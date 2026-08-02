@@ -1,0 +1,644 @@
+datatypes:
+  INTERLIS.ANYSTRUCTURE:
+    qualified_name: INTERLIS.ANYSTRUCTURE
+    kind: DataType
+    name: ANYSTRUCTURE
+    extends: []
+    attributes:
+      own: {}
+  INTERLIS.AXIS:
+    qualified_name: INTERLIS.AXIS
+    kind: DataType
+    name: AXIS
+    extends: []
+    attributes:
+      own: {}
+  INTERLIS.TimeOfDay:
+    qualified_name: INTERLIS.TimeOfDay
+    kind: DataType
+    name: TimeOfDay
+    extends: []
+    attributes:
+      own:
+        Hours:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Minutes:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Seconds:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  INTERLIS.UTC:
+    qualified_name: INTERLIS.UTC
+    kind: DataType
+    name: UTC
+    extends: []
+    attributes:
+      own: {}
+  INTERLIS.GregorianDate:
+    qualified_name: INTERLIS.GregorianDate
+    kind: DataType
+    name: GregorianDate
+    extends: []
+    attributes:
+      own:
+        Year:
+          type: INTERLIS.GregorianYear
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Month:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Day:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  INTERLIS.GregorianDateTime:
+    qualified_name: INTERLIS.GregorianDateTime
+    kind: DataType
+    name: GregorianDateTime
+    extends: []
+    attributes:
+      own:
+        Hours:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Minutes:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Seconds:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  INTERLIS.LineSegment:
+    qualified_name: INTERLIS.LineSegment
+    kind: DataType
+    name: LineSegment
+    extends: []
+    attributes:
+      own:
+        SegmentEndPoint:
+          type: INTERLIS.LineCoord
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+  INTERLIS.StartSegment:
+    qualified_name: INTERLIS.StartSegment
+    kind: DataType
+    name: StartSegment
+    extends: []
+    attributes:
+      own: {}
+  INTERLIS.StraightSegment:
+    qualified_name: INTERLIS.StraightSegment
+    kind: DataType
+    name: StraightSegment
+    extends: []
+    attributes:
+      own: {}
+  INTERLIS.ArcSegment:
+    qualified_name: INTERLIS.ArcSegment
+    kind: DataType
+    name: ArcSegment
+    extends: []
+    attributes:
+      own: {}
+  INTERLIS.SurfaceEdge:
+    qualified_name: INTERLIS.SurfaceEdge
+    kind: DataType
+    name: SurfaceEdge
+    extends: []
+    attributes:
+      own:
+        Geometry:
+          type: F466480C-C0A2-47de-A0FC-D9D3932DB96E
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        LineAttrs:
+          type: INTERLIS.ANYSTRUCTURE
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  INTERLIS.SurfaceBoundary:
+    qualified_name: INTERLIS.SurfaceBoundary
+    kind: DataType
+    name: SurfaceBoundary
+    extends: []
+    attributes:
+      own:
+        Lines:
+          type: INTERLIS.SurfaceEdge
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+  INTERLIS.LineGeometry:
+    qualified_name: INTERLIS.LineGeometry
+    kind: DataType
+    name: LineGeometry
+    extends: []
+    attributes:
+      own:
+        Segments:
+          type: INTERLIS.LineSegment
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+  IlisMeta16.ModelData.DocText:
+    qualified_name: IlisMeta16.ModelData.DocText
+    kind: DataType
+    name: DocText
+    extends: []
+    attributes:
+      own:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Text:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.Ili1Format:
+    qualified_name: IlisMeta16.ModelData.Ili1Format
+    kind: DataType
+    name: Ili1Format
+    extends: []
+    attributes:
+      own:
+        isFree:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        LineSize:
+          type: IlisMeta16.ModelData.LengthRange
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        tidSize:
+          type: IlisMeta16.ModelData.LengthRange
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        blankCode:
+          type: IlisMeta16.ModelData.Code
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        undefinedCode:
+          type: IlisMeta16.ModelData.Code
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        continueCode:
+          type: IlisMeta16.ModelData.Code
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Font:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        tidKind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        tidExplanation:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.Expression:
+    qualified_name: IlisMeta16.ModelData.Expression
+    kind: DataType
+    name: Expression
+    extends: []
+    attributes:
+      own: {}
+  IlisMeta16.ModelData.Multiplicity:
+    qualified_name: IlisMeta16.ModelData.Multiplicity
+    kind: DataType
+    name: Multiplicity
+    extends: []
+    attributes:
+      own:
+        Min:
+          type: IlisMeta16.ModelData.MultRange
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Max:
+          type: IlisMeta16.ModelData.MultRange
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.UnaryExpr:
+    qualified_name: IlisMeta16.ModelData.UnaryExpr
+    kind: DataType
+    name: UnaryExpr
+    extends: []
+    attributes:
+      own:
+        Operation:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        SubExpression:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.CompoundExpr:
+    qualified_name: IlisMeta16.ModelData.CompoundExpr
+    kind: DataType
+    name: CompoundExpr
+    extends: []
+    attributes:
+      own:
+        Operation:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        SubExpressions:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+  IlisMeta16.ModelData.Factor:
+    qualified_name: IlisMeta16.ModelData.Factor
+    kind: DataType
+    name: Factor
+    extends: []
+    attributes:
+      own: {}
+  IlisMeta16.ModelData.PathEl:
+    qualified_name: IlisMeta16.ModelData.PathEl
+    kind: DataType
+    name: PathEl
+    extends: []
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Ref:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        NumIndex:
+          type: IlisMeta16.ModelData.MultRange
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        SpecIndex:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.PathOrInspFactor:
+    qualified_name: IlisMeta16.ModelData.PathOrInspFactor
+    kind: DataType
+    name: PathOrInspFactor
+    extends: []
+    attributes:
+      own:
+        PathEls:
+          type: IlisMeta16.ModelData.PathEl
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+        Inspection:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.EnumAssignment:
+    qualified_name: IlisMeta16.ModelData.EnumAssignment
+    kind: DataType
+    name: EnumAssignment
+    extends: []
+    attributes:
+      own:
+        ValueToAssign:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        MinEnumValue:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        MaxEnumValue:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.EnumMapping:
+    qualified_name: IlisMeta16.ModelData.EnumMapping
+    kind: DataType
+    name: EnumMapping
+    extends: []
+    attributes:
+      own:
+        EnumValue:
+          type: IlisMeta16.ModelData.PathOrInspFactor
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Cases:
+          type: IlisMeta16.ModelData.EnumAssignment
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+  IlisMeta16.ModelData.ClassRef:
+    qualified_name: IlisMeta16.ModelData.ClassRef
+    kind: DataType
+    name: ClassRef
+    extends: []
+    attributes:
+      own:
+        Ref:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.ActualArgument:
+    qualified_name: IlisMeta16.ModelData.ActualArgument
+    kind: DataType
+    name: ActualArgument
+    extends: []
+    attributes:
+      own:
+        FormalArgument:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Expression:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        ObjectClasses:
+          type: IlisMeta16.ModelData.ClassRef
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+  IlisMeta16.ModelData.FunctionCall:
+    qualified_name: IlisMeta16.ModelData.FunctionCall
+    kind: DataType
+    name: FunctionCall
+    extends: []
+    attributes:
+      own:
+        Function:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Arguments:
+          type: IlisMeta16.ModelData.ActualArgument
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+  IlisMeta16.ModelData.RuntimeParamRef:
+    qualified_name: IlisMeta16.ModelData.RuntimeParamRef
+    kind: DataType
+    name: RuntimeParamRef
+    extends: []
+    attributes:
+      own:
+        RuntimeParam:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.Constant:
+    qualified_name: IlisMeta16.ModelData.Constant
+    kind: DataType
+    name: Constant
+    extends: []
+    attributes:
+      own:
+        Value:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Type:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.ClassConst:
+    qualified_name: IlisMeta16.ModelData.ClassConst
+    kind: DataType
+    name: ClassConst
+    extends: []
+    attributes:
+      own:
+        Class:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.AttributeConst:
+    qualified_name: IlisMeta16.ModelData.AttributeConst
+    kind: DataType
+    name: AttributeConst
+    extends: []
+    attributes:
+      own:
+        Attribute:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.UnitRef:
+    qualified_name: IlisMeta16.ModelData.UnitRef
+    kind: DataType
+    name: UnitRef
+    extends: []
+    attributes:
+      own:
+        Unit:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.UnitFunction:
+    qualified_name: IlisMeta16.ModelData.UnitFunction
+    kind: DataType
+    name: UnitFunction
+    extends: []
+    attributes:
+      own:
+        Explanation:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.SignParamAssignment:
+    qualified_name: IlisMeta16.ModelData.SignParamAssignment
+    kind: DataType
+    name: SignParamAssignment
+    extends: []
+    attributes:
+      own:
+        Param:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Assignment:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelData.CondSignParamAssignment:
+    qualified_name: IlisMeta16.ModelData.CondSignParamAssignment
+    kind: DataType
+    name: CondSignParamAssignment
+    extends: []
+    attributes:
+      own:
+        Where:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Assignments:
+          type: IlisMeta16.ModelData.SignParamAssignment
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+  IlisMeta16.ModelTranslation.DocTextTranslation:
+    qualified_name: IlisMeta16.ModelTranslation.DocTextTranslation
+    kind: DataType
+    name: DocTextTranslation
+    extends: []
+    attributes:
+      own:
+        Text:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+  IlisMeta16.ModelTranslation.METranslation:
+    qualified_name: IlisMeta16.ModelTranslation.METranslation
+    kind: DataType
+    name: METranslation
+    extends: []
+    attributes:
+      own:
+        Of:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        TranslatedName:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        TranslatedDoc:
+          type: IlisMeta16.ModelTranslation.DocTextTranslation
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null

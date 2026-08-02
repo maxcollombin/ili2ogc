@@ -1,0 +1,919 @@
+associations:
+  IlisMeta16.ModelData.MetaAttributes:
+    qualified_name: IlisMeta16.ModelData.MetaAttributes
+    kind: Association
+    name: MetaAttributes
+    ends:
+    - role: MetaElement
+      target: IlisMeta16.ModelData.MetaElement
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: MetaAttribute
+      target: IlisMeta16.ModelData.MetaAttribute
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.Inheritance:
+    qualified_name: IlisMeta16.ModelData.Inheritance
+    kind: Association
+    name: Inheritance
+    ends:
+    - role: Sub
+      target: IlisMeta16.ModelData.ExtendableME
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Super
+      target: IlisMeta16.ModelData.ExtendableME
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.PackageElements:
+    qualified_name: IlisMeta16.ModelData.PackageElements
+    kind: Association
+    name: PackageElements
+    ends:
+    - role: ElementInPackage
+      target: IlisMeta16.ModelData.Package
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: Element
+      target: IlisMeta16.ModelData.MetaElement
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.Import:
+    qualified_name: IlisMeta16.ModelData.Import
+    kind: Association
+    name: Import
+    ends:
+    - role: ImportingP
+      target: IlisMeta16.ModelData.Package
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: ImportedP
+      target: IlisMeta16.ModelData.Package
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.DomainConstraint:
+    qualified_name: IlisMeta16.ModelData.DomainConstraint
+    kind: Association
+    name: DomainConstraint
+    ends:
+    - role: ToDomain
+      target: IlisMeta16.ModelData.DomainType
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: Constraint
+      target: IlisMeta16.ModelData.Constraint
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.ClassConstraint:
+    qualified_name: IlisMeta16.ModelData.ClassConstraint
+    kind: Association
+    name: ClassConstraint
+    ends:
+    - role: ToClass
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: Constraint
+      target: IlisMeta16.ModelData.Constraint
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.LocalType:
+    qualified_name: IlisMeta16.ModelData.LocalType
+    kind: Association
+    name: LocalType
+    ends:
+    - role: LTParent
+      target: IlisMeta16.ModelData.AttrOrParam
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: LocalType
+      target: IlisMeta16.ModelData.Type
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.AttrOrParamType:
+    qualified_name: IlisMeta16.ModelData.AttrOrParamType
+    kind: Association
+    name: AttrOrParamType
+    ends:
+    - role: AttrOrParam
+      target: IlisMeta16.ModelData.AttrOrParam
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Type
+      target: IlisMeta16.ModelData.Type
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.ClassAttr:
+    qualified_name: IlisMeta16.ModelData.ClassAttr
+    kind: Association
+    name: ClassAttr
+    ends:
+    - role: AttrParent
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: ClassAttribute
+      target: IlisMeta16.ModelData.AttrOrParam
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.ClassParam:
+    qualified_name: IlisMeta16.ModelData.ClassParam
+    kind: Association
+    name: ClassParam
+    ends:
+    - role: ParamParent
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: ClassParameter
+      target: IlisMeta16.ModelData.AttrOrParam
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.BaseType:
+    qualified_name: IlisMeta16.ModelData.BaseType
+    kind: Association
+    name: BaseType
+    ends:
+    - role: TRT
+      target: IlisMeta16.ModelData.TypeRelatedType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: BaseType
+      target: IlisMeta16.ModelData.Type
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.TypeRestriction:
+    qualified_name: IlisMeta16.ModelData.TypeRestriction
+    kind: Association
+    name: TypeRestriction
+    ends:
+    - role: TRTR
+      target: IlisMeta16.ModelData.TypeRelatedType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: TypeRestriction
+      target: IlisMeta16.ModelData.Type
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.BaseClass:
+    qualified_name: IlisMeta16.ModelData.BaseClass
+    kind: Association
+    name: BaseClass
+    ends:
+    - role: CRT
+      target: IlisMeta16.ModelData.ClassRelatedType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: BaseClass
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.ClassRestriction:
+    qualified_name: IlisMeta16.ModelData.ClassRestriction
+    kind: Association
+    name: ClassRestriction
+    ends:
+    - role: CRTR
+      target: IlisMeta16.ModelData.ClassRelatedType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: ClassRestriction
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.AssocRole:
+    qualified_name: IlisMeta16.ModelData.AssocRole
+    kind: Association
+    name: AssocRole
+    ends:
+    - role: Association
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: Role
+      target: IlisMeta16.ModelData.Role
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.ExplicitAssocAcc:
+    qualified_name: IlisMeta16.ModelData.ExplicitAssocAcc
+    kind: Association
+    name: ExplicitAssocAcc
+    ends:
+    - role: AssocAccOf
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: ExplicitAssocAcc
+      target: IlisMeta16.ModelData.ExplicitAssocAccess
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.AssocAccOrigin:
+    qualified_name: IlisMeta16.ModelData.AssocAccOrigin
+    kind: Association
+    name: AssocAccOrigin
+    ends:
+    - role: UseAsOrigin
+      target: IlisMeta16.ModelData.ExplicitAssocAccess
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: OriginRole
+      target: IlisMeta16.ModelData.Role
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.AssocAccTarget:
+    qualified_name: IlisMeta16.ModelData.AssocAccTarget
+    kind: Association
+    name: AssocAccTarget
+    ends:
+    - role: UseAsTarget
+      target: IlisMeta16.ModelData.ExplicitAssocAccess
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: TargetRole
+      target: IlisMeta16.ModelData.Role
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.AssocAcc:
+    qualified_name: IlisMeta16.ModelData.AssocAcc
+    kind: Association
+    name: AssocAcc
+    ends:
+    - role: Class
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: AssocAcc
+      target: IlisMeta16.ModelData.Role
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.TransferElement:
+    qualified_name: IlisMeta16.ModelData.TransferElement
+    kind: Association
+    name: TransferElement
+    ends:
+    - role: TransferClass
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: TransferElement
+      target: IlisMeta16.ModelData.AttrOrParam
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.Ili1TransferElement:
+    qualified_name: IlisMeta16.ModelData.Ili1TransferElement
+    kind: Association
+    name: Ili1TransferElement
+    ends:
+    - role: Ili1TransferClass
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Ili1RefAttr
+      target: IlisMeta16.ModelData.AttrOrParam
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.Dependency:
+    qualified_name: IlisMeta16.ModelData.Dependency
+    kind: Association
+    name: Dependency
+    ends:
+    - role: Using
+      target: IlisMeta16.ModelData.DataUnit
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Dependent
+      target: IlisMeta16.ModelData.DataUnit
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.AllowedInBasket:
+    qualified_name: IlisMeta16.ModelData.AllowedInBasket
+    kind: Association
+    name: AllowedInBasket
+    ends:
+    - role: OfDataUnit
+      target: IlisMeta16.ModelData.DataUnit
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: ClassInBasket
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.GenericDef:
+    qualified_name: IlisMeta16.ModelData.GenericDef
+    kind: Association
+    name: GenericDef
+    ends:
+    - role: Context
+      target: IlisMeta16.ModelData.Context
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: GenericDomain
+      target: IlisMeta16.ModelData.DomainType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.ConcreteForGeneric:
+    qualified_name: IlisMeta16.ModelData.ConcreteForGeneric
+    kind: Association
+    name: ConcreteForGeneric
+    ends:
+    - role: GenericDef
+      target: IlisMeta16.ModelData.GenericDef
+      target_kind: Unknown
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: ConcreteDomain
+      target: IlisMeta16.ModelData.DomainType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: shared
+  IlisMeta16.ModelData.MetaDataUnit:
+    qualified_name: IlisMeta16.ModelData.MetaDataUnit
+    kind: Association
+    name: MetaDataUnit
+    ends:
+    - role: MetaBasketDef
+      target: IlisMeta16.ModelData.MetaBasketDef
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: MetaDataTopic
+      target: IlisMeta16.ModelData.DataUnit
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.MetaBasketMembers:
+    qualified_name: IlisMeta16.ModelData.MetaBasketMembers
+    kind: Association
+    name: MetaBasketMembers
+    ends:
+    - role: MetaBasketDef
+      target: IlisMeta16.ModelData.MetaBasketDef
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: Member
+      target: IlisMeta16.ModelData.MetaObjectDef
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.MetaObjectClass:
+    qualified_name: IlisMeta16.ModelData.MetaObjectClass
+    kind: Association
+    name: MetaObjectClass
+    ends:
+    - role: MetaObjectDef
+      target: IlisMeta16.ModelData.MetaObjectDef
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Class
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.NumUnit:
+    qualified_name: IlisMeta16.ModelData.NumUnit
+    kind: Association
+    name: NumUnit
+    ends:
+    - role: Num
+      target: IlisMeta16.ModelData.NumType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Unit
+      target: IlisMeta16.ModelData.Unit
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.AxisSpec:
+    qualified_name: IlisMeta16.ModelData.AxisSpec
+    kind: Association
+    name: AxisSpec
+    ends:
+    - role: CoordType
+      target: IlisMeta16.ModelData.CoordType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Axis
+      target: IlisMeta16.ModelData.NumType
+      target_kind: Class
+      lower: '1'
+      upper: '3'
+      aggregation: none
+  IlisMeta16.ModelData.NumsRefSys:
+    qualified_name: IlisMeta16.ModelData.NumsRefSys
+    kind: Association
+    name: NumsRefSys
+    ends:
+    - role: NumType
+      target: IlisMeta16.ModelData.NumType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: RefSys
+      target: IlisMeta16.ModelData.MetaObjectDef
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.StructOfFormat:
+    qualified_name: IlisMeta16.ModelData.StructOfFormat
+    kind: Association
+    name: StructOfFormat
+    ends:
+    - role: FormattedType
+      target: IlisMeta16.ModelData.FormattedType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Struct
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.ObjectOID:
+    qualified_name: IlisMeta16.ModelData.ObjectOID
+    kind: Association
+    name: ObjectOID
+    ends:
+    - role: Class
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Oid
+      target: IlisMeta16.ModelData.DomainType
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.BasketOID:
+    qualified_name: IlisMeta16.ModelData.BasketOID
+    kind: Association
+    name: BasketOID
+    ends:
+    - role: ForDataUnit
+      target: IlisMeta16.ModelData.DataUnit
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Oid
+      target: IlisMeta16.ModelData.DomainType
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.LocalFType:
+    qualified_name: IlisMeta16.ModelData.LocalFType
+    kind: Association
+    name: LocalFType
+    ends:
+    - role: LFTParent
+      target: IlisMeta16.ModelData.FunctionDef
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: LocalType
+      target: IlisMeta16.ModelData.Type
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: composite
+  IlisMeta16.ModelData.ResultType:
+    qualified_name: IlisMeta16.ModelData.ResultType
+    kind: Association
+    name: ResultType
+    ends:
+    - role: Function
+      target: IlisMeta16.ModelData.FunctionDef
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: ResultType
+      target: IlisMeta16.ModelData.Type
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.FormalArgument:
+    qualified_name: IlisMeta16.ModelData.FormalArgument
+    kind: Association
+    name: FormalArgument
+    ends:
+    - role: Function
+      target: IlisMeta16.ModelData.FunctionDef
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: Argument
+      target: IlisMeta16.ModelData.Argument
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.ArgumentType:
+    qualified_name: IlisMeta16.ModelData.ArgumentType
+    kind: Association
+    name: ArgumentType
+    ends:
+    - role: Argument
+      target: IlisMeta16.ModelData.Argument
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Type
+      target: IlisMeta16.ModelData.Type
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.ARefOf:
+    qualified_name: IlisMeta16.ModelData.ARefOf
+    kind: Association
+    name: ARefOf
+    ends:
+    - role: ForARef
+      target: IlisMeta16.ModelData.AttributeRefType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Of
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.ARefRestriction:
+    qualified_name: IlisMeta16.ModelData.ARefRestriction
+    kind: Association
+    name: ARefRestriction
+    ends:
+    - role: ARef
+      target: IlisMeta16.ModelData.AttributeRefType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Type
+      target: IlisMeta16.ModelData.Type
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.TopNode:
+    qualified_name: IlisMeta16.ModelData.TopNode
+    kind: Association
+    name: TopNode
+    ends:
+    - role: EnumType
+      target: IlisMeta16.ModelData.EnumType
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: TopNode
+      target: IlisMeta16.ModelData.EnumNode
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: composite
+  IlisMeta16.ModelData.SubNode:
+    qualified_name: IlisMeta16.ModelData.SubNode
+    kind: Association
+    name: SubNode
+    ends:
+    - role: ParentNode
+      target: IlisMeta16.ModelData.EnumNode
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: Node
+      target: IlisMeta16.ModelData.EnumNode
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.TreeValueTypeOf:
+    qualified_name: IlisMeta16.ModelData.TreeValueTypeOf
+    kind: Association
+    name: TreeValueTypeOf
+    ends:
+    - role: ETVT
+      target: IlisMeta16.ModelData.EnumTreeValueType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: ET
+      target: IlisMeta16.ModelData.EnumType
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.LineFormStructure:
+    qualified_name: IlisMeta16.ModelData.LineFormStructure
+    kind: Association
+    name: LineFormStructure
+    ends:
+    - role: LineForm
+      target: IlisMeta16.ModelData.LineForm
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Structure
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.LinesForm:
+    qualified_name: IlisMeta16.ModelData.LinesForm
+    kind: Association
+    name: LinesForm
+    ends:
+    - role: LineType
+      target: IlisMeta16.ModelData.LineType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: LineForm
+      target: IlisMeta16.ModelData.LineForm
+      target_kind: Class
+      lower: '1'
+      upper: '*'
+      aggregation: none
+  IlisMeta16.ModelData.LineCoord:
+    qualified_name: IlisMeta16.ModelData.LineCoord
+    kind: Association
+    name: LineCoord
+    ends:
+    - role: LineType
+      target: IlisMeta16.ModelData.LineType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: CoordType
+      target: IlisMeta16.ModelData.CoordType
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.LineAttr:
+    qualified_name: IlisMeta16.ModelData.LineAttr
+    kind: Association
+    name: LineAttr
+    ends:
+    - role: LineType
+      target: IlisMeta16.ModelData.LineType
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: LAStructure
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.BaseViewDef:
+    qualified_name: IlisMeta16.ModelData.BaseViewDef
+    kind: Association
+    name: BaseViewDef
+    ends:
+    - role: View
+      target: IlisMeta16.ModelData.View
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: RenamedBaseView
+      target: IlisMeta16.ModelData.RenamedBaseView
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.BaseViewRef:
+    qualified_name: IlisMeta16.ModelData.BaseViewRef
+    kind: Association
+    name: BaseViewRef
+    ends:
+    - role: RenamedBaseView
+      target: IlisMeta16.ModelData.RenamedBaseView
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: BaseView
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '1'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.DerivedAssoc:
+    qualified_name: IlisMeta16.ModelData.DerivedAssoc
+    kind: Association
+    name: DerivedAssoc
+    ends:
+    - role: DeriAssoc
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: View
+      target: IlisMeta16.ModelData.View
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.ExistenceDef:
+    qualified_name: IlisMeta16.ModelData.ExistenceDef
+    kind: Association
+    name: ExistenceDef
+    ends:
+    - role: ExistenceConstraint
+      target: IlisMeta16.ModelData.ExistenceConstraint
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: ExistsIn
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.GraphicBase:
+    qualified_name: IlisMeta16.ModelData.GraphicBase
+    kind: Association
+    name: GraphicBase
+    ends:
+    - role: Graphic
+      target: IlisMeta16.ModelData.Graphic
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Base
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+  IlisMeta16.ModelData.GraphicRule:
+    qualified_name: IlisMeta16.ModelData.GraphicRule
+    kind: Association
+    name: GraphicRule
+    ends:
+    - role: Graphic
+      target: IlisMeta16.ModelData.Graphic
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none
+    - role: DrawingRule
+      target: IlisMeta16.ModelData.DrawingRule
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: composite
+  IlisMeta16.ModelData.SignClass:
+    qualified_name: IlisMeta16.ModelData.SignClass
+    kind: Association
+    name: SignClass
+    ends:
+    - role: DrawingRule
+      target: IlisMeta16.ModelData.DrawingRule
+      target_kind: Class
+      lower: '0'
+      upper: '*'
+      aggregation: none
+    - role: Class
+      target: IlisMeta16.ModelData.Class
+      target_kind: Class
+      lower: '0'
+      upper: '1'
+      aggregation: none

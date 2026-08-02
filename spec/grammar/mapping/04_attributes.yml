@@ -1,0 +1,335 @@
+attrType:
+  grammar:
+    rule: attrType
+  kind: Container
+  attribute_bindings:
+    dispatch:
+      source:
+        field: type_|domainRef|referenceAttr|restrictedStructureRef
+        kind: alt_rule
+      note: 'Pure 4-way dispatcher, confirmed via grammar-metamodel- mapping.yml: "kind: Container". No
+        own construction; result is whichever of type_()/domainRef()/referenceAttr()/ restrictedStructureRef()
+        matched, each already bound separately.
+
+        '
+  note: Attribute references
+attrTypeDef:
+  grammar:
+    rule: attrTypeDef
+  kind: Dispatcher
+  dispatches_to:
+  - attrType
+  - lineType
+  attribute_bindings:
+    Mandatory:
+      source:
+        field: MANDATORY
+        presence: true
+      note: 'Leading optional MANDATORY token (first alternative only). AttrOrParam itself has no Mandatory
+        attribute (confirmed: ilismeta16-classes.yml, own+inherited lists do not include Mandatory), but
+        DomainType does ("Mandatory: BOOLEAN" own attribute, confirmed). So this feeds Mandatory on whichever
+        concrete DomainType subclass instance is produced by the dispatched sub-rule below (attrType/enumeration/numericType-
+        like NumType), not on AttrOrParam.
+
+        '
+    Type:
+      source:
+        field: attrType|enumeration|numeric|NUMERIC
+        kind: alt_rule_or_token
+      note: 'First alternative dispatches to one of: attrType() |  enumeration() (anonymous EnumType)
+        | numeric() CIRCULAR? (LSBR unitRef RSBR)? (anonymous NumType, reusing the numeric() bindings
+        already documented) | bare NUMERIC LSBR unitRef RSBR (anonymous NumType with only a Unit, no Min/Max).
+        Confirmed via grammar-metamodel-mapping.yml: "kind: Dispatcher, dispatches_to: [attrType, lineType]"
+        (lineType is reached separately, not through this branch - see the grammar-rules ordering). Feeds
+        the enclosing AttrOrParamType.Type association end (handled by the parent attributeDef/roleDef/
+        etc. construct).
+
+        '
+    _collection:
+      target: IlisMeta16.ModelData.MultiValue
+      Ordered:
+        source:
+          field: BAG|LIST
+          kind: alt_token
+        mapping:
+          BAG: false
+          LIST: true
+      Multiplicity:
+        source:
+          field: cardinality
+          optional: true
+      BaseType:
+        association: BaseType
+        role: BaseType
+        source:
+          field: restrictedStructureRef
+      note: 'CONFIRME (Lot 13, point 2, phase 2). La recherche precedente cherchait une classe nommee
+        litteralement "Bag"/ "List"/"Collection" - elle existe sous un AUTRE nom : IlisMeta16.ModelData.MultiValue
+        (ilismeta16-classes.yml, extends TypeRelatedType), avec attributs own Ordered:BOOLEAN (mandatory)
+        et Multiplicity:IlisMeta16.ModelData.Multiplicity. Confirme par RULE #4, INTERLIS 2 Metamodel
+        edition 2022-06-17, section 2.3.1 (p.10) : "The class TypeRelatedType serves as basis for all
+        types, which use another type (by means of the relationship BaseType)... Currently there is only
+        one extending class for TypeRelatedType: MultiValue. It serves to describe a set of sub elements.
+        Attributes further describe whether this set is ordered (LIST) or not (BAG), and what cardinality
+        it features." Binding : "(BAG|LIST) cardinality? OF restrictedStructureRef" -> target MultiValue,
+        Ordered (BAG->false, LIST->true), Multiplicity (depuis cardinality(), optionnel), BaseType (association
+        confirmee TRT{0..*} TypeRelatedType <-> BaseType{1} Type, ilismeta16-associations.yml - alimentee
+        par restrictedStructureRef() resolu). Point 2 EXTRACT SCRIPT check : scripts/extract_ilismeta16.py
+        n''a aucun filtre excluant ces concepts (parse_classes/datatypes/associations/ enumerations couvrent
+        tous les kinds UML pertinents, packaged_elements() parcourt l''arbre XMI recursivement via root.iter()
+        - pas de lacune d''extraction, juste une recherche precedente par mauvais nom de classe (RULE
+        #1 respectee : le nom correct a ete confirme par grep avant d''etre propose ici).
+
+        '
+attributeDef:
+  grammar:
+    rule: attributeDef
+  kind: Instance
+  target: IlisMeta16.ModelData.AttrOrParam
+  parent:
+    association: ClassAttr
+    role: ClassAttribute
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+    SubdivisionKind:
+      source:
+        field: SUBDIVISION
+        presence: true
+      rule:
+        SUBDIVISION only: SubDiv
+        CONTINUOUS + SUBDIVISION: ContSubDiv
+        neither: NoSubDiv
+      note: needs final confirmation of CONTINUOUS+SUBDIVISION -> ContSubDiv mapping against a real .ili
+        example
+    Transient:
+      source:
+        field: TRANSIENT
+        presence: true
+    Derivates:
+      source:
+        field: factor
+        multi: true
+      note: each factor (after optional ASSIGN) is an Expression appended to Derivates
+  note: Attribute type resolution
+attributePathConst:
+  grammar:
+    rule: attributePathConst
+  kind: Instance
+  target: IlisMeta16.ModelData.AttributeConst
+  attribute_bindings:
+    Attribute:
+      source:
+        field: viewableRef
+        DOT: null
+        Name: null
+        join: .
+      note: '"GT GT (viewableRef DOT)? Name" (e.g. ">>MyAttr" or ">>MyClass.MyAttr"). AttributeConst is
+        a DataType with a single own attribute Attribute: INTERLIS.NAME (0..1), confirmed in ilismeta16-datatypes.yml,
+        so the optional viewableRef qualifier and the mandatory Name are joined with "." into this single
+        Attribute string (analogous to classRef.Ref).
+
+        '
+  note: 05_associations Association definitions
+baseAttrRef:
+  grammar:
+    rule: baseAttrRef
+  kind: Container
+  attribute_bindings:
+    AttrName:
+      source:
+        field: Name
+      note: '"Name (DIV PosNumber)?" or "Name DIV domainRef". Per grammar-metamodel-mapping.yml: no direct
+        IlisMeta16 instance expected; "reference to a base attribute (Name, optionally with a numeric
+        precision via DIV PosNumber) or a domainRef; used as a placeholder inside formatDef''s format
+        pattern." Feeds the struct attribute name being referenced in the formatDef() template (see formatDef
+        binding).
+
+        '
+    Precision:
+      source:
+        field: PosNumber
+        alt: 1
+        optional: true
+      note: 'Alternative 1 only: optional decimal-precision hint (DIV PosNumber) for the referenced numeric
+        attribute.'
+    Unit:
+      source:
+        field: domainRef
+        alt: 2
+        optional: true
+      note: 'Alternative 2 only: DIV domainRef supplies a unit/domain for the referenced attribute''s
+        formatted representation, instead of a plain precision number.'
+  note: No direct IlisMeta16 instance expected. Reference to a base attribute (Name, optionally with a
+    numeric precision via DIV PosNumber) or a domainRef; used as a placeholder inside formatDef's format
+    pattern.
+classOrAssociationRef:
+  grammar:
+    rule: classOrAssociationRef
+  kind: Container
+  attribute_bindings:
+    dispatch:
+      source:
+        field: classRef|associationRef
+        kind: alt_rule
+      note: 'Pure dispatcher (2 alternatives): classRef() or associationRef(). No own construction; result
+        is whichever of the two sub-rules'' resolved reference matched (a class, or an association treated
+        as Class[Kind=Association]).
+
+        '
+  note: No direct IlisMeta16 instance expected. Dispatcher between classRef and associationRef.
+referenceAttr:
+  grammar:
+    rule: referenceAttr
+  kind: Instance
+  target: IlisMeta16.ModelData.ReferenceType
+  attribute_bindings:
+    External:
+      source:
+        field: EXTERNAL
+        presence: true
+      note: 'Optional "(EXTERNAL)" clause. Feeds ReferenceType.External (own BOOLEAN attribute, mandatory,
+        confirmed in ilismeta16-classes.yml) - true if present, false otherwise.
+
+        '
+    BaseClass:
+      source:
+        field: restrictedClassOrAssRef
+      note: 'ReferenceType extends ClassRelatedType (confirmed in ilismeta16-classes.yml), so the resolved
+        restrictedClassOrAssRef (already bound separately - itself a base ref plus optional RESTRICTION
+        list) feeds the same BaseClass/ClassRestriction associations documented on the classType binding,
+        here on this ReferenceType instance rather than a ClassRefType.
+
+        '
+  note: 'CORRIGE (Lot 15, point 1, phase 2 - decision utilisateur confirmee). L''ancien target: AttrOrParam
+    etait une erreur de copier-coller : referenceAttr() decrit un TYPE (Type=REFERENCE TO ...), pas un
+    attribut - le meme pattern que textType/coordinateType (target.class pointe directement sur leur propre
+    Type, sans bloc semantics.type separe, sans parent ClassAttr). L''ancien target: AttrOrParam aurait
+    construit un second AttrOrParam redondant, en double de celui deja cree par attributeDef/parameterDef
+    (qui consomme ce ReferenceType via l''association AttrOrParamType, comme n''importe quel autre Type).
+    || CORRIGE (Lot 15, point 1, phase 2 - decision utilisateur confirmee, source grammar-metamodel-mapping.yml
+    deja corrigee). L''ancien target: AttrOrParam etait une erreur de copier-coller : referenceAttr()
+    decrit un TYPE (ReferenceType), pas un attribut - meme pattern que textType/coordinateType (target
+    direct, parent: null, pas de bloc semantics.type separe). L''attribut lui-meme est deja construit
+    par attributeDef/parameterDef, qui consomme ce ReferenceType via AttrOrParamType comme n''importe
+    quel autre Type.'
+restrictedClassOrAssRef:
+  grammar:
+    rule: restrictedClassOrAssRef
+  kind: Container
+  attribute_bindings:
+    BaseRef:
+      source:
+        field: classOrAssociationRef
+        index: 0
+      note: '"(classOrAssociationRef | ANYCLASS) (RESTRICTION LPAR classOrAssociationRef (SEMI classOrAssociationRef)*
+        RPAR)?". Per grammar-metamodel-mapping.yml: no direct IlisMeta16 instance expected (kind: Container);
+        "feeds Role.BaseClass (via ClassRef) or the equivalent association-side reference". The first
+        classOrAssociationRef (or the ANYCLASS wildcard, meaning "any class") is the unrestricted base
+        reference.
+
+        '
+    AnyClass:
+      source:
+        field: ANYCLASS
+        presence: true
+      note: Wildcard alternative to a concrete base classOrAssociationRef - matches any class.
+    Restrictions:
+      source:
+        field: classOrAssociationRef
+        multi: true
+        optional: true
+      note: 'The classOrAssociationRef entries inside the optional "RESTRICTION(...)" clause narrow the
+        base reference to one or more specific alternatives (semicolon-separated). These are the same
+        multiple OR-joined target classes documented in the roleDef binding (Role.BaseClass, multi).
+
+        '
+  note: No direct IlisMeta16 instance expected. One or more classOrAssociationRef, optionally restricted
+    via ANYCLASS RESTRICTION(...). Feeds Role.BaseClass (via ClassRef) or the equivalent association-side
+    reference.
+restrictedClassOrStructureRef:
+  grammar:
+    rule: restrictedClassOrStructureRef
+  kind: Container
+  dispatches_to:
+  - restrictedClassOrAssRef
+  - restrictedStructureRef
+  attribute_bindings:
+    BaseRef:
+      source:
+        field: classOrStructureRef
+        index: 0
+      note: '"(classOrStructureRef | ANYSTRUCTURE) (RESTRICTION LPAR classOrStructureRef ((COMMA|SEMI)
+        classOrStructureRef)* RPAR)?". Per grammar-metamodel-mapping.yml: "kind: Container, dispatches_to:
+        [restrictedClassOrAssRef, restrictedStructureRef]" - this is a semantic-role note (this rule plays
+        the combined role of either sibling rule depending on the enclosing context), not a literal grammar
+        call to those two rules (structurally it calls classOrStructureRef(), not classOrAssociationRef()/structureRef()
+        directly).
+
+        '
+    AnyStructure:
+      source:
+        field: ANYSTRUCTURE
+        presence: true
+      note: Wildcard alternative to a concrete base classOrStructureRef - matches any structure.
+    Restrictions:
+      source:
+        field: classOrStructureRef
+        multi: true
+        optional: true
+      note: 'The classOrStructureRef entries inside the optional "RESTRICTION(...)" clause narrow the
+        base reference to one or more alternatives (COMMA- or SEMI-separated).
+
+        '
+restrictedStructureRef:
+  grammar:
+    rule: restrictedStructureRef
+  kind: Reference
+  target: IlisMeta16.ModelData.Class
+  discriminant:
+    attribute: Kind
+    value: Structure
+  attribute_bindings:
+    resolved_ref:
+      source:
+        field: structureRef|type_
+        index: 0
+      note: '"(structureRef | type_ | ANYSTRUCTURE) (RESTRICTION LPAR structureRef ((COMMA|SEMI) structureRef)*
+        RPAR)?". Confirmed via grammar-metamodel-mapping.yml: "kind: Reference, discriminator: {attribute:
+        Kind, value: Structure}" - the base alternative resolves to an existing IlisMeta16.ModelData.Class[Kind=Structure]
+        instance. The discriminant was left null in this file before this edit but is explicitly specified
+        in grammar-metamodel-mapping.yml, so it is corrected here to match.
+
+        '
+    AnyStructure:
+      source:
+        field: ANYSTRUCTURE
+        presence: true
+      note: Wildcard alternative to a concrete base structureRef/type_ - matches any structure.
+    _inline_type:
+      source:
+        field: type_
+        optional: true
+      status: not_applicable
+      note: 'Lot 19 (phase 2) - CONFIRMÉ `not_applicable`, divergence de grammaire (pas un manque du métamodèle).
+        RULE #4, Reference Manual eCH-0031 V2.1.0 (2024-04-24) §3.6.4 "Strukturattribute", EBNF officielle
+        EXACTE : `RestrictedStructureRef = (StructureRef | ''ANYSTRUCTURE'') [''RESTRICTION'' ''('' StructureRef
+        {'';'' StructureRef} '')''].` - AUCUNE alternative `type_()` (type inline anonyme) dans la règle
+        officielle, seulement `StructureRef | ANYSTRUCTURE`. L''alternative `type_()` de la grammaire
+        de ce projet est donc une EXTENSION propre au projet, absente du métamodèle officiel - même famille
+        de divergence que POW (`composedUnit`) et `type.text_range_alt` (voir `grammar-divergences.md`).
+        Décision ModelBuilder : lever une erreur explicite si un `type_()` inline est réellement rencontré
+        à cette position, plutôt que deviner une construction `Class[Kind=Structure]` anonyme.
+
+        '
+    Restrictions:
+      source:
+        field: structureRef
+        multi: true
+        optional: true
+      note: 'The structureRef entries inside the optional "RESTRICTION(...)" clause narrow the base reference
+        to one or more specific structure alternatives (comma- or semicolon-separated - both COMMA and
+        SEMI are accepted as separators here, unlike restrictedClassOrAssRef which only accepts SEMI).
+
+        '

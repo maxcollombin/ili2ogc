@@ -1,0 +1,2670 @@
+classes:
+  INTERLIS.ANYUNIT:
+    qualified_name: INTERLIS.ANYUNIT
+    kind: Class
+    name: ANYUNIT
+    abstract: true
+    extends: []
+    all_superclasses: []
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.DIMENSIONLESS:
+    qualified_name: INTERLIS.DIMENSIONLESS
+    kind: Class
+    name: DIMENSIONLESS
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.LENGTH:
+    qualified_name: INTERLIS.LENGTH
+    kind: Class
+    name: LENGTH
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.MASS:
+    qualified_name: INTERLIS.MASS
+    kind: Class
+    name: MASS
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.TIME:
+    qualified_name: INTERLIS.TIME
+    kind: Class
+    name: TIME
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.ELECTRIC_CURRENT:
+    qualified_name: INTERLIS.ELECTRIC_CURRENT
+    kind: Class
+    name: ELECTRIC_CURRENT
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.TEMPERATURE:
+    qualified_name: INTERLIS.TEMPERATURE
+    kind: Class
+    name: TEMPERATURE
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.AMOUNT_OF_MATTER:
+    qualified_name: INTERLIS.AMOUNT_OF_MATTER
+    kind: Class
+    name: AMOUNT_OF_MATTER
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.ANGLE:
+    qualified_name: INTERLIS.ANGLE
+    kind: Class
+    name: ANGLE
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.SOLID_ANGLE:
+    qualified_name: INTERLIS.SOLID_ANGLE
+    kind: Class
+    name: SOLID_ANGLE
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.LUMINOUS_INTENSITY:
+    qualified_name: INTERLIS.LUMINOUS_INTENSITY
+    kind: Class
+    name: LUMINOUS_INTENSITY
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.MONEY:
+    qualified_name: INTERLIS.MONEY
+    kind: Class
+    name: MONEY
+    abstract: true
+    extends:
+    - INTERLIS.ANYUNIT
+    all_superclasses:
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.m:
+    qualified_name: INTERLIS.m
+    kind: Class
+    name: m
+    abstract: false
+    extends:
+    - INTERLIS.LENGTH
+    all_superclasses:
+    - INTERLIS.LENGTH
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.kg:
+    qualified_name: INTERLIS.kg
+    kind: Class
+    name: kg
+    abstract: false
+    extends:
+    - INTERLIS.MASS
+    all_superclasses:
+    - INTERLIS.MASS
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.s:
+    qualified_name: INTERLIS.s
+    kind: Class
+    name: s
+    abstract: false
+    extends:
+    - INTERLIS.TIME
+    all_superclasses:
+    - INTERLIS.TIME
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.A:
+    qualified_name: INTERLIS.A
+    kind: Class
+    name: A
+    abstract: false
+    extends:
+    - INTERLIS.ELECTRIC_CURRENT
+    all_superclasses:
+    - INTERLIS.ELECTRIC_CURRENT
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.K:
+    qualified_name: INTERLIS.K
+    kind: Class
+    name: K
+    abstract: false
+    extends:
+    - INTERLIS.TEMPERATURE
+    all_superclasses:
+    - INTERLIS.TEMPERATURE
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.mol:
+    qualified_name: INTERLIS.mol
+    kind: Class
+    name: mol
+    abstract: false
+    extends:
+    - INTERLIS.AMOUNT_OF_MATTER
+    all_superclasses:
+    - INTERLIS.AMOUNT_OF_MATTER
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.rad:
+    qualified_name: INTERLIS.rad
+    kind: Class
+    name: rad
+    abstract: false
+    extends:
+    - INTERLIS.ANGLE
+    all_superclasses:
+    - INTERLIS.ANGLE
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.sr:
+    qualified_name: INTERLIS.sr
+    kind: Class
+    name: sr
+    abstract: false
+    extends:
+    - INTERLIS.SOLID_ANGLE
+    all_superclasses:
+    - INTERLIS.SOLID_ANGLE
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.cd:
+    qualified_name: INTERLIS.cd
+    kind: Class
+    name: cd
+    abstract: false
+    extends:
+    - INTERLIS.LUMINOUS_INTENSITY
+    all_superclasses:
+    - INTERLIS.LUMINOUS_INTENSITY
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.ANYCLASS:
+    qualified_name: INTERLIS.ANYCLASS
+    kind: Class
+    name: ANYCLASS
+    abstract: false
+    extends: []
+    all_superclasses: []
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.METAOBJECT:
+    qualified_name: INTERLIS.METAOBJECT
+    kind: Class
+    name: METAOBJECT
+    abstract: true
+    extends: []
+    all_superclasses: []
+    attributes:
+      own:
+        Name:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited: {}
+  INTERLIS.METAOBJECT_TRANSLATION:
+    qualified_name: INTERLIS.METAOBJECT_TRANSLATION
+    kind: Class
+    name: METAOBJECT_TRANSLATION
+    abstract: true
+    extends: []
+    all_superclasses: []
+    attributes:
+      own:
+        Name:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        NameInBaseLanguage:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited: {}
+  INTERLIS.REFSYSTEM:
+    qualified_name: INTERLIS.REFSYSTEM
+    kind: Class
+    name: REFSYSTEM
+    abstract: true
+    extends:
+    - INTERLIS.METAOBJECT
+    all_superclasses:
+    - INTERLIS.METAOBJECT
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  INTERLIS.COORDSYSTEM:
+    qualified_name: INTERLIS.COORDSYSTEM
+    kind: Class
+    name: COORDSYSTEM
+    abstract: true
+    extends:
+    - INTERLIS.REFSYSTEM
+    all_superclasses:
+    - INTERLIS.REFSYSTEM
+    - INTERLIS.METAOBJECT
+    attributes:
+      own:
+        Axis:
+          type: INTERLIS.AXIS
+          multiplicity:
+            lower: '1'
+            upper: '3'
+          aggregation: null
+      inherited:
+        Name:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  INTERLIS.SCALSYSTEM:
+    qualified_name: INTERLIS.SCALSYSTEM
+    kind: Class
+    name: SCALSYSTEM
+    abstract: true
+    extends:
+    - INTERLIS.REFSYSTEM
+    all_superclasses:
+    - INTERLIS.REFSYSTEM
+    - INTERLIS.METAOBJECT
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  INTERLIS.SIGN:
+    qualified_name: INTERLIS.SIGN
+    kind: Class
+    name: SIGN
+    abstract: true
+    extends:
+    - INTERLIS.METAOBJECT
+    all_superclasses:
+    - INTERLIS.METAOBJECT
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  INTERLIS.TIMESYSTEMS.CALENDAR:
+    qualified_name: INTERLIS.TIMESYSTEMS.CALENDAR
+    kind: Class
+    name: CALENDAR
+    abstract: false
+    extends:
+    - INTERLIS.SCALSYSTEM
+    all_superclasses:
+    - INTERLIS.SCALSYSTEM
+    - INTERLIS.REFSYSTEM
+    - INTERLIS.METAOBJECT
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  INTERLIS.TIMESYSTEMS.TIMEOFDAYSYS:
+    qualified_name: INTERLIS.TIMESYSTEMS.TIMEOFDAYSYS
+    kind: Class
+    name: TIMEOFDAYSYS
+    abstract: false
+    extends:
+    - INTERLIS.SCALSYSTEM
+    all_superclasses:
+    - INTERLIS.SCALSYSTEM
+    - INTERLIS.REFSYSTEM
+    - INTERLIS.METAOBJECT
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: INTERLIS.NAME
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  INTERLIS.min:
+    qualified_name: INTERLIS.min
+    kind: Class
+    name: min
+    abstract: false
+    extends:
+    - INTERLIS.s
+    all_superclasses:
+    - INTERLIS.s
+    - INTERLIS.TIME
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.h:
+    qualified_name: INTERLIS.h
+    kind: Class
+    name: h
+    abstract: false
+    extends:
+    - INTERLIS.min
+    all_superclasses:
+    - INTERLIS.min
+    - INTERLIS.s
+    - INTERLIS.TIME
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.d:
+    qualified_name: INTERLIS.d
+    kind: Class
+    name: d
+    abstract: false
+    extends:
+    - INTERLIS.h
+    all_superclasses:
+    - INTERLIS.h
+    - INTERLIS.min
+    - INTERLIS.s
+    - INTERLIS.TIME
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.M:
+    qualified_name: INTERLIS.M
+    kind: Class
+    name: M
+    abstract: false
+    extends:
+    - INTERLIS.TIME
+    all_superclasses:
+    - INTERLIS.TIME
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  INTERLIS.Y:
+    qualified_name: INTERLIS.Y
+    kind: Class
+    name: Y
+    abstract: false
+    extends:
+    - INTERLIS.TIME
+    all_superclasses:
+    - INTERLIS.TIME
+    - INTERLIS.ANYUNIT
+    attributes:
+      own: {}
+      inherited: {}
+  IlisMeta16.ModelData.MetaElement:
+    qualified_name: IlisMeta16.ModelData.MetaElement
+    kind: Class
+    name: MetaElement
+    abstract: true
+    extends: []
+    all_superclasses: []
+    attributes:
+      own:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+      inherited: {}
+  IlisMeta16.ModelData.MetaAttribute:
+    qualified_name: IlisMeta16.ModelData.MetaAttribute
+    kind: Class
+    name: MetaAttribute
+    abstract: false
+    extends: []
+    all_superclasses: []
+    attributes:
+      own:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Value:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited: {}
+  IlisMeta16.ModelData.ExtendableME:
+    qualified_name: IlisMeta16.ModelData.ExtendableME
+    kind: Class
+    name: ExtendableME
+    abstract: true
+    extends:
+    - IlisMeta16.ModelData.MetaElement
+    all_superclasses:
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.Package:
+    qualified_name: IlisMeta16.ModelData.Package
+    kind: Class
+    name: Package
+    abstract: true
+    extends:
+    - IlisMeta16.ModelData.MetaElement
+    all_superclasses:
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.Model:
+    qualified_name: IlisMeta16.ModelData.Model
+    kind: Class
+    name: Model
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.Package
+    all_superclasses:
+    - IlisMeta16.ModelData.Package
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        iliVersion:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Contracted:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Language:
+          type: IlisMeta16.LanguageCode
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        At:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Version:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        NoIncrementalTransfer:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        CharSetIANAName:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        xmlns:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        ili1Transfername:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        ili1Format:
+          type: IlisMeta16.ModelData.Ili1Format
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.SubModel:
+    qualified_name: IlisMeta16.ModelData.SubModel
+    kind: Class
+    name: SubModel
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.Package
+    all_superclasses:
+    - IlisMeta16.ModelData.Package
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.Type:
+    qualified_name: IlisMeta16.ModelData.Type
+    kind: Class
+    name: Type
+    abstract: true
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.Constraint:
+    qualified_name: IlisMeta16.ModelData.Constraint
+    kind: Class
+    name: Constraint
+    abstract: true
+    extends:
+    - IlisMeta16.ModelData.MetaElement
+    all_superclasses:
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.DomainType:
+    qualified_name: IlisMeta16.ModelData.DomainType
+    kind: Class
+    name: DomainType
+    abstract: true
+    extends:
+    - IlisMeta16.ModelData.Type
+    all_superclasses:
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.Class:
+    qualified_name: IlisMeta16.ModelData.Class
+    kind: Class
+    name: Class
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.Type
+    all_superclasses:
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Multiplicity:
+          type: IlisMeta16.ModelData.Multiplicity
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        EmbeddedRoleTransfer:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        ili1OptionalTable:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.AttrOrParam:
+    qualified_name: IlisMeta16.ModelData.AttrOrParam
+    kind: Class
+    name: AttrOrParam
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        SubdivisionKind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Transient:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Derivates:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.TypeRelatedType:
+    qualified_name: IlisMeta16.ModelData.TypeRelatedType
+    kind: Class
+    name: TypeRelatedType
+    abstract: true
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.MultiValue:
+    qualified_name: IlisMeta16.ModelData.MultiValue
+    kind: Class
+    name: MultiValue
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.TypeRelatedType
+    all_superclasses:
+    - IlisMeta16.ModelData.TypeRelatedType
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Ordered:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Multiplicity:
+          type: IlisMeta16.ModelData.Multiplicity
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.ClassRelatedType:
+    qualified_name: IlisMeta16.ModelData.ClassRelatedType
+    kind: Class
+    name: ClassRelatedType
+    abstract: true
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.ReferenceType:
+    qualified_name: IlisMeta16.ModelData.ReferenceType
+    kind: Class
+    name: ReferenceType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ClassRelatedType
+    all_superclasses:
+    - IlisMeta16.ModelData.ClassRelatedType
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        External:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.Role:
+    qualified_name: IlisMeta16.ModelData.Role
+    kind: Class
+    name: Role
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ReferenceType
+    all_superclasses:
+    - IlisMeta16.ModelData.ReferenceType
+    - IlisMeta16.ModelData.ClassRelatedType
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Strongness:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Ordered:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Multiplicity:
+          type: IlisMeta16.ModelData.Multiplicity
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Derivates:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+        EmbeddedTransfer:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        External:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.ExplicitAssocAccess:
+    qualified_name: IlisMeta16.ModelData.ExplicitAssocAccess
+    kind: Class
+    name: ExplicitAssocAccess
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.DataUnit:
+    qualified_name: IlisMeta16.ModelData.DataUnit
+    kind: Class
+    name: DataUnit
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        ViewUnit:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        DataUnitName:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.Context:
+    qualified_name: IlisMeta16.ModelData.Context
+    kind: Class
+    name: Context
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.MetaElement
+    all_superclasses:
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.Unit:
+    qualified_name: IlisMeta16.ModelData.Unit
+    kind: Class
+    name: Unit
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Definition:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.MetaBasketDef:
+    qualified_name: IlisMeta16.ModelData.MetaBasketDef
+    kind: Class
+    name: MetaBasketDef
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.MetaObjectDef:
+    qualified_name: IlisMeta16.ModelData.MetaObjectDef
+    kind: Class
+    name: MetaObjectDef
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.MetaElement
+    all_superclasses:
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        IsRefSystem:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.BooleanType:
+    qualified_name: IlisMeta16.ModelData.BooleanType
+    kind: Class
+    name: BooleanType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.TextType:
+    qualified_name: IlisMeta16.ModelData.TextType
+    kind: Class
+    name: TextType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        MaxLength:
+          type: IlisMeta16.ModelData.LengthRange
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.BlackboxType:
+    qualified_name: IlisMeta16.ModelData.BlackboxType
+    kind: Class
+    name: BlackboxType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.NumType:
+    qualified_name: IlisMeta16.ModelData.NumType
+    kind: Class
+    name: NumType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Min:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Max:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Circular:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Clockwise:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.CoordType:
+    qualified_name: IlisMeta16.ModelData.CoordType
+    kind: Class
+    name: CoordType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        NullAxis:
+          type: IlisMeta16.ModelData.AxisInd
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        PiHalfAxis:
+          type: IlisMeta16.ModelData.AxisInd
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Multi:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.NumsRefSys:
+    qualified_name: IlisMeta16.ModelData.NumsRefSys
+    kind: Class
+    name: NumsRefSys
+    abstract: false
+    extends: []
+    all_superclasses: []
+    attributes:
+      own:
+        Axis:
+          type: IlisMeta16.ModelData.AxisInd
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited: {}
+  IlisMeta16.ModelData.FormattedType:
+    qualified_name: IlisMeta16.ModelData.FormattedType
+    kind: Class
+    name: FormattedType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.NumType
+    all_superclasses:
+    - IlisMeta16.ModelData.NumType
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Format:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Min:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+        Max:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+        Circular:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+        Clockwise:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+  IlisMeta16.ModelData.AnyOIDType:
+    qualified_name: IlisMeta16.ModelData.AnyOIDType
+    kind: Class
+    name: AnyOIDType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.FunctionDef:
+    qualified_name: IlisMeta16.ModelData.FunctionDef
+    kind: Class
+    name: FunctionDef
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.MetaElement
+    all_superclasses:
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Explanation:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.Argument:
+    qualified_name: IlisMeta16.ModelData.Argument
+    kind: Class
+    name: Argument
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.MetaElement
+    all_superclasses:
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.ClassRefType:
+    qualified_name: IlisMeta16.ModelData.ClassRefType
+    kind: Class
+    name: ClassRefType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ClassRelatedType
+    all_superclasses:
+    - IlisMeta16.ModelData.ClassRelatedType
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.ObjectType:
+    qualified_name: IlisMeta16.ModelData.ObjectType
+    kind: Class
+    name: ObjectType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ClassRelatedType
+    all_superclasses:
+    - IlisMeta16.ModelData.ClassRelatedType
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Multiple:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.AttributeRefType:
+    qualified_name: IlisMeta16.ModelData.AttributeRefType
+    kind: Class
+    name: AttributeRefType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.EnumType:
+    qualified_name: IlisMeta16.ModelData.EnumType
+    kind: Class
+    name: EnumType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Order:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.EnumNode:
+    qualified_name: IlisMeta16.ModelData.EnumNode
+    kind: Class
+    name: EnumNode
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.EnumTreeValueType:
+    qualified_name: IlisMeta16.ModelData.EnumTreeValueType
+    kind: Class
+    name: EnumTreeValueType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.LineForm:
+    qualified_name: IlisMeta16.ModelData.LineForm
+    kind: Class
+    name: LineForm
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.MetaElement
+    all_superclasses:
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own: {}
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.LineType:
+    qualified_name: IlisMeta16.ModelData.LineType
+    kind: Class
+    name: LineType
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.DomainType
+    all_superclasses:
+    - IlisMeta16.ModelData.DomainType
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        MaxOverlap:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Multi:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Mandatory:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.View:
+    qualified_name: IlisMeta16.ModelData.View
+    kind: Class
+    name: View
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.Class
+    all_superclasses:
+    - IlisMeta16.ModelData.Class
+    - IlisMeta16.ModelData.Type
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        FormationKind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        FormationParameter:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+        Where:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Transient:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Multiplicity:
+          type: IlisMeta16.ModelData.Multiplicity
+          multiplicity:
+            lower: '0'
+            upper: '1'
+        EmbeddedRoleTransfer:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        ili1OptionalTable:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+  IlisMeta16.ModelData.RenamedBaseView:
+    qualified_name: IlisMeta16.ModelData.RenamedBaseView
+    kind: Class
+    name: RenamedBaseView
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        OrNull:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.SimpleConstraint:
+    qualified_name: IlisMeta16.ModelData.SimpleConstraint
+    kind: Class
+    name: SimpleConstraint
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.Constraint
+    all_superclasses:
+    - IlisMeta16.ModelData.Constraint
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Percentage:
+          type: 39FDCDA0-DAE3-4c14-B2DC-C4F0F4DAAAF8
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        LogicalExpression:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.ExistenceConstraint:
+    qualified_name: IlisMeta16.ModelData.ExistenceConstraint
+    kind: Class
+    name: ExistenceConstraint
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.Constraint
+    all_superclasses:
+    - IlisMeta16.ModelData.Constraint
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Attr:
+          type: IlisMeta16.ModelData.PathOrInspFactor
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.UniqueConstraint:
+    qualified_name: IlisMeta16.ModelData.UniqueConstraint
+    kind: Class
+    name: UniqueConstraint
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.Constraint
+    all_superclasses:
+    - IlisMeta16.ModelData.Constraint
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Where:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Kind:
+          type: 279A049B-2BCC-4fb5-9C8F-3B22EF3EE0ED
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        UniqueDef:
+          type: IlisMeta16.ModelData.PathOrInspFactor
+          multiplicity:
+            lower: '1'
+            upper: '*'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.SetConstraint:
+    qualified_name: IlisMeta16.ModelData.SetConstraint
+    kind: Class
+    name: SetConstraint
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.Constraint
+    all_superclasses:
+    - IlisMeta16.ModelData.Constraint
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Where:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+        Constraint:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+  IlisMeta16.ModelData.Graphic:
+    qualified_name: IlisMeta16.ModelData.Graphic
+    kind: Class
+    name: Graphic
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Where:
+          type: IlisMeta16.ModelData.Expression
+          multiplicity:
+            lower: '0'
+            upper: '1'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelData.DrawingRule:
+    qualified_name: IlisMeta16.ModelData.DrawingRule
+    kind: Class
+    name: DrawingRule
+    abstract: false
+    extends:
+    - IlisMeta16.ModelData.ExtendableME
+    all_superclasses:
+    - IlisMeta16.ModelData.ExtendableME
+    - IlisMeta16.ModelData.MetaElement
+    attributes:
+      own:
+        Rule:
+          type: IlisMeta16.ModelData.CondSignParamAssignment
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+      inherited:
+        Name:
+          type: C16095C6-1D80-49ab-9A0B-5847A355489B
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Documentation:
+          type: IlisMeta16.ModelData.DocText
+          multiplicity:
+            lower: '0'
+            upper: '*'
+        Abstract:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Generic:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+        Final:
+          type: INTERLIS.BOOLEAN
+          multiplicity:
+            lower: '1'
+            upper: '1'
+  IlisMeta16.ModelTranslation.Translation:
+    qualified_name: IlisMeta16.ModelTranslation.Translation
+    kind: Class
+    name: Translation
+    abstract: false
+    extends: []
+    all_superclasses: []
+    attributes:
+      own:
+        Language:
+          type: IlisMeta16.LanguageCode
+          multiplicity:
+            lower: '1'
+            upper: '1'
+          aggregation: null
+        Translations:
+          type: IlisMeta16.ModelTranslation.METranslation
+          multiplicity:
+            lower: '0'
+            upper: '*'
+          aggregation: null
+      inherited: {}

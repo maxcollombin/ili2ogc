@@ -1,0 +1,18 @@
+[project]
+name = "interlis-runtime"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "antlr4-python3-runtime==4.13.2",
+    "antlr4-tools>=0.2.2",
+    "pyyaml>=6.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "antlr4-tools>=0.2.2",
+    "pydantic>=2.13.4",
+    "ruamel-yaml>=0.19.1",
+]

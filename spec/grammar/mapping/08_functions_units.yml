@@ -1,0 +1,289 @@
+argumentDef:
+  grammar:
+    rule: argumentDef
+  kind: Instance
+  target: IlisMeta16.ModelData.Argument
+  parent:
+    association: FormalArgument
+    role: Argument
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+      note: confirmed inherited attribute Argument.Name (mandatory, ilismeta16-classes.yml)
+  note: 'Kind resolved by argumentType dispatcher || Confirmed via grammar (argumentDef(), source ~12366-12378):
+    Name COLON argumentType'
+argumentType:
+  grammar:
+    rule: argumentType
+  kind: Dispatcher
+  dispatches_to:
+  - type
+  - attrType
+  attribute_bindings:
+    Kind:
+      source:
+        field: attrTypeDef|OBJECT|OBJECTS|ENUMVAL|ENUMTREEVAL
+        kind: alt_rule_or_token
+        optional: true
+      mapping:
+        attrTypeDef_present: Type
+        OBJECT_present: Type
+        OBJECTS_present: Type
+        ENUMVAL: EnumVal
+        ENUMTREEVAL: EnumTreeVal
+      note: 'CORRIGE (Lot 16, sous-groupe argument/argumentType) : la branche alt2 ''(OBJECT|OBJECTS)
+        OF ...'' dispatche ELLE AUSSI Kind=Type (voir _object_of_variant ci-dessous pour la preuve) -
+        l''ancienne note limitant ce mapping a 3 alternatives sur 4 etait incomplete. Argument.Kind reste
+        exactement Type/EnumVal/ EnumTreeVal (ilismeta16-kind-values.yml, mandatory: true) ; alt1 ET alt2
+        dispatchent tous deux Type, distingues seulement par le sous-type concret de l''instance Type
+        (voir _type_ref).
+
+        '
+    _type_ref:
+      source:
+        field: attrTypeDef|restrictedClassOrAssRef|viewRef
+        alt: 1|2
+        optional: true
+      note: 'Quand Kind=Type, feeds l''association ArgumentType confirmee (Type end, target IlisMeta16.ModelData.Type).
+        Pour alt1 (attrTypeDef), le sous-type concret suit le mecanisme deja confirme d''attrTypeDef.
+        Pour alt2 (OBJECT|OBJECTS OF ...), le sous-type concret est IlisMeta16.ModelData.ObjectType (CONFIRME
+        Lot 16 - voir _object_of_variant).
+
+        '
+  note: 'Runtime parameters || Confirmed via grammar (argumentType(), source ~12433-12483), 4 alternatives:
+    alt1: attrTypeDef alt2: (OBJECT|OBJECTS) OF (restrictedClassOrAssRef|viewRef) alt3: ENUMVAL alt4:
+    ENUMTREEVAL'
+composedUnit:
+  grammar:
+    rule: composedUnit
+  kind: Container
+  attribute_bindings:
+    Operands:
+      source:
+        field: unitRef
+        multi: true
+      note: the unitRef-typed operands (first + each subsequent one after MUL/DIV/POW) resolve to Unit
+        references; feeds the enclosing Unit's Definition (Expression) via some composed-unit-expression
+        construction not further specified in the metamodel - ModelBuilder must build an appropriate Expression/CompoundExpr-like
+        structure from these operands and the MUL/DIV/POW operators.
+  note: 'No direct IlisMeta16 instance expected. Sets Kind=ComposedU on the enclosing Unit (created by
+    unitDef); feeds NumUnit associations for each combined unitRef. || Confirmed via grammar (composedUnit(),
+    source ~9062-9130) and .g4 (line 354): LPAR (unitRef|Name|INTERLIS DOT Name) ((MUL|DIV|POW) (unitRef|INTERLIS
+    DOT Name|Name))* RPAR No dedicated ''ComposedUnit'' class/datatype exists in the metamodel (only Unit.Kind=ComposedU
+    marks a Unit AS composed - confirmed, ilismeta16-kind-values.yml). This rule feeds the enclosing unitDef''s
+    Unit instance directly (Kind=ComposedU), not a separate class.'
+derivedUnit:
+  grammar:
+    rule: derivedUnit
+  kind: Container
+  attribute_bindings:
+    _status:
+      status: not_applicable
+      note: 'CONFIRME not_applicable (Lot 12, phase 2, re-verifie) : grep "derivedUnit()" sur tout src/interlis/antlr/InterlisParser.py
+        ne retourne AUCUNE occurrence d''appel self.derivedUnit() en dehors de la definition de la methode
+        elle-meme - regle grammaticale orpheline/inatteignable, confirme une seconde fois (lot 8 puis
+        lot 12). Le ModelBuilder n''a pas besoin de gerer DerivedUnitContext via un parsing normal d''un
+        .ili demarrant depuis modeldef/interlis2def. Si un futur changement de grammaire rendait cette
+        regle atteignable, ce binding serait a revoir entierement (structure probable : decConst(s) combines
+        via MUL/DIV/POW comme facteur numerique, plus un unitRef - non confirme faute d''usage reel).
+
+        '
+  note: 'No direct IlisMeta16 instance expected. Sets Kind=DerivedU on the enclosing Unit (created by
+    unitDef); decConst/unitRef feed the Unit''s Definition (Expression). || Confirmed via grammar (derivedUnit(),
+    source ~8953-8990) AND .g4 (line 352): decConst ((MUL|DIV|POW) decConst)* LSBR unitRef RSBR CRITICAL
+    FINDING (grep-verified): this rule is NEVER CALLED from any other rule in the compiled parser (grep
+    "self.derivedUnit()" across the entire InterlisParser.py returns zero matches beyond the method definition
+    itself) - it is an orphaned/unreachable production. Its shape closely resembles unitDef''s first alternative
+    (''expression (LSBR unitRef RSBR)?''), suggesting derivedUnit may have been the ORIGINAL intended
+    production for that unitDef branch before being superseded by the more general ''expression'' rule
+    - but this is speculation, not confirmed. Per RULE #7 (stay within Lot 8 scope) and RULE #5, this
+    is documented as unresolved/unreachable rather than being force-mapped to Unit.Kind=DerivedU (which
+    is already covered via unitDef''s own bracket-unitRef branches - see unitDef binding above).'
+functionDecl:
+  grammar:
+    rule: functionDecl
+  kind: Instance
+  target: IlisMeta16.ModelData.FunctionDef
+  parent:
+    association: PackageElements
+    role: Element
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        index: 0
+      note: confirmed inherited attribute FunctionDef.Name (mandatory, ilismeta16-classes.yml)
+  note: 'Function declarations || Confirmed via grammar (functionDecl(), source ~12144-12180): FUNCTION
+    Name LPAR argumentDef (SEMI argumentDef)* RPAR COLON (BOOLEAN | attrTypeDef | Name) SEMI'
+functionDef:
+  grammar:
+    rule: functionDef
+  kind: Container
+  attribute_bindings:
+    _status:
+      status: not_applicable
+      note: 'CONFIRME (Lot 13, point 11, phase 2). Tranche par test EMPIRIQUE (RULE #4/#2 - au-dela du
+        grep/lecture statique, execution reelle du parser compile via antlr4-python3-runtime==4.13.2 sur
+        3 extraits .ili minimaux) plutot que par seule lecture de spec, faute de fichier .ili source reel
+        disponible autrement. Site 1 (unitDef alt3, ~L8877) : deja confirme Lot 12/13 - cas degenere bare-SEMI,
+        entierement couvert par unitDef.Kind=BaseU "absent" (rien de plus a coder). Sites 2+3 (modeldef
+        ~L1876, definitions ~L2390) : test empirique "UNIT Meter [m] EXTENDS Length;" (SANS EQ, forme
+        abregee du Reference Manual 2006-04-13 section 2.9.1 "Meter [m] EXTENDS Length;") parse SANS AUCUNE
+        ERREUR, mais produit DEUX noeuds functionDef distincts et ADJACENTS dans l''arbre : "(functionDef
+        UNIT Meter [m] EXTENDS (unitRef Length))" (alt1, l''en-tete, SANS le SEMI - confirme par lecture
+        du code compile : alt1 ne consomme jamais SEMI) immediatement suivi de "(functionDef ;)" (alt2,
+        cas degenere bare-SEMI qui consomme le point-virgule laisse en suspens par alt1 - le meme mecanisme
+        degenere que sur le site 1). Autrement dit : quand alt1 est atteinte de facon autonome a ces 2
+        sites, la boucle modeldef/definitions rappelle functionDef() une SECONDE fois pour absorber le
+        SEMI restant - PAS une branche morte comme l''hypothese initiale du Lot 12 le supposait, mais
+        un artefact de conception ou l''en-tete (UNIT?/Name/ShortName?/EXTENDS unitRef?) et le terminateur
+        (SEMI) sont scindes en 2 invocations successives de la MEME regle. Semantiquement, cette paire
+        ADJACENTE equivaut exactement a un unitDef avec Kind=BaseU absent (unite concrete sans formule)
+        - cf. binding unitDef ci-dessus. Test complementaire "= FUNCTION Explanation [unitRef];" SANS
+        Name du tout (alt2 complet, atteint directement) parse egalement sans erreur - donc syntaxiquement
+        atteignable - mais SEMANTIQUEMENT VIDE : Unit.Name est mandatory (ilismeta16-classes.yml), un
+        alt2-complet sans Name precedent ne peut construire aucune instance Unit valide. Decision ModelBuilder
+        : (a) une paire adjacente [functionDef-alt1 (en-tete), functionDef-alt2-bare-SEMI] doit etre fusionnee
+        et traitee comme un unitDef Kind=BaseU (Name/ ShortName/EXTENDS -> Inheritance, memes bindings
+        que unitDef) ; (b) un functionDef-alt2-COMPLET (EQ FUNCTION Explanation LSBR unitRef RSBR) rencontre
+        SANS alt1 immediatement precedent n''a pas de Name et ne peut construire d''instance Unit - lever
+        une erreur explicite plutot que deviner un nom. Cette regle "functionDef" reste par ailleurs confirmee
+        (Lot 12, doc ilidoc ili2c) comme distincte du vrai FunctionDef de la spec INTERLIS 2 (= functionDecl
+        dans ce projet) - coherent avec le commentaire du .g4 source (vendor/interlis-antlr4/InterlisParser.g4
+        L28) signalant deja cette confusion de nommage entre les 2 regles.
+
+        '
+  note: 'No direct IlisMeta16 instance expected. Despite its name, this rule does NOT create the FunctionDef
+    instance (that''s functionDecl). It''s an optional trailing clause on a function name specifying its
+    result unit ([unitRef], EXTENDS unitRef) and Explanation text, feeding attributes/associations of
+    the enclosing FunctionDef. Function arguments || Confirmed via grammar (functionDef(), source ~12258-12318)
+    AND the .g4 source (vendor/interlis-antlr4/InterlisParser.g4 lines 509-515): functionDef : UNIT? Name
+    (LSBR Name RSBR)? (EXTENDS unitRef)? | (EQ FUNCTION Explanation LSBR unitRef RSBR)? SEMI ; CORRECTION
+    (Lot 12->13, phase 2) : l''affirmation precedente ("ONLY ever called from unitDef''s 3rd alternative")
+    etait FAUSSE - grep "self.functionDef()" confirme 3 sites d''appel reels : - ligne ~1876, dans modeldef()
+    : alternative de haut niveau parmi metaDataBasketDef/unitDef/functionDef/functionDecl/... via adaptivePredict
+    (pas de EQ consomme avant l''appel) - ligne ~2390, dans definitions() : meme famille de dispatch (metaDataBasketDef/unitDef/functionDef/domainDef/...),
+    meme absence de EQ prealable - ligne ~8877, dans unitDef() (3eme alt de son propre dispatch interne
+    apres son propre EQ) : SEUL ce site confirme le raisonnement precedent (alt2/EQ FUNCTION... est bien
+    inatteignable ici, car unitDef a deja consomme son propre EQ, et le SEMI final est aussi deja gere
+    par unitDef - donc seul alt1, ou le cas degenere bare-SEMI d''alt2, est atteignable a CE site precis).
+    Consequence : aux 2 AUTRES sites (modeldef/definitions), functionDef() est appele comme alternative
+    AUTONOME de haut niveau, sans EQ ni SEMI deja consommes par l''appelant - rien ne prouve qu''alt2
+    (EQ FUNCTION Explanation LSBR unitRef RSBR SEMI) y soit inatteignable ; au contraire cette forme mappe
+    proprement sur IlisMeta16.ModelData.UnitFunction (Explanation) + un unitRef. Hypothese non confirmee
+    sur alt1 (UNIT? Name (LSBR Name RSBR)? (EXTENDS unitRef)?), ressemblant fortement a l''en-tete de
+    unitDef lui-meme (moins ABSTRACT/EQ) : possible mecanisme de chainage de plusieurs declarations d''unites
+    dans une meme instruction (ex. "UNIT m, cm = m/100;"), mais NON confirme par la doc ilidoc (docs.interlis.ch/ili2c/5.5.4/ilidoc.html)
+    ni par un .ili reel. Ce que la doc ilidoc CONFIRME : le vrai "FunctionDef" de la spec (= FUNCTION
+    Function-Name ...) correspond a functionDecl dans ce projet, pas a cette regle - le commentaire ci-dessus
+    le disait deja correctement, ce point reste valide.'
+parameterDef:
+  grammar:
+    rule: parameterDef
+  kind: Instance
+  target: IlisMeta16.ModelData.AttrOrParam
+  parent:
+    association: ClassParam
+    role: ClassParameter
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+      note: confirmed inherited attribute AttrOrParam.Name (mandatory, ilismeta16-classes.yml)
+    Abstract:
+      source:
+        field: ABSTRACT
+        presence: true
+      note: confirmed inherited attribute AttrOrParam.Abstract (from ExtendableME); resolved from the
+        optional (ABSTRACT|EXTENDED|FINAL) group, same pattern as classDef's own Abstract/Final handling
+        (Lot 4).
+    Final:
+      source:
+        field: FINAL
+        presence: true
+      note: same optional-group pattern as Abstract above; EXTENDED has no direct confirmed AttrOrParam/ExtendableME
+        attribute distinct from Abstract/Final (see classDef note - Generic is a separate ExtendableME
+        attribute not obviously tied to any token here).
+  note: 'METAOBJECT(...) branch may instead reference MetaObjectDef - needs confirmation against a real
+    .ili example using PARAMETER METAOBJECT || Confirmed via grammar (parameterDef(), source ~9579-9631):
+    PARAMETER Name (LPAR (ABSTRACT|EXTENDED|FINAL) RPAR)? COLON (attrTypeDef | METAOBJECT (OF metaObjectRef)?)
+    SEMI'
+runTimeParameterDef:
+  grammar:
+    rule: runTimeParameterDef
+  kind: Instance
+  target: IlisMeta16.ModelData.AttrOrParam
+  parent:
+    association: PackageElements
+    role: Element
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+    Abstract:
+      source:
+        field: ABSTRACT
+        presence: true
+      note: same optional single-token modifier pattern as parameterDef, but WITHOUT surrounding LPAR/RPAR
+        here (bare (ABSTRACT|EXTENDED|FINAL)? directly after Name, per grammar)
+    Final:
+      source:
+        field: FINAL
+        presence: true
+  note: 'Unit definitions || Confirmed via grammar (runTimeParameterDef(), source ~9688-9720): PARAMETER
+    Name (ABSTRACT|EXTENDED|FINAL)? COLON attrTypeDef SEMI'
+unitDef:
+  grammar:
+    rule: unitDef
+  kind: Instance
+  target: IlisMeta16.ModelData.Unit
+  discriminant:
+    attribute: Kind
+    dynamic: true
+    rule:
+      unitRef: BaseU
+      derivedUnit: DerivedU
+      composedUnit: ComposedU
+  parent:
+    association: PackageElements
+    role: Element
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        index: 0
+      note: confirmed inherited attribute Unit.Name (mandatory, ilismeta16-classes.yml)
+    Abstract:
+      source:
+        field: ABSTRACT
+        presence: true
+      note: confirmed inherited attribute (ExtendableME.Abstract), resolved from the optional (LPAR ABSTRACT
+        RPAR) group
+    Definition:
+      source:
+        field: expression
+        optional: true
+      note: 'confirmed attribute Unit.Definition: IlisMeta16.ModelData.Expression (0..1, ilismeta16-classes.yml);
+        populated only for the first unitDef alternative (bare expression, with or without a bracketed
+        unitRef).'
+  note: 'Kind resolved dynamically: plain unitRef -> BaseU, derivedUnit -> DerivedU, composedUnit -> ComposedU
+    Derived and composed units || Confirmed via grammar (unitDef(), source ~8799-8880) AND .g4 (lines
+    339-349): UNIT? Name (LSBR Name RSBR)? (LPAR ABSTRACT RPAR)? (EXTENDS unitRef)? EQ ( expression (LSBR
+    unitRef RSBR)? | composedUnit | functionDef | LSBR unitRef RSBR )? SEMI'
+unitRef:
+  grammar:
+    rule: unitRef
+  kind: Reference
+  target: IlisMeta16.ModelData.UnitRef
+  attribute_bindings:
+    Unit:
+      source:
+        field: INTERLIS+DOT+Name|Name+DOT+Name
+        join: .
+      note: 'confirmed attribute Unit: INTERLIS.NAME (0..1) on IlisMeta16.ModelData.UnitRef (ilismeta16-datatypes.yml);
+        populated by joining all Name tokens (and the literal INTERLIS qualifier when alt2 matches) with
+        ''.'' separators, mirroring the same join pattern already used for classRef/structureRef/domainRef
+        (Lots 2 and 4).'
+  note: '09_views_graphics Views and graphical representations View definitions || Confirmed via grammar
+    (unitRef(), source ~9177-9218), 2 alternatives: alt1: Name (DOT Name)* alt2: INTERLIS DOT Name'

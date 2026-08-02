@@ -1,0 +1,117 @@
+associationDef:
+  grammar:
+    rule: associationDef
+  kind: Instance
+  target: IlisMeta16.ModelData.Class
+  discriminant:
+    attribute: Kind
+    value: Association
+  parent:
+    association: PackageElements
+    role: Element
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        index: 0
+    Abstract:
+      source:
+        field: ABSTRACT
+        presence: true
+    Final:
+      source:
+        field: FINAL
+        presence: true
+associationRef:
+  grammar:
+    rule: associationRef
+  kind: Reference
+  target: IlisMeta16.ModelData.Class
+  discriminant:
+    attribute: Kind
+    value: Association
+  attribute_bindings:
+    _resolution:
+      note: 'Pure reference resolution: qualified name (Name (DOT Name)?)? Name resolves to an existing
+        IlisMeta16.ModelData.Class with Kind=Association (same pattern as classRef/structureRef); no own
+        attributes constructed.'
+  note: Association roles and cardinalities
+cardinality:
+  grammar:
+    rule: cardinality
+  kind: ValueObject
+  target: IlisMeta16.ModelData.Multiplicity
+  attribute_bindings:
+    Min:
+      source:
+        field: PosNumber
+        index: 0
+      rule:
+        MUL_alone: 0
+        PosNumber: literal_value
+      note: confirmed Multiplicity.own.Min (MultRange, mandatory). '{*}' alone means {0..*} (Min=0); '{PosNumber}'
+        or '{PosNumber..X}' - the first PosNumber is Min.
+    Max:
+      source:
+        field: MUL|PosNumber
+        index: 1
+        optional: true
+      rule:
+        MUL_alone: '*'
+        MUL_after_DOTDOT: '*'
+        PosNumber_after_DOTDOT: literal_value
+        absent: same_as_Min
+      note: confirmed Multiplicity.own.Max (MultRange, 0..1). '{*}' -> Max='*' (unbounded); '{N..*}' ->
+        Max='*'; '{N..M}' -> Max=M; '{N}' alone (no DOTDOT) -> Max defaults to same value as Min (exact
+        cardinality), per grammar structure where DOTDOT+bound is optional.
+  note: 06_types
+roleDef:
+  grammar:
+    rule: roleDef
+  kind: Instance
+  target: IlisMeta16.ModelData.Role
+  parent:
+    association: AssocRole
+    role: Role
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+    Strongness:
+      source:
+        field: MINUS
+        sequence_pattern: true
+      rule:
+        MINUS MINUS: Assoc
+        MINUS LT GT: Aggr
+        MINUS LT HASH GT: Comp
+      note: 'Confirmed against INTERLIS 2 Reference Manual §2.7.2 "Force of relationship": -- = Association,
+        -<> = Aggregation (marks the role leading to the whole), -<#> = Composition (marks the role leading
+        to the whole). Each role''s own symbol directly encodes its Strongness value.
+
+        '
+    Ordered:
+      source:
+        field: ORDERED
+        presence: true
+      note: part of the (modifiers) group in LPAR...RPAR before the strength symbol
+    Multiplicity:
+      source:
+        field: cardinality
+        optional: true
+    EmbeddedTransfer:
+      source:
+        field: EXTERNAL
+        presence: false
+      note: polarity unconfirmed - EXTERNAL present likely means NOT embedded (external/topic-spanning
+        reference per spec 2.6.3/2.7.5)
+  note: 'Strongness resolved dynamically: LT/GT -> Assoc, HASH -> Comp, default -> Aggr (needs confirmation
+    against kind-values.yml) || Grammar covers two distinct alternatives sharing this rule name: --- Alternative
+    1 (spec-documented, §2.7.1 EBNF): full role declaration --- Name (modifiers)? (--|-<>|-<#>) cardinality?
+    restrictedClassOrAssRef (OR restrictedClassOrAssRef)* (ASSIGN STRING)? SEMI ASSIGN STRING at the end:
+    spec EBNF shows '':='' Role-Factor (an Expression), but the ANTLR grammar (2.4 dialect) only matches
+    a literal STRING here, not a full factor. Purpose/target attribute unclear - not yet mapped. --- Alternative
+    2 (ili2c 2.4 dialect extension, not in the 2006 manual EBNF) --- Name COLON MANDATORY? (attrTypeDef
+    | enumeration | numeric | constraintDef) SEMI Does NOT create a new Role instance. Restricts/redefines
+    the type of an already-declared (inherited) role by name - likely feeds TypeRestriction on the existing
+    Role, MANDATORY affecting DomainType.Mandatory. STATUS: unresolved, needs a real .ili example.'

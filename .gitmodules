@@ -1,0 +1,3 @@
+[submodule "vendor/interlis-antlr4"]
+	path = vendor/interlis-antlr4
+	url = https://github.com/geostandards-ch/interlis-antlr4.git

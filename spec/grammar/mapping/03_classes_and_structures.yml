@@ -1,0 +1,137 @@
+classDef:
+  grammar:
+    rule: classDef
+  kind: Instance
+  target: IlisMeta16.ModelData.Class
+  discriminant:
+    attribute: Kind
+    value: Class
+  parent:
+    association: PackageElements
+    role: Element
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        index: 0
+      note: Name(1) after END is the closing name, must match Name(0) - validation only, not a separate
+        attribute binding
+    Abstract:
+      source:
+        field: ABSTRACT
+        presence: true
+      note: resolved from the optional (ABSTRACT|EXTENDED|FINAL) token group inside LPAR...RPAR after
+        the class name
+    Final:
+      source:
+        field: FINAL
+        presence: true
+  note: 'EmbeddedRoleTransfer, ili1OptionalTable, Multiplicity: NOT sourced from ClassDefContext. Confirmed
+    via IlisMeta16.ili (lines 146-147): EmbeddedRoleTransfer is MANDATORY BOOLEAN with no visible grammar
+    token; ili1OptionalTable is "INTERLIS 1 only". These are ModelBuilder-computed defaults (e.g. False/None),
+    not grammar-sourced attributes.'
+classOrStructureDef:
+  grammar:
+    rule: classOrStructureDef
+  kind: Dispatcher
+  dispatches_to:
+  - classDef
+  - structureDef
+  attribute_bindings:
+    _dispatch:
+      note: 'Pure dispatcher/aggregator, no own class - a repeated loop of 3 alternatives: ''(ATTRIBUTE)?
+        attributeDef+'', ''constraintDef+'', ''(PARAMETER)? parameterDef+''. Each attributeDef/constraintDef/parameterDef
+        feeds its own confirmed association (ClassAttr/ClassConstraint/ClassParam) on the enclosing classDef/structureDef,
+        not on classOrStructureDef itself.'
+  note: Class and structure references
+classOrStructureRef:
+  grammar:
+    rule: classOrStructureRef
+  kind: Dispatcher
+  dispatches_to:
+  - classRef
+  - structureRef
+  attribute_bindings:
+    dispatch:
+      source:
+        field: classRef|structureRef
+        kind: alt_rule
+      note: 'Pure dispatcher (2 alternatives): classRef() or structureRef(). Confirmed via grammar-metamodel-mapping.yml:
+        "kind: Dispatcher, dispatches_to: [classRef, structureRef]". No own construction; result is whichever
+        of the two sub-rules'' resolved reference matched.
+
+        '
+  note: 04_attributes Attribute definitions
+classRef:
+  grammar:
+    rule: classRef
+  kind: Reference
+  target: IlisMeta16.ModelData.ClassRef
+  resolves_to: Class
+  attribute_bindings:
+    Ref:
+      source:
+        field: INTERLIS
+        DOT: null
+        SIGN|Name: null
+        join: .
+      note: 'classRef() has 3 alternatives: "INTERLIS.REFSYSTEM" (a fixed predefined reference), "INTERLIS."
+        + (SIGN|Name)(.(SIGN|Name))* (a qualified predefined INTERLIS-namespace class path), or a bare
+        (SIGN|Name)(.(SIGN|Name))* path (a user-model-qualified class path, e.g. "MyTopic.MyClass"). SIGN
+        is accepted alongside Name at each segment (the grammar allows the reserved word SIGN as a literal
+        identifier here, same pattern as BASKET/LOCAL in enumElement). ClassRef is a DataType with a single
+        own attribute Ref: INTERLIS.NAME (confirmed in ilismeta16-datatypes.yml), so all matched segments
+        (plus the literal "INTERLIS" prefix and REFSYSTEM keyword where applicable) are joined with "."
+        into this single Ref string.
+
+        '
+structureDef:
+  grammar:
+    rule: structureDef
+  kind: Instance
+  target: IlisMeta16.ModelData.Class
+  discriminant:
+    attribute: Kind
+    value: Structure
+  parent:
+    association: PackageElements
+    role: Element
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        index: 0
+      note: inherited Name (MetaElement); same pattern as classDef above.
+    Abstract:
+      source:
+        field: ABSTRACT
+        presence: true
+      note: 'resolved from the optional (ABSTRACT|GENERIC|FINAL) token group inside LPAR...RPAR - same
+        shared modifier-token-set pattern as classDef (Lot: reused).'
+    Final:
+      source:
+        field: FINAL
+        presence: true
+structureRef:
+  grammar:
+    rule: structureRef
+  kind: Reference
+  resolves_to: Class
+  resolves_to_constraint:
+    Kind: Structure
+  attribute_bindings:
+    resolved_name:
+      source:
+        field: INTERLIS
+        DOT: null
+        BOOLEAN|URI|UUIDOID|Name: null
+        join: .
+      note: 'structureRef() has 2 alternatives: "INTERLIS." + (BOOLEAN|URI|UUIDOID|Name)(.Name)* (a predefined
+        INTERLIS-namespace structure path, where BOOLEAN/URI/UUIDOID are accepted as literal first-segment
+        identifiers alongside Name), or a bare Name(.Name)* path. Per grammar-metamodel-mapping.yml, structureRef''s
+        semantics are "kind: Reference, reference.target.class: Class, constraint: Kind=Structure" - unlike
+        classRef, it does NOT construct an IlisMeta16.ModelData.ClassRef DataType wrapper (no metamodel.target
+        block for this rule); the joined qualified name resolves directly to an existing IlisMeta16.ModelData.Class
+        instance with Kind=Structure, looked up by name rather than newly constructed.
+
+        '

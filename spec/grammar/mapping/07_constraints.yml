@@ -1,0 +1,860 @@
+argument:
+  grammar:
+    rule: argument
+  kind: Instance
+  target: IlisMeta16.ModelData.ActualArgument
+  discriminant:
+    attribute: Kind
+    dynamic: true
+    rule:
+      ALL: AllOf
+      default: Expression
+  attribute_bindings:
+    Expression:
+      source:
+        field: expression
+        alt: 1
+        optional: true
+      note: 'confirmed attribute Expression: IlisMeta16.ModelData.Expression on ActualArgument, populated
+        only for the Kind=Expression alternative'
+    ObjectClasses:
+      source:
+        field: restrictedClassOrAssRef
+        alt: 2
+        optional: true
+      note: 'confirmed attribute ObjectClasses: IlisMeta16.ModelData.ClassRef (0..*) on ActualArgument,
+        for the ''ALL (restrictedClassOrAssRef)'' variant. restrictedClassOrAssRef already resolves to
+        classOrAssociationRef entries (confirmed in Lot 4), feeding this list.'
+  note: 'Kind resolved dynamically: ALL present -> AllOf, otherwise Expression Paths and references ||
+    Confirmed via grammar (argument(), source ~12038-12070+), 2 alternatives: alt1: expression() alt2:
+    ALL (LPAR restrictedClassOrAssRef RPAR | viewableRef RPAR)'
+associationPath:
+  grammar:
+    rule: associationPath
+  kind: Container
+  attribute_bindings:
+    Ref:
+      source:
+        field: Name
+      note: feeds PathEl.Ref (INTERLIS.NAME, confirmed) on the enclosing pathEl (Kind=AssocPath)
+    _leading_backslash:
+      status: not_applicable
+      note: 'Lot 18 (phase 2, résidus Phase 1). Preuve d''absence exhaustive : `PathEl` (ilismeta16-datatypes.yml/XMI)
+        n''a que 4 attributs own - Kind, Ref, NumIndex, SpecIndex - aucun ne se prête à encoder "direction
+        de traversée de l''association". Décision ModelBuilder : le BACKSLASH optionnel est un marqueur
+        de désambiguïsation purement syntaxique, consommé au moment de la RÉSOLUTION du nom d''association
+        (pour choisir quelle association porte ce nom en cas d''ambiguïté), sans effet sur les données
+        stockées dans le PathEl résultant une fois l''association résolue - Ref reste le nom de l''association,
+        identique avec ou sans backslash.
+
+        '
+  note: 'No direct IlisMeta16 instance expected. Disambiguates which association role to follow within
+    a pathEl. Attribute references || Confirmed via grammar (associationPath(), source ~11778-11794):
+    BACKSLASH? Name  -- an optional leading backslash then an association name, used to select which association
+    a path traverses when a role name alone would be ambiguous. No dedicated ''AssociationPath'' class
+    exists in the metamodel (grep confirms none) - this rule feeds directly into the enclosing pathEl''s
+    PathEl.Ref/Kind=AssocPath, no separate class instance.'
+attributePath:
+  grammar:
+    rule: attributePath
+  kind: Container
+  feeds_into: IlisMeta16.ModelData.PathOrInspFactor
+  attribute_bindings:
+    _dispatch:
+      source:
+        field: objectOrAttributePath
+      note: pass-through construction - same target PathOrInspFactor as objectOrAttributePath itself;
+        this rule adds no fields of its own.
+  note: 'No direct IlisMeta16 instance expected. Pure pass-through to objectOrAttributePath. || Confirmed
+    via grammar (attributePath(), source ~11581-11592): a pure single-child wrapper around objectOrAttributePath()
+    - no own tokens.'
+attributeRef:
+  grammar:
+    rule: attributeRef
+  kind: Container
+  attribute_bindings:
+    Ref:
+      source:
+        field: Name
+        alt: 1
+        optional: true
+      note: feeds PathEl.Ref (INTERLIS.NAME) on the enclosing pathEl (Kind=Attribute, corrected - see
+        pathEl binding)
+    SpecIndex:
+      source:
+        field: FIRST|LAST
+        kind: alt_token
+        optional: true
+      note: 'confirmed 1:1 match: PathEl.SpecIndex enum values are exactly First/Last (ilismeta16-kind-values.yml),
+        matching attributeRef''s FIRST/LAST tokens inside the optional LSBR...RSBR bracket.'
+    NumIndex:
+      source:
+        field: Number
+        optional: true
+      note: 'Lot 18 (phase 2, résidus Phase 1) - CONFIRMÉ, pas de mismatch (voir pathEl.NumIndex pour
+        la preuve complète) : `MultRange` est un `uml:PrimitiveType` scalaire (docs/uml/IlisMeta16-formatted.xmi
+        l.306-307), pas une structure Min/Max à deux bornes - le `Number` unique du bracket l''alimente
+        donc directement, sans transformation ni "range dégénéré" à construire.
+
+        '
+  note: 'CORRIGE (audit croisé grammar-metamodel-mapping.yml/python-bindings.yml, 2026-08-02, avant fusion
+    spec). L''ancien target AttrOrParam (et semantics.reference.target) ici n''a jamais ete confirme par
+    un grep - non detecte par check_mapping.py car ce champ n''est pas dans son perimetre de validation
+    (metamodel.target uniquement). Deja corrige cote python-bindings.yml (RULE #1, note "Reset to null")
+    : cette regle ne construit pas sa propre instance, elle alimente les champs (Name/FIRST/LAST/Number/AGGREGATES)
+    du PathEl construit par la regle ENGLOBANTE pathEl (alt8) - voir python-bindings.yml:attributeRef
+    pour le detail complet. 08_functions_units Functions, parameters and units Function definitions ||
+    Confirmed via grammar (attributeRef(), source ~11844-11884), 2 alternatives: alt1: Name (LSBR (FIRST|LAST|Number)
+    RSBR)? alt2: AGGREGATES CORRECTION (RULE #1): the previous target IlisMeta16.ModelData. AttrOrParam
+    here was NOT confirmed by any grep match tying attributeRef() specifically to AttrOrParam construction
+    - AttrOrParam is a real class (ilismeta16-classes.yml) but nothing here justifies picking it over
+    the far better-fitting PathEl, given attributeRef() is only ever called from pathEl() (alt8) and its
+    own Name/FIRST/LAST/ Number tokens line up closely with PathEl''s own Ref/SpecIndex attributes. Reset
+    to null: this rule contributes fields to the ENCLOSING pathEl''s PathEl instance, it does not construct
+    its own class. CORRECTION (Lot 13, point 9): the enclosing pathEl alt8 -> Kind was previously labelled
+    ReferenceAttr; re-examined against the INTERLIS 2 Reference Manual edition 2006-04-13 EBNF (section
+    "Factors", p.61), which separates "ReferenceAttribute-Name" (a bare Name, no qualifier) from "AttributeRef"
+    (Attribute-Name with optional [FIRST|LAST| Position] or AGGREGATES) as two DISTINCT PathEl alternatives.
+    This project''s attributeRef() rule matches "AttributeRef" structurally (Name + optional [FIRST|LAST|Number]
+    bracket, or AGGREGATES), so the enclosing pathEl''s Kind is now confirmed Attribute, not ReferenceAttr
+    (see pathEl binding above for the full corrected mapping).'
+constraintDef:
+  grammar:
+    rule: constraintDef
+  kind: Container
+  attribute_bindings:
+    dispatch:
+      source:
+        field: mandatoryConstraint|plausibilityConstraint|existenceConstraint|uniquenessConstraint|setConstraint|expression
+        kind: alt_rule
+      note: alt 6 (bare expression, no keyword) is plausibly a SimpleConstraint with Kind left unset (SimpleConstraint.Kind
+        is optional per ilismeta16-kind-values.yml) and LogicalExpression=expression, by analogy with
+        mandatoryConstraint/plausibilityConstraint. Not asserted as certain - ModelBuilder should route
+        it through the same SimpleConstraint construction but without a Kind value.
+  note: 'No direct IlisMeta16 instance expected. Dispatcher between mandatoryConstraint, plausibilityConstraint,
+    existenceConstraint, uniquenessConstraint, setConstraint, or a bare boolean expression constraint.
+    Constraint variants || Pure dispatcher rule: 6 alternatives (constraintDef(), source ~9773-9820).
+    No own target - delegates to each sub-rule''s own construction, except alt 6 (bare `expression SEMI`,
+    no keyword).'
+constraintsDef:
+  grammar:
+    rule: constraintsDef
+  kind: Container
+  parent:
+    association: ClassConstraint
+    role: Constraint
+    note: confirmed association IlisMeta16.ModelData.ClassConstraint (ilismeta16-associations.yml), ends
+      ToClass/Constraint. If classOrAssociationRef resolves to an association, the same ClassConstraint
+      association still applies since Association IS a Class (Kind=Association) - not DomainConstraint,
+      which targets DomainType instead.
+  attribute_bindings:
+    Constraints:
+      source:
+        field: constraintDef
+        multi: true
+      note: each constraintDef -> a Constraint subclass instance (SimpleConstraint/ExistenceConstraint/UniqueConstraint/SetConstraint),
+        appended via the ClassConstraint association (Constraint role) to the class resolved from classOrAssociationRef
+  note: 'Container for constraint declarations. Meta objects and baskets || Confirmed via grammar (constraintsDef(),
+    source ~10680-10730): CONSTRAINTS OF classOrAssociationRef EQ constraintDef* END SEMI A standalone
+    topic-level block that ADDS constraints to an already-declared class/association (e.g. from an extending
+    topic).'
+existenceConstraint:
+  grammar:
+    rule: existenceConstraint
+  kind: Instance
+  target: IlisMeta16.ModelData.ExistenceConstraint
+  parent:
+    association: ExistenceDef
+    role: ExistenceConstraint
+    note: confirmed association IlisMeta16.ModelData.ExistenceDef (ilismeta16-associations.yml), ends
+      ExistenceConstraint/ExistsIn; ExistsIn (target Class) is resolved from viewableRef(0).
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        optional: true
+      note: ExistenceConstraint.Name is inherited from Constraint (mandatory) - same caveat as mandatoryConstraint.
+    Attr:
+      source:
+        field: attributePath
+        index: 0
+      note: 'confirmed attribute Attr: IlisMeta16.ModelData.PathOrInspFactor on ExistenceConstraint (ilismeta16-classes.yml);
+        attributePath(0) is the attribute whose existence is required. attributePath()''s internal PathEls/Inspection
+        dispatch is Lot 7 (Expressions) - not resolved here.'
+  note: 'CORRIGE (Lot 20, phase 2 - bug de grammaire confirme par test empirique ET corrige, voir grammar-divergences.md
+    pour l''historique complet). AVANT : "EXISTENCE CONSTRAINT (Name COLON)? attributePath(0) REQUIRED
+    IN viewableRef COLON attributePath(1) SEMI" - un seul couple viewableRef/attributePath, alors que
+    le Reference Manual eCH-0031 V2.1.0 (§3.12) prevoit une clause repetable "{''OR'' ViewableRef '':''
+    AttributePath}". Teste empiriquement (antlr4-python3-runtime) : rejetait "... : Attr OR Viewable2
+    : Attr2;" (erreur de syntaxe sur OR) avant correction. APRES : "EXISTENCE CONSTRAINT (Name COLON)?
+    attributePath(0) REQUIRED IN viewableRef(0) COLON attributePath(1) (OR viewableRef(i) COLON attributePath(i))*
+    SEMI" - accessors viewableRef/attributePath desormais rule_multi (getTypedRuleContexts), nouvel accessor
+    OR (token_multi). Parser regenere dans src/interlis/antlr/, mappings/antlr-rule-index.yml regenere
+    (RULE #2bis), corrige dans vendor/interlis-antlr4/InterlisParser.g4.'
+expression:
+  grammar:
+    rule: expression
+  kind: Container
+  feeds_into: IlisMeta16.ModelData.Expression
+  attribute_bindings:
+    _dispatch:
+      source:
+        field: term
+      note: Expression has no own attributes - the concrete shape (UnaryExpr/CompoundExpr/Factor-derived)
+        is entirely determined by what term() resolves to, recursively through term0/term1/term2/predicate/factor.
+  note: 'No direct IlisMeta16 instance expected. Pure pass-through to term; the actual Expression subtype
+    (UnaryExpr / CompoundExpr / Constant / FunctionCall / etc.) is produced further down the precedence
+    chain (term0/term1/term2/factor). Expression operators || Confirmed via grammar (expression(), source
+    ~10741-10754): pure single-child wrapper around term() - no own tokens. IlisMeta16.ModelData.Expression
+    (ilismeta16-datatypes.yml) is a DataType with attributes.own: {} - a pure opaque/abstract container,
+    confirming this rule has nothing of its own to bind either.'
+factor:
+  grammar:
+    rule: factor
+  kind: Conditional
+  when_present:
+    objectOrAttributePath:
+      target: IlisMeta16.ModelData.PathOrInspFactor
+  attribute_bindings:
+    dispatch:
+      source:
+        field: objectOrAttributePath|inspection|functionCall|constant|Number
+        kind: alt_rule_or_token
+      note: '8 alternatives:
+
+        1. objectOrAttributePath() -> PathOrInspFactor-like path (see objectOrAttributePath binding)
+
+        2. (inspection()|INSPECTION viewableRef) (OF objectOrAttributePath)? -> feeds PathOrInspFactor.Inspection;
+        inspection() itself is Lot 9 (Views) scope, not resolved here
+
+        3. functionCall() -> confirmed IlisMeta16.ModelData.FunctionCall
+
+        4. INTERLIS DOT (URI|UUIDOID|...) (LPAR expression (COMMA expression)* RPAR)? -> unresolved, see
+        below
+
+        5. PARAMETER (Name DOT)? Name -> matches IlisMeta16.ModelData.RuntimeParamRef (confirmed DataType,
+        ilismeta16-datatypes.yml) with RuntimeParam:NAME; the optional ''Name DOT'' prefix (topic qualifier)
+        has no dedicated attribute slot on RuntimeParamRef (own: {RuntimeParam only}) - unresolved for
+        that qualifier specifically
+
+        6. ALL (OF objectOrAttributePath)? -> unresolved, no confirmed ''AllOf''-style Factor subtype
+        found (ActualArgument.Kind has an ''AllOf'' value but that belongs to argument(), a different
+        rule - see argument binding)
+
+        7. constant() -> confirmed IlisMeta16.ModelData.Constant (already bound elsewhere)
+
+        8. Number token -> presumably a numeric literal Constant(Type=Numeric) equivalent, but Number
+        here is a bare token match with no constant() wrapper - unresolved whether ModelBuilder should
+        synthesize a Constant or a distinct numeric Factor.
+
+        '
+  note: 'Dispatcher/wrapper for expression leaves. When objectOrAttributePath (optionally with an inspection()
+    clause) is present, produces IlisMeta16.ModelData.PathOrInspFactor (PathEls from objectOrAttributePath,
+    Inspection from inspection()). Otherwise delegates to functionCall, a parenthesized expression, or
+    a constant/reference token. Function calls inside expressions || Confirmed via grammar (factor(),
+    source ~11336-11500), 8 alternatives (RULE #3). IlisMeta16.ModelData.Factor (ilismeta16-datatypes.yml)
+    is an empty DataType (attributes.own: {}) - a pure abstract marker, like Expression/Constraint. Each
+    alternative dispatches to its own already- confirmed concrete construction rather than populating
+    Factor fields.'
+functionCall:
+  grammar:
+    rule: functionCall
+  kind: Instance
+  target: IlisMeta16.ModelData.FunctionCall
+  attribute_bindings:
+    Function:
+      source:
+        field: Name
+        index: -1
+        join: .
+      note: 'confirmed attribute Function: INTERLIS.NAME on FunctionCall (ilismeta16-datatypes.yml). Grammar:
+        (Name DOT)? (Name DOT)? Name LPAR ... RPAR - up to 3 Name tokens (qualifier.qualifier.functionName);
+        the last Name is the actual function name, joined with any preceding qualifier Names via DOT for
+        a fully-qualified reference.'
+    Arguments:
+      source:
+        field: argument
+        multi: true
+      note: 'confirmed attribute Arguments: IlisMeta16.ModelData.ActualArgument (0..*) on FunctionCall;
+        each argument() -> one ActualArgument (see argument binding below)'
+  note: Expression arguments
+globalUniqueness:
+  grammar:
+    rule: globalUniqueness
+  kind: Container
+  attribute_bindings:
+    Elements:
+      source:
+        field: uniqueEl
+        multi: true
+      note: each uniqueEl -> one PathOrInspFactor entry, appended to the enclosing UniqueConstraint.UniqueDef
+        list (no intermediate class instance)
+  note: 'No direct IlisMeta16 instance expected. Comma-separated list of uniqueEl. Corresponds to Kind=GlobalU
+    on the enclosing UniqueConstraint (created by uniquenessConstraint) when no localUniqueness clause
+    is present in the same statement; feeds its UniqueDef (PathOrInspFactor list). No qualifier of its
+    own (matches the official INTERLIS 2 Reference Manual EBNF, where GlobalUniqueness never carries a
+    LOCAL/BASKET marker). || Confirmed via grammar (globalUniqueness(), source ~10260-10287): uniqueEl
+    (COMMA uniqueEl)* - a comma-separated list of path elements. RULE #1 check: grep for "GlobalUniqueness"
+    as a class name in mappings/ilismeta16-*.yml returns NOTHING - no such class exists. This matches
+    the documented historical error to avoid (see copilot-instructions.md). This rule does NOT construct
+    a class instance of its own; it only produces a list of PathOrInspFactor entries (via uniqueEl) that
+    feed the enclosing UniqueConstraint''s UniqueDef attribute directly. CORRECTION (3e correction uniquenessConstraint,
+    RULE #4 edition 2024) : globalUniqueness() elle- meme ne porte toujours aucun qualificatif propre,
+    MAIS un corps globalUniqueness peut desormais etre associe a Kind=BasketU via le (BASKET) de l''englobant
+    uniquenessConstraint (voir binding uniquenessConstraint.discriminant ci-dessus) - la note precedente
+    ("GlobalUniqueness never carries LOCAL/BASKET") reste vraie au niveau de CETTE regle mais ne signifiait
+    pas que Kind=BasketU etait impossible pour un corps global.'
+localUniqueness:
+  grammar:
+    rule: localUniqueness
+  kind: Container
+  attribute_bindings:
+    Kind:
+      source:
+        field: LOCAL
+        presence: true
+      mapping:
+        LOCAL: LocalU
+      note: 'CORRIGE (3e correction, RULE #4 edition 2024). Feeds the enclosing UniqueConstraint.Kind
+        = LocalU (mandatory GlobalU/ BasketU/LocalU, ilismeta16-kind-values.yml) - LOCAL est desormais
+        le SEUL token possible ici (BASKET n''est plus une alternative a ce niveau, voir uniquenessConstraint.discriminant
+        pour le nouveau mecanisme de Kind=BasketU au niveau englobant).
+
+        '
+  note: 'No direct IlisMeta16 instance expected. CORRIGE (grammaire .g4 fixee) : porte desormais elle-meme
+    son propre qualificatif MANDATORY "LPAR (LOCAL|BASKET) RPAR" (retire du niveau englobant uniquenessConstraint
+    - voir commentaire ci-dessus et grammar-divergences.md). Sets Kind=LocalU ou Kind=BasketU sur l''enclosing
+    UniqueConstraint selon le mot-cle capture ici. Le chemin de roles (Name (MINUS GT Name)*) et la liste
+    d''attributs finale (COLON Name (COMMA Name)*)? alimentent probablement UniqueDef (PathOrInspFactor)
+    - construction exacte encore une hypothese, voir python-bindings.yml. || CORRIGE x2 (Lot 14 point
+    6, puis 3e correction uniquenessConstraint - voir grammar-divergences.md pour l''historique complet).
+    Bug de grammaire confirme et corrige (RULE #4) : - AVANT (originel) : "UNIQUE (LPAR (LOCAL|BASKET)
+    RPAR)? (Name COLON)? Name (MINUS GT Name)* (COLON Name (COMMA Name)*)? SEMI", avec un UNIQUE propre
+    exigeant un UNIQUE IMBRIQUE dans l''englobant - INATTEIGNABLE pour la syntaxe naturelle. Confirme
+    par test empirique de parsing. - CORRECTION INTERMEDIAIRE (Lot 14 point 6, basee sur l''edition 2006
+    du Reference Manual) : "LPAR (LOCAL|BASKET) RPAR (Name COLON)? Name (MINUS GT Name)* (COLON Name (COMMA
+    Name)*)?" - UNIQUE/SEMI retires, qualificatif rendu MANDATORY mais a tort fusionne LOCAL/BASKET. -
+    CORRECTION FINALE (RULE #4 sur l''edition 2024, V2.1.0, approuvee 2024-04-24, qui PREVAUT sur l''edition
+    2006) : "LocalUniqueness = ''('' ''LOCAL'' '')'' StructureAttribute-Name {...} ..." - (LOCAL) SEUL,
+    jamais (BASKET) a ce niveau (BASKET est un qualificatif du niveau uniquenessConstraint, voir ce binding).
+    Grammaire corrigee en consequence : "LPAR LOCAL RPAR (Name COLON)? Name (MINUS GT Name)* (COLON Name
+    (COMMA Name)*)?". Confirme par test empirique complet (LOCAL et BASKET testes separement : BASKET
+    dispatche desormais correctement vers globalUniqueness avec Kind=BasketU, LOCAL vers localUniqueness
+    avec Kind=LocalU) + non-regression sur le corpus de 342 modeles reels (339/342, aucun changement par
+    rapport aux corrections precedentes) + non-regression sur tous les tests synthetiques anterieurs.
+    RULE #1 check: no "LocalUniqueness" class exists in the metamodel (same grep as globalUniqueness above
+    returns nothing) - this rule must NOT construct its own class instance either.'
+mandatoryConstraint:
+  grammar:
+    rule: mandatoryConstraint
+  kind: Instance
+  target: IlisMeta16.ModelData.SimpleConstraint
+  discriminant:
+    attribute: Kind
+    value: MandC
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        optional: true
+      note: optional 'Name COLON' prefix before the expression, confirmed via MandatoryConstraintContext.Name()/COLON().
+        SimpleConstraint.Name is inherited from Constraint (mandatory, upper=1) - if grammar omits Name,
+        ModelBuilder must supply a default.
+    LogicalExpression:
+      source:
+        field: expression
+      note: confirmed attribute on IlisMeta16.ModelData.SimpleConstraint (ilismeta16-classes.yml)
+  note: 'Confirmed via grammar (mandatoryConstraint(), source ~9863-9915): MANDATORY CONSTRAINT (Name
+    COLON)? expression SEMI'
+metaDataBasketDef:
+  grammar:
+    rule: metaDataBasketDef
+  kind: Instance
+  target: IlisMeta16.ModelData.MetaBasketDef
+  discriminant:
+    attribute: Kind
+    dynamic: true
+    rule:
+      SIGN: SignB
+      REFSYSTEM: RefSystemB
+  parent:
+    association: PackageElements
+    role: Element
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        index: 0
+      note: inherited Name (MetaElement)
+    Kind:
+      source:
+        field: SIGN|REFSYSTEM
+        kind: alt_token
+      rule:
+        SIGN: SignB
+        REFSYSTEM: RefSystemB
+      note: confirmed MetaBasketDef.Kind enum (SignB/RefSystemB, kind-values.yml) - the mandatory leading
+        '(SIGN|REFSYSTEM) BASKET' token dispatches the value directly.
+    Final:
+      source:
+        field: FINAL
+        presence: true
+      note: optional FINAL token before the extends/topic clause; MetaBasketDef inherits Final from ExtendableME
+        (confirmed own attr list includes it via inherited).
+    extends_metaDataBasketRef:
+      source:
+        field: metaDataBasketRef
+        optional: true
+      note: 'CONFIRME (Lot 16, sous-groupe metaDataBasketDef). RULE #4, Reference Manual eCH-0031 V2.1.0
+        (2024-04-24) §3.10.1, EBNF exact : "MetaDataBasketDef = (''SIGN''|''REFSYSTEM'') ''BASKET'' Basket-Name
+        Properties<FINAL> [''EXTENDS'' MetaDataBasketRef] ''~'' TopicRef {...} '';''." MetaBasketDef EXTENDS
+        ExtendableME, donc l''association generique Inheritance (Sub {0..*} ExtendableME <-> Super {0..1}
+        ExtendableME, deja confirmee pour classDef/structureDef/viewDef/graphicDef/unitDef/DataUnit -
+        Lots 12/13/15) s''applique ici aussi : feeds Inheritance (Sub = ce MetaBasketDef, Super = MetaBasketDef
+        resolu par metaDataBasketRef()). Meme pattern reutilise, aucune nouvelle association necessaire.
+
+        '
+    topicRef:
+      source:
+        field: topicRef
+      note: 'CONFIRME (Lot 16, sous-groupe metaDataBasketDef). La clause mandatory ''TILDE topicRef()''
+        alimente IlisMeta16.ModelData.MetaDataUnit (MetaBasketDef {0..*} <-> MetaDataTopic {1..1} DataUnit,
+        ilismeta16-associations.yml) : MetaDataTopic = la DataUnit, PAS le SubModel. topicRef() lui-meme
+        resout vers SubModel (son target confirme), mais grace au design dual SubModel+DataUnit du TOPIC
+        (Metamodel §2.1.4, point 18, deja confirme pour topicDef/DataUnit.Dependency) : le MetaDataTopic
+        recherche ici est le jumeau DataUnit (nomme "BASKET") du meme topic, resolu par le meme Name que
+        topicRef() a trouve pour le SubModel - pas une association MetaBasketDef<->SubModel distincte
+        (fausse piste de l''ancienne note, la confusion terminologique SubModel/DataUnit etant justement
+        le sujet du point 18).
+
+        '
+    objects_of_clauses:
+      source:
+        field: Name|Name
+        multi: true
+      note: 'CONFIRME (Lot 16, sous-groupe metaDataBasketDef) - ancienne piste AllowedInBasket ABANDONNEE
+        (fausse piste : AllowedInBasket {OfDataUnit:DataUnit <-> ClassInBasket:Class} concerne les classes
+        autorisees dans un basket de TRANSFERT ordinaire, sujet distinct du present OBJECTS OF). RULE
+        #4, EBNF exact (§3.10.1) : "{''OBJECTS'' ''OF'' Class-Name '':'' MetaObject-Name {'','' MetaObject-Name}}
+        '';''." Chaine de construction CONFIRMEE via 2 associations distinctes (ilismeta16-associations.yml)
+        : pour chaque MetaObject-Name enumere sous un Class-Name donne, crée une instance IlisMeta16.ModelData.MetaObjectDef
+        (Name = MetaObject-Name, IsRefSystem = (Kind du MetaBasketDef == RefSystemB)) liee (a) a ce MetaBasketDef
+        via MetaBasketMembers (MetaBasketDef {0..1} <-> Member {0..*} MetaObjectDef, composite) et (b)
+        a la Class resolue via Class-Name via MetaObjectClass (MetaObjectDef {0..*} <-> Class {1..1} Class).
+        Boucle externe (un Class-Name par occurrence de la clause OBJECTS OF, plusieurs MetaObject-Name
+        possibles par occurrence) a iterer cote ModelBuilder.
+
+        '
+  note: 'Kind resolved dynamically: SIGN -> SignB, REFSYSTEM -> RefSystemB'
+metaDataBasketRef:
+  grammar:
+    rule: metaDataBasketRef
+  kind: Reference
+  target: IlisMeta16.ModelData.MetaBasketDef
+  attribute_bindings:
+    _resolution:
+      note: 'Pure reference resolution: qualified name (Name (DOT Name)?)? Name resolves to an existing
+        IlisMeta16.ModelData.MetaBasketDef by qualified_name (same pattern as classRef/viewRef/graphicRef/topicRef).'
+  note: 'CORRIGE (audit croisé grammar-metamodel-mapping.yml/python-bindings.yml, 2026-08-02, avant fusion
+    spec). "MetaDataBasket" (sans suffixe Def) n''existe dans aucun fichier ilismeta16-*.yml (RULE #1
+    : grep sur qualified_name ne retourne rien) - nom invente, jamais valide, non detecte par check_mapping.py
+    car ce champ semantics.target n''est pas dans son perimetre de validation (metamodel.target uniquement).
+    Vraie classe (confirmee, ilismeta16-classes.yml et deja correcte cote python-bindings.yml) : MetaBasketDef.'
+metaObjectRef:
+  grammar:
+    rule: metaObjectRef
+  kind: Reference
+  attribute_bindings:
+    _resolution:
+      source:
+        field: metaDataBasketRef
+        Name: null
+      note: No own class; '(metaDataBasketRef DOT)? Name' resolves a meta-object by name, optionally qualified
+        by a metaDataBasketRef. Used as the target of the LCBR metaObjectRef RCBR alternatives in signParamAssignment/enumAssignment
+        (Lot 10, both marked unresolved there) and elsewhere - the resolved object's actual type depends
+        entirely on call-site context, not on metaObjectRef itself.
+  note: 'CORRIGE (meme audit, 2026-08-02). "MetaObject" (sans suffixe Def) n''existe pas non plus (RULE
+    #1, grep vide) - meme categorie d''erreur que metaDataBasketRef ci-dessus. Contrairement a metaDataBasketRef,
+    pas de classe fixe a mettre a la place : deja confirme (Lot 10/17, note python-bindings.yml) que le
+    type reel resolu par cette regle depend entierement du contexte d''appel (signParamAssignment, enumAssignment,
+    parameterDef bare METAOBJECT...), jamais de la regle metaObjectRef elle-meme - pas de target unique
+    a documenter ici. Expressions'
+objectOrAttributePath:
+  grammar:
+    rule: objectOrAttributePath
+  kind: Container
+  feeds_into: IlisMeta16.ModelData.PathOrInspFactor
+  attribute_bindings:
+    PathEls:
+      source:
+        field: pathEl
+        multi: true
+      note: 'confirmed attribute PathEls: IlisMeta16.ModelData.PathEl (0..*) on PathOrInspFactor (ilismeta16-datatypes.yml);
+        each pathEl() -> one PathEl instance (see pathEl binding below), chained in declaration order
+        via the ''->'' separators.'
+  note: 'No direct IlisMeta16 instance expected. Chain of pathEl separated by "->"; feeds IlisMeta16.ModelData.PathOrInspFactor.PathEls
+    (constructed by factor, not here). || Confirmed via grammar (objectOrAttributePath(), source ~11526-11554):
+    pathEl (MINUS GT pathEl)*  -- a ''->''-separated chain of path elements.'
+pathEl:
+  grammar:
+    rule: pathEl
+  kind: Instance
+  target: IlisMeta16.ModelData.PathEl
+  attribute_bindings:
+    Kind:
+      source:
+        field: THIS|THISAREA|THATAREA|PARENT|attributeRef|associationPath|Name+COLON|Name(no bracket)|Name+LSBR+Name+RSBR|Name+EQ+EQ+STRING
+        kind: alt_dispatch
+      mapping:
+        THIS: This
+        THISAREA: ThisArea
+        THATAREA: ThatArea
+        PARENT: Parent
+        Name (alt5, no bracket): ReferenceAttr
+        associationPath_alt: AssocPath
+        Name COLON: Role
+        Name LSBR Name RSBR (alt5, with bracket): ViewBase
+        attributeRef_alt: Attribute
+        Name EQ EQ STRING (alt9): MetaObject
+      note: 'All 9 alternatives now confirmed (Lot 13, point 9): alt1-4 (THIS/THISAREA/THATAREA/PARENT)
+        literal matches; alt5 without its optional bracket -> ReferenceAttr, alt5 WITH the bracket ->
+        ViewBase (corrected split, see construction comment above and RULE #4 citation); alt6 (''Name
+        COLON'') -> Role; alt7 (associationPath()) -> AssocPath; alt8 (attributeRef()) -> Attribute (corrected
+        from a previous ReferenceAttr label - see construction comment); alt9 (''Name EQ EQ STRING'')
+        -> MetaObject.'
+    Ref:
+      source:
+        field: Name
+        alt: 5|6|9
+        optional: true
+      note: 'confirmed attribute Ref: INTERLIS.NAME on PathEl; populated from the plain Name token in
+        alts 5, 6 and 9 (the attribute/role name itself, before any bracket/colon/comparison suffix)'
+    NumIndex:
+      note: 'Lot 18 (phase 2, résidus Phase 1) - CONFIRMÉ, le "mismatch" supposé n''en était pas un. Vérification
+        directe du XMI source (docs/uml/IlisMeta16-formatted.xmi, l.306-307) : `MultRange` est un `uml:PrimitiveType`
+        (comme `Code`/`LengthRange`), PAS une structure Min/Max - c''est une valeur SCALAIRE unique (confirmé
+        par recoupement avec `Multiplicity.Min`/`Max`, chacun typé `MultRange` séparément et alimenté
+        directement par un seul token littéral, cf. binding `cardinality`). PathEl.NumIndex n''est donc
+        PAS un "range" à deux bornes - juste UNE valeur. alt5 (ViewBase, désormais confirmé) ne l''alimente
+        PAS (son crochet contient un Name, pas un nombre - simplement hors sujet pour ce champ, pas une
+        anomalie). NumIndex est alimenté UNIQUEMENT via `attributeRef`''s bracket `Number` (voir binding
+        attributeRef.NumIndex, également corrigé) - directement, sans transformation, `MultRange` acceptant
+        nativement une valeur scalaire unique.
+
+        '
+  note: 'Kind resolved dynamically from the matched alternative (THIS/THISAREA/THATAREA/PARENT/associationPath/attributeRef/Name)
+    || Confirmed via grammar (pathEl(), source ~11661-11750), 9 alternatives, matched 1:1 against the
+    10 confirmed values of PathEl.Kind (ilismeta16-kind-values.yml, ordered: This/ThisArea/ThatArea/Parent/
+    ReferenceAttr/AssocPath/Role/ViewBase/Attribute/MetaObject). Lot 13 point 9 (RULE #4): the official
+    INTERLIS 2 Reference Manual, edition 2006-04-13, section "Factors" (p.61) gives the historical EBNF:
+    PathEl = ( THIS | THISAREA | THATAREA | PARENT | ReferenceAttribute-Name | AssociationPath | Role-Name
+    [ ''['' Association-Name '']'' ] | Base-Name | AttributeRef ). AttributeRef = Attribute-Name ( ''[''
+    (FIRST|LAST|Position) '']'' )? | AGGREGATES. This project''s attributeRef() rule (alt8) matches "AttributeRef"
+    above almost verbatim (Name + optional [FIRST|LAST|Number] bracket, or AGGREGATES) - i.e. Kind=Attribute,
+    NOT ReferenceAttr as previously labelled (correction, same pattern as Lot 12''s functionDef fix: a
+    name-similarity assumption - attributeRef()/ReferenceAttr - turned out wrong on closer reading). "ReferenceAttribute-Name"
+    in the refman is a bare Name with none of AttributeRef''s qualifiers - this matches alt5 WITHOUT its
+    optional bracket. "Base-Name" (bare) is the refman''s equivalent of ViewBase; this project''s grammar
+    appears to have extended it with an optional bracket qualifier (disambiguating WHICH base view/class,
+    needed for multi-EXTENDS views - View/BaseViewDef/ BaseViewRef associations, ilismeta16-associations.yml)
+    rather than leaving it fully bare - a documented grammar evolution (RULE #4: this grammar was redefined
+    since INTERLIS 2.4), hence alt5 WITH its bracket = ViewBase. (Role, matched to alt6 ''Name COLON'',
+    and AssocPath, matched to alt7 associationPath(), stay as previously confirmed - the refman''s bracket-based
+    ''Role-Name [Association-Name]'' notation was apparently replaced by this project''s colon-suffix
+    notation for Role; not part of this investigation''s scope, left as-is.) alt9 ''Name EQ EQ STRING''
+    (Name==STRING) = MetaObject: matches Reference Manual section 2.10 "Dealing with meta objects" (p.55-56,
+    e.g. SIGN/ REFSYSTEM/AXIS meta objects) - meta objects are identified purely by NAME (a string) within
+    a basket, with no dedicated reference syntax of their own; "Name == STRING" reads naturally as testing/selecting
+    a meta-object-typed path element by its name literal.'
+plausibilityConstraint:
+  grammar:
+    rule: plausibilityConstraint
+  kind: Instance
+  target: IlisMeta16.ModelData.SimpleConstraint
+  discriminant:
+    attribute: Kind
+    dynamic: true
+    rule:
+      LTEQ: LowPercC
+      GTEQ: HighPercC
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        optional: true
+    Percentage:
+      source:
+        field: numericConst
+      note: confirmed attribute Percentage on SimpleConstraint (ilismeta16-classes.yml)
+    LogicalExpression:
+      source:
+        field: expression
+      note: the expression after MOD; MOD here is the grammar's '%' percentage-separator token, not modulo
+        arithmetic
+  note: 'Kind resolved dynamically: LTEQ -> LowPercC, GTEQ -> HighPercC || Confirmed via grammar (plausibilityConstraint(),
+    source ~9944-10012): CONSTRAINT (Name COLON)? (LTEQ|GTEQ) numericConst MOD expression SEMI'
+predicate:
+  grammar:
+    rule: predicate
+  kind: Conditional
+  when_present:
+    NOT:
+      target: IlisMeta16.ModelData.UnaryExpr
+      discriminant:
+        attribute: Operation
+        value: Not
+    DEFINED:
+      target: IlisMeta16.ModelData.UnaryExpr
+      discriminant:
+        attribute: Operation
+        value: Defined
+  attribute_bindings:
+    SubExpression:
+      source:
+        field: expression
+        alt: 2
+        optional: true
+      note: alt2's parenthesized expression, wrapped as SubExpression when NOT is present
+    _defined_factor:
+      source:
+        field: factor
+        alt: 3
+      note: alt3's DEFINED LPAR factor RPAR - UnaryExpr.SubExpression is typed Expression, not Factor
+        directly (ilismeta16-datatypes.yml); ModelBuilder must wrap the factor in an Expression envelope
+        to satisfy the type, or this indicates SubExpression's declared type is looser than shown - not
+        fully reconciled here.
+  note: 'Conditionally produces IlisMeta16.ModelData.UnaryExpr (Operation=Not or Operation=Defined) when
+    NOT/DEFINED tokens are present; otherwise pure pass-through to factor or a parenthesized expression.
+    || Confirmed via grammar (predicate(), source ~11083-11148), 4 distinct alternatives (RULE #3): alt1:
+    factor()                                    -> pure pass-through alt2: NOT? LPAR expression RPAR                    ->
+    UnaryExpr(Not) if NOT present, else pass-through to expression alt3: DEFINED LPAR factor RPAR                     ->
+    UnaryExpr(Defined) alt4: LPAR BASKET RPAR factor                      -> unresolved special case'
+relation:
+  grammar:
+    rule: relation
+  kind: Container
+  attribute_bindings:
+    RelationKind:
+      source:
+        field: EQ+EQ|NOT_EQ|LT+GT|LTEQ|GTEQ|LT|GT
+        kind: alt_token
+      mapping:
+        EQ EQ: Equal
+        NOT_EQ: NotEqual
+        LT GT: NotEqual
+        LTEQ: LessOrEqual
+        GTEQ: GreaterOrEqual
+        LT: Less
+        GT: Greater
+      note: 7 grammar alternatives map onto 6 confirmed enum children with NOT_EQ and 'LT GT' both plausibly
+        meaning not-equal (two spellings of the same relation, similar to '<>' vs '#'/'!=' conventions
+        in other languages) - this specific double-mapping is inferred from count/semantics, not from
+        a cited spec section; documented rather than silently assumed elsewhere. This rule itself constructs
+        no class instance - it only supplies the RelationKind value consumed by the enclosing term2's
+        CompoundExpr(Operation=Relation).
+  note: 'No direct IlisMeta16 instance expected. Resolves the relational operator symbol (EQ/NOT_EQ/LT/GT/LTEQ/GTEQ)
+    used by term2 to set CompoundExpr.Operation=Relation with the matching sub-value (Equal/NotEqual/Less/Greater/LessOrEqual/
+    GreaterOrEqual). || Confirmed via grammar (relation(), source ~11187-11237), 7 alternatives mapping
+    to the 6 confirmed children of CompoundExpr.Operation=Relation (ilismeta16-kind-values.yml): Equal/NotEqual/LessOrEqual/GreaterOrEqual/Less/Greater.'
+setConstraint:
+  grammar:
+    rule: setConstraint
+  kind: Instance
+  target: IlisMeta16.ModelData.SetConstraint
+  attribute_bindings:
+    Name:
+      source:
+        field: Name|INTERLIS
+        kind: alt_token_or_rule
+        optional: true
+      note: 'Lot 18 (phase 2, résidus Phase 1) - inclut désormais l''alt B "INTERLIS COLON" (voir _interlis_label
+        ci-dessous pour la preuve de fermeture).
+
+        '
+    Where:
+      source:
+        field: expression
+        index: 0
+        optional: true
+      note: confirmed attribute SetConstraint.Where (Expression, ilismeta16-classes.yml); populated by
+        the expression immediately following WHERE in either alternative.
+    Constraint:
+      source:
+        field: expression
+        index: -1
+      note: confirmed attribute SetConstraint.Constraint (Expression); the final expression before SEMI
+        in either alternative (the actual boolean constraint, after the optional WHERE-expression and
+        optional Name/INTERLIS label).
+  note: 'Confirmed via grammar (setConstraint(), source ~10544-10651), 2 structurally distinct alternatives
+    inside one method (RULE #3): SET CONSTRAINT (LPAR (LOCAL|BASKET) RPAR)? alt A: Name COLON WHERE expression(0)
+    COLON expression(1) alt B: (WHERE expression(0) COLON)? (Name COLON | INTERLIS COLON)? expression(last)
+    SEMI 4), DEUX documents : (1) INTERLIS 2 Metamodel edition 2022-06-17,'
+term:
+  grammar:
+    rule: term
+  kind: Conditional
+  when_present:
+    EQ_GT:
+      target: IlisMeta16.ModelData.CompoundExpr
+      discriminant:
+        attribute: Operation
+        value: Implication
+  attribute_bindings:
+    SubExpressions:
+      source:
+        field: term0
+        multi: true
+      note: confirmed attribute on CompoundExpr (Expression, multiplicity 0..*); populated with [term0(0),
+        term0(1)] only when the '=> term0' branch matched, else this rule degenerates to returning term0(0)
+        directly without constructing a CompoundExpr.
+  note: 'CORRIGE (audit croisé grammar-metamodel-mapping.yml/python-bindings.yml, 2026-08-02, avant fusion
+    spec). Le commentaire "needs confirmation" etait perime : deja confirme cote python-bindings.yml (kind-values.yml)
+    que le EQ GT term0 optionnel produit un CompoundExpr Operation= Implication. Aligne ici sur le meme
+    schema Conditional que term0/ term1/term2/predicate (qui, eux, avaient deja ce target - non detecte
+    comme divergence par le script de comparaison target/parent car imbrique sous when_present, pas au
+    niveau metamodel.target). || Confirmed via grammar (term(), source ~10790-10815): term0(0) (EQ GT
+    term0(1))?  -- i.e. ''term0 (=> term0)?'' EQ+GT together spell the ''=>'' (implication) operator.'
+term0:
+  grammar:
+    rule: term0
+  kind: Conditional
+  when_present:
+    OR:
+      target: IlisMeta16.ModelData.CompoundExpr
+      discriminant:
+        attribute: Operation
+        value: Or
+  attribute_bindings:
+    SubExpressions:
+      source:
+        field: term1
+        multi: true
+      note: only constructed as CompoundExpr when at least one operator is present; pure pass-through
+        to the single term1 otherwise (mirrors term()'s optional-operator pattern)
+  note: 'Conditionally produces IlisMeta16.ModelData.CompoundExpr with Operation=Or when OR is present;
+    PLUS/MINUS need confirmation against kind-values.yml (not currently listed as CompoundExpr operations
+    - may indicate arithmetic handled differently). || Confirmed via grammar (term0(), source ~10864-10890):
+    term1 ((OR|PLUS|MINUS) term1)*'
+term1:
+  grammar:
+    rule: term1
+  kind: Conditional
+  when_present:
+    AND:
+      target: IlisMeta16.ModelData.CompoundExpr
+      discriminant:
+        attribute: Operation
+        value: And
+    MUL:
+      target: IlisMeta16.ModelData.CompoundExpr
+      discriminant:
+        attribute: Operation
+        value: Mult
+    DIV:
+      target: IlisMeta16.ModelData.CompoundExpr
+      discriminant:
+        attribute: Operation
+        value: Div
+  attribute_bindings:
+    SubExpressions:
+      source:
+        field: term2
+        multi: true
+      note: only constructed as CompoundExpr when at least one operator is present; pure pass-through
+        to the single term2 otherwise
+  note: 'Conditionally produces IlisMeta16.ModelData.CompoundExpr with Operation=And/Mult/Div when AND/MUL/DIV
+    present; POW not currently in kind-values.yml Operation list, needs confirmation. || Confirmed via
+    grammar (term1(), source ~10949-10975): term2 ((AND|MUL|DIV|POW) term2)*'
+term2:
+  grammar:
+    rule: term2
+  kind: Conditional
+  when_present:
+    relation:
+      target: IlisMeta16.ModelData.CompoundExpr
+      discriminant:
+        attribute: Operation
+        value: Relation
+  attribute_bindings:
+    SubExpressions:
+      source:
+        field: predicate
+        multi: true
+      note: '[predicate(0), predicate(1)] when relation() branch matched'
+    _relation_child:
+      source:
+        field: relation
+        optional: true
+      note: feeds the 'Relation' children enum (Equal/NotEqual/etc.) - see relation() binding for the
+        exact token->value mapping
+  note: 'Conditionally produces IlisMeta16.ModelData.CompoundExpr with Operation=Relation when a relation()
+    is present; otherwise pass-through to predicate. || Confirmed via grammar (term2(), source ~11014-11033):
+    predicate(0) (relation predicate(1))?'
+uniqueEl:
+  grammar:
+    rule: uniqueEl
+  kind: Container
+  feeds_into: IlisMeta16.ModelData.PathOrInspFactor
+  attribute_bindings:
+    _dispatch:
+      source:
+        field: objectOrAttributePath
+      note: 'PathOrInspFactor has PathEls (list of PathEl) and Inspection (INTERLIS.NAME); which of the
+        two objectOrAttributePath feeds depends on ObjectOrAttributePathContext''s own structure - deferred
+        to Lot 7 (Expressions), which covers objectOrAttributePath/attributePath/pathEl. Not resolved
+        here to respect RULE #7 (stay within Lot 6 scope).'
+  note: 'No direct IlisMeta16 instance expected. Pure pass-through to objectOrAttributePath, which resolves
+    to PathOrInspFactor. || Confirmed via grammar (uniqueEl(), source ~10313-10326): a single wrapper
+    around objectOrAttributePath() - no own tokens.'
+uniquenessConstraint:
+  grammar:
+    rule: uniquenessConstraint
+  kind: Instance
+  target: IlisMeta16.ModelData.UniqueConstraint
+  attribute_bindings:
+    Name:
+      source:
+        field: Name
+        index: 0
+        optional: true
+    Where:
+      source:
+        field: expression
+        optional: true
+      note: 'CONFIRME (2e correction - decouverte annexe, grammaire .g4 corrigee - voir commentaire de
+        construction ci-dessus). Feeds UniqueConstraint.Where (Expression, 0..1, confirme ilismeta16-classes.yml)
+        depuis le "WHERE expression" ajoute - meme pattern que setConstraint.Where deja confirme.
+
+        '
+  note: 'CORRIGE (grammaire .g4 fixee, cf. issue localUniqueness) : Kind n''est PLUS porte par un qualificatif
+    (LOCAL|BASKET) sur uniquenessConstraint elle-meme (ce qualificatif a ete retire du niveau englobant
+    car il etait consomme AVANT la boucle (globalUniqueness|localUniqueness)+, rendant localUniqueness
+    inatteignable pour la syntaxe naturelle a un seul UNIQUE - voir grammar-divergences.md). Kind=GlobalU
+    par defaut (corps ne contenant que des globalUniqueness) ; Kind=LocalU/BasketU si le corps contient
+    une clause localUniqueness portant elle-meme (LOCAL) ou (BASKET) (voir localUniqueness ci-dessous).
+    || CORRIGE x3 (voir grammar-divergences.md pour l''historique complet des 3 corrections successives
+    sur cette regle). Forme actuelle confirmee via grammar (uniquenessConstraint(), regenere) : UNIQUE
+    (LPAR BASKET RPAR)? (Name COLON)? (Name COLON)? (WHERE expression COLON)? (globalUniqueness | localUniqueness)+
+    SEMI 1ere correction (Lot 14 point 6) : le qualificatif fusionne (LPAR (LOCAL|BASKET) RPAR)? a ete
+    RETIRE de ce niveau (il etait consomme ICI, avant la boucle, empechant structurellement localUniqueness()
+    de jamais voir son propre marqueur). 2e correction (decouverte lors d''un test de non-regression sur
+    342 modeles de production reels, models.geo.admin.ch/ilimodels.xml) : cette regle n''avait AUCUNE
+    clause WHERE - confirme par un ECHEC DE PARSING REEL sur V_D/OeREB/OeREBKRMkvs_V2_0.ili:204 ("UNIQUE
+    WHERE NOT(DEFINED(SubCode)): Code;"). 3e correction (RULE #4, apres reception par l''utilisateur de
+    la source de verite la PLUS A JOUR : eCH-0031 INTERLIS 2 - Manuel de reference, edition V2.1.0, approuve
+    2024-04-24, qui PREVAUT sur l''edition 2006-04-13 utilisee jusqu''ici) : le texte exact §3.12 "Conditions
+    de coherence" y est : "UniquenessConstraint = ''UNIQUE'' [''('' ''BASKET'' '')''] [Constraint-Name
+    '':''] [''WHERE'' Logical-Expression '':''] (GlobalUniqueness | LocalUniqueness) '';''." et "LocalUniqueness
+    = ''('' ''LOCAL'' '')'' StructureAttribute-Name {''->'' StructureAttribute-Name} '':'' Attribute-Name
+    {'','' Attribute-Name}." - CETTE edition confirme que (BASKET) est un qualificatif du niveau uniquenessConstraint
+    LUI-MEME (applicable que le corps soit Global OU Local), et que (LOCAL) est EXCLUSIF a la branche
+    LocalUniqueness (jamais un choix partage avec BASKET). Ma 2e correction (celle du fix precedent, basee
+    sur l''edition 2006 qui ne precisait pas ce detail) avait a tort rendu le qualificatif de localUniqueness
+    "(LOCAL|BASKET)" au lieu de "(LOCAL)" seul, et n''avait pas reintroduit de (BASKET) au niveau uniquenessConstraint.
+    Corrige : (LPAR BASKET RPAR)? reintroduit ICI (BASKET seul, pas LOCAL) ; localUniqueness() n''a plus
+    que "(LPAR LOCAL RPAR)" (voir plus bas). Confirme via RULE #4 que le Reference Manual 2006 et le Metamodel
+    2022-06-17 (composedUnit, numeric/refSys, topicDef, viewAttributes, signParamAssignment - tous les
+    autres points deja cites dans cette investigation) restent IDENTIQUES dans l''edition 2024 : aucune
+    autre correction necessaire ailleurs. Revalide sur l''exemple reel (0 erreur), le corpus complet (339/342,
+    memes 3 echecs preexistants sans rapport) et tous les tests empiriques synthetiques anterieurs (functionDef,
+    numeric/refSys, localUniqueness) - aucune regression.'

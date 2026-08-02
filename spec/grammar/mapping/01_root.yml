@@ -1,0 +1,18 @@
+interlis2def:
+  grammar:
+    rule: interlis2def
+  kind: Container
+  type: ModelRepository
+  attribute_bindings:
+    _dispatch:
+      note: 'No own class; 2 alternatives: ''INTERLIS Dec SEMI modeldef?'' (mainline, feeds Model.iliVersion
+        via Dec + optional modeldef()) or ''TRANSFER INTERLIS1 SEMI'' (legacy ili1 transfer format marker,
+        no confirmed distinct construction). Root entry point of the parse tree, no PackageElements parent
+        of its own.'
+    iliVersion:
+      source:
+        field: Dec
+        index: 0
+      note: confirmed IlisMeta16.ModelData.Model.own.iliVersion (TEXT) - the version number after INTERLIS
+        keyword, propagated into the child modeldef()'s Model instance.
+  note: 02_packages Models and topics

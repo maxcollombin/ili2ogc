@@ -1,0 +1,159 @@
+_source: INTERLIS 2 - Metamodel, edition 2022-06-17 (English), chapitre 4 (https://www.interlis.ch/download/interlis2/ili24-metamodel_2022-06-17_e.pdf)
+_note: Valeurs saisies manuellement depuis le texte ILI de la spec, car non presentes dans l'export XMI
+  ili2c (voir docstring du script generateur).
+kind_values:
+  IlisMeta16.ModelData.Ili1Format.tidKind:
+    mandatory: true
+    values:
+    - TID_I16
+    - TID_I32
+    - TID_ANY
+    - TID_EXPLANATION
+  IlisMeta16.ModelData.Model.Kind:
+    mandatory: true
+    values:
+    - NormalM
+    - TypeM
+    - RefSystemM
+    - SymbologyM
+  IlisMeta16.ModelData.Class.Kind:
+    mandatory: true
+    values:
+    - Structure
+    - Class
+    - View
+    - Association
+  IlisMeta16.ModelData.AttrOrParam.SubdivisionKind:
+    mandatory: false
+    values:
+    - NoSubDiv
+    - SubDiv
+    - ContSubDiv
+  IlisMeta16.ModelData.Role.Strongness:
+    mandatory: true
+    values:
+    - Assoc
+    - Aggr
+    - Comp
+  IlisMeta16.ModelData.Unit.Kind:
+    mandatory: true
+    values:
+    - BaseU
+    - DerivedU
+    - ComposedU
+  IlisMeta16.ModelData.MetaBasketDef.Kind:
+    mandatory: true
+    values:
+    - SignB
+    - RefSystemB
+  IlisMeta16.ModelData.TextType.Kind:
+    mandatory: true
+    values:
+    - MText
+    - Text
+    - Name
+    - Uri
+  IlisMeta16.ModelData.BlackboxType.Kind:
+    mandatory: true
+    values:
+    - Binary
+    - Xml
+  IlisMeta16.ModelData.Argument.Kind:
+    mandatory: true
+    values:
+    - Type
+    - EnumVal
+    - EnumTreeVal
+  IlisMeta16.ModelData.EnumType.Order:
+    mandatory: true
+    values:
+    - Unordered
+    - Ordered
+    - Circular
+  IlisMeta16.ModelData.LineType.Kind:
+    mandatory: true
+    values:
+    - Polyline
+    - DirectedPolyline
+    - Surface
+    - Area
+  IlisMeta16.ModelData.View.FormationKind:
+    mandatory: true
+    values:
+    - Projection
+    - Join
+    - Union
+    - Aggregation
+    - Inspection
+    children:
+      Aggregation:
+      - All
+      - Equal
+      Inspection:
+      - Normal
+      - Area
+  IlisMeta16.ModelData.UnaryExpr.Operation:
+    mandatory: false
+    values:
+    - Not
+    - Defined
+  IlisMeta16.ModelData.CompoundExpr.Operation:
+    mandatory: false
+    values:
+    - Implication
+    - And
+    - Or
+    - Mult
+    - Div
+    - Relation
+    children:
+      Relation:
+      - Equal
+      - NotEqual
+      - LessOrEqual
+      - GreaterOrEqual
+      - Less
+      - Greater
+  IlisMeta16.ModelData.PathEl.Kind:
+    mandatory: false
+    ordered: true
+    values:
+    - This
+    - ThisArea
+    - ThatArea
+    - Parent
+    - ReferenceAttr
+    - AssocPath
+    - Role
+    - ViewBase
+    - Attribute
+    - MetaObject
+  IlisMeta16.ModelData.PathEl.SpecIndex:
+    mandatory: false
+    values:
+    - First
+    - Last
+  IlisMeta16.ModelData.ActualArgument.Kind:
+    mandatory: true
+    values:
+    - Expression
+    - AllOf
+  IlisMeta16.ModelData.Constant.Type:
+    mandatory: true
+    values:
+    - Undefined
+    - Numeric
+    - Text
+    - Enumeration
+  IlisMeta16.ModelData.SimpleConstraint.Kind:
+    mandatory: false
+    values:
+    - MandC
+    - LowPercC
+    - HighPercC
+  IlisMeta16.ModelData.UniqueConstraint.Kind:
+    mandatory: true
+    values:
+    - GlobalU
+    - BasketU
+    - LocalU
