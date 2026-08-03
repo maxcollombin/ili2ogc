@@ -99,6 +99,21 @@ roleDef:
       source:
         field: cardinality
         optional: true
+    BaseClass:
+      association: BaseClass
+      role: BaseClass
+      source:
+        field: restrictedClassOrAssRef
+        path: BaseRef
+        optional: true
+      note: 'CORRIGE (audit CLI ModelBuilder, 2026-08-03) : aucun binding ne couvrait la reference de classe
+        cible de restrictedClassOrAssRef() - documentee "not yet mapped" ci-dessous depuis l''origine.
+        Role EXTENDS ReferenceType EXTENDS ClassRelatedType (confirme ilismeta16-classes.yml) : la meme
+        association BaseClass (CRT{0..*} ClassRelatedType <-> BaseClass{0..*} Class, ilismeta16-associations.yml)
+        deja utilisee pour toute autre ClassRelatedType s''applique ici. restrictedClassOrAssRef() retourne
+        un bag {BaseRef: ForwardRef, AnyClass, Restrictions} - BaseRef est LE nom de base resolu. Couvre
+        uniquement la 1ere occurrence (le cas usuel) ; la boucle ''(OR restrictedClassOrAssRef)*'' pour des
+        restrictions multiples reste hors perimetre de cette correction.'
     EmbeddedTransfer:
       source:
         field: EXTERNAL

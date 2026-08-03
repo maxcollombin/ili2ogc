@@ -841,12 +841,14 @@ numeric:
       source:
         field: CLOCKWISE|COUNTERCLOCKWISE
         kind: alt_token
+        optional: true
       rule:
         CLOCKWISE: true
         COUNTERCLOCKWISE: false
       note: 'Optional, mutually exclusive with each other; absent when neither is present (NumType.Clockwise
         is itself optional per multiplicity {0..1} confirmed in ilismeta16-classes.yml/check_mapping.py
-        output).
+        output). CORRIGE (audit smoke test ModelBuilder, 2026-08-02) : le flag structure `optional: true`
+        manquait alors que cette meme note le decrit deja - ajoute pour correspondre.
 
         '
     Unit:

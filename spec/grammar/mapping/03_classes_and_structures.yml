@@ -33,17 +33,28 @@ classDef:
 classOrStructureDef:
   grammar:
     rule: classOrStructureDef
-  kind: Dispatcher
-  dispatches_to:
-  - classDef
-  - structureDef
-  attribute_bindings:
-    _dispatch:
-      note: 'Pure dispatcher/aggregator, no own class - a repeated loop of 3 alternatives: ''(ATTRIBUTE)?
-        attributeDef+'', ''constraintDef+'', ''(PARAMETER)? parameterDef+''. Each attributeDef/constraintDef/parameterDef
-        feeds its own confirmed association (ClassAttr/ClassConstraint/ClassParam) on the enclosing classDef/structureDef,
-        not on classOrStructureDef itself.'
-  note: Class and structure references
+  kind: Container
+  children:
+  - attributeDef
+  - constraintDef
+  - parameterDef
+  note: 'CORRIGE (audit pendant le smoke test ModelBuilder, 2026-08-02) : `kind:
+    Dispatcher, dispatches_to: [classDef, structureDef]` etait faux - jamais
+    verifie contre le code ANTLR reel (RULE #2), vraisemblablement confondu
+    avec la regle voisine `classOrStructureRef` (elle, un vrai dispatcher
+    classRef/structureRef). Verifie maintenant
+    (InterlisParser.py:2597-2676, ClassDefContext.classOrStructureDef()) :
+    `classOrStructureDef` est le CORPS partage de classDef/structureDef
+    (accesseurs reels confirmes dans generated/ast-accessors.yml : ATTRIBUTE,
+    PARAMETER, attributeDef, constraintDef - aucun accesseur classDef/
+    structureDef). Pure dispatcher/aggregateur, pas de classe propre - une
+    boucle repetee de 3 alternatives : "(ATTRIBUTE)? attributeDef+",
+    "constraintDef+", "(PARAMETER)? parameterDef+". Chaque attributeDef/
+    constraintDef/parameterDef alimente sa propre association confirmee
+    (ClassAttr/ClassConstraint/ClassParam) sur le classDef/structureDef
+    englobant via SON PROPRE `parent:`, pas via classOrStructureDef
+    lui-meme - d''ou kind: Container + children (visite multiple, comme
+    definitions), pas Dispatcher (alternative unique).'
 classOrStructureRef:
   grammar:
     rule: classOrStructureRef

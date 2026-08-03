@@ -36,6 +36,9 @@ attrTypeDef:
       source:
         field: attrType|enumeration|numeric|NUMERIC
         kind: alt_rule_or_token
+      wrap:
+        numeric: IlisMeta16.ModelData.NumType
+        enumeration: IlisMeta16.ModelData.EnumType
       note: 'First alternative dispatches to one of: attrType() |  enumeration() (anonymous EnumType)
         | numeric() CIRCULAR? (LSBR unitRef RSBR)? (anonymous NumType, reusing the numeric() bindings
         already documented) | bare NUMERIC LSBR unitRef RSBR (anonymous NumType with only a Unit, no Min/Max).
@@ -43,6 +46,13 @@ attrTypeDef:
         (lineType is reached separately, not through this branch - see the grammar-rules ordering). Feeds
         the enclosing AttrOrParamType.Type association end (handled by the parent attributeDef/roleDef/
         etc. construct).
+        CORRIGE (audit CLI ModelBuilder, 2026-08-03) : numeric()/enumeration() retournent un bag (dict de
+        champs partages avec numericType/coordinateType/etc., voir path: ailleurs) jamais enveloppe dans
+        une instance concrete - Type restait absent pour tout attribut numerique/enumeration anonyme.
+        "wrap:" promeut le bag en instance NumType/EnumType reelle (cles du bag attachees telles quelles,
+        deja nommees comme les attributs/associations reelles - Min/Max/Circular/Clockwise/Unit pour
+        NumType, Order/Elements pour EnumType). NUMERIC bare et attrType() restent hors de ce mecanisme
+        (attrType produit deja une instance propre ; NUMERIC bare, cas plus rare, pas encore cable).
 
         '
     _collection:

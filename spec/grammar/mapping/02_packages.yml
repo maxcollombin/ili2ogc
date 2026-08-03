@@ -5,14 +5,29 @@ definitions:
   children:
   - classDef
   - structureDef
-  - topicDef
+  - associationDef
   - domainDef
   - functionDef
   - unitDef
+  - metaDataBasketDef
+  - contextDef
+  - constraintsDef
+  - viewDef
+  - graphicDef
   attribute_bindings:
     _dispatch:
       note: 'Pure dispatcher, no own class (11 mutually exclusive alternatives, each delegating to its
         own already-bound or later-bound rule: metaDataBasketDef/unitDef/functionDef/domainDef/contextDef/classDef/structureDef/associationDef/constraintsDef/viewDef/graphicDef).'
+  note: 'CORRIGE (audit pendant le smoke test ModelBuilder, 2026-08-02) : `children`
+    listait `topicDef` (INACCESSIBLE depuis DefinitionsContext - jamais verifie
+    contre le code ANTLR reel, RULE #2) et omettait 6 des 11 accesseurs reels.
+    Verifie maintenant (inspect.signature sur DefinitionsContext reel) : les 11
+    accesseurs exacts sont associationDef/classDef/constraintsDef/contextDef/
+    domainDef/functionDef/graphicDef/metaDataBasketDef/structureDef/unitDef/
+    viewDef - deja correctement enumeres dans la note `_dispatch` ci-dessus
+    (qui, elle, etait juste), seul le champ structure `children` etait faux.
+    topicDef n''a jamais sa place ici : un TOPIC est defini au niveau de
+    modeldef (definitions en est le contenu D''UN topic, pas topicDef lui-meme).'
 genericRef:
   grammar:
     rule: genericRef
@@ -83,7 +98,7 @@ modeldef:
     Language:
       source:
         field: Name
-        index: 1
+        anchor: LPAR
         optional: true
       note: 'CONFIRME (Lot 16, sous-groupe modeldef). Reference Manual eCH-0031 V2.1.0/2024-04-24 (§3.5.1,
         EBNF exacte) et edition 2006-04-13 (identiques sur ce point) : ''ModelDef = ... ''MODEL'' Model-Name
@@ -92,6 +107,13 @@ modeldef:
         639 (2 lettres, ex. ''en''/''fr''/''de''/''it''/''rm''), optionnellement suivi d''un code pays
         ISO 3166 (''de_CH''). Fusionne avec l''ancienne entree ''generic_alias'' (meme champ grammatical,
         hypothese erronee "alias pre-2.3" abandonnee).
+        CORRIGE (audit CLI ModelBuilder, 2026-08-03) : "index: 1" etait faux quand
+        aucune clause de langue n''est presente - Name(1) devient alors le nom
+        de fermeture "END Model-Name" (meme regle que le "Name(1) after END"
+        deja documente sur classDef), pas la langue. "anchor: LPAR" resout
+        correctement les deux cas : absent si LPAR absent (pas de clause de
+        langue), le Name immediatement apres LPAR sinon - meme mecanisme deja
+        confirme sur CharSetIANAName/xmlns ci-dessus.
 
         '
     CharSetIANAName:
@@ -173,10 +195,26 @@ modeldef:
 
         '
     imports:
-      source:
+      for_each:
         field: Name|INTERLIS
         multi: true
         optional: true
+        between: [IMPORTS, END]
+      target: IlisMeta16.ModelData.Import
+      ImportedP:
+        association: Import
+        role: ImportedP
+        source:
+          field: null
+          context_key: __item__
+          as_forward_ref: true
+          always_external_ref: true
+      ImportingP:
+        association: Import
+        role: ImportingP
+        source:
+          field: null
+          context_key: modeldef
       note: 'CONFIRME (Lot 16, sous-groupe modeldef). ''(IMPORTS UNQUALIFIED? (Name|INTERLIS) (COMMA UNQUALIFIED?
         (Name|INTERLIS))* SEMI)*'' alimente IlisMeta16.ModelData.Import (ImportingP {0..*} Package <->
         ImportedP {0..*} Package, ilismeta16-associations.yml et confirme metamodel.txt ''ASSOCIATION
@@ -189,6 +227,13 @@ modeldef:
         aux elements du modele importe), non persiste dans le metamodele - status: not_applicable pour
         ce sous-point specifique (voir _imports_unqualified ci-dessous), la construction Import elle-meme
         est CONFIRMEE.
+        CABLE (audit CLI ModelBuilder, 2026-08-03) : mecanisme moteur `for_each` ajoute specifiquement
+        pour ce cas (une boucle grammaticale -> N instances liees, pas une seule construction imbriquee) -
+        ImportedP devient un ForwardRef (resolu en UnresolvedNamedReference en V1 single-fichier, le modele
+        importe n''etant jamais charge - decision de perimetre deja actee). Aucune association inverse
+        Model->Import n''existe cote metamodele (Import n''est reference que depuis ses propres bouts) :
+        les instances construites sont conservees sous la cle brute "imports" sur le Model (pas un role
+        officiel du metamodele) uniquement pour rester atteignables depuis Python, pas une omission.
 
         '
     _imports_unqualified:

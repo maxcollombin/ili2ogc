@@ -1,0 +1,90 @@
+"""Smoke test de bout en bout du ModelBuilder (voir plan de conception,
+/home/maxime/.claude/plans/rippling-kindling-swing.md). Valide le moteur
+generique (dispatch par kind, discriminant, arbre de composition via
+`parent:`, attachement par association, table de symboles) sur un modele
+minimal reel - pas une simulation.
+
+Limitations connues (gaps de spec par-regle, pas de defauts du moteur -
+voir .claude/PROGRESS.md) : la resolution de la reference de classe cible
+d'un roleDef (restrictedClassOrAssRef) n'est pas encore cablee dans
+spec/grammar/mapping/ (documentee "not yet mapped" dans sa propre note),
+donc les ForwardRef ne sont pas exercees ici de bout en bout."""
+import warnings
+from pathlib import Path
+
+import pytest
+
+from interlis.builder.model_builder import InterlisModelBuilder
+from interlis.runtime.parse import parse_file
+
+ROOT = Path(__file__).resolve().parent.parent
+MAPPINGS_DIR = ROOT / "mappings"
+SPEC_DIR = ROOT / "spec/grammar/mapping"
+FIXTURE = Path(__file__).parent / "fixtures/minimal_model.ili"
+
+
+@pytest.fixture(scope="module")
+def builder_and_model():
+    tree, errors = parse_file(FIXTURE)
+    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # gaps de spec connus, voir docstring
+        model = builder.build(tree)
+    return builder, model
+
+
+@pytest.fixture(scope="module")
+def model(builder_and_model):
+    return builder_and_model[1]
+
+
+def test_model_identity(model):
+    assert model._qualified_class == "IlisMeta16.ModelData.Model"
+    assert model.Name == "MinimalTest"
+    assert model.iliVersion == "2.4"
+
+
+def test_topic_dual_instance(model):
+    assert len(model.Element) == 2
+    submodel, dataunit = model.Element
+    assert submodel._qualified_class == "IlisMeta16.ModelData.SubModel"
+    assert submodel.Name == "MainTopic"
+    assert dataunit._qualified_class == "IlisMeta16.ModelData.DataUnit"
+    assert dataunit.Name == "BASKET"
+    assert submodel._twin is dataunit
+    assert dataunit._twin is submodel
+
+
+def test_classes_with_discriminant(model):
+    submodel = model.Element[0]
+    person, company, worksfor = submodel.Element
+    assert (person.Name, person.Kind) == ("Person", "Class")
+    assert (company.Name, company.Kind) == ("Company", "Class")
+    assert (worksfor.Name, worksfor.Kind) == ("WorksFor", "Association")
+
+
+def test_attribute_with_text_type(model):
+    person = model.Element[0].Element[0]
+    attrs = {a.Name: a for a in person.ClassAttribute}
+    assert set(attrs) == {"Name", "BirthYear", "Kind"}
+    name_attr = attrs["Name"]
+    assert name_attr._qualified_class == "IlisMeta16.ModelData.AttrOrParam"
+    assert name_attr.Type is not None
+    assert name_attr.Type._qualified_class == "IlisMeta16.ModelData.TextType"
+    assert name_attr.Type.Kind == "Text"
+
+
+def test_association_roles_and_strongness(model):
+    worksfor = model.Element[0].Element[2]
+    roles = {r.Name: r for r in worksfor.Role}
+    assert set(roles) == {"Employee", "Employer"}
+    assert roles["Employee"].Strongness == "Assoc"
+    assert roles["Employer"].Strongness == "Assoc"
+
+
+def test_symbol_table_registration(builder_and_model):
+    builder, model = builder_and_model
+    person = model.Element[0].Element[0]
+    resolved = builder.symbol_table.resolve("Person")
+    assert resolved is person

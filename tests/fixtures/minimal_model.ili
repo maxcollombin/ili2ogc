@@ -1,0 +1,24 @@
+INTERLIS 2.4;
+
+MODEL MinimalTest AT "https://example.org/minimal" VERSION "2026-08-02" =
+
+  TOPIC MainTopic =
+
+    CLASS Person =
+      Name: MANDATORY TEXT;
+      BirthYear: 1800 .. 2100;
+      Kind: (Adult, Child);
+    END Person;
+
+    CLASS Company =
+      Name: MANDATORY TEXT;
+    END Company;
+
+    ASSOCIATION WorksFor =
+      Employee -- {0..*} Person;
+      Employer (EXTENDED) -- {0..1} Company;
+    END WorksFor;
+
+  END MainTopic;
+
+END MinimalTest.
