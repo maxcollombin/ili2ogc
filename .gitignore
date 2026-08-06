@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .venv/
 /xtf_corpus/
+/ili_corpus/

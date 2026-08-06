@@ -286,7 +286,26 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 None,
             )
             if content_node is None:
-                continue  # STRING DOTDOT STRING / CLASS RESTRICTION(...) - pas encore mappe (voir note domainDef)
+                class_token = next(
+                    (c for c in segment if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.CLASS), None,
+                )
+                if class_token is None:
+                    continue  # STRING DOTDOT STRING - pas encore mappe (voir note domainDef)
+                instance = self._build_domain_class_restriction(segment, rule_name)
+                if not isinstance(instance, MetaInstance):
+                    continue
+                if getattr(instance, "Name", None) is None:
+                    instance.Name = name_node.getText()
+                    self._maybe_register_symbol(instance)
+                if mandatory and getattr(instance, "Mandatory", None) is None:
+                    instance.Mandatory = True
+                if entry.parent and self._parent_stack:
+                    self.attachment.attach(
+                        self._parent_stack[-1], entry.parent.role, instance,
+                        association=entry.parent.association, role=entry.parent.role, rule=rule_name,
+                    )
+                results.append(instance)
+                continue
             content_rule = self._rule_name(content_node)
             if content_rule == "type":
                 # `_rule_name` derive "type" de `TypeContext` (regle grammaticale
@@ -317,6 +336,42 @@ class InterlisModelBuilder(InterlisParserVisitor):
         if not results:
             return None
         return results[0] if len(results) == 1 else results
+
+    def _build_domain_class_restriction(self, segment: list[Any], rule_name: str) -> MetaInstance:
+        """DOMAIN X = CLASS RESTRICTION(A; B; ...); - la 5e alternative de
+        domainDef(), inlinee directement dans son corps ANTLR (CLASS
+        (RESTRICTION LPAR classOrAssociationRef (SEMI classOrAssociationRef)*
+        RPAR)?, PAS un appel a une sous-regle dediee - confirme sur le code
+        genere reel) et jusqu'ici jamais construite (Lot 28, trouve sur
+        RoadTrafficCensus_V1_1.ili : "CHCantonCode_Extended = CLASS
+        RESTRICTION(sAbroadCode; sCHCantonCode);"). RULE #4 : correspond a
+        l'alternative "ClassType" du manuel (eCH-0031 V2.1.0, "ClassType =
+        'CLASS' ['RESTRICTION' '(' ViewableRef {';' ViewableRef} ')'] | ...")
+        - metaclasse cible non "ClassType" (absente d'ilismeta16-*.yml) mais
+        IlisMeta16.ModelData.ReferenceType, MEME target que referenceAttr()
+        (REFERENCE TO ...) : Class EXTENDS Type (confirme), donc utilisable
+        directement comme role Type de AttrOrParamType, mais CETTE
+        alternative grammaticale n'a pas de clause EXTERNAL (confirme sur le
+        code ANTLR - contrairement a referenceAttr), donc External=False
+        inconditionnellement. BaseClass attache via la MEME association que
+        referenceAttr.BaseClass/roleDef.BaseClass (ClassRelatedType). Ne
+        couvre que la 1ere classOrAssociationRef (base non restreinte) -
+        meme limite deja documentee pour ces deux bindings."""
+        instance = self.registry.new_instance("IlisMeta16.ModelData.ReferenceType")
+        instance.External = False
+        first_ref = next(
+            (c for c in segment if isinstance(c, ParserRuleContext) and self._rule_name(c) == "classOrAssociationRef"),
+            None,
+        )
+        if first_ref is not None:
+            value = self.visit(first_ref)
+            if value is not None:
+                self.attachment.attach(
+                    instance, "BaseClass", value, association="BaseClass", role="BaseClass", rule=rule_name,
+                )
+                if isinstance(value, ForwardRef):
+                    self.forward_refs.register_pending(value, instance, "BaseClass")
+        return instance
 
     # ------------------------------------------------------------------
     # Strategie 2 : Conditional

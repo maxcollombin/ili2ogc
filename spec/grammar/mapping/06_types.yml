@@ -379,8 +379,16 @@ domainDef:
     normalement, numeric()/enumeration() nus enveloppes en NumType/EnumType via le meme mecanisme
     `wrap:`/visit_wrapped que attrTypeDef.Type, Lot 19) - meme cas particulier reconnu que topicDef
     (_build_multi_target, seul autre cas special parmi les 121 regles). N''utilise PAS
-    attribute_bindings (ignore par cette strategie) - STRING DOTDOT STRING / CLASS RESTRICTION(...)
-    restent non mappes (pas de cible metamodele connue), silencieusement ignores comme avant.
+    attribute_bindings (ignore par cette strategie) - seul STRING DOTDOT STRING reste non mappe (pas
+    de cible metamodele connue - EBNF eCH-0031 confirme cette forme absente du manuel, extension propre
+    au projet non encore rencontree dans un fichier reel), silencieusement ignore comme avant.
+    CORRIGE (Lot 28, RoadTrafficCensus_V1_1.ili reel : "CHCantonCode_Extended = CLASS RESTRICTION
+    (sAbroadCode; sCHCantonCode);") : la 5e alternative "CLASS RESTRICTION(...)" (EBNF "ClassType",
+    inlinee sans sous-regle dediee) est desormais construite via
+    InterlisModelBuilder._build_domain_class_restriction - meme target ReferenceType que referenceAttr()
+    (Class EXTENDS Type), External toujours False (pas de clause EXTERNAL dans cette alternative),
+    BaseClass = 1ere classOrAssociationRef seulement (meme limite que referenceAttr.BaseClass/
+    roleDef.BaseClass, deja documentee).
     || No fixed target: DomainType is abstract. Concrete class resolved by type_ dispatcher (see grammar-metamodel-mapping.yml
     comment).'
 domainRef:

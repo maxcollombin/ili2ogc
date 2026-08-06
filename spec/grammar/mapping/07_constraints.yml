@@ -417,6 +417,7 @@ metaDataBasketDef:
     topicRef:
       source:
         field: topicRef
+      optional: true
       note: 'CONFIRME (Lot 16, sous-groupe metaDataBasketDef). La clause mandatory ''TILDE topicRef()''
         alimente IlisMeta16.ModelData.MetaDataUnit (MetaBasketDef {0..*} <-> MetaDataTopic {1..1} DataUnit,
         ilismeta16-associations.yml) : MetaDataTopic = la DataUnit, PAS le SubModel. topicRef() lui-meme
@@ -427,11 +428,23 @@ metaDataBasketDef:
         (fausse piste de l''ancienne note, la confusion terminologique SubModel/DataUnit etant justement
         le sujet du point 18).
 
+        NON IMPLEMENTE cote moteur (Lot 28, decouvert en construisant CHBase_Part1_GEOMETRY_V1.ili,
+        premier fichier reel du corpus a exercer "REFSYSTEM BASKET ... ~ topicRef") : le moteur generique
+        (AttachmentResolver.attach) ne sait pas suivre `_twin` avant d''attacher - attacher directement le
+        SubModel resolu leve BuildError ("topicRef introuvable comme attribut/role sur MetaBasketDef", la
+        cle attendue etant en realite le role MetaDataTopic de l''association MetaDataUnit, cote DataUnit).
+        `optional: true` ajoute pour tolerer l''echec (RULE #5) plutot que de faire planter tout le build a
+        cause d''un mecanisme metadata annexe (REFSYSTEM/SIGN BASKET), sans rapport avec la validation
+        d''attributs de classe metier visee par le validateur XTF en cours. MetaBasketDef reste donc
+        construit SANS TopicRef (Kind/Name/Final/extends corrects). A revisiter si un besoin reel de
+        resoudre les baskets REFSYSTEM/SIGN se presente.
+
         '
     objects_of_clauses:
       source:
         field: Name|Name
         multi: true
+      optional: true
       note: 'CONFIRME (Lot 16, sous-groupe metaDataBasketDef) - ancienne piste AllowedInBasket ABANDONNEE
         (fausse piste : AllowedInBasket {OfDataUnit:DataUnit <-> ClassInBasket:Class} concerne les classes
         autorisees dans un basket de TRANSFERT ordinaire, sujet distinct du present OBJECTS OF). RULE
@@ -443,6 +456,15 @@ metaDataBasketDef:
         a la Class resolue via Class-Name via MetaObjectClass (MetaObjectDef {0..*} <-> Class {1..1} Class).
         Boucle externe (un Class-Name par occurrence de la clause OBJECTS OF, plusieurs MetaObject-Name
         possibles par occurrence) a iterer cote ModelBuilder.
+
+        NON IMPLEMENTE cote moteur (Lot 28, meme decouverte que topicRef ci-dessus) : `field: Name|Name,
+        multi: true` renvoie une liste plate de tous les tokens Name (Class-Name ET MetaObject-Name
+        confondus, aucun regroupement par occurrence) - la boucle de construction MetaObjectDef/
+        MetaBasketMembers/MetaObjectClass decrite ci-dessus necessiterait un decoupage positionnel des
+        enfants de la regle (meme famille que `domainDef._build_multi_declaration`, Lot 22 point 3),
+        jamais ecrit. `optional: true` ajoute pour tolerer l''echec d''attach() (RULE #5) plutot que de
+        faire planter tout le build. MetaBasketDef reste donc construit SANS ses MetaObjectDef enfants.
+        A revisiter si un besoin reel de resoudre le detail des OBJECTS OF se presente.
 
         '
   note: 'Kind resolved dynamically: SIGN -> SignB, REFSYSTEM -> RefSystemB'
