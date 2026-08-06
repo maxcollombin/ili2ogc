@@ -49,6 +49,16 @@ class SymbolTable:
     def __init__(self):
         self._qualified: dict[str, Any] = {}
         self._by_short_name: dict[str, list[Any]] = {}
+        # Noms de modeles importes via `IMPORTS UNQUALIFIED X` dans CE
+        # fichier (ex. {"INTERLIS"}) - jamais persiste cote metamodele
+        # (Import n'a pas d'attribut propre pour UNQUALIFIED, confirme
+        # metamodel.txt - voir spec/grammar/mapping/02_packages.yml,
+        # _imports_unqualified), mais necessaire ici : seul un import
+        # explicitement UNQUALIFIED autorise une reference NON qualifiee a
+        # resoudre vers un modele importe plutot que de rester strictement
+        # locale au fichier courant (Reference Manual eCH-0031 V2.1.0
+        # §3.5.1). Peuple par InterlisModelBuilder._register_unqualified_imports.
+        self.unqualified_imports: set[str] = set()
 
     def register(self, qualified_name: str, instance: Any) -> None:
         self._qualified[qualified_name] = instance
@@ -79,12 +89,35 @@ class SymbolTable:
             return candidates[0]
         return None
 
+    def rekey_model_prefix(self, old_prefix: str, new_prefix: str) -> None:
+        """Ajoute, pour toute entree qualifiee `old_prefix.X`, un ALIAS
+        `new_prefix.X` -> meme instance (l'entree d'origine reste, jamais
+        retiree) - utilise UNIQUEMENT par ModelRepository pour le modele
+        INTERLIS predefini (voir repository.py, _PREDEFINED_INTERLIS_SOURCE) :
+        son MODEL declare porte un nom interne different du nom reel
+        documente par le manuel (contrainte lexer - "INTERLIS" est un token
+        reserve, pas un Name valide) ; corrige ici une fois le modele
+        construit pour que les references qualifiees ecrites par un
+        utilisateur (`INTERLIS.I32OID`) trouvent une correspondance exacte
+        plutot que de ne compter que sur le repli par nom court de
+        `resolve()`. Ne touche QUE `_qualified`, jamais `_by_short_name` :
+        l'instance y figure deja depuis son enregistrement d'origine
+        (`register()`) - la retoucher dupliquerait l'entree et casserait le
+        cas `len(candidates) == 1` de `resolve()` sur un nom court par
+        ailleurs non ambigu (trouve en ecrivant le test de ce mecanisme)."""
+        prefix = old_prefix + "."
+        for qualified, instance in list(self._qualified.items()):
+            if qualified.startswith(prefix):
+                self._qualified[new_prefix + "." + qualified[len(prefix):]] = instance
+
     def has_prefix(self, name: str) -> bool:
-        """True si `name` semble faire reference a un modele/prefixe connu
-        du fichier courant (par opposition a un prefixe de modele importe,
-        totalement absent de la table)."""
+        """True si `name` est QUALIFIE (contient un prefixe de modele) ET que
+        ce prefixe designe le fichier courant lui-meme (par opposition a un
+        prefixe de modele importe, totalement absent de la table). Ne
+        s'applique qu'aux noms qualifies - un nom sans point releve d'une
+        logique separee, voir ForwardRefResolver._resolve_one."""
         if "." not in name:
-            return True
+            return False
         prefix = name.split(".", 1)[0]
         return any(qn.startswith(prefix + ".") or qn == prefix for qn in self._qualified)
 
@@ -126,18 +159,34 @@ class ForwardRefResolver:
         found = self.symbol_table.resolve(ref.name, kind_hint=kind_hint)
         if found is not None:
             return found
-        if not self.symbol_table.has_prefix(ref.name):
-            # Prefixe absent de CE fichier : candidat a une resolution
-            # cross-fichier si un ModelRepository est configure (voir
-            # repository.py) - chaque modele charge garde sa PROPRE table,
-            # jamais fusionnee, donc aucune ambiguite de nom court introduite
-            # entre modeles sans rapport (seule une correspondance de nom
-            # QUALIFIE COMPLET dans la table du modele explicitement vise
-            # compte).
-            if repository is not None and "." in ref.name:
-                prefix = ref.name.split(".", 1)[0]
-                found = repository.resolve_external(prefix, ref.name, kind_hint)
+        if "." in ref.name:
+            if not self.symbol_table.has_prefix(ref.name):
+                # Prefixe absent de CE fichier : candidat a une resolution
+                # cross-fichier si un ModelRepository est configure (voir
+                # repository.py) - chaque modele charge garde sa PROPRE
+                # table, jamais fusionnee, donc aucune ambiguite de nom court
+                # introduite entre modeles sans rapport (seule une
+                # correspondance de nom QUALIFIE COMPLET dans la table du
+                # modele explicitement vise compte).
+                if repository is not None:
+                    prefix = ref.name.split(".", 1)[0]
+                    found = repository.resolve_external(prefix, ref.name, kind_hint)
+                    if found is not None:
+                        return found
+                return UnresolvedNamedReference(ref.name, reason="external_import")
+            raise BuildError(f"reference non resolue et non attribuable a un import : {ref.name!r}", rule=ref.rule)
+        # Nom NON qualifie introuvable localement : seule une reference vers
+        # un modele explicitement importe UNQUALIFIED (voir
+        # SymbolTable.unqualified_imports) peut legitimement la designer -
+        # sinon c'est un vrai bug local (nom jamais declare dans ce fichier),
+        # a signaler par une exception plutot qu'a masquer (RULE #5).
+        if not self.symbol_table.unqualified_imports:
+            raise BuildError(
+                f"reference non resolue et non attribuable a un import : {ref.name!r}", rule=ref.rule
+            )
+        if repository is not None:
+            for model_name in self.symbol_table.unqualified_imports:
+                found = repository.resolve_external(model_name, ref.name, kind_hint)
                 if found is not None:
                     return found
-            return UnresolvedNamedReference(ref.name, reason="external_import")
-        raise BuildError(f"reference non resolue et non attribuable a un import : {ref.name!r}", rule=ref.rule)
+        return UnresolvedNamedReference(ref.name, reason="external_import")

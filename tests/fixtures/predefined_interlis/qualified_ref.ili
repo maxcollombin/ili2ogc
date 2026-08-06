@@ -1,0 +1,11 @@
+INTERLIS 2.4;
+
+MODEL QualifiedRef AT "https://example.org/qualified-ref" VERSION "2026-08-06" =
+
+  TOPIC T =
+    CLASS Thing =
+      Ident: INTERLIS.I32OID;
+    END Thing;
+  END T;
+
+END QualifiedRef.

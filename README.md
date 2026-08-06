@@ -107,7 +107,8 @@ metamodel's own official names.
   directories - never the network - so any model not present there (e.g.
   the handful of "core" INTERLIS models hosted outside
   models.geo.admin.ch, such as `Units`/`CoordSys`/`Text_V2`) stays
-  unresolved too.
+  unresolved too. Exception: the predefined `INTERLIS` namespace (see next
+  bullet) always resolves, `--repo` or not - it needs no directory lookup.
 - **Formal constraints are not evaluated**: `CONSTRAINT`/`MANDATORY
   CONSTRAINT` clauses are built as data (an expression tree), never
   executed against real data.
@@ -115,9 +116,19 @@ metamodel's own official names.
   applied to every class in the topic that doesn't declare its own OID
   clause) is not yet wired - it needs a post-processing pass over all
   classes in a topic, which the current engine doesn't perform yet.
-- **INTERLIS predefined namespace domains** (e.g. `I32OID`, made available
-  unqualified by `IMPORTS UNQUALIFIED INTERLIS;`) are not modeled - a bare
-  reference to one stays unresolved.
+- **INTERLIS predefined namespace domains** (Reference Manual Annex A):
+  `NOOID`/`I32OID`/`STANDARDOID` are modeled and resolve both qualified
+  (`INTERLIS.I32OID`) and unqualified (`I32OID` after `IMPORTS UNQUALIFIED
+  INTERLIS;`). `ANYOID`/`UUIDOID` are NOT modeled: unlike the other three,
+  the grammar treats them as reserved lexer tokens usable only through the
+  special `INTERLIS.ANYOID`/`INTERLIS.UUIDOID` qualified forms (not through
+  ordinary `domainRef`), which would need a dedicated binding - out of
+  scope so far (no corpus file has needed it yet).
+- **`NumType.Min`/`.Max` are not populated** for numeric-range domains
+  (e.g. `DOMAIN Code = 0..255;`) - a pre-existing gap found while modeling
+  the predefined namespace above (`I32OID`'s own range exhibits it too),
+  reproducible even on `models/IlisMeta16.ili`'s own domains. Not yet
+  fixed.
 
 ## Architecture
 
@@ -176,12 +187,3 @@ uv run --env-file .env antlr4 \
     -o src/interlis/antlr \
     vendor/interlis-antlr4/InterlisParser.g4
 ```
-
-
-Yes — the ModelBuilder now resolves multi-model IMPORTS for real. I implemented a ModelRepository (src/interlis/builder/repository.py) that indexes local .ili files by their actual declared MODEL/REFSYSTEM name (not filename — the corpus has files whose declared model name differs from the filename), and loads imported models on demand the first time a qualified reference into them is needed. Each file keeps its own isolated symbol table (no cross-model name-collision risk); only explicit ModelName.Something references trigger cross-file lookups. Usage: interlis build file.ili --repo path/to/models-dir (CLI) or InterlisModelBuilder(..., repository=ModelRepository([...])) (API).
-
-Writing an end-to-end test for this immediately surfaced 4 real, previously-invisible bugs, the most significant being: _attach_unclaimed_results was silently dropping any ForwardRef produced by a domain/class reference used as an attribute's type — meaning Attr: SomeDomain; lost its .Type entirely, locally or cross-file, with no crash to reveal it. Fixing that then exposed two more latent issues (bare-paren DOMAIN X = (a,b,c); never building a real instance, and the already-documented "multi-domain-per-DOMAIN-block" limitation, now properly fixed via a dedicated segmentation pass) and one abstract-class kind_hint matching bug.
-
-Results on the 167-file corpus: 166/167 build without error (up from 165/167 — a real data-correctness improvement, not just fewer crashes), and with --repo enabled, total unresolved cross-references dropped from 1456 to 795 (-45%). The one remaining failure references an INTERLIS-predefined namespace domain (I32OID via IMPORTS UNQUALIFIED INTERLIS), which is out of scope and now documented. models/IlisMeta16.ili still builds cleanly, validate_spec.py is still 121/121 clean, and all 10 pytest tests pass (4 new, covering the multi-file case).
-
-README and .claude/PROGRESS.md are updated. Everything is staged but not committed, per your preference — let me know if you'd like me to commit.

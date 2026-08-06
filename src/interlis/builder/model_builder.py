@@ -17,6 +17,7 @@ from interlis.builder import context_access as ca
 from interlis.builder.attach import AttachmentResolver
 from interlis.builder.errors import BuildError
 from interlis.builder.forward_refs import ForwardRef, ForwardRefResolver, SymbolTable
+from interlis.builder.repository import ModelRepository
 from interlis.builder.source_resolver import _alt_matches, resolve_source
 from interlis.metamodel.instance import MetaInstance
 from interlis.metamodel.registry import MetamodelRegistry
@@ -25,7 +26,7 @@ from interlis.spec.models import SpecEntry
 from interlis.spec.spec_index import load_spec
 
 class InterlisModelBuilder(InterlisParserVisitor):
-    def __init__(self, mappings_dir: Path, spec_dir: Path, *, repository: "ModelRepository | None" = None):
+    def __init__(self, mappings_dir: Path, spec_dir: Path, *, repository: ModelRepository | None = None):
         schema = MetamodelSchema.load(mappings_dir)
         registry = MetamodelRegistry.build(schema)
         spec: dict[str, SpecEntry] = load_spec(spec_dir)
@@ -49,14 +50,20 @@ class InterlisModelBuilder(InterlisParserVisitor):
         self.registry = registry
         self.spec = spec
         self.attachment = attachment
-        self.repository = repository
+        # Un ModelRepository "nu" (aucun repertoire de recherche) sert
+        # toujours de support au modele INTERLIS predefini (voir
+        # repository.py, _BUILTIN_SOURCES) - ce n'est pas de la resolution
+        # cross-fichier a proprement parler (aucun disque consulte au-dela
+        # du texte integre), donc reste actif meme sans --repo/repository=...
+        # explicite. La resolution cross-fichier REELLE (repertoires fournis
+        # par l'appelant) demeure opt-in comme avant.
+        self.repository = repository if repository is not None else ModelRepository([])
         self.symbol_table = SymbolTable()
         self.forward_refs = ForwardRefResolver(self.symbol_table)
         self.parser_symbolic_names = InterlisParser.symbolicNames
         self._construction_stack: list[dict] = []
         self._parent_stack: list[MetaInstance] = []
-        if repository is not None:
-            repository.bind_builder_factory(self._make_sub_builder)
+        self.repository.bind_builder_factory(self._make_sub_builder)
 
     def _make_sub_builder(self) -> "InterlisModelBuilder":
         return InterlisModelBuilder._from_shared(self.schema, self.registry, self.spec, self.attachment, self.repository)
@@ -104,6 +111,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
         if isinstance(entry.target, list):
             return self._build_multi_target(ctx, rule_name, entry)
 
+        if rule_name == "modeldef":
+            self._register_unqualified_imports(ctx)
+
         instance = self.registry.new_instance(entry.target)
         instance._source_ctx = ctx
 
@@ -142,6 +152,34 @@ class InterlisModelBuilder(InterlisParserVisitor):
             )
 
         return instance
+
+    def _register_unqualified_imports(self, ctx: ParserRuleContext) -> None:
+        """Detecte, sur le ModeldefContext brut, quels noms de la boucle
+        `IMPORTS` sont precedes du modificateur `UNQUALIFIED` (ex. `IMPORTS
+        UNQUALIFIED INTERLIS;`) - alimente symbol_table.unqualified_imports,
+        consulte par ForwardRefResolver._resolve_one pour autoriser une
+        reference NON qualifiee a resoudre vers un modele importe. Pas
+        exprimable via le mecanisme generique for_each/attribute_bindings
+        (voir modeldef.imports, spec/grammar/mapping/02_packages.yml) : le
+        metamodele Import n'a lui-meme aucun attribut pour UNQUALIFIED
+        (confirme metamodel.txt) - ceci reste un detail interne au moteur de
+        resolution, jamais persiste sur une instance MetaInstance.
+
+        UNQUALIFIED precede toujours immediatement le nom qu'il modifie dans
+        la grammaire ('IMPORTS UNQUALIFIED? (Name|INTERLIS) (COMMA
+        UNQUALIFIED? (Name|INTERLIS))* SEMI' - confirme
+        spec/grammar/mapping/02_packages.yml, note modeldef.imports) : un
+        simple parcours positionnel de ctx.children suffit, pas besoin d'une
+        correlation plus complexe."""
+        if not ca.has_accessor(ctx, "UNQUALIFIED"):
+            return
+        children = list(ctx.children or [])
+        for node in ca.call_list(ctx, "UNQUALIFIED"):
+            idx = children.index(node)
+            if idx + 1 < len(children):
+                nxt = children[idx + 1]
+                if isinstance(nxt, TerminalNode):
+                    self.symbol_table.unqualified_imports.add(nxt.getText())
 
     def _build_multi_target(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry):
         """Cas topicDef uniquement (deux targets lies : SubModel + DataUnit).

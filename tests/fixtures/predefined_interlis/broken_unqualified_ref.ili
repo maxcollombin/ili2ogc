@@ -1,0 +1,11 @@
+INTERLIS 2.4;
+
+MODEL BrokenUnqualifiedRef AT "https://example.org/broken" VERSION "2026-08-06" =
+
+  TOPIC T =
+    CLASS Thing =
+      Ident: TotallyUndeclaredDomain;
+    END Thing;
+  END T;
+
+END BrokenUnqualifiedRef.

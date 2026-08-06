@@ -14,9 +14,64 @@ import re
 from pathlib import Path
 from typing import Any
 
-from interlis.runtime.parse import parse_file
+from interlis.runtime.parse import parse_file, parse_text
 
 _MODEL_NAME_RE = re.compile(r"\b(?:MODEL|REFSYSTEM)\s+([A-Za-z_][A-Za-z0-9_]*)")
+
+# Modele "INTERLIS" predefini (Reference Manual eCH-0031 V2.1.0/2024-04-24,
+# Annexe A "Das interne INTERLIS-Datenmodell", citee telle quelle - RULE #4) :
+# toujours disponible qualifie (`INTERLIS.I32OID`), et non qualifie
+# uniquement via `IMPORTS UNQUALIFIED INTERLIS;` (voir
+# SymbolTable.unqualified_imports / ForwardRefResolver._resolve_one).
+# N'existe comme fichier .ili nulle part sur disque - construit via le VRAI
+# pipeline parse+build (pas d'instances Python fabriquees a la main, RULE #1)
+# pour beneficier des memes garanties que n'importe quel autre modele.
+#
+# Le MODEL declare ci-dessous ne peut PAS s'appeler litteralement "INTERLIS" :
+# ce mot est son propre token lexer reserve (utilise par la clause
+# 'IMPORTS (Name|INTERLIS)' elle-meme), distinct de `Name` - confirme par
+# test empirique ("mismatched input 'INTERLIS' expecting Name" des que
+# "MODEL INTERLIS" est tente). Sans consequence pratique : la resolution par
+# nom court de SymbolTable.resolve() (voir forward_refs.py) retrouve
+# "I32OID" quel que soit le nom qualifie interne reellement enregistre -
+# seule la cle "INTERLIS" du dict ci-dessous (utilisee par ModelRepository,
+# jamais par le texte source lui-meme) compte pour le lookup externe.
+#
+# ANYOID/UUIDOID VOLONTAIREMENT ABSENTS (perimetre reduit par rapport a la
+# citation complete du manuel, confirme par test empirique) : contrairement
+# a NOOID/I32OID/STANDARDOID, `ANYOID` et `UUIDOID` sont eux-memes des TOKENS
+# LEXER RESERVES dans vendor/interlis-antlr4/InterlisLexer.g4 ("ANYOID :
+# 'ANYOID';", "UUIDOID : 'UUIDOID';"), jamais un `Name` ordinaire - la
+# grammaire ne les rend accessibles QUE via les formes qualifiees speciales
+# `INTERLIS DOT ANYOID`/`INTERLIS DOT UUIDOID` de InterlisParser.g4 (clauses
+# `OID AS`, `structureRef`, `oidType`, etc. - jamais via le `domainRef`
+# ordinaire, qui n'accepte que des sequences de `Name`). Consequence :
+# `DOMAIN ANYOID = ...;`/`DOMAIN UUIDOID = ...;` sont syntaxiquement
+# IMPOSSIBLES a ecrire (confirme : "mismatched input 'ANYOID' expecting
+# {'UUIDOID', Name}"), et `EXTENDS ANYOID` egalement (domainRef n'accepte
+# pas ce token) - le modele predefini "litteral" du manuel n'est donc pas
+# exprimable tel quel dans CETTE grammaire. Modeliser ANYOID/UUIDOID
+# correctement necessiterait un binding dedie pour ces formes qualifiees
+# speciales (kind: Reference distinct, jamais un domainRef) - hors perimetre
+# de ce lot (Lot 23, motive par I32OID uniquement, seul echec reel du
+# corpus). NOOID est inclus pour rester fidele a la citation du manuel mais
+# n'est actuellement cible par aucun ForwardRef reel du corpus - I32OID
+# n'EXTENDS plus ANYOID (impossible) mais reste un DOMAIN OID numerique
+# independant, comportementalement equivalent pour toute resolution par nom.
+_PREDEFINED_MODEL_INTERNAL_NAME = "PredefinedInterlisNamespace"
+_PREDEFINED_INTERLIS_SOURCE = f"""\
+INTERLIS 2.4;
+
+MODEL {_PREDEFINED_MODEL_INTERNAL_NAME} AT "http://www.interlis.ch" VERSION "2024-04-24" =
+
+  DOMAIN
+    NOOID = OID ANY;
+    I32OID = OID 0..2147483647;
+    STANDARDOID = OID TEXT*16;
+
+END {_PREDEFINED_MODEL_INTERNAL_NAME}.
+"""
+_BUILTIN_SOURCES = {"INTERLIS": _PREDEFINED_INTERLIS_SOURCE}
 
 
 class ModelRepository:
@@ -64,12 +119,15 @@ class ModelRepository:
     def _get_table(self, model_name: str):
         if model_name in self._cache:
             return self._cache[model_name]
-        path = self._index.get(model_name)
-        if path is None or self._make_sub_builder is None:
-            self._cache[model_name] = None
-            return None
-        tree, syntax_errors = parse_file(path)
-        if syntax_errors:
+        if model_name in _BUILTIN_SOURCES:
+            tree, syntax_errors = parse_text(_BUILTIN_SOURCES[model_name])
+        else:
+            path = self._index.get(model_name)
+            if path is None:
+                self._cache[model_name] = None
+                return None
+            tree, syntax_errors = parse_file(path)
+        if syntax_errors or self._make_sub_builder is None:
             self._cache[model_name] = None
             return None
         builder = self._make_sub_builder()
@@ -80,5 +138,18 @@ class ModelRepository:
         # table partiellement peuplee au lieu de relancer indefiniment le
         # chargement du meme fichier.
         self._cache[model_name] = builder.symbol_table
-        builder.build(tree)
+        result = builder.build(tree)
+        if model_name in _BUILTIN_SOURCES:
+            # Le Model reellement declare porte un nom interne different du
+            # nom reel documente par le manuel (voir
+            # _PREDEFINED_INTERLIS_SOURCE, contrainte lexer) - corrige ici :
+            # Name de l'instance elle-meme (ce n'est pas une fabrication,
+            # juste la correction du contournement de syntaxe vers la vraie
+            # valeur), toutes les entrees qualifiees de sa table, et un alias
+            # sous le nom nu attendu pour que `Import.ImportedP` (resolution
+            # `always_external`, cible le nom du modele lui-meme) retrouve
+            # l'instance Model reelle plutot qu'un UnresolvedNamedReference.
+            result.Name = model_name
+            builder.symbol_table.rekey_model_prefix(_PREDEFINED_MODEL_INTERNAL_NAME, model_name)
+            builder.symbol_table.register(model_name, result)
         return builder.symbol_table
