@@ -7,9 +7,11 @@ domainRef, unitRef, viewRef, graphicRef, topicRef, metaDataBasketRef,
 metaObjectRef, viewableRef) produit un ForwardRef pose directement dans le
 champ concerne via AttachmentResolver, au lieu de resoudre immediatement.
 Une passe finale (resolve_all) remplace chaque ForwardRef par l'instance
-reelle trouvee dans la SymbolTable, ou par une UnresolvedNamedReference si
-le nom semble venir d'un modele importe (decision de perimetre V1 - voir
-CLAUDE.md/le plan de conception)."""
+reelle trouvee dans la SymbolTable (fichier courant), ou - si un
+ModelRepository est fourni (resolution multi-fichiers, voir repository.py) -
+dans la table du modele importe correspondant, chargee a la demande. Sans
+repository (ou si le modele reste introuvable), le nom devient un
+UnresolvedNamedReference documente plutot qu'une exception."""
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -53,11 +55,26 @@ class SymbolTable:
         short = qualified_name.rsplit(".", 1)[-1]
         self._by_short_name.setdefault(short, []).append(instance)
 
-    def resolve(self, name: str) -> Any | None:
+    def resolve(self, name: str, kind_hint: str | list[str] | None = None) -> Any | None:
         if name in self._qualified:
             return self._qualified[name]
         short = name.rsplit(".", 1)[-1]
         candidates = self._by_short_name.get(short, [])
+        if kind_hint is not None and len(candidates) > 1:
+            # Le meme nom court peut designer des entites metamodele
+            # DIFFERENTES (ex. une CLASS "MetaElement" et un role anonyme
+            # (nomme d'apres sa classe cible) "MetaElement" dans une autre
+            # association, ou "Localisation" a la fois une CLASS et un role
+            # anonyme d'association - trouve sur DMAV_AdressesDeBatiments_V1_0.ili)
+            # - le kind_hint (target/resolves_to du binding Reference-kind,
+            # ex. "Class", ou plusieurs valeurs possibles ex. viewableRef :
+            # ["Class", "View"]) permet de lever l'ambiguite en ne retenant
+            # que les instances de la/des classe(s) metamodele visee(s).
+            hints = kind_hint if isinstance(kind_hint, list) else [kind_hint]
+            filtered = [c for c in candidates if getattr(c, "_qualified_class", "").rsplit(".", 1)[-1] in hints]
+            if len(filtered) == 1:
+                return filtered[0]
+            candidates = filtered if filtered else candidates
         if len(candidates) == 1:
             return candidates[0]
         return None
@@ -80,9 +97,9 @@ class ForwardRefResolver:
     def register_pending(self, ref: ForwardRef, container: Any, field: str) -> None:
         self._pending.append(_Pending(ref, container, field))
 
-    def resolve_all(self) -> None:
+    def resolve_all(self, repository=None) -> None:
         for entry in self._pending:
-            resolved = self._resolve_one(entry.ref)
+            resolved = self._resolve_one(entry.ref, repository)
             current = getattr(entry.container, entry.field, None)
             if isinstance(current, list):
                 for i, item in enumerate(current):
@@ -92,12 +109,35 @@ class ForwardRefResolver:
                 setattr(entry.container, entry.field, resolved)
         self._pending.clear()
 
-    def _resolve_one(self, ref: ForwardRef) -> Any:
+    def _resolve_one(self, ref: ForwardRef, repository=None) -> Any:
+        kind_hint = ref.resolves_to_hint if isinstance(ref.resolves_to_hint, (str, list)) else None
         if ref.always_external:
+            # Le nom lui-meme (ex. modeldef.imports.ImportedP) EST le nom du
+            # modele importe, jamais prefixe - si un ModelRepository est
+            # configure, tenter de le charger et de le resoudre vers
+            # l'instance Model reelle (elle s'enregistre sous son propre nom
+            # nu, meme mecanisme que toute autre instance nommee) plutot que
+            # de toujours retomber sur UnresolvedNamedReference.
+            if repository is not None:
+                found = repository.resolve_external(ref.name, ref.name, kind_hint)
+                if found is not None:
+                    return found
             return UnresolvedNamedReference(ref.name, reason="external_import")
-        found = self.symbol_table.resolve(ref.name)
+        found = self.symbol_table.resolve(ref.name, kind_hint=kind_hint)
         if found is not None:
             return found
         if not self.symbol_table.has_prefix(ref.name):
+            # Prefixe absent de CE fichier : candidat a une resolution
+            # cross-fichier si un ModelRepository est configure (voir
+            # repository.py) - chaque modele charge garde sa PROPRE table,
+            # jamais fusionnee, donc aucune ambiguite de nom court introduite
+            # entre modeles sans rapport (seule une correspondance de nom
+            # QUALIFIE COMPLET dans la table du modele explicitement vise
+            # compte).
+            if repository is not None and "." in ref.name:
+                prefix = ref.name.split(".", 1)[0]
+                found = repository.resolve_external(prefix, ref.name, kind_hint)
+                if found is not None:
+                    return found
             return UnresolvedNamedReference(ref.name, reason="external_import")
         raise BuildError(f"reference non resolue et non attribuable a un import : {ref.name!r}", rule=ref.rule)

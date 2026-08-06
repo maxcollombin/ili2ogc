@@ -63,7 +63,7 @@ classOrStructureRef:
   - classRef
   - structureRef
   attribute_bindings:
-    dispatch:
+    _dispatch:
       source:
         field: classRef|structureRef
         kind: alt_rule

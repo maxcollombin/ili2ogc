@@ -33,6 +33,18 @@ def call(ctx: Any, field: str, index: int | None = None) -> Any:
             if index == 0:
                 return method()
             raise TypeError(f"{field} sur {type(ctx).__name__} n'accepte pas d'index (accesseur single)")
+        if index < 0:
+            # Index Python (-1 = dernier element) : l'accesseur ANTLR genere
+            # (getTypedRuleContext(s)/getToken(s)) ne comprend QUE des index
+            # positifs 0-bases (retourne None sans erreur pour un index
+            # negatif, jamais traduit en "depuis la fin") - passer par la
+            # liste complete pour beneficier du slicing Python normal.
+            # Bug trouve via un vrai .ili (setConstraint.Constraint, corpus
+            # models.geo.admin.ch/DMAV_Bodenbedeckung_V1_0.ili) : index: -1
+            # renvoyait toujours None, jamais la derniere expression() reelle.
+            values = method()
+            values = list(values) if values is not None else []
+            return values[index] if -len(values) <= index < len(values) else None
         return method(index)
     return method()
 

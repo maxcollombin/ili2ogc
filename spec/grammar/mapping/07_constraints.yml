@@ -123,7 +123,7 @@ constraintDef:
     rule: constraintDef
   kind: Container
   attribute_bindings:
-    dispatch:
+    _dispatch:
       source:
         field: mandatoryConstraint|plausibilityConstraint|existenceConstraint|uniquenessConstraint|setConstraint|expression
         kind: alt_rule
@@ -216,7 +216,7 @@ factor:
     objectOrAttributePath:
       target: IlisMeta16.ModelData.PathOrInspFactor
   attribute_bindings:
-    dispatch:
+    _dispatch:
       source:
         field: objectOrAttributePath|inspection|functionCall|constant|Number
         kind: alt_rule_or_token

@@ -12,6 +12,7 @@ import warnings
 from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
+from interlis.builder.repository import ModelRepository
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_file
 
@@ -74,7 +75,8 @@ def cmd_build(args: argparse.Namespace) -> int:
             print(f"  {e}", file=sys.stderr)
         return 1
 
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
+    repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         model = builder.build(tree)
@@ -96,6 +98,11 @@ def main(argv: list[str] | None = None) -> int:
     build_parser = subparsers.add_parser("build", help="Parse un fichier .ili et affiche le modele construit.")
     build_parser.add_argument("file", help="Chemin du fichier .ili a construire.")
     build_parser.add_argument("-q", "--quiet", action="store_true", help="Ne pas afficher les avertissements.")
+    build_parser.add_argument(
+        "--repo", action="append", default=[], metavar="DIR",
+        help="Repertoire de modeles .ili a utiliser pour resoudre les references vers des modeles importes "
+             "(IMPORTS) - repetable. Absent par defaut : aucune resolution cross-fichier (comportement V1).",
+    )
     build_parser.set_defaults(func=cmd_build)
 
     args = parser.parse_args(argv)

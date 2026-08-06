@@ -323,7 +323,13 @@ renamedViewableRef:
       source:
         field: Name
         index: 0
-      note: optional 'Name TILDE' rename alias -> RenamedBaseView.inherited.Name
+        optional: true
+      note: 'optional ''Name TILDE'' rename alias -> RenamedBaseView.inherited.Name. optional: true ajoute
+        (audit corpus reel models.geo.admin.ch, 2026-08-03) : le cas sans alias (ex. "ALL OF Localisation;",
+        DMAV_AdressesDeBatiments_V1_0.ili) est majoritaire dans le corpus reel, la note documentait deja
+        "optional" mais le flag manquait sur le binding lui-meme.
+
+        '
     viewableRef:
       association: BaseViewRef
       role: BaseView
@@ -441,9 +447,15 @@ viewAttributes:
       source:
         field: attributeDef
         index: 0
+        optional: true
       note: '3rd grammatical alternative (bare attrTypeDef/attributeDef) - confirmed IlisMeta16.ModelData.ClassAttr:
         Class(AttrParent) <-> AttrOrParam(ClassAttribute, composite); parent Class end is the enclosing
-        View.'
+        View. optional: true ajoute (audit corpus reel models.geo.admin.ch, 2026-08-03) : la 1ere alternative
+        "ALL OF ..." (deja confirmee not_applicable, voir all_of_redefinition ci-dessous) n''a AUCUN
+        attributeDef du tout dans le meme viewAttributes() - trouve sur DMAV_AssiettesDeServitudes_V1_0.ili
+        ("ALL OF AssietteDeServitude; UNIQUE CH050701: EREID;").
+
+        '
     all_of_redefinition:
       status: not_applicable
       note: 'Lot 17 (phase 2), point 15 FERME. 1ere alternative "ALL OF Name; (Name ASSIGN expression;)*".
@@ -611,6 +623,9 @@ viewableRef:
   grammar:
     rule: viewableRef
   kind: Reference
+  resolves_to:
+  - Class
+  - View
   attribute_bindings:
     _resolution:
       note: 'Pure reference resolution: qualified name (Name (DOT Name)?)? Name, always followed by one
@@ -619,4 +634,10 @@ viewableRef:
         Name). Resolves to any IlisMeta16.ModelData.Class (Structure/Class/Association/View) via BaseViewRef.BaseView;
         no own attributes constructed (same pattern as classOrStructureRef, Lot 4).'
   note: 'No fixed target: resolves to either IlisMeta16.ModelData.Class or IlisMeta16.ModelData.View depending
-    on what the qualified name actually refers to in the model.'
+    on what the qualified name actually refers to in the model. resolves_to: [Class, View] ajoute (audit
+    corpus reel models.geo.admin.ch, 2026-08-03) : sans hint, un role anonyme homonyme (ex. "Localisation
+    -<> {0..1} Localisation;", meme mecanisme que roleDef sur IlisMeta16.ili) rendait la resolution
+    ambigue - trouve sur DMAV_AdressesDeBatiments_V1_0.ili ("VIEW Localisation_Valable PROJECTION OF
+    Localisation;").
+
+    '

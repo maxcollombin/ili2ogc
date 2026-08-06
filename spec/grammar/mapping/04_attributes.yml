@@ -3,7 +3,7 @@ attrType:
     rule: attrType
   kind: Container
   attribute_bindings:
-    dispatch:
+    _dispatch:
       source:
         field: type_|domainRef|referenceAttr|restrictedStructureRef
         kind: alt_rule
@@ -179,7 +179,7 @@ classOrAssociationRef:
     rule: classOrAssociationRef
   kind: Container
   attribute_bindings:
-    dispatch:
+    _dispatch:
       source:
         field: classRef|associationRef
         kind: alt_rule
@@ -204,12 +204,19 @@ referenceAttr:
 
         '
     BaseClass:
+      association: BaseClass
+      role: BaseClass
       source:
         field: restrictedClassOrAssRef
-      note: 'ReferenceType extends ClassRelatedType (confirmed in ilismeta16-classes.yml), so the resolved
-        restrictedClassOrAssRef (already bound separately - itself a base ref plus optional RESTRICTION
-        list) feeds the same BaseClass/ClassRestriction associations documented on the classType binding,
-        here on this ReferenceType instance rather than a ClassRefType.
+        path: BaseRef
+        optional: true
+      note: 'CORRIGE (audit CLI ModelBuilder, 2026-08-03) : le binding assignait le bag brut
+        {BaseRef, AnyClass, Restrictions} entier (dict, avec ForwardRef non extrait) au lieu
+        d''en extraire BaseRef via path: - meme bug/meme correctif que roleDef.BaseClass (voir
+        spec/grammar/mapping/05_associations.yml), copie ici a l''identique : ReferenceType extends
+        ClassRelatedType (confirme ilismeta16-classes.yml), meme association BaseClass. Couvre
+        uniquement la 1ere occurrence ; AnyClass/Restrictions restent hors perimetre (meme limite
+        que roleDef.BaseClass).
 
         '
   note: 'CORRIGE (Lot 15, point 1, phase 2 - decision utilisateur confirmee). L''ancien target: AttrOrParam

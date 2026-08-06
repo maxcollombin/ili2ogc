@@ -1,0 +1,16 @@
+INTERLIS 2.4;
+
+MODEL Base AT "https://example.org/base" VERSION "2026-08-03" =
+
+  DOMAIN
+    PersonKind = (Adult, Child);
+
+  TOPIC MainTopic =
+
+    CLASS Person =
+      Name: MANDATORY TEXT;
+    END Person;
+
+  END MainTopic;
+
+END Base.

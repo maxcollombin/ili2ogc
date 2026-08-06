@@ -41,6 +41,7 @@ class SpecEntry(BaseModel, extra="allow"):
     when_present: dict[str, TargetBranch] | None = None
     default: dict[str, Any] | None = None
     attribute_bindings: dict[str, Any] | None = None
+    multi_declaration: bool = False
     note: str | None = None
 
     @field_validator("kind")

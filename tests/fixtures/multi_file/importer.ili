@@ -1,0 +1,15 @@
+INTERLIS 2.4;
+
+MODEL Importer AT "https://example.org/importer" VERSION "2026-08-03" =
+
+  IMPORTS Base;
+
+  TOPIC UseTopic =
+
+    CLASS Employee =
+      Kind: MANDATORY Base.PersonKind;
+    END Employee;
+
+  END UseTopic;
+
+END Importer.

@@ -22,10 +22,14 @@ class BuildError(Exception):
 
 
 class UnresolvedNamedReference:
-    """Reference nommee non resolue - decision de perimetre V1 (voir plan de
-    conception ModelBuilder) : une reference vers un modele importe
+    """Reference nommee non resolue - une reference vers un modele importe
     (IMPORTS) devient cet objet documente explicitement plutot qu'une
-    exception ou un None silencieux."""
+    exception ou un None silencieux. Reste le comportement par defaut (aucun
+    ModelRepository configure) et le repli pour tout modele reellement
+    introuvable meme avec un repository (hors du/des repertoire(s) fourni(s),
+    fichier avec erreur de syntaxe, import circulaire non entierement
+    resolu) - voir ModelRepository (repository.py) pour la resolution
+    multi-fichiers reelle."""
 
     __slots__ = ("name", "reason")
 

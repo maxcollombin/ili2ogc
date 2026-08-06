@@ -282,7 +282,7 @@ coordinateType:
     NullAxis:
       source:
         field: rotationDef
-        index: 0
+        path: NullAxis
         optional: true
       note: 'CONFIRME (Lot 13, point 2, phase 2). Correction : la piste precedente (clauses internes a
         numeric()) est abandonnee - la vraie source est le rotationDef() de coordinateType lui-meme (voir
@@ -290,15 +290,22 @@ coordinateType:
         NullAxis (type AxisInd = domaine 1..3, ilismeta16-classes.yml/metamodel PDF section 2.3.1). Les
         clauses "{ Name [PosNumber] }"/"< Name >" de numeric() restent une question separee (point 3,
         Lot 14 - NumsRefSys-like, non concernees par ce point).
+        CORRIGE (audit corpus reel models.geo.admin.ch, 2026-08-03) : `field: rotationDef, index: 0`
+        indexait a tort l''accesseur rotationDef() lui-meme (single, 0 ou 1 occurrence) au lieu de son
+        PosNumber interne -> `path: NullAxis` delegue desormais a la regle rotationDef (voir ci-dessous,
+        qui expose elle-meme NullAxis/PiHalfAxis via son propre PosNumber indexe).
 
         '
     PiHalfAxis:
       source:
         field: rotationDef
-        index: 1
+        path: PiHalfAxis
         optional: true
-      note: CONFIRME (Lot 13, point 2) - meme rotationDef() que NullAxis ci-dessus ; le second PosNumber
-        (apres MINUS GT) alimente PiHalfAxis (AxisInd).
+      note: 'CONFIRME (Lot 13, point 2) - meme rotationDef() que NullAxis ci-dessus ; le second PosNumber
+        (apres MINUS GT) alimente PiHalfAxis (AxisInd). CORRIGE (audit corpus reel, 2026-08-03) - meme
+        correctif que NullAxis (path au lieu d''index direct sur rotationDef).
+
+        '
     _rotation_via_rotationDef:
       note: 'Precision : il n''existe PAS d''attribut/association "Rotation" separe sur CoordType (confirme,
         ilismeta16-classes.yml : seuls NullAxis/PiHalfAxis/Multi en own) - rotationDef() alimente DIRECTEMENT
@@ -350,22 +357,30 @@ domainDef:
   grammar:
     rule: domainDef
   kind: Container
+  multi_declaration: true
   parent:
     association: PackageElements
     role: Element
-  attribute_bindings:
-    Name:
-      source:
-        field: Name
-        index: 0
-    Mandatory:
-      source:
-        field: MANDATORY
-        presence: true
-      note: applies to the concrete DomainType subclass instance created via type_
   note: 'No fixed target: IlisMeta16.ModelData.DomainType is abstract (isAbstract=true in the XMI). The
     concrete instantiated subclass is resolved by the type_ dispatcher (-> textType/numericType/ booleanType/enumerationType/coordinateType/lineType/classType/
     attributeType/oIDType/blackboxType), each already individually mapped with its own qualified_name.
+    CORRIGE (audit corpus reel models.geo.admin.ch, 2026-08-03) : domainDef() n''est PAS "une seule
+    declaration de domaine" mais boucle grammaticalement (confirme sur le code genere reel,
+    InterlisParser.py, boucle while _alt!=2) sur N declarations partageant un seul mot-cle DOMAIN (ex.
+    "DOMAIN\n  Code = 0..255;\n  MultRange = 0..2147483647;\n  LengthRange EXTENDS MultRange =
+    1..2147483647;", models/IlisMeta16.ili), chacune avec son PROPRE Name + exactement une alternative de
+    contenu parmi 3 SOEURS DIRECTES - `type_()`, `numeric()` nu, `enumeration()` nu (confirme : la_==1
+    type_(), la_==2 numeric(), la_==3 enumeration() - PAS des alternatives imbriquees dans type_()).
+    Aucun mecanisme generique existant (bag/for_each) ne correle plusieurs accesseurs DIFFERENTS a la
+    MEME position parmi N occurrences - `multi_declaration: true` delegue entierement a
+    InterlisModelBuilder._build_multi_declaration (model_builder.py), qui decoupe ctx.children par
+    position (delimiteur SEMI, un token par declaration) plutot que par nom d''accesseur : pour chaque
+    segment, retrouve son propre Name/MANDATORY et sa propre alternative de contenu (type_() deja visite
+    normalement, numeric()/enumeration() nus enveloppes en NumType/EnumType via le meme mecanisme
+    `wrap:`/visit_wrapped que attrTypeDef.Type, Lot 19) - meme cas particulier reconnu que topicDef
+    (_build_multi_target, seul autre cas special parmi les 121 regles). N''utilise PAS
+    attribute_bindings (ignore par cette strategie) - STRING DOTDOT STRING / CLASS RESTRICTION(...)
+    restent non mappes (pas de cible metamodele connue), silencieusement ignores comme avant.
     || No fixed target: DomainType is abstract. Concrete class resolved by type_ dispatcher (see grammar-metamodel-mapping.yml
     comment).'
 domainRef:
@@ -373,13 +388,25 @@ domainRef:
     rule: domainRef
   kind: Reference
   target: IlisMeta16.ModelData.DomainType
+  resolves_to:
+  - DomainType
+  - Class
   attribute_bindings:
     _resolution:
       note: 'Pure reference resolution: qualified name (Name (DOT Name)*)? Name, or ''INTERLIS DOT Name''
         for predefined domains - resolves to an existing IlisMeta16.ModelData.DomainType subclass instance
         by qualified_name; no own attributes constructed (DomainType itself is abstract, own: {Mandatory}
         inherited by all concrete subclasses already bound in earlier lots).'
-  note: Type dispatching
+  note: 'Type dispatching. resolves_to: [DomainType, Class] ajoute (audit corpus reel, 2026-08-03) :
+    domainRef() est syntaxiquement indistinguable d''un structureRef/classRef pour un simple nom qualifie
+    (l''ambiguite grammaticale INTERLIS classique domaine/structure/classe) - confirme sur
+    models/IlisMeta16.ili ("Multiplicity: Multiplicity;", l''attribut ET le TYPE partagent le nom
+    "Multiplicity", qui est en realite une STRUCTURE/Class, pas un DomainType). Sans le hint "Class" en
+    repli, l''ambiguite avec d''autres entites homonymes (ex. un attribut nomme pareil ailleurs) restait
+    non resolue meme quand la vraie cible (la Class) etait un candidat unique parmi les candidats
+    filtres.
+
+    '
 enumElement:
   grammar:
     rule: enumElement
@@ -810,8 +837,14 @@ lineType:
       source:
         field: intersectionDef
         index: 0
-      note: confirmed LineType.own.MaxOverlap (TEXT, 0..1) - fed by the optional intersectionDef() clause
-        (WITHOUT OVERLAPS > Dec), see intersectionDef binding below.
+        optional: true
+      note: 'confirmed LineType.own.MaxOverlap (TEXT, 0..1) - fed by the optional intersectionDef() clause
+        (WITHOUT OVERLAPS > Dec), see intersectionDef binding below. optional: true ajoute (audit corpus
+        reel models.geo.admin.ch, 2026-08-03) : la note documentait deja "optional" mais le flag manquait
+        (ex. "Line = POLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2;" sans clause WITHOUT OVERLAPS,
+        CHBase_Part1_GEOMETRY_V2.ili).
+
+        '
 numeric:
   grammar:
     rule: numeric
@@ -1066,12 +1099,25 @@ rotationDef:
     rule: rotationDef
   kind: Container
   attribute_bindings:
-    _rotation_axes:
-      note: 'Feeds directly into the enclosing coordinateType''s CoordType instance: PosNumber(index 0)
-        -> NullAxis, PosNumber(index 1, after MINUS GT) -> PiHalfAxis. See coordinateType binding above
-        for the confirmed attribute-level bindings (this rule itself constructs no instance of its own).
+    NullAxis:
+      source:
+        field: PosNumber
+        index: 0
+      note: 'Feeds directly into the enclosing coordinateType''s CoordType instance (via path:, see
+        coordinateType.NullAxis/PiHalfAxis). CORRIGE (audit corpus reel models.geo.admin.ch, 2026-08-03) :
+        coordinateType tentait auparavant d''indexer directement `field: rotationDef` avec index 0/1,
+        alors que rotationDef() est lui-meme un accesseur SINGLE (0 ou 1 occurrence, confirme
+        generated/ast-accessors.yml : RotationDefContext n''a pas de kind rule_multi pour rotationDef sur
+        CoordinateTypeContext) - seul son PosNumber INTERNE (rule_multi, confirme) est indexable 0/1.
+        TypeError sur tout coordinateType() avec une clause ROTATION reelle (ex. CHBase_Part1_GEOMETRY_V2.ili).
 
         '
+    PiHalfAxis:
+      source:
+        field: PosNumber
+        index: 1
+      note: Second PosNumber (apres MINUS GT) - voir NullAxis ci-dessus pour le contexte complet de la
+        correction.
   note: 'No direct IlisMeta16 instance expected. ROTATION <n1> -> <n2>: two numeric values feeding a rotation-related
     attribute of the enclosing element (coordinate system definition context). || CONFIRME (Lot 13, point
     2, phase 2): rotationDef() = ROTATION PosNumber(0) MINUS GT PosNumber(1), i.e. "ROTATION axisA ->

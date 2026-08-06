@@ -151,6 +151,20 @@ def resolve_source(
                 node = ca.call(ctx, name, alt_index)
             except TypeError:
                 node = ca.call(ctx, name)
+            if isinstance(node, list):
+                # `name` est un accesseur "multi" sur CE ctx (peut apparaitre
+                # plusieurs fois - ex. numeric()/enumeration() sur
+                # DomainDefContext, qui boucle sur N declarations de domaine,
+                # meme quand une seule alternative n'est en jeu par
+                # declaration) et aucun index explicite n'a matche (alt_index
+                # est None ou ne s'applique pas ici) : `ca.call` sans index
+                # renvoie alors la LISTE COMPLETE, jamais None, meme quand
+                # elle est VIDE - sans ce garde, une liste vide etait
+                # faussement traitee comme "alternative presente" (trouve sur
+                # domainDef._domain_content : "numeric" matchait toujours en
+                # premier avec une liste vide avant que "enumeration", la
+                # vraie alternative presente, ne soit jamais essayee).
+                node = node[0] if node else None
             if node is not None:
                 if kind == "alt_token_presence":
                     value = name
@@ -195,7 +209,7 @@ def resolve_source(
     if source.get("sequence_pattern"):
         if rule_map is None:
             raise BuildError("sequence_pattern sans rule:/mapping: associe", rule=rule, ctx=ctx)
-        return _match_sequence_pattern(ctx, field, rule_map, builder, rule)
+        return _match_sequence_pattern(ctx, field, rule_map, builder, rule, optional)
 
     # --- anchor : position relative a un token ancre (pas un index plat -
     # necessaire quand plusieurs occurrences du meme type de champ existent
@@ -238,9 +252,15 @@ def resolve_source(
     # --- cas standard : field (+ alt) (+ index) (+ optional). ----------------
     alt = source.get("alt")
     if alt is not None and not _alt_matches(ctx, alt):
-        if optional:
-            return None
-        raise BuildError(f"alternative grammaticale {alt} non prise", rule=rule, ctx=ctx)
+        # Meme politique que pour alt_token/alt_rule (voir plus haut) :
+        # un binding qui ne s'applique qu'a UNE alternative grammaticale
+        # numerotee est par nature conditionnel - traite comme absent/None
+        # par defaut plutot que de bloquer, `optional: true` ou pas (motif
+        # repete plus qu'il n'est commode de corriger un par un a chaque
+        # nouveau modele reel qui l'exerce, ex. predicate._defined_factor).
+        if not optional:
+            warnings.warn(f"[{rule}] alternative grammaticale {alt} non prise - traite comme absent/None")
+        return None
 
     if not ca.has_accessor(ctx, field):
         if optional:
@@ -316,14 +336,19 @@ def _resolve_join(ctx: Any, source: dict, builder: Any, rule: str) -> str:
     return separator.join(s for s in segments if s is not None)
 
 
-def _match_sequence_pattern(ctx: Any, field: str, rule_map: dict, builder: Any, rule: str) -> Any:
+def _match_sequence_pattern(ctx: Any, field: str, rule_map: dict, builder: Any, rule: str, optional: bool = False) -> Any:
     if not ca.has_accessor(ctx, field):
         raise BuildError(f"accesseur {field!r} introuvable sur {type(ctx).__name__}", rule=rule, ctx=ctx)
     # `field` peut lui-meme etre un accesseur "multi" (ex. '--' = deux
     # tokens MINUS) : l'ancre est TOUJOURS la 1ere occurrence, la sequence
-    # se lit a partir de sa position dans ctx.children.
+    # se lit a partir de sa position dans ctx.children. Absent est possible
+    # de facon legitime (ex. roleDef a une 2e forme grammaticale - restriction
+    # de type sur un role EXISTANT par son nom - qui n'utilise aucun symbole
+    # de force de relation du tout).
     candidates = ca.call_list(ctx, field)
     if not candidates:
+        if optional:
+            return None
         raise BuildError(f"{field!r} absent (sequence_pattern)", rule=rule, ctx=ctx)
     anchor_node = candidates[0]
     children = list(ctx.children or [])
