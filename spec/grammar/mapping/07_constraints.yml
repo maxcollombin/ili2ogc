@@ -834,8 +834,11 @@ uniquenessConstraint:
     une clause localUniqueness portant elle-meme (LOCAL) ou (BASKET) (voir localUniqueness ci-dessous).
     || CORRIGE x3 (voir grammar-divergences.md pour l''historique complet des 3 corrections successives
     sur cette regle). Forme actuelle confirmee via grammar (uniquenessConstraint(), regenere) : UNIQUE
-    (LPAR BASKET RPAR)? (Name COLON)? (Name COLON)? (WHERE expression COLON)? (globalUniqueness | localUniqueness)+
-    SEMI 1ere correction (Lot 14 point 6) : le qualificatif fusionne (LPAR (LOCAL|BASKET) RPAR)? a ete
+    (LPAR BASKET RPAR)? (Name COLON)? (WHERE expression COLON)? (globalUniqueness | localUniqueness)+
+    SEMI (Lot 24 : un doublon accidentel de (Name COLON)? issu d''un copier-coller lors d''une correction
+    anterieure a ete retire du .g4 - inoffensif pour ce binding, qui ne lisait deja que la 1ere occurrence
+    via index:0, mais ne correspondait pas a l''EBNF confirmee ci-dessous ; parser regenere, non-regression
+    confirmee sur le corpus complet et les 14 tests pytest). 1ere correction (Lot 14 point 6) : le qualificatif fusionne (LPAR (LOCAL|BASKET) RPAR)? a ete
     RETIRE de ce niveau (il etait consomme ICI, avant la boucle, empechant structurellement localUniqueness()
     de jamais voir son propre marqueur). 2e correction (decouverte lors d''un test de non-regression sur
     342 modeles de production reels, models.geo.admin.ch/ilimodels.xml) : cette regle n''avait AUCUNE
