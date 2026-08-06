@@ -16,10 +16,7 @@ attrType:
 attrTypeDef:
   grammar:
     rule: attrTypeDef
-  kind: Dispatcher
-  dispatches_to:
-  - attrType
-  - lineType
+  kind: Container
   attribute_bindings:
     Mandatory:
       source:
@@ -42,9 +39,7 @@ attrTypeDef:
       note: 'First alternative dispatches to one of: attrType() |  enumeration() (anonymous EnumType)
         | numeric() CIRCULAR? (LSBR unitRef RSBR)? (anonymous NumType, reusing the numeric() bindings
         already documented) | bare NUMERIC LSBR unitRef RSBR (anonymous NumType with only a Unit, no Min/Max).
-        Confirmed via grammar-metamodel-mapping.yml: "kind: Dispatcher, dispatches_to: [attrType, lineType]"
-        (lineType is reached separately, not through this branch - see the grammar-rules ordering). Feeds
-        the enclosing AttrOrParamType.Type association end (handled by the parent attributeDef/roleDef/
+        Feeds the enclosing AttrOrParamType.Type association end (handled by the parent attributeDef/roleDef/
         etc. construct).
         CORRIGE (audit CLI ModelBuilder, 2026-08-03) : numeric()/enumeration() retournent un bag (dict de
         champs partages avec numericType/coordinateType/etc., voir path: ailleurs) jamais enveloppe dans
@@ -53,6 +48,25 @@ attrTypeDef:
         deja nommees comme les attributs/associations reelles - Min/Max/Circular/Clockwise/Unit pour
         NumType, Order/Elements pour EnumType). NUMERIC bare et attrType() restent hors de ce mecanisme
         (attrType produit deja une instance propre ; NUMERIC bare, cas plus rare, pas encore cable).
+        CORRIGE (Lot 29 - bug moteur reel, trouve en construisant le validateur XTF) : l''ancien
+        `dispatches_to: [attrType, lineType]` faisait court-circuiter TOUT le calcul de ce binding
+        (ainsi que Mandatory et _collection) des que `ctx.attrType()` matchait (la branche la_==1,
+        de LOIN la plus frequente en pratique - tout attribut simplement type TEXT/domaine/reference/
+        structure) : `_relay` retournait `self.visit(attrType_node)` immediatement, AVANT meme de
+        calculer les attribute_bindings de attrTypeDef lui-meme. Consequence reelle, VERIFIEE
+        empiriquement sur RoadTrafficCensus_V1_1.ili : `MLocId : MANDATORY TEXT*50;` produisait un
+        TextType avec Mandatory=None (jamais True) - silencieux, aucune erreur, decouvert seulement en
+        interrogeant directement une instance construite (RULE #6 "0 erreur" ne l''aurait jamais
+        detecte, le mapping/schema restant valide). `lineType` etait en plus une entree FAUSSE
+        (`AttrTypeDefContext` n''a AUCUN accesseur `lineType()` - confirme sur le code ANTLR reel,
+        attrTypeDef() n''appelle jamais `self.lineType()` ; lineType() n''est atteint que via
+        `type_()` -> `attrType()`, un niveau plus bas, sans rapport direct avec attrTypeDef). Le champ
+        `attrType` de CE binding (`Type.source.field`) couvre DEJA integralement le meme cas via le
+        mecanisme generique alt ("|" dans field) - `dispatches_to` etait a la fois faux (lineType) et
+        redondant/nuisible (attrType). Supprime entierement ; Mandatory/Type/_collection passent
+        desormais TOUJOURS par le calcul de bag normal de `_relay`, quelle que soit l''alternative
+        grammaticale prise. Non-regression verifiee : corpus 3 fichiers XTF cibles + models/IlisMeta16.ili
+        + 23 tests pytest, aucun changement de sortie hors l''ajout du Mandatory desormais correct.
 
         '
     _collection:

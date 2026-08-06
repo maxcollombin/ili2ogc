@@ -1037,6 +1037,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 # Mandatory), retenter sur une valeur MetaInstance soeur du
                 # meme bag avant d'abandonner.
                 siblings = [v for v in value.values() if isinstance(v, MetaInstance)]
+                has_unresolved_sibling = any(isinstance(v, ForwardRef) for v in value.values())
                 for key, sub_value in value.items():
                     if sub_value is None or (isinstance(sub_value, list) and not sub_value) or self._is_hollow(sub_value):
                         continue
@@ -1057,19 +1058,92 @@ class InterlisModelBuilder(InterlisParserVisitor):
                                 _assoc_name, role, upper = found
                                 self.attachment._set_field(instance, role, sub_value, upper)
                         continue
+                    attached_on = None
+                    attached_field = key
                     try:
                         self.attachment.attach(instance, key, sub_value, rule=rule_name)
+                        attached_on = instance
+                        attached_field = self._resolved_field_name(instance, key, {})
                     except BuildError:
                         for sibling in siblings:
                             if sibling is sub_value:
                                 continue
                             try:
                                 self.attachment.attach(sibling, key, sub_value, rule=rule_name)
+                                attached_on = sibling
+                                attached_field = self._resolved_field_name(sibling, key, {})
                                 break
                             except BuildError:
                                 continue
-                        else:
+                        if attached_on is None:
+                            # CORRIGE (Lot 29, regression trouvee sur models/
+                            # IlisMeta16.ili apres le fix attrTypeDef.dispatches_to
+                            # ci-dessus - "[roleDef] impossible d'attacher 'Type'
+                            # sur Role") : `attach()` (ci-dessus) exige un role
+                            # litteralement nomme `key` (ici "Type") sur une
+                            # association connectant les deux classes - or
+                            # roleDef() appelle aussi attrTypeDef() (role type
+                            # inline), et AUCUNE association Role<->(Class ou
+                            # DomainType) ne s'appelle "Type" (role nomme
+                            # differemment, ex. BaseClass). Repli generique par
+                            # CLASSE CONNUE (meme mecanisme que le bloc
+                            # `isinstance(value, MetaInstance)`/`ForwardRef` plus
+                            # bas dans cette methode, pour un enfant non reclame
+                            # BRUT) - applique ici pour une valeur nichee dans un
+                            # bag, pour un `sub_value` MetaInstance OU ForwardRef
+                            # (hint de classe cible via resolves_to_hint).
+                            candidate_classes: list[str] = []
+                            if isinstance(sub_value, MetaInstance):
+                                candidate_classes = [sub_value._qualified_class]
+                            elif isinstance(sub_value, ForwardRef):
+                                hints = sub_value.resolves_to_hint if isinstance(sub_value.resolves_to_hint, list) else (
+                                    [sub_value.resolves_to_hint] if sub_value.resolves_to_hint else []
+                                )
+                                candidate_classes = [
+                                    qn for hint in hints for qn in self.schema.uml.qualified
+                                    if qn.rsplit(".", 1)[-1] == hint
+                                ]
+                            for qualified_class in candidate_classes:
+                                found = self.attachment.find_association_connecting(instance._qualified_class, qualified_class)
+                                if found is not None:
+                                    _assoc_name, role, upper = found
+                                    self.attachment._set_field(instance, role, sub_value, upper)
+                                    attached_on = instance
+                                    attached_field = role
+                                    break
+                        if attached_on is None:
+                            if has_unresolved_sibling and not isinstance(sub_value, ForwardRef):
+                                # Best-effort (docstring de cette methode) :
+                                # une cle soeur du bag (ex. attrTypeDef.Mandatory,
+                                # destinee au Type produit a cote) n'a nulle part
+                                # ou s'attacher CE ctx-ci parce que ce Type est
+                                # encore un ForwardRef non resolu (ex. reference
+                                # a un DOMAIN nomme existant, potentiellement
+                                # PARTAGE entre plusieurs usages de l'attribut -
+                                # ex. "Owner: MANDATORY Owner;" - domaine et
+                                # attribut homonymes, Lot 29). Appliquer Mandatory
+                                # sur l'instance PARTAGEE une fois resolue serait
+                                # incertain (quel usage aurait raison si
+                                # plusieurs different ?) - abandonne silencieusement
+                                # plutot que de faire planter tout le build pour
+                                # une info secondaire non critique. Un `sub_value`
+                                # qui est LUI-MEME le ForwardRef non resolu (ex.
+                                # Type) doit en revanche toujours lever - une
+                                # reference cassee ne doit jamais etre masquee
+                                # (RULE #5), voir le `raise` ci-dessous.
+                                continue
                             raise
+                    if attached_on is not None and isinstance(sub_value, ForwardRef):
+                        # CORRIGE (Lot 29) : un ForwardRef niche DANS le bag
+                        # (ex. attrTypeDef.Type quand attrType() dispatche vers
+                        # domainRef(), reference a un domaine nomme existant)
+                        # n'etait jamais enregistre pour resolution differee -
+                        # contrairement au cas ForwardRef "nu" (non imbrique
+                        # dans un dict, deja gere plus bas dans cette methode) -
+                        # il restait un ForwardRef littéral, jamais remplace par
+                        # l'instance reelle ni par UnresolvedNamedReference,
+                        # silencieusement, `resolve_all()` ne le voyant jamais.
+                        self.forward_refs.register_pending(sub_value, attached_on, attached_field)
                 continue
             if isinstance(value, list):
                 continue
