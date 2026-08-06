@@ -48,9 +48,11 @@ def test_qualified_reference_resolves_without_any_repository():
     assert not isinstance(type_value, UnresolvedNamedReference)
     assert type_value._qualified_class == "IlisMeta16.ModelData.NumType"
     assert type_value.Name == "I32OID"
-    # NumType.Min/Max non couverts ici : bug pre-existant, non lie a ce lot,
-    # confirme y compris sur models/IlisMeta16.ili (ex. "Code = 0..255;") -
-    # a traiter dans un lot dedie.
+    # Min/Max : corrige au Lot 25 (voir test_numeric_domain_min_max.py) -
+    # verifie ici aussi puisque I32OID est un NumType construit via le
+    # meme chemin (domainDef -> numeric() nu -> visit_wrapped).
+    assert type_value.Min == "0"
+    assert type_value.Max == "2147483647"
 
 
 def test_unqualified_reference_resolves_with_imports_unqualified():

@@ -124,11 +124,6 @@ metamodel's own official names.
   special `INTERLIS.ANYOID`/`INTERLIS.UUIDOID` qualified forms (not through
   ordinary `domainRef`), which would need a dedicated binding - out of
   scope so far (no corpus file has needed it yet).
-- **`NumType.Min`/`.Max` are not populated** for numeric-range domains
-  (e.g. `DOMAIN Code = 0..255;`) - a pre-existing gap found while modeling
-  the predefined namespace above (`I32OID`'s own range exhibits it too),
-  reproducible even on `models/IlisMeta16.ili`'s own domains. Not yet
-  fixed.
 
 ## Architecture
 

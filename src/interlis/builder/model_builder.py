@@ -325,7 +325,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
         for token_or_rule, branch in (entry.when_present or {}).items():
             if not ca.has_accessor(ctx, token_or_rule):
                 continue
-            if not ca.is_present(ctx, token_or_rule):
+            node = ca.call(ctx, token_or_rule)
+            if node is None:
                 continue
             instance = self.registry.new_instance(branch.target)
             instance._source_ctx = ctx
@@ -337,6 +338,15 @@ class InterlisModelBuilder(InterlisParserVisitor):
             self._push_construction_context(rule_name, instance)
             self._parent_stack.append(instance)
             try:
+                if isinstance(node, ParserRuleContext):
+                    # `token_or_rule` designe une VRAIE regle grammaticale
+                    # (pas un simple token), avec son propre contenu structure
+                    # decrit par SA PROPRE entree spec (ex. oIDType.numeric ->
+                    # numeric(), Min/Max/Circular/Clockwise/Unit) - la visiter
+                    # et fusionner son bag sur `instance`, meme mecanisme que
+                    # visit_wrapped (wrap: explicite). CORRIGE (Lot 25) :
+                    # avant, ce contenu n'etait jamais recupere du tout.
+                    self._merge_bag_into_instance(instance, self.visit(node), rule_name)
                 if entry.attribute_bindings:
                     self._apply_bindings(instance, ctx, rule_name, entry.attribute_bindings, construction_ctx, consumed)
             finally:
@@ -435,7 +445,18 @@ class InterlisModelBuilder(InterlisParserVisitor):
         # trouve par balayage (voir _apply_sibling_bag_values ci-dessous),
         # mais sans attendre le balayage puisque le noeud a deja ete consomme
         # par le calcul du binding lui-meme.
-        wrapped = [v for v in real_values.values() if isinstance(v, MetaInstance)]
+        # CORRIGE (audit NumType.Min/Max, Lot 25) : exclut les instances
+        # "hollow" (ex. numeric()._refsys_clause -> NumsRefSys construite
+        # inconditionnellement par _build_nested meme quand la clause de
+        # reference n'est PAS presente dans le source, tous ses champs
+        # restant None) - sans ce filtre, une telle instance creuse gagnait
+        # a tort ce fast-path et etait renvoyee TELLE QUELLE au lieu du bag
+        # dict, empechant visit_wrapped (qui a deja sa PROPRE logique de
+        # filtrage des valeurs hollow, voir plus bas) de jamais l'atteindre -
+        # perdant silencieusement Min/Max/Circular/Clockwise/Unit de TOUT
+        # domaine/type numerique, y compris sur models/IlisMeta16.ili
+        # lui-meme (ex. "Code = 0..255;").
+        wrapped = [v for v in real_values.values() if isinstance(v, MetaInstance) and not self._is_hollow(v)]
         if len(wrapped) == 1:
             self._apply_sibling_bag_values(wrapped[0], real_values)
             return wrapped[0]
@@ -775,8 +796,24 @@ class InterlisModelBuilder(InterlisParserVisitor):
         finally:
             self._parent_stack.pop()
 
+        self._merge_bag_into_instance(instance, bag, rule_name)
+        return instance
+
+    def _merge_bag_into_instance(self, instance: MetaInstance, bag: Any, rule_name: str) -> None:
+        """Fusionne un bag dict (resultat de `_relay` sur une regle Container,
+        ex. numeric()/enumeration()) sur `instance` - attache chaque champ non
+        vide/non hollow, resout les ForwardRef en attente. Facteur commun
+        entre `visit_wrapped` (wrap: explicite) et `_build_conditional`
+        (branche `when_present` dont le token/regle EST elle-meme une regle
+        avec son propre contenu structure, ex. oIDType.numeric -> numeric()) -
+        CORRIGE (audit NumType.Min/Max, Lot 25) : avant, seul `visit_wrapped`
+        appliquait ce filtre hollow ; `_build_conditional` ne visitait jamais
+        le noeud de la branche matched du tout, perdant tout le contenu
+        propre de numeric()/textType() (Min/Max/Circular/Clockwise/Unit) pour
+        toute regle OID numerique/textuelle (ex. `I32OID = OID
+        0..2147483647;`, namespace INTERLIS predefini)."""
         if not isinstance(bag, dict):
-            return instance
+            return
         for field, value in bag.items():
             if field == "Elements":
                 continue  # deja attache via enumElement.parent: pendant la visite ci-dessus
@@ -790,7 +827,6 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 self.forward_refs.register_pending(value, instance, self._resolved_field_name(instance, field, {}))
                 continue
             self.attachment.attach(instance, field, value, rule=rule_name)
-        return instance
 
     @staticmethod
     def _is_hollow(value: Any) -> bool:
