@@ -104,11 +104,16 @@ metamodel's own official names.
   `--repo`/`repository=...`, a reference into an imported model stays an
   unresolved named reference (`UnresolvedNamedReference`) rather than an
   error. With it, resolution only ever looks at the given local
-  directories - never the network - so any model not present there (e.g.
-  the handful of "core" INTERLIS models hosted outside
-  models.geo.admin.ch, such as `Units`/`CoordSys`/`Text_V2`) stays
-  unresolved too. Exception: the predefined `INTERLIS` namespace (see next
-  bullet) always resolves, `--repo` or not - it needs no directory lookup.
+  directories - never the network - so any model not present there stays
+  unresolved too. This includes the handful of "core" INTERLIS models
+  (`Units`, `CoordSys`, ...) that real-world data commonly imports but
+  that are NOT hosted on models.geo.admin.ch - they live at
+  `https://models.interlis.ch/ilimodels.xml` instead (same
+  `IliRepository20.RepositoryIndex.ModelMetadata` index format, confirmed
+  Lot 26) - pass a directory populated from there as an additional
+  `--repo`/`ModelRepository([...])` entry to resolve them too. Exception:
+  the predefined `INTERLIS` namespace (see next bullet) always resolves,
+  `--repo` or not - it needs no directory lookup.
 - **Formal constraints are not evaluated**: `CONSTRAINT`/`MANDATORY
   CONSTRAINT` clauses are built as data (an expression tree), never
   executed against real data.
