@@ -171,6 +171,53 @@ def resolve_attribute(attr: MetaInstance) -> ResolvedAttribute:
     return ResolvedAttribute(attr=attr, type_instance=type_instance, type_kind=type_kind, mandatory=mandatory)
 
 
+def reference_external_status(resolved: ResolvedAttribute) -> bool | None:
+    """Statut de la clause optionnelle `REFERENCE TO (EXTERNAL) X` pour cet
+    attribut (Lot 34, `ReferenceType.External`, own BOOLEAN deja construit
+    par referenceAttr() - spec/grammar/mapping/04_attributes.yml). Utilise
+    pour distinguer, quand un REF extrait ne resout vers AUCUN objet du
+    transfert, une reference EXTERNE legitime (catalogue/panier separe,
+    RULE #4 - eCH-0031 V2.1.0 §3.6.3 : SANS cette clause, la cible DOIT
+    normalement resoudre dans le MEME panier) d'un signal plus probable de
+    donnee incorrecte. Tri-state (`True`/`False`/`None`) plutot que bool :
+    `None` signifie "ce validateur ne sait pas identifier une REFERENCE
+    TO ici avec confiance" - a NE PAS confondre avec `False` ("confirme
+    NON-EXTERNAL") ; RULE #5, ne jamais deguiser une incertitude en fait.
+
+    2 formes CONFIRMEES (True/False, jamais None) dans le corpus reel
+    (RoadTrafficCensus_V1_1.MLocStatusRef) :
+    - `resolved.type_kind == "ReferenceType"` : direct, `.External` lu tel
+      quel sur `resolved.type_instance`.
+    - `resolved.type_kind == "Class"` (Structure) ENVELOPPANT exactement un
+      ClassAttribute dont le Type resout LUI-MEME en `ReferenceType` : motif
+      standard `CatalogueObjects_V1.Catalogues.MandatoryCatalogueReference`
+      (ex. `MLocStatusRef.Reference: REFERENCE TO (EXTERNAL) MLocStatus`) -
+      l'attribut XTF observe (ex. "MLocStatus") porte Type=Class (la
+      structure elle-meme), pas directement ReferenceType ; descend d'UN
+      niveau pour retrouver le VRAI `.External`.
+
+    `None` (statut REELLEMENT indetermine, PAS "suppose False") pour tout
+    le reste : ex. `resolved.type_kind == "Class"` enveloppant un attribut
+    UNIQUE qui n'est PAS une reference (trouve reel sur
+    `Axis_V1_1.AxisSegmentGeometry` - une STRUCTURE a un seul attribut,
+    mais de type geometrie `LineWithAltitude`, pas une reference du tout -
+    memes conditions structurelles que le motif catalogue, contenu
+    different) ; roles d'association embarques (Lot 32, `Role` - le manuel
+    permet AUSSI un `EXTERNAL` sur un role, mais son mapping actuel,
+    `roleDef.EmbeddedTransfer`, est documente "polarity unconfirmed" depuis
+    ce lot, spec/grammar/mapping/05_associations.yml - PAS reutilise ici
+    tant que non confirme)."""
+    if resolved.type_kind == "ReferenceType" and resolved.type_instance is not None:
+        return bool(getattr(resolved.type_instance, "External", False))
+    if resolved.type_kind == "Class" and resolved.type_instance is not None:
+        wrapped = attributes_of(resolved.type_instance)
+        if len(wrapped) == 1:
+            inner = resolve_attribute(next(iter(wrapped.values())))
+            if inner.type_kind == "ReferenceType" and inner.type_instance is not None:
+                return bool(getattr(inner.type_instance, "External", False))
+    return None
+
+
 def enum_values(enum_type: MetaInstance) -> set[str]:
     """Tous les CHEMINS POINTES valides pour ce EnumType (RULE #4, Reference
     Manual eCH-0031 V2.1.0 §4.3.11.3, citation exacte : "EnumValue =

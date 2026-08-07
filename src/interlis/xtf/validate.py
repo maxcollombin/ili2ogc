@@ -21,7 +21,13 @@ Perimetre couvert :
   "ch.astra.roadtrafficcensus.402", absent du fichier de donnees lui-meme
   mais legitime : RoadTrafficCensusCatalogues est un topic separe,
   `DEPENDS ON` declare mais pas necessairement inclus dans CE transfert) -
-  degrade en `warning`, jamais `error`.
+  degrade en `warning`, jamais `error`. Lot 34 : le message distingue
+  desormais ce cas (`ReferenceType.External == True`, deja construit par
+  referenceAttr() depuis la clause `(EXTERNAL)`) d'un REF non resolu sur
+  une reference NON declaree EXTERNAL - qui devrait normalement resoudre
+  dans le MEME panier (eCH-0031 V2.1.0 §3.6.3) et est donc un signal plus
+  probable d'une donnee reellement incorrecte - sans changer la severite
+  (RULE #5, aucun catalogue n'est charge pour verifier positivement).
 - roles d'association embarques comme pseudo-attributs (Lot 32, ex.
   `rMeasurementLocation` sur `Indicator`) : `schema.embedded_roles_of`
   determine, pour une classe donnee, quels roles d'association s'y
@@ -39,7 +45,9 @@ from interlis.builder.repository import ModelRepository
 from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
-from interlis.xtf.schema import ResolvedAttribute, enum_values, resolve_attribute, resolve_class, schema_members_of
+from interlis.xtf.schema import (
+    ResolvedAttribute, enum_values, reference_external_status, resolve_attribute, resolve_class, schema_members_of,
+)
 
 # Classes de Type concretes reconnues comme "reference a un objet" (valeur
 # structurelle attendue : REF vers un TID/OID, pas une valeur litterale) -
@@ -187,10 +195,55 @@ def _validate_object(
                 # `warning`, jamais `error` (voir docstring module : sans
                 # catalogue externe charge, une reference externe legitime
                 # est indiscernable d'une reference cassee).
+                #
+                # Lot 34 : le schema DISTINGUE deja les deux cas via
+                # ReferenceType.External (own BOOLEAN, deja construit par
+                # referenceAttr() - spec/grammar/mapping/04_attributes.yml -
+                # depuis la clause optionnelle "(EXTERNAL)" sur `REFERENCE TO
+                # (EXTERNAL) X`). RULE #4, citation directe eCH-0031 V2.1.0
+                # §3.6.3 : "Soll die Referenz auf ein Objekt eines anderen
+                # Behaelters ... verweisen duerfen, muss die Eigenschaft
+                # EXTERNAL angegeben werden" - SANS cette clause, la cible
+                # DOIT normalement resoudre dans le MEME panier ; un REF non
+                # resolu sur une reference NON-EXTERNAL est donc un signal
+                # plus probable d'une donnee reellement incorrecte qu'une
+                # reference EXTERNAL non resolue (catalogue legitime,
+                # confirme reel sur MLocStatusRef.Reference.Type.External =
+                # True). Severite volontairement INCHANGEE (toujours
+                # `warning`, jamais `error`) - ce lot ne fait QUE distinguer
+                # les deux cas dans le message, il ne pretend pas verifier
+                # positivement la premiere hypothese (aucun catalogue
+                # n'est charge, voir docs/model-resolution-strategy.md).
+                # `reference_external_status` gere aussi le motif
+                # STRUCTURE-enveloppe standard (CatalogueObjects_V1.
+                # Catalogues.MandatoryCatalogueReference, ex. MLocStatusRef)
+                # - confirme empiriquement etre la forme REELLE la plus
+                # frequente dans ce corpus, pas seulement le cas
+                # ReferenceType direct. Tri-state (RULE #5) : `None` (statut
+                # reellement indetermine - ex. role d'association embarque,
+                # ou structure enveloppant un contenu non-reference comme
+                # une geometrie, confirme reel sur Axis_V1_1.
+                # AxisSegmentGeometry) garde le libelle neutre d'origine,
+                # PLUTOT que d'affirmer a tort "NON declaree" par defaut.
+                status = reference_external_status(resolved)
+                if status is True:
+                    detail = (
+                        "reference declaree (EXTERNAL) : objet cible attendu dans un panier/catalogue "
+                        "externe (DEPENDS ON), non resolu faute de catalogue charge - situation normale"
+                    )
+                elif status is False:
+                    detail = (
+                        "reference NON declaree (EXTERNAL) : devrait normalement resoudre dans ce meme "
+                        "panier (eCH-0031 V2.1.0 3.6.3) - signal plus probable d'une donnee incorrecte"
+                    )
+                else:
+                    detail = (
+                        "reference externe/catalogue probable, ou reference cassee - statut EXTERNAL "
+                        "indetermine par ce validateur (role d'association, ou structure non reconnue)"
+                    )
                 issues.append(ValidationIssue(
                     "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                    f"{ctx}: REF {ref!r} introuvable dans ce transfert (reference externe/catalogue "
-                    "probable, ou reference cassee - indiscernable sans catalogue charge)",
+                    f"{ctx}: REF {ref!r} introuvable dans ce transfert ({detail})",
                 ))
             # else : REF resolu avec succes dans le transfert - rien a signaler.
             continue
