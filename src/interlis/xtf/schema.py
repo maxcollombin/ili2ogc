@@ -34,19 +34,55 @@ def resolve_class(qualified_class: str, *, symbol_table: SymbolTable, repository
     return None
 
 
-def attributes_of(class_instance: MetaInstance) -> dict[str, MetaInstance]:
+def _own_attributes_of(class_instance: MetaInstance) -> dict[str, MetaInstance]:
     """Nom d'attribut -> instance AttrOrParam, pour les attributs PROPRES a
-    cette classe (association ClassAttr, role ClassAttribute - voir
-    spec/grammar/mapping/04_attributes.yml, attributeDef.parent).
-    N'inclut PAS les attributs herites via EXTENDS - limite documentee
-    (README/PROGRESS), hors perimetre de ce lot (necessiterait de remonter
-    la chaine Inheritance, jamais exercee par le corpus XTF cible a ce
-    jour)."""
+    CETTE classe uniquement (association ClassAttr, role ClassAttribute -
+    voir spec/grammar/mapping/04_attributes.yml, attributeDef.parent) -
+    n'inclut PAS les attributs herites via EXTENDS, voir attributes_of."""
     return {
         a.Name: a
         for a in (getattr(class_instance, "ClassAttribute", None) or [])
         if isinstance(a, MetaInstance) and getattr(a, "Name", None)
     }
+
+
+def attributes_of(class_instance: MetaInstance) -> dict[str, MetaInstance]:
+    """Nom d'attribut -> instance AttrOrParam, PROPRES a cette classe PUIS
+    HERITEES via la chaine `EXTENDS` (AJOUTE Lot 38, demande explicite
+    utilisateur - remonte l'association `Inheritance`/role `Super`,
+    desormais alimentee par classDef()/structureDef() depuis ce meme lot,
+    spec/grammar/mapping/03_classes_and_structures.yml - jusque-la jamais
+    construite du tout, pas seulement non parcourue). Un attribut PROPRE
+    l'emporte sur un attribut herite de meme nom (redeclaration/restriction
+    dans la sous-classe) - cas non confirme sur un exemple reel a ce jour,
+    mais coherent avec la semantique EXTENDS generale du langage plutot que
+    de supposer l'absence de collision.
+
+    Arret gracieux (RULE #5, pas de crash sur les limites deja connues) :
+    - `Super` absent (racine de la chaine, ou classe abstraite terminale) :
+      boucle simplement terminee.
+    - `Super` encore un `ForwardRef`/`UnresolvedNamedReference` (classe
+      parente dans un modele non charge via `--repo`, ex.
+      `CatalogueObjects_V1.Catalogues.Item` confirme reel sur
+      RoadTrafficCensus_V1_1) : chaine d'heritage tronquee a ce point,
+      pas d'erreur - les attributs herites au-dela restent simplement
+      invisibles, meme categorie de limite deja connue pour toute
+      resolution cross-modele partielle.
+    - garde anti-cycle (`seen`, par identite) : aucun cycle reel connu
+      dans le corpus (EXTENDS circulaire serait de toute facon une erreur
+      de modele), mais protection bon marche contre une boucle infinie si
+      jamais rencontre."""
+    merged: dict[str, MetaInstance] = {}
+    seen: set[int] = set()
+    current: MetaInstance | None = class_instance
+    chain: list[dict[str, MetaInstance]] = []
+    while isinstance(current, MetaInstance) and id(current) not in seen:
+        seen.add(id(current))
+        chain.append(_own_attributes_of(current))
+        current = getattr(current, "Super", None)
+    for level in reversed(chain):
+        merged.update(level)
+    return merged
 
 
 def _role_base_class(role: MetaInstance) -> MetaInstance | None:
@@ -210,7 +246,13 @@ def reference_external_status(resolved: ResolvedAttribute) -> bool | None:
     if resolved.type_kind == "ReferenceType" and resolved.type_instance is not None:
         return bool(getattr(resolved.type_instance, "External", False))
     if resolved.type_kind == "Class" and resolved.type_instance is not None:
-        wrapped = attributes_of(resolved.type_instance)
+        # `_own_attributes_of` (PAS `attributes_of`, Lot 38) : ce test
+        # verifie un motif structurel sur LA STRUCTURE ELLE-MEME (enveloppe
+        # a un seul attribut PROPRE) - un attribut herite via EXTENDS
+        # ajouterait a tort une 2e entree et casserait la detection du
+        # motif MandatoryCatalogueReference, sans rapport avec ce qui est
+        # verifie ici.
+        wrapped = _own_attributes_of(resolved.type_instance)
         if len(wrapped) == 1:
             inner = resolve_attribute(next(iter(wrapped.values())))
             if inner.type_kind == "ReferenceType" and inner.type_instance is not None:

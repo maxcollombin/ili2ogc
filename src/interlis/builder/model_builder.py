@@ -740,7 +740,34 @@ class InterlisModelBuilder(InterlisParserVisitor):
             expanded.extend(self._expand_kind_hint(h))
         return ForwardRef(
             name=name, resolves_to_hint=expanded or None, rule=rule_name, home_model=self._current_model_name(),
+            topic_extends_hint=self._current_topic_extends_hint(ctx),
         )
+
+    def _current_topic_extends_hint(self, ctx: ParserRuleContext) -> str | None:
+        """Texte brut du 1er topicRef() du TOPIC englobant `ctx`, UNIQUEMENT
+        si ce TOPIC porte un EXTENDS (Lot 38 point 2 - voir
+        ForwardRef.topic_extends_hint pour la justification RULE #4 complete,
+        forward_refs.py). Remonte `ctx.parentCtx` jusqu'au premier
+        `TopicDefContext` rencontre (l'arbre ANTLR reflete exactement
+        l'imbrication de la grammaire - classDef/structureDef/etc. sont
+        TOUJOURS des descendants directs du topicDef qui les contient, donc
+        cette remontee trouve systematiquement LE bon topic englobant, pas
+        besoin de correler autrement). Lecture de texte brut plutot que
+        consultation de l'etat deja construit (DataUnit.Super) : evite toute
+        dependance sur l'ordre de resolution des ForwardRef en attente
+        (`definitions` - donc les classDef/structureDef d'un topic - est
+        toujours traite AVANT `extends_topicRef` dans `_build_multi_target`,
+        DataUnit.Super ne serait donc pas encore resolu au moment ou ce texte
+        est necessaire)."""
+        node = ctx.parentCtx
+        while node is not None and type(node).__name__ != "TopicDefContext":
+            node = node.parentCtx
+        if node is None or node.EXTENDS() is None:
+            return None
+        refs = node.topicRef()
+        if not refs:
+            return None
+        return refs[0].getText()
 
     def _current_model_name(self) -> str | None:
         """Nom du MODEL englobant la construction en cours (parcourt
@@ -859,6 +886,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
             # Liste multi vide (rien present dans le .ili) : rien a attacher.
             return
         if isinstance(value, ForwardRef):
+            if binding.get("association") == "Inheritance" and binding.get("role") == "Super":
+                # EXTENDS (Lot 38 point 2) : jamais fatal si non resolu, voir
+                # ForwardRef.graceful (RULE #5, symetrique a domainRef/BaseClass
+                # depuis le Lot 36).
+                value.graceful = True
             self.attachment.attach(
                 instance, key, value,
                 association=binding.get("association"), role=binding.get("role"), rule=rule_name,

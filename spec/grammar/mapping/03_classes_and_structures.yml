@@ -26,10 +26,23 @@ classDef:
       source:
         field: FINAL
         presence: true
-  note: 'EmbeddedRoleTransfer, ili1OptionalTable, Multiplicity: NOT sourced from ClassDefContext. Confirmed
-    via IlisMeta16.ili (lines 146-147): EmbeddedRoleTransfer is MANDATORY BOOLEAN with no visible grammar
-    token; ili1OptionalTable is "INTERLIS 1 only". These are ModelBuilder-computed defaults (e.g. False/None),
-    not grammar-sourced attributes.'
+    Super:
+      association: Inheritance
+      role: Super
+      source:
+        field: classOrStructureRef
+        optional: true
+      note: 'AJOUTE (Lot 38, demande explicite utilisateur - "attributs herites via EXTENDS"). `(EXTENDS
+        classOrStructureRef)?` sur classDef() n''avait AUCUN binding jusqu''ici (grep negatif confirme,
+        03_classes_and_structures.yml) - la clause EXTENDS etait entierement ignoree, aucune instance
+        `Inheritance` jamais construite pour une classe/structure. `classOrStructureRef` resout deja
+        directement vers un `Class` (Dispatcher classRef|structureRef, tous deux `kind: Reference,
+        resolves_to: Class`) - pas de bag a deballer (`path:`), contrairement a `referenceAttr.BaseClass`/
+        `roleDef.BaseClass` (source restrictedClassOrAssRef, elle bien un bag). Association `Inheritance`
+        confirmee (ilismeta16-associations.yml : `Sub {0..*} <-> Super {0..1}`, `ExtendableME`) - Class
+        EXTENDS ExtendableME (confirme ilismeta16-classes.yml). RULE #5, perimetre delibere : alimente
+        UNIQUEMENT le lien Super lui-meme, ne remonte PAS automatiquement les attributs herites - voir
+        `xtf/schema.py:attributes_of` pour la resolution transitive cote validateur XTF (Lot 38).'
 classOrStructureDef:
   grammar:
     rule: classOrStructureDef
@@ -123,6 +136,15 @@ structureDef:
       source:
         field: FINAL
         presence: true
+    Super:
+      association: Inheritance
+      role: Super
+      source:
+        field: structureRef
+        optional: true
+      note: 'AJOUTE (Lot 38) - meme raisonnement/verification que classDef.Super ci-dessus. `(EXTENDS
+        structureRef)?` sur structureDef() n''avait aucun binding jusqu''ici ; `structureRef` resout deja
+        directement vers un `Class[Kind=Structure]` (kind: Reference), pas de bag a deballer.'
 structureRef:
   grammar:
     rule: structureRef

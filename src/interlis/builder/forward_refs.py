@@ -38,6 +38,32 @@ class ForwardRef:
     # meme fichier, MEME symbol_table depuis le fix multi-modeles du
     # Lot 28). None si non determinable (ex. modele predefini INTERLIS).
     home_model: str | None = None
+    # Texte brut (Lot 38 point 2) du 1er topicRef() du TOPIC englobant cette
+    # reference, UNIQUEMENT si ce TOPIC porte un EXTENDS (ex.
+    # "CatalogueObjects_V1.Catalogues" pour une reference produite dans
+    # `TOPIC AxisCatalogs EXTENDS CatalogueObjects_V1.Catalogues = ...`) -
+    # None si le TOPIC englobant n'a pas d'EXTENDS, ou si aucun TOPIC
+    # n'englobe cette reference. RULE #4, citation directe eCH-0031 V2.1.0
+    # §3.5.4 "Namensraume" : "Erweitert ein Modellierungselement ein
+    # anderes, werden seinen Namensraumen alle Namen des
+    # Basis-Modellierungselementes zugefuegt" (etend un element de
+    # modelisation un autre, tous les noms de l'element de base sont
+    # ajoutes a son espace de noms) - un TOPIC B EXTENDS TOPIC A rend
+    # visibles, SANS IMPORTS UNQUALIFIED, tous les noms courts declares
+    # dans A a l'interieur de B. Utilise en dernier recours par
+    # `ForwardRefResolver._resolve_one` pour un nom NON qualifie introuvable
+    # localement, AVANT le repli IMPORTS UNQUALIFIED existant.
+    topic_extends_hint: str | None = None
+    # True pour un ForwardRef porte par le role Super de l'association
+    # Inheritance (classDef/structureDef/topicDef EXTENDS, Lot 38 point 2) -
+    # un EXTENDS non resolu ne doit JAMAIS faire planter tout le build,
+    # symetriquement a la politique deja en place pour domainRef/BaseClass
+    # (Lot 36) : degrade en UnresolvedNamedReference plutot que BuildError,
+    # y compris quand `topic_extends_hint` a ete tente et a echoue (ex.
+    # modele externe absent du `--repo` fourni). Positionne par
+    # InterlisModelBuilder._apply_one_binding, jamais par _resolve_or_defer
+    # (qui ne connait pas encore le role/association cible a ce stade).
+    graceful: bool = False
 
 
 @dataclass
@@ -213,13 +239,26 @@ class ForwardRefResolver:
                     if found is not None:
                         return found
                 return UnresolvedNamedReference(ref.name, reason="external_import")
+            if ref.graceful:
+                # EXTENDS non resolu (Lot 38 point 2, RULE #5) : jamais
+                # fatal, symetrique a domainRef/BaseClass (Lot 36).
+                return UnresolvedNamedReference(ref.name, reason="unresolved_extends")
             raise BuildError(f"reference non resolue et non attribuable a un import : {ref.name!r}", rule=ref.rule)
-        # Nom NON qualifie introuvable localement : seule une reference vers
-        # un modele explicitement importe UNQUALIFIED (voir
-        # SymbolTable.unqualified_imports) peut legitimement la designer -
-        # sinon c'est un vrai bug local (nom jamais declare dans ce fichier),
-        # a signaler par une exception plutot qu'a masquer (RULE #5).
+        # Nom NON qualifie introuvable localement : essayer d'abord le
+        # namespace du TOPIC EXTENDS englobant, le cas echeant (RULE #4,
+        # voir ForwardRef.topic_extends_hint) - AVANT le repli IMPORTS
+        # UNQUALIFIED existant, les deux mecanismes etant independants.
+        found = self._resolve_via_topic_extends(ref, kind_hint, repository)
+        if found is not None:
+            return found
+        # Sinon, seule une reference vers un modele explicitement importe
+        # UNQUALIFIED (voir SymbolTable.unqualified_imports) peut
+        # legitimement la designer - sinon c'est un vrai bug local (nom
+        # jamais declare dans ce fichier), a signaler par une exception
+        # plutot qu'a masquer (RULE #5).
         if not self.symbol_table.unqualified_imports:
+            if ref.graceful:
+                return UnresolvedNamedReference(ref.name, reason="unresolved_extends")
             raise BuildError(
                 f"reference non resolue et non attribuable a un import : {ref.name!r}", rule=ref.rule
             )
@@ -229,3 +268,28 @@ class ForwardRefResolver:
                 if found is not None:
                     return found
         return UnresolvedNamedReference(ref.name, reason="external_import")
+
+    def _resolve_via_topic_extends(self, ref: ForwardRef, kind_hint, repository=None) -> Any | None:
+        """Tente de resoudre un nom NON qualifie comme membre du namespace du
+        TOPIC EXTENDS englobant (voir ForwardRef.topic_extends_hint pour la
+        justification RULE #4). Seul le cas d'un EXTENDS QUALIFIE (topic
+        d'un AUTRE modele, ex. "CatalogueObjects_V1.Catalogues") necessite
+        un traitement dedie ici : un EXTENDS sur un topic du MEME fichier
+        (non qualifie, ex. "TOPIC Countries EXTENDS AdministrativeUnits")
+        est deja couvert sans rien de special, la resolution par nom court
+        generique (`SymbolTable.resolve` plus haut dans `_resolve_one`)
+        trouvant deja le nom cible dans la MEME table de symboles, sans
+        notion de portee par topic - retenter ici un candidat "hint.name"
+        ne ferait que redupliquer exactement le meme repli par nom court,
+        pour rien."""
+        hint = ref.topic_extends_hint
+        if not hint or "." not in hint:
+            return None
+        candidate = f"{hint}.{ref.name}"
+        found = self.symbol_table.resolve(candidate, kind_hint=kind_hint)
+        if found is not None:
+            return found
+        if repository is not None:
+            prefix = hint.split(".", 1)[0]
+            return repository.resolve_external(prefix, candidate, kind_hint)
+        return None
