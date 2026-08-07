@@ -176,6 +176,60 @@ def test_reference_target_not_found_is_warning_not_error(ref_builder):
     assert _messages(issues, attribute="RefLocation", severity="error") == []
 
 
+# --- Lot 40 : compatibilite de classe d'une reference RESOLUE (RefLocation
+# declare REFERENCE TO Location - fixture etendue avec SpecialLocation
+# EXTENDS Location, tests/fixtures/xtf/reference_model.ili) ---
+
+
+def test_reference_resolved_to_declared_class_has_no_issue(ref_builder):
+    location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "loc-1")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    assert _messages(issues, attribute="RefLocation") == []
+
+
+def test_reference_resolved_to_subclass_is_compatible(ref_builder):
+    """Polymorphisme INTERLIS standard : une reference declaree vers
+    Location doit accepter une cible reelle de type SpecialLocation
+    (EXTENDS Location) sans le signaler comme incompatible."""
+    special = XtfObject(
+        tid="loc-1", qualified_class="RefTest.MainTopic.SpecialLocation",
+        attributes=dict([_text_attr("Name", "Bern"), _text_attr("Detail", "capital")]),
+    )
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "loc-1")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[special, indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    assert _messages(issues, attribute="RefLocation") == []
+
+
+def test_reference_resolved_to_incompatible_class_is_error(ref_builder):
+    """RefLocation resout vers un objet REELLEMENT present dans le
+    transfert (donc information COMPLETE, pas ambigu comme le cas "REF
+    introuvable") mais de classe Indicator, sans rapport avec Location
+    (ni identique, ni sous-classe) - doit devenir une `error`."""
+    other_indicator = XtfObject(
+        tid="ind-2", qualified_class=INDICATOR_CLASS, attributes=dict([_text_attr("Value", "1")]),
+    )
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "ind-2")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[other_indicator, indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    msgs = _messages(issues, attribute="RefLocation", severity="error")
+    assert any("incompatible" in m for m in msgs)
+
+
 # --- Lot 32 : roles d'association embarques comme pseudo-attributs
 # (tests/fixtures/xtf/reference_model.ili : ASSOCIATION Location_Indicator
 # = rLocation -<#> Location; rIndicator -- {0..*} Indicator; - meme forme

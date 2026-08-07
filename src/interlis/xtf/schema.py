@@ -85,8 +85,13 @@ def attributes_of(class_instance: MetaInstance) -> dict[str, MetaInstance]:
     return merged
 
 
-def _role_base_class(role: MetaInstance) -> MetaInstance | None:
-    base = getattr(role, "BaseClass", None)
+def _class_related_base_class(instance: MetaInstance) -> MetaInstance | None:
+    """`.BaseClass` (association BaseClass, role CRT<->BaseClass,
+    ilismeta16-associations.yml) de n'importe quelle instance
+    `ClassRelatedType` - `Role` (roleDef.BaseClass, Lot 32) ET
+    `ReferenceType` (referenceAttr.BaseClass, meme association generique,
+    reutilise depuis le Lot 40 par `reference_target_class` ci-dessous)."""
+    base = getattr(instance, "BaseClass", None)
     if isinstance(base, list):
         base = base[0] if base else None
     return base if isinstance(base, MetaInstance) else None
@@ -145,7 +150,7 @@ def embedded_roles_of(class_instance: MetaInstance, symbol_table: SymbolTable) -
         if len(roles) != 2:
             continue
         role_a, role_b = roles
-        target_a, target_b = _role_base_class(role_a), _role_base_class(role_b)
+        target_a, target_b = _class_related_base_class(role_a), _class_related_base_class(role_b)
         if target_a is None or target_b is None:
             continue
         multi_a, multi_b = _role_is_multi(role_a), _role_is_multi(role_b)
@@ -195,7 +200,7 @@ def resolve_attribute(attr: MetaInstance) -> ResolvedAttribute:
         # pas de champ Type separe, la classe cible vient de BaseClass
         # (attache via l'association BaseClass, comme pour tout autre
         # ClassRelatedType - meme mecanisme que ReferenceType).
-        target = _role_base_class(attr)
+        target = _class_related_base_class(attr)
         return ResolvedAttribute(
             attr=attr, type_instance=target, type_kind="Class" if target is not None else None,
             mandatory=bool(getattr(attr, "Mandatory", False)),
@@ -205,6 +210,50 @@ def resolve_attribute(attr: MetaInstance) -> ResolvedAttribute:
     type_kind = type_instance._qualified_class.rsplit(".", 1)[-1] if type_instance is not None else None
     mandatory = bool(getattr(type_instance, "Mandatory", False)) if type_instance is not None else False
     return ResolvedAttribute(attr=attr, type_instance=type_instance, type_kind=type_kind, mandatory=mandatory)
+
+
+def reference_target_class(resolved: ResolvedAttribute) -> MetaInstance | None:
+    """La Class DECLAREE comme cible d'une reference/role (Lot 40 -
+    compatibilite de classe d'une reference resolue avec sa cible
+    declaree). Pour `type_kind == "Class"` (role d'association embarque,
+    Lot 32, OU `restrictedClassOrAssRef`/`restrictedStructureRef`
+    resolvant DIRECTEMENT vers une Class, Lot 30) : `resolved.type_instance`
+    EST DEJA cette classe (voir `resolve_attribute`, les deux formes
+    partagent le meme `type_kind="Class"`). Pour `type_kind ==
+    "ReferenceType"` (`REFERENCE TO X` ordinaire) : `resolved.type_instance`
+    est le WRAPPER `ReferenceType` lui-meme, pas la classe cible - celle-ci
+    vit dans son `.BaseClass` (meme association generique `BaseClass` que
+    `Role`, confirme `referenceAttr()` - spec/grammar/mapping/
+    04_attributes.yml)."""
+    if resolved.type_instance is None:
+        return None
+    if resolved.type_kind == "ReferenceType":
+        return _class_related_base_class(resolved.type_instance)
+    if resolved.type_kind == "Class":
+        return resolved.type_instance
+    return None
+
+
+def is_class_compatible(actual: MetaInstance, declared: MetaInstance) -> bool:
+    """True si `actual` EST `declared`, ou une SOUS-CLASSE (directe ou
+    indirecte, via la chaine `Inheritance`/`Super` - Lot 38) de `declared`
+    (Lot 40) - principe de polymorphisme INTERLIS standard pour une
+    reference : une reference declaree vers une classe (souvent abstraite)
+    doit accepter comme cible reelle n'importe quelle sous-classe concrete,
+    pas seulement `declared` elle-meme. Comparaison par IDENTITE Python
+    (`is`), pas par nom qualifie - valide tant que `actual`/`declared`
+    proviennent du meme `symbol_table`/`ModelRepository` (toujours le cas
+    au sein d'un seul `validate_transfer`, qui reutilise LA MEME
+    SymbolTable/ModelRepository partout - RULE #1, meme garantie deja
+    exploitee par `attributes_of`)."""
+    seen: set[int] = set()
+    current: MetaInstance | None = actual
+    while isinstance(current, MetaInstance) and id(current) not in seen:
+        if current is declared:
+            return True
+        seen.add(id(current))
+        current = getattr(current, "Super", None)
+    return False
 
 
 def reference_external_status(resolved: ResolvedAttribute) -> bool | None:

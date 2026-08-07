@@ -8,6 +8,10 @@ MODEL RefTest AT "https://example.org/reftest" VERSION "2026-08-07" =
       Name: MANDATORY TEXT;
     END Location;
 
+    CLASS SpecialLocation EXTENDS Location =
+      Detail: TEXT;
+    END SpecialLocation;
+
     CLASS Indicator =
       Value: MANDATORY TEXT;
       RefLocation: REFERENCE TO Location;

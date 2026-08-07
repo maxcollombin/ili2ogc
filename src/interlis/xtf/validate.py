@@ -34,11 +34,23 @@ Perimetre couvert :
   embarquent (algorithme confirme contre le Reference Manual eCH-0031
   V2.1.0 §4.3.9) - traites ensuite EXACTEMENT comme un attribut de
   reference ordinaire (meme resolution TID/REF).
+- compatibilite de classe d'une reference RESOLUE (Lot 40) : quand un REF
+  extrait resout bien vers un objet du transfert, verifie que la classe
+  REELLE de cet objet est `declared` elle-meme OU une SOUS-CLASSE (chaine
+  `Inheritance`/`Super`, Lot 38) de la classe DECLAREE par la reference/le
+  role (`schema.reference_target_class`/`is_class_compatible`) -
+  polymorphisme INTERLIS standard. Information COMPLETE des lors qu'un REF
+  resout (contrairement au cas "REF introuvable", intrinsequement ambigu,
+  voir ci-dessus) : severite `error`, meme politique que MANDATORY/NUMERIC/
+  ENUM. Silencieux (pas de check) si la classe declaree ou la classe reelle
+  ne peut pas etre resolue avec certitude (cross-modele non charge via
+  --repo, role d'association sans BaseClass confirme, etc.) - RULE #5,
+  jamais de faux positif sur une incertitude.
 - PAS encore couvert (limites documentees, PROGRESS.md) : attributs herites
-  via EXTENDS, compatibilite de classe d'une reference resolue avec sa
-  BaseClass declaree, geometrie/coordonnees, roles d'association definis
-  dans un modele IMPORTE (embedded_roles_of ne cherche que dans la table
-  de symboles du modele racine)."""
+  via EXTENDS depuis un modele IMPORTE non charge (chaine Super tronquee),
+  geometrie/coordonnees, roles d'association definis dans un modele
+  IMPORTE (embedded_roles_of ne cherche que dans la table de symboles du
+  modele racine)."""
 from dataclasses import dataclass
 
 from interlis.builder.repository import ModelRepository
@@ -46,7 +58,8 @@ from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 from interlis.xtf.schema import (
-    ResolvedAttribute, enum_values, reference_external_status, resolve_attribute, resolve_class, schema_members_of,
+    ResolvedAttribute, enum_values, is_class_compatible, reference_external_status, reference_target_class,
+    resolve_attribute, resolve_class, schema_members_of,
 )
 
 # Classes de Type concretes reconnues comme "reference a un objet" (valeur
@@ -282,7 +295,24 @@ def _validate_object(
                     "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
                     f"{ctx}: REF {ref!r} introuvable dans ce transfert ({detail})",
                 ))
-            # else : REF resolu avec succes dans le transfert - rien a signaler.
+            else:
+                # Lot 40 : REF resolu avec succes - verifie desormais la
+                # compatibilite de classe de l'objet cible reel avec la
+                # classe DECLAREE par la reference/le role. Silencieux (pas
+                # d'issue) si l'une des deux classes ne peut pas etre
+                # etablie avec certitude, ou si compatible - RULE #5, jamais
+                # de faux positif sur une incertitude cross-modele.
+                declared = reference_target_class(resolved)
+                if declared is not None:
+                    target_obj = tid_index[ref]
+                    actual_cls = resolve_class(target_obj.qualified_class, symbol_table=symbol_table, repository=repository)
+                    if actual_cls is not None and not is_class_compatible(actual_cls, declared):
+                        issues.append(ValidationIssue(
+                            "error", basket.bid, obj.tid, obj.qualified_class, attr_name,
+                            f"{ctx}: REF {ref!r} resolu vers {target_obj.qualified_class!r}, incompatible "
+                            f"avec la classe declaree {getattr(declared, 'Name', '?')!r} "
+                            "(ni identique, ni sous-classe via EXTENDS)",
+                        ))
             continue
         if resolved.type_kind not in ("TextType", "NumType", "EnumType"):
             # Type resolu vers autre chose que les 3 kinds geres par ce lot
