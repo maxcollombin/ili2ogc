@@ -290,7 +290,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     (c for c in segment if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.CLASS), None,
                 )
                 if class_token is None:
-                    continue  # STRING DOTDOT STRING - pas encore mappe (voir note domainDef)
+                    continue  # segment sans Name reconnu de contenu direct - voir domainDef, note STRING DOTDOT STRING
                 instance = self._build_domain_class_restriction(segment, rule_name)
                 if not isinstance(instance, MetaInstance):
                     continue
@@ -371,6 +371,84 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 )
                 if isinstance(value, ForwardRef):
                     self.forward_refs.register_pending(value, instance, "BaseClass")
+        return instance
+
+    def _build_type_string_range(self, ctx: ParserRuleContext) -> MetaInstance | None:
+        """`type()` (methode Python `type_`, grammaire `type : baseType |
+        lineType | STRING DOTDOT STRING;`) - construit sa 3e alternative,
+        un domaine "STRING DOTDOT STRING" bare (ex. `Angle_DMS_90 EXTENDS
+        Angle_DMS = "-90:00:00.000" .. "90:00:00.000";`, CoordSys-20151124.ili
+        reel), jusqu'ici documentee `status: not_applicable` (06_types.yml,
+        entree `type`, note `text_range_alt`, Phase 2/Lot 18) : "aucune
+        classe DomainType concrete ne porte de construction range de chaine
+        ... decision ModelBuilder : lever une erreur explicite si cette 3e
+        alternative est reellement rencontree, plutot que deviner un
+        encodage" - cette conclusion datait d'AVANT tout exemple reel
+        (recherche negative sur les 12 sous-classes de DomainType a
+        l'epoque). RULE #1 : desormais rencontree (Lot 37, trouvee en
+        repondant a une question directe utilisateur sur la robustesse de
+        CoordSys) - reexaminee avec cet exemple reel en main plutot que
+        maintenue par inertie.
+
+        **Cible retenue, par analogie structurelle directe** : la MEME
+        forme syntaxique "STRING DOTDOT STRING" est DEJA mappee ailleurs
+        dans ce fichier pour `formattedType()` (alternatives 1/3, `FORMAT
+        ... STRING DOTDOT STRING`) vers `IlisMeta16.ModelData.FormattedType`,
+        `Min`/`Max` herites de `NumType` (meme GUID que `Class.Name`, un
+        TEXT-like primitif - deja documente comme stockant des "exemples de
+        format" plutot que des bornes numeriques). L'exemple reel confirme
+        cette analogie plutot que de l'infirmer : `Angle_DMS_90 EXTENDS
+        Angle_DMS` ou `Angle_DMS = FORMAT BASED ON Angle_DMS_S (...)` - un
+        domaine qui ETEND un FormattedType et fournit SES PROPRES bornes en
+        litteraux, le format lui-meme restant herite via EXTENDS (heritage
+        EXTENDS lui-meme non modelise ici - limite deja connue et documentee
+        ailleurs pour ce mecanisme en general, pas specifique a ce cas).
+        L'objection d'origine ("NumType.Min/Max jamais alimente par STRING")
+        visait uniquement la reutilisation du binding PROPRE a `numeric()`,
+        pas une impossibilite categorique - `formattedType()` alimente deja
+        ces memes champs depuis un STRING, precedent direct reutilise ici.
+
+        **NE PASSE PAS par `resolve_source`/`alt:`** (contrairement au
+        binding `formattedType.Min`/`.Max` lui-meme) : construction
+        manuelle directe des enfants de `ctx`, meme style que
+        `_build_domain_class_restriction`. Necessaire, pas un choix de
+        style - trouve en tentant l'approche declarative standard d'abord
+        (RULE #1/#2, avant d'ecrire cette methode) : `ctx.getAltNumber()`
+        renvoie INCONDITIONNELLEMENT 0 pour toute regle sans alternatives
+        labellisees dans `InterlisParser.g4` (confirme empiriquement sur
+        `formattedType()` ET `numeric()` - la grammaire vendee n'utilise
+        nulle part la syntaxe `# Label` d'ANTLR4, donc aucun contexte ne
+        stocke jamais son numero d'alternative reellement matchee).
+        Consequence VERIFIEE : le binding `formattedType.Min`/`.Max`/
+        `.Format` (`alt: 1`/`alt: 1|3`) est LUI-MEME actuellement inerte en
+        pratique (verifie : un domaine synthetique `FORMAT INTERLIS.X
+        "a".."z"` construit un FormattedType dont Format/Min/Max restent
+        TOUS `None`) - et plus largement, TOUT binding `alt: <entier>` du
+        mapping (15 occurrences, 4 fichiers) est potentiellement inerte des
+        que 2 alternatives partagent un nom d'accesseur. **Bug moteur reel,
+        prexistant, PAS introduit ni corrige ce lot** - portee bien plus
+        large que ce cas precis (necessiterait de labelliser les
+        alternatives dans la grammaire vendee et regenerer le parser, ou un
+        mecanisme de repli base sur la presence d'accesseurs plutot que sur
+        `getAltNumber()`) - documente dans PROGRESS.md pour arbitrage/
+        priorisation future, hors perimetre de ce lot.
+
+        Egalement note (06_types.yml, domainDef) : `domainDef()` a sa
+        PROPRE 4e alternative directe pour "STRING DOTDOT STRING" (distincte
+        de celle-ci, imbriquee dans `type()`), mais elle est GRAMMATICALEMENT
+        INATTEIGNABLE en pratique - confirme empiriquement (introspection de
+        l'arbre ANTLR reel sur `Angle_DMS_90`) : ANTLR resout systematiquement
+        l'ambiguite entre les 2 productions identiques ("STRING DOTDOT
+        STRING") en faveur de `type()` (listee AVANT dans l'alternation de
+        domainDef), jamais via la branche propre de domainDef - cette
+        methode est donc le SEUL point d'entree reel pour ce motif, quel
+        que soit son point de grammaire d'origine apparent."""
+        strings = [c for c in (ctx.children or []) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.STRING]
+        if len(strings) != 2:
+            return None
+        instance = self.registry.new_instance("IlisMeta16.ModelData.FormattedType")
+        instance.Min = strings[0].getText()
+        instance.Max = strings[1].getText()
         return instance
 
     def _build_enumeration_tree(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry) -> None:
@@ -510,11 +588,22 @@ class InterlisModelBuilder(InterlisParserVisitor):
         if entry.multi_declaration:
             return self._build_multi_declaration(ctx, rule_name, entry)
 
-        # enumeration() : 3e et dernier cas special parmi les 121 regles
-        # (Lot 33, meme famille que multi_declaration/_build_multi_target) -
-        # voir _build_enumeration_tree pour le detail du bug corrige.
+        # enumeration() : 3e cas special parmi les 121 regles (Lot 33, meme
+        # famille que multi_declaration/_build_multi_target) - voir
+        # _build_enumeration_tree pour le detail du bug corrige.
         if rule_name == "enumeration":
             return self._build_enumeration_tree(ctx, rule_name, entry)
+
+        # type() : 4e et dernier cas special (Lot 37) - sa 3e alternative
+        # grammaticale bare "STRING DOTDOT STRING" (ni baseType() ni
+        # lineType() present) n'a ni sous-regle a dispatcher ni binding
+        # declaratif exploitable (voir _build_type_string_range pour le
+        # detail complet, y compris un bug moteur plus large decouvert a
+        # cette occasion : alt: est inerte dans tout le mapping).
+        if rule_name == "type" and not ca.is_present(ctx, "baseType") and not ca.is_present(ctx, "lineType"):
+            instance = self._build_type_string_range(ctx)
+            if instance is not None:
+                return instance
 
         # children: dispatch multi-visite (ex. definitions -> classDef*,
         # topicDef*, ...) - toutes les occurrences comptent, pas une seule

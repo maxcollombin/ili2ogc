@@ -379,9 +379,19 @@ domainDef:
     normalement, numeric()/enumeration() nus enveloppes en NumType/EnumType via le meme mecanisme
     `wrap:`/visit_wrapped que attrTypeDef.Type, Lot 19) - meme cas particulier reconnu que topicDef
     (_build_multi_target, seul autre cas special parmi les 121 regles). N''utilise PAS
-    attribute_bindings (ignore par cette strategie) - seul STRING DOTDOT STRING reste non mappe (pas
-    de cible metamodele connue - EBNF eCH-0031 confirme cette forme absente du manuel, extension propre
-    au projet non encore rencontree dans un fichier reel), silencieusement ignore comme avant.
+    attribute_bindings (ignore par cette strategie).
+    CORRIGE (Lot 37, RULE #1) : "STRING DOTDOT STRING" EST rencontree dans un fichier reel
+    (CoordSys-20151124.ili : Angle_DMS_90 EXTENDS Angle_DMS = "-90:00:00.000" .. "90:00:00.000";) -
+    la note precedente ("jamais rencontree en reel") etait fausse, corrigee ici. Desormais construite
+    via InterlisModelBuilder._build_domain_string_range (meme famille que _build_domain_class_restriction,
+    contournement manuel deliberement choisi - PAS le mecanisme declaratif standard alt:, voir
+    docstring de la methode pour le detail d''un bug moteur reel et plus large decouvert a cette
+    occasion : ctx.getAltNumber() renvoie toujours 0, rendant potentiellement inertes les 15 bindings
+    alt: <entier> du mapping des que 2 alternatives partagent un accesseur - non corrige ce lot, hors
+    perimetre, documente dans PROGRESS.md). Cible : IlisMeta16.ModelData.FormattedType (meme classe deja
+    visee par formattedType() alternatives 1/3 pour la MEME forme syntaxique STRING DOTDOT STRING),
+    Min/Max = les 2 litteraux STRING tels quels (guillemets inclus, meme convention que le reste du
+    projet - le dequillemetage n''est fait nulle part ailleurs non plus, voir context_access.text).
     CORRIGE (Lot 28, RoadTrafficCensus_V1_1.ili reel : "CHCantonCode_Extended = CLASS RESTRICTION
     (sAbroadCode; sCHCantonCode);") : la 5e alternative "CLASS RESTRICTION(...)" (EBNF "ClassType",
     inlinee sans sous-regle dediee) est desormais construite via
@@ -1223,20 +1233,25 @@ type:
         (delegates further), or bare ''STRING DOTDOT STRING'' (a text-range domain). The 3rd alternative
         has no confirmed dedicated DomainType subclass distinct from TextType/LengthRange - status unresolved.'
     text_range_alt:
-      status: not_applicable
-      note: 'Lot 18 (phase 2, résidus Phase 1). "''STRING DOTDOT STRING''" (e.g. "a".."z"). Preuve d''absence
-        désormais exhaustive : grep de TOUTES les 12 sous-classes directes de `DomainType` (`ilismeta16-classes.yml`
-        : TypeRelatedType, ClassRelatedType, BooleanType, TextType, BlackboxType, NumType, CoordType,
-        AnyOIDType, AttributeRefType, EnumType, EnumTreeValueType, LineType) - aucune ne porte de construction
-        "range de chaîne entre guillemets". `TextType.Kind` (ilismeta16-kind-values.yml) = {MText, Text,
-        Name, Uri} seulement, aucune valeur "Range". `NumType.Min/Max` (utilisé par `numeric()`, déjà
-        confirmé) est alimenté exclusivement par des tokens Number/PosNumber/Dec (littéraux numériques),
-        jamais par un token STRING - donc pas réutilisable ici malgré le type de stockage générique (TEXT)
-        partagé. Cohérent avec le Reference Manual (EBNF `TextType` = mot-clé + longueur seulement, aucun
-        `Min..Max` ; seul `NumericType` porte un `NumericRange`) - même famille de divergence que POW
-        (`composedUnit`, point 12) et `CONTRACT ISSUED BY` (`modeldef`) : extension de grammaire propre
-        à ce projet, absente du métamodèle officiel. Décision ModelBuilder : lever une erreur explicite
-        si cette 3e alternative de `type()` est réellement rencontrée, plutôt que deviner un encodage.
+      note: 'CORRIGE (Lot 37, RULE #1 - reexamine avec un exemple reel en main, ce qui n''existait pas
+        au Lot 18). "''STRING DOTDOT STRING''" (e.g. "a".."z") EST rencontree dans un fichier reel
+        (CoordSys-20151124.ili : "Angle_DMS_90 EXTENDS Angle_DMS = ''-90:00:00.000'' .. ''90:00:00.000'';",
+        ou Angle_DMS est lui-meme un FORMAT BASED ON ... - un FormattedType). L''ancienne conclusion
+        "aucune sous-classe DomainType ne convient" reposait sur une recherche EXHAUSTIVE mais SANS
+        exemple reel a confronter - elle manquait l''analogie directe deja presente ailleurs dans ce
+        meme fichier de spec : `formattedType()` (alternatives 1/3, meme forme syntaxique EXACTE "STRING
+        DOTDOT STRING") vise deja `IlisMeta16.ModelData.FormattedType`, `Min`/`Max` herites de NumType
+        (meme GUID que Class.Name, stockage TEXT d''exemples de format). L''objection d''origine
+        ("NumType.Min/Max jamais alimente par STRING") ne visait que la reutilisation du binding PROPRE
+        a `numeric()` - pas une impossibilite categorique, `formattedType()` alimente deja ces memes
+        champs depuis un STRING. Desormais construite via `InterlisModelBuilder._build_type_string_range`
+        (meme famille de cas special que multi_declaration/enumeration - PAS le mecanisme declaratif
+        standard, voir docstring de la methode pour le detail complet, y compris un bug moteur plus
+        large decouvert a cette occasion : `ctx.getAltNumber()` toujours 0, rendant `formattedType.Min/
+        Max/Format` elles-memes actuellement inertes en pratique malgre leur binding `alt:` "confirme" -
+        non corrige ce lot, documente dans PROGRESS.md). `domainDef()` a sa PROPRE alternative directe
+        pour ce meme motif, mais grammaticalement inatteignable (ANTLR resout l''ambiguite en faveur de
+        `type()`, confirme empiriquement) - `_build_type_string_range` est le SEUL point d''entree reel.
 
         '
   note: Primitive and base types
