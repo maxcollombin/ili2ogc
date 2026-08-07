@@ -73,3 +73,15 @@ def repository():
 def test_repository_indexes_declared_model_names(repository):
     assert repository._index.get("Base") == FIXTURES_DIR / "base.ili"
     assert repository._index.get("Importer") == FIXTURES_DIR / "importer.ili"
+
+
+def test_availability_builtin_available_missing_and_failed(repository):
+    """Lot 39 - `ModelRepository.availability()`, verification proactive de
+    completude header-vs-resolu pour `interlis validate` : les 4 etats
+    possibles, chacun exerce concretement (pas seulement "un des 4 marche",
+    RULE #1)."""
+    _build(repository)  # lie bind_builder_factory (necessaire a _get_table)
+    assert repository.availability("INTERLIS") == "builtin"
+    assert repository.availability("Base") == "available"
+    assert repository.availability("NoSuchModel") == "missing"
+    assert repository.availability("BrokenSyntax") == "indexed_but_failed"

@@ -1,0 +1,11 @@
+INTERLIS 2.4;
+
+MODEL BrokenSyntax AT "https://example.org/broken" VERSION "2026-08-07" =
+
+  TOPIC T =
+    CLASS Thing =
+      Ident: MANDATORY TEXT
+    END Thing;
+  END T;
+
+END BrokenSyntax.

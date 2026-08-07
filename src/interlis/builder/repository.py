@@ -126,6 +126,35 @@ class ModelRepository:
         absent des repertoires `--repo` fournis."""
         return self._index.get(model_name)
 
+    def register_prebuilt(self, model_name: str, symbol_table) -> None:
+        """Enregistre dans le MEME cache que `resolve_external`/
+        `availability` un modele DEJA construit ailleurs (Lot 39 - le
+        modele racine de `interlis validate`, construit directement par le
+        builder principal via son propre `parse_file`+`build()`, pas via
+        `_get_table`) - evite de le re-parser/reconstruire en double lors
+        de la verification de completude du header (`availability` ci-
+        dessous)."""
+        self._cache[model_name] = symbol_table
+
+    def availability(self, model_name: str) -> str:
+        """'builtin' | 'available' | 'indexed_but_failed' | 'missing' -
+        etat de resolvabilite d'un modele nomme (Lot 39, verification
+        PROACTIVE de completude header-vs-resolu pour `interlis validate`,
+        voir xtf/model_resolution.py:header_completeness) - independant de
+        ce qu'une DATASECTION exerce reellement (`resolve_external` ne
+        charge que ce qui est effectivement REFERENCE, voir Lot 36 :
+        'seuls les modeles reellement references... sont charges'`).
+        Reutilise `_get_table` (meme cache que `resolve_external`) : aucun
+        cout double si ce modele est de toute facon touche plus tard par
+        une reference reelle, et `register_prebuilt` evite le cout double
+        pour le modele racine lui-meme."""
+        if model_name in _BUILTIN_SOURCES:
+            return "builtin"
+        if model_name not in self._index and model_name not in self._cache:
+            return "missing"
+        table = self._get_table(model_name)
+        return "available" if table is not None else "indexed_but_failed"
+
     def bind_builder_factory(self, factory) -> None:
         """Injecte la fabrique de sous-builder (fournie par le builder
         racine, qui possede les composants partages - schema/registre/spec/

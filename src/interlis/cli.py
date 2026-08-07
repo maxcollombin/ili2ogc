@@ -15,7 +15,7 @@ from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_file
-from interlis.xtf.model_resolution import header_model_lookup, root_model_names
+from interlis.xtf.model_resolution import header_completeness, header_model_lookup, root_model_names
 from interlis.xtf.parse import parse_xtf
 from interlis.xtf.validate import validate_transfer
 
@@ -118,6 +118,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     transfer = parse_xtf(xtf_path)
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
 
+    root_model_name = None
     if args.model:
         model_path = Path(args.model)
         if not model_path.exists():
@@ -132,6 +133,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
             candidate = repository.path_for(name)
             if candidate is not None:
                 model_path = candidate
+                root_model_name = name
                 break
         if model_path is None:
             header = header_model_lookup(transfer)
@@ -153,6 +155,31 @@ def cmd_validate(args: argparse.Namespace) -> int:
         warnings.simplefilter("ignore")
         builder.build(tree)
 
+    if repository is not None and root_model_name is not None:
+        # Evite de reconstruire en double le modele racine (deja construit
+        # ci-dessus via son propre parse_file/build()) quand
+        # header_completeness() verifie sa resolvabilite ci-dessous (Lot 39).
+        repository.register_prebuilt(root_model_name, builder.symbol_table)
+
+    # header_completeness (Lot 39) n'a de sens QUE si un --repo est fourni -
+    # sans lui, aucun modele ne peut de toute facon etre verifie/resolu, et
+    # ce mode (`--model` seul, historique) n'a jamais suppose de resolution
+    # cross-modele : ne pas changer son comportement/sa sortie par defaut.
+    # Meme suppression d'avertissements que le build racine ci-dessus : sans
+    # elle, chaque modele du header construit ICI (potentiellement jamais
+    # touche par ailleurs) emettrait ses propres UserWarning (gaps de spec
+    # connus) directement sur stderr, y compris sous -q.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        header_status = header_completeness(transfer, repository) if repository is not None else []
+    incomplete = [s for s in header_status if s.status not in ("builtin", "available")]
+    if incomplete and not args.quiet:
+        print(f"Modeles du header (HEADERSECTION/MODELS) : {len(header_status) - len(incomplete)}/{len(header_status)} resolus")
+        for s in incomplete:
+            label = {"missing": "absent de --repo", "indexed_but_failed": "trouve mais echoue a construire"}[s.status]
+            print(f"  [{label}] {s.name} VERSION={s.version!r} URI={s.uri!r}")
+        print()
+
     catalogs = [parse_xtf(Path(c)) for c in args.catalog]
     issues = validate_transfer(transfer, symbol_table=builder.symbol_table, repository=repository, catalogs=catalogs)
 
@@ -163,10 +190,15 @@ def cmd_validate(args: argparse.Namespace) -> int:
             continue
         print(f"[{issue.severity:7s}] {issue.qualified_class}[{issue.object_tid}].{issue.attribute}: {issue.message}")
 
+    header_suffix = (
+        f" - {len(header_status) - len(incomplete)}/{len(header_status)} modeles du header resolus"
+        if header_status else ""
+    )
     print(
         f"\n{len(issues)} probleme(s) : "
         f"{counts.get('error', 0)} erreur(s), {counts.get('warning', 0)} avertissement(s), "
-        f"{counts.get('info', 0)} info(s){'' if args.verbose else ' (masquees, --verbose pour les voir)'}",
+        f"{counts.get('info', 0)} info(s){'' if args.verbose else ' (masquees, --verbose pour les voir)'}"
+        f"{header_suffix}",
     )
     return 1 if counts.get("error") else 0
 

@@ -93,6 +93,16 @@ level issues (unresolved-type attributes, e.g. geometry); `-q`/`--quiet`
 shows only the final summary. Exit code is `1` if any `error`-severity
 issue was found, `0` otherwise (warnings/info never fail the run).
 
+When `--repo` is given, every model declared in the transfer's
+`HEADERSECTION/MODELS` is proactively checked for resolvability against
+it (Lot 39) - not just the ones actually touched by the data - and any
+gap (model missing from `--repo`, or indexed but failing to build) is
+reported up front, with a resolved-count folded into the final summary
+line. This can surface issues invisible to earlier, purely lazy
+validation, where a `--repo` directory that looked complete could still
+be missing a model that no attribute in *this particular* transfer
+happened to reference.
+
 ## Usage - Python API
 
 ```python
@@ -164,20 +174,25 @@ metamodel's own official names.
   public catalogue file was found for this project's real-world
   inventory). See `docs/xtf-catalogue-references.md` for the full
   investigation and how unresolved references are classified either way.
-- **Attributes inherited via `EXTENDS`** are not seen by the XTF
-  validator's schema lookup (`xtf/schema.py`) - only attributes declared
-  directly on a class.
-- **`formattedType()`'s `Format`/`Min`/`Max` bindings are currently
-  inert** (`FORMAT INTERLIS.Name "a".."z"` / `FORMAT domainRef "a".."z"`
-  always build a `FormattedType` with these fields `None`): the vendored
-  grammar (`vendor/interlis-antlr4/InterlisParser.g4`) never labels
-  alternatives, so `ctx.getAltNumber()` always returns `0` and every
-  `alt: <int>` binding that needs to disambiguate alternatives sharing an
-  accessor name is unreachable - 15 bindings across 4 spec files are
-  affected in principle, not just this one. Not yet fixed (needs either
-  grammar-level alternative labels + a parser regen, or an
-  accessor-presence-based fallback in the engine) - see `.claude/
-  PROGRESS.md` (Lot 37) for the full analysis.
+- **Attributes inherited via `EXTENDS`** are now seen by the XTF
+  validator's schema lookup (`xtf/schema.py:attributes_of`, Lot 38) -
+  resolved transitively up the `Super` chain, own attributes winning over
+  inherited ones of the same name. A `TOPIC B EXTENDS TOPIC A` (common
+  Swiss pattern, e.g. CHBase) also makes `A`'s own short names resolvable
+  unqualified inside `B`, per eCH-0031 V2.1.0 §3.5.4 - this only degrades
+  gracefully (`UnresolvedNamedReference`, never a crash) when the base
+  model itself cannot be built, which can currently happen for reasons
+  unrelated to `EXTENDS` (see the grammar-coverage bullet below).
+- **Two possible grammar-coverage gaps found while testing `EXTENDS`
+  resolution against the real CHBase corpus, not yet confirmed as real
+  bugs or fixed**: a `MANDATORY CONSTRAINT` clause combining two
+  conditions with `OR` (`CHBase_Part3_CATALOGUEOBJECTS_V1.ili`), and a
+  `TOPIC` with two separate `DEPENDS ON X;` statements instead of one
+  comma-separated clause (`CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili`) both
+  currently fail to parse, which blocks the *entire* `.ili` file
+  (ANTLR rejects the whole tree on any rule failure) - not just the
+  offending clause. Needs checking against the Reference Manual before
+  deciding whether these are valid INTERLIS 2 forms worth supporting.
 
 ## Architecture
 
