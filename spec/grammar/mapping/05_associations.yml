@@ -123,8 +123,42 @@ roleDef:
       source:
         field: EXTERNAL
         presence: false
-      note: polarity unconfirmed - EXTERNAL present likely means NOT embedded (external/topic-spanning
-        reference per spec 2.6.3/2.7.5)
+      note: 'STATUS toujours unconfirmed (RULE #5) - reinvestigue au Lot 43 (geometrie/roles embarques),
+        conclusion : la justification precedente ("spec 2.6.3/2.7.5") etait probablement une erreur de
+        categorie, PAS confirmee comme correcte pour autant.
+
+        Investigation RULE #4 (Lot 43) : le manuel eCH-0031 V2.1.0 decrit DEUX concepts distincts qui
+        partagent un vocabulaire proche ("Beziehungszugang"/acces vs "eingebettete Beziehung"/embarquement) -
+        a ne pas confondre :
+        (1) §3.7.5 "Beziehungszugaenge" (AssociationAccess) : capacite de NAVIGUER par expression de chemin
+        (`obj.RoleName`, §3.13) depuis un objet vers les instances de relation - lie au meme Topic ET a la
+        clause EXTERNAL ("... muss dies bei der Rolle speziell angemerkt werden (EXTERNAL...). Die Klasse
+        erhaelt dann keine Beziehungszugaenge.", citation directe) - CONFIRME comme un construit metamodele
+        SEPARE (`ExplicitAssocAccess`, association `AssocAcc` roles `AssocAccOrigin`/`AssocAccTarget`,
+        visible sur le diagramme "Abbildung 3: Uebersicht Hauptkonstrukte" du PDF metamodele ili24-metamodel_2022-06-17,
+        totalement distinct de `Role.EmbeddedTransfer`).
+        (2) §4.3.9 "Codierung von Beziehungen" (XTF embedding, deja implemente Lot 32 via
+        `schema.embedded_roles_of`) : algorithme confirme base UNIQUEMENT sur le nombre de roles (2),
+        la cardinalite max de chaque role, la presence d''un OID, et le Topic de la classe cible vs celui
+        de l''association ("Beziehungen werden immer eingebettet, ausser wenn... mehr als zwei Rollen...
+        beide Rollen max Kardinalitaet > 1... eine OID gefordert... bei gewissen themenuebergreifenden
+        Beziehungen" - citation directe, RIEN sur EXTERNAL dans cette liste d''exceptions).
+
+        Conclusion : `EmbeddedTransfer` (nom laissant supposer un lien avec (2)) ne peut PAS etre derive de
+        la seule clause EXTERNAL PROPRE a ce role (qui relève de (1), un mecanisme different) sans preuve
+        empirique - aucune trouvee (ni prose explicative dans le PDF metamodele autour de la declaration
+        `EmbeddedTransfer: MANDATORY BOOLEAN;`, ni commentaire dans `models/IlisMeta16.ili`). Seul exemple
+        REEL du corpus combinant les deux ingredients necessaires pour trancher empiriquement (association a
+        2 roles, cardinalites <=1 des deux cotes, UN role marque EXTERNAL - ex. `ASSOCIATION Hierarchy =
+        UpperLevelUnit (EXTERNAL) -<> {0..1} AdministrativeUnit; LowerLevelUnit -- AdministrativeUnit; END
+        Hierarchy;`, `CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili`) : BLOQUE, ce fichier echoue actuellement au
+        PARSING (gap grammatical CONFIRME REEL, PROGRESS.md Lot 39/45 - `DEPENDS ON` repetees separement,
+        sans rapport avec ce point) - jamais atteint le ModelBuilder pour verification. RESTE `unconfirmed`,
+        toujours PAS reutilise par `xtf/validate.py`/`schema.reference_external_status` (RULE #5, ne jamais
+        deguiser une incertitude en fait) - a reexaminer si/quand le gap grammatical CHBase est corrige,
+        seul chemin connu vers une verification empirique reelle sur ce point precis.
+
+        '
   note: 'Strongness resolved dynamically: LT/GT -> Assoc, HASH -> Comp, default -> Aggr (needs confirmation
     against kind-values.yml) || Grammar covers two distinct alternatives sharing this rule name: --- Alternative
     1 (spec-documented, §2.7.1 EBNF): full role declaration --- Name (modifiers)? (--|-<>|-<#>) cardinality?
