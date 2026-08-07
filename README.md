@@ -66,6 +66,33 @@ Options:
 - `--repo DIR`: directory of `.ili` files to resolve `IMPORTS` references
   against (repeatable). Omit for the previous single-file behavior.
 
+## Usage - XTF validation
+
+```sh
+uv run interlis validate path/to/transfer.xtf --repo path/to/model-directory
+```
+
+Validates a `.xtf` data transfer against the schema it declares using
+(structure, `MANDATORY`, base types, TID/REF resolution, embedded
+association roles). `--repo` (repeatable) resolves the `.ili` schema(s):
+the root model is auto-detected from the transfer's own `HEADERSECTION`/
+`DATASECTION` (see `docs/model-resolution-strategy.md` for why this is
+never a live Model Repository lookup) - pass `--model FILE.ili` to
+override with an explicit file instead.
+
+```sh
+uv run interlis validate transfer.xtf --repo models/ --catalog codes.xtf -v
+```
+
+`--catalog FILE.xtf` (repeatable) supplies additional transfers whose
+objects should also count as resolvable targets - typically a
+catalogue/code-list basket distributed separately from the main data
+transfer (see [Known limitations](#known-limitations) and
+`docs/xtf-catalogue-references.md`). `-v`/`--verbose` also shows `info`-
+level issues (unresolved-type attributes, e.g. geometry); `-q`/`--quiet`
+shows only the final summary. Exit code is `1` if any `error`-severity
+issue was found, `0` otherwise (warnings/info never fail the run).
+
 ## Usage - Python API
 
 ```python
@@ -129,6 +156,28 @@ metamodel's own official names.
   special `INTERLIS.ANYOID`/`INTERLIS.UUIDOID` qualified forms (not through
   ordinary `domainRef`), which would need a dedicated binding - out of
   scope so far (no corpus file has needed it yet).
+- **XTF catalogue/code-list references** (`REFERENCE TO (EXTERNAL) X`,
+  common Swiss pattern via `CatalogueObjects_V1.Catalogues.
+  MandatoryCatalogueReference`) resolve only if their target basket is
+  supplied via `--catalog` - `interlis validate` cannot locate it on its
+  own (neither `.ili` nor `.xtf` encode a physical location for it, and no
+  public catalogue file was found for this project's real-world
+  inventory). See `docs/xtf-catalogue-references.md` for the full
+  investigation and how unresolved references are classified either way.
+- **Attributes inherited via `EXTENDS`** are not seen by the XTF
+  validator's schema lookup (`xtf/schema.py`) - only attributes declared
+  directly on a class.
+- **`formattedType()`'s `Format`/`Min`/`Max` bindings are currently
+  inert** (`FORMAT INTERLIS.Name "a".."z"` / `FORMAT domainRef "a".."z"`
+  always build a `FormattedType` with these fields `None`): the vendored
+  grammar (`vendor/interlis-antlr4/InterlisParser.g4`) never labels
+  alternatives, so `ctx.getAltNumber()` always returns `0` and every
+  `alt: <int>` binding that needs to disambiguate alternatives sharing an
+  accessor name is unreachable - 15 bindings across 4 spec files are
+  affected in principle, not just this one. Not yet fixed (needs either
+  grammar-level alternative labels + a parser regen, or an
+  accessor-presence-based fallback in the engine) - see `.claude/
+  PROGRESS.md` (Lot 37) for the full analysis.
 
 ## Architecture
 
