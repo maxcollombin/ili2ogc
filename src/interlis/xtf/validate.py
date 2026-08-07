@@ -115,7 +115,9 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
         if text is None:
             return problems
         allowed = enum_values(resolved.type_instance)
-        if allowed and text not in allowed:
+        # "OTHERS" toujours valide (RULE #4, eCH-0031 V2.1.0 §4.3.11.3 :
+        # "EnumValue = (EnumElement-Name {'.' EnumElement-Name}) | 'OTHERS'.")
+        if allowed and text != "OTHERS" and text not in allowed:
             problems.append(f"{ctx}: valeur {text!r} absente de l'enumeration ({sorted(allowed)!r})")
     elif kind == "TextType":
         if node.text is None and not node.children:

@@ -373,6 +373,72 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     self.forward_refs.register_pending(value, instance, "BaseClass")
         return instance
 
+    def _build_enumeration_tree(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry) -> None:
+        """Construit correctement l'arbre EnumNode d'un `enumeration()`
+        (Lot 33 - bug reel trouve en elargissant le corpus XTF a
+        ID65.1_KGS_PBC_V2_2 : "KGS_Kategorie : MANDATORY (A (A,
+        verstaerkter_Schutz), B);" produisait TopNode=A/A.Sub=[B], perdant
+        totalement les vrais enfants de A et confondant B - un FRERE de A
+        au niveau racine - avec un enfant. Root cause documentee sur
+        `enumElement` (spec/grammar/mapping/06_types.yml) : l'ancien
+        mecanisme (chaque enumElement s'auto-attachant via
+        `parent: {association: TopNode, role: TopNode}`) ne pouvait
+        represent qu'UNE CHAINE LINEAIRE, jamais un arbre a embranchements,
+        et ignorait la convention documentee dans `models/IlisMeta16.ili`
+        (commentaire sur EnumNode) : "MetaElement.Name := 'TOP' for
+        topnode" - un noeud racine SYNTHETIQUE, jamais un element reel.
+
+        Distingue le niveau par la classe du PARENT courant
+        (`_parent_stack[-1]`, deja pousse par `visit_wrapped` pour l'appel
+        SOMMET, ou par `_build_instance` de l'enumElement englobant pour un
+        appel IMBRIQUE - Sub-Enumeration) :
+        - Appel SOMMET (parent = EnumType) : cree le noeud TOP synthetique,
+          l'attache comme EnumType.TopNode, y attache CHAQUE enumElement de
+          la liste plate comme enfant direct (role Node, association
+          SubNode) - Order/Final s'appliquent a l'EnumType lui-meme.
+        - Appel IMBRIQUE (parent = EnumNode, l'enumElement englobant) :
+          attache directement les enumElement de cette Sub-Enumeration comme
+          enfants de CE noeud (pas de TOP synthetique supplementaire -
+          l'enumElement englobant sert deja de racine locale) - Final
+          s'applique a ce noeud lui-meme (marque non extensible), Order est
+          `not_applicable` a ce niveau (deja documente ainsi)."""
+        parent_context = self._parent_stack[-1] if self._parent_stack else None
+        is_top_level = isinstance(parent_context, MetaInstance) and parent_context._qualified_class == "IlisMeta16.ModelData.EnumType"
+
+        if is_top_level:
+            top = self.registry.new_instance("IlisMeta16.ModelData.EnumNode")
+            top.Name = "TOP"
+            self.attachment.attach(
+                parent_context, "TopNode", top, association="TopNode", role="TopNode", rule=rule_name,
+            )
+            children_target = top
+            final_target = parent_context
+        else:
+            children_target = parent_context
+            final_target = parent_context
+
+        if children_target is not None and ca.has_accessor(ctx, "enumElement"):
+            for el_ctx in ca.call_list(ctx, "enumElement"):
+                node = self.visit(el_ctx)
+                if isinstance(node, MetaInstance):
+                    self.attachment.attach(
+                        children_target, "Node", node, association="SubNode", role="Node", rule=rule_name,
+                    )
+
+        construction_ctx = self._construction_stack[-1] if self._construction_stack else {}
+        consumed: set[int] = set()
+        final_binding = entry.attribute_bindings.get("Final") if entry.attribute_bindings else None
+        if final_target is not None and isinstance(final_binding, dict):
+            final_value = self._resolve_binding_value(ctx, rule_name, "Final", final_binding, construction_ctx, consumed)
+            if final_value:
+                self.attachment.attach(final_target, "Final", final_value, rule=rule_name)
+        order_binding = entry.attribute_bindings.get("Order") if entry.attribute_bindings else None
+        if is_top_level and isinstance(order_binding, dict):
+            order_value = self._resolve_binding_value(ctx, rule_name, "Order", order_binding, construction_ctx, consumed)
+            if order_value:
+                self.attachment.attach(parent_context, "Order", order_value, rule=rule_name)
+        return None
+
     # ------------------------------------------------------------------
     # Strategie 2 : Conditional
     # ------------------------------------------------------------------
@@ -443,6 +509,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
         # voir _build_multi_declaration.
         if entry.multi_declaration:
             return self._build_multi_declaration(ctx, rule_name, entry)
+
+        # enumeration() : 3e et dernier cas special parmi les 121 regles
+        # (Lot 33, meme famille que multi_declaration/_build_multi_target) -
+        # voir _build_enumeration_tree pour le detail du bug corrige.
+        if rule_name == "enumeration":
+            return self._build_enumeration_tree(ctx, rule_name, entry)
 
         # children: dispatch multi-visite (ex. definitions -> classDef*,
         # topicDef*, ...) - toutes les occurrences comptent, pas une seule
@@ -577,7 +649,23 @@ class InterlisModelBuilder(InterlisParserVisitor):
         expanded: list[str] = []
         for h in hint:
             expanded.extend(self._expand_kind_hint(h))
-        return ForwardRef(name=name, resolves_to_hint=expanded or None, rule=rule_name)
+        return ForwardRef(
+            name=name, resolves_to_hint=expanded or None, rule=rule_name, home_model=self._current_model_name(),
+        )
+
+    def _current_model_name(self) -> str | None:
+        """Nom du MODEL englobant la construction en cours (parcourt
+        `_parent_stack` depuis la fin) - utilise pour desambiguiser un nom
+        court QUAND MEME cible present dans plusieurs modeles d'un fichier
+        multi-MODEL (Lot 33 : "PointStructure" declare separement dans
+        BaseModel_SectoralPlans_LV03_V1_4 ET _LV95_V1_4, meme fichier,
+        MEME symbol_table depuis le fix multi-modeles du Lot 28 -
+        auparavant invisible car un seul modele par fichier n'etait jamais
+        construit)."""
+        for inst in reversed(self._parent_stack):
+            if inst._qualified_class == "IlisMeta16.ModelData.Model":
+                return getattr(inst, "Name", None)
+        return None
 
     def _expand_kind_hint(self, short_name: str) -> list[str]:
         """Un hint (`resolves_to`/`target`) peut nommer une classe metamodele

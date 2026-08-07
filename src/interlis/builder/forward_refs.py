@@ -31,6 +31,13 @@ class ForwardRef:
     # l'heuristique generique has_prefix (pensee pour des references qui
     # POURRAIENT etre locales, ex. classRef/associationRef).
     always_external: bool = False
+    # Nom du MODEL englobant la construction qui a produit ce ForwardRef
+    # (Lot 33) - desambiguise un nom court present dans PLUSIEURS modeles
+    # d'un meme fichier multi-MODEL (ex. "PointStructure" declare
+    # separement dans BaseModel_SectoralPlans_LV03_V1_4 ET _LV95_V1_4,
+    # meme fichier, MEME symbol_table depuis le fix multi-modeles du
+    # Lot 28). None si non determinable (ex. modele predefini INTERLIS).
+    home_model: str | None = None
 
 
 @dataclass
@@ -78,7 +85,7 @@ class SymbolTable:
                 result.append(instance)
         return result
 
-    def resolve(self, name: str, kind_hint: str | list[str] | None = None) -> Any | None:
+    def resolve(self, name: str, kind_hint: str | list[str] | None = None, home_model: str | None = None) -> Any | None:
         if name in self._qualified:
             return self._qualified[name]
         short = name.rsplit(".", 1)[-1]
@@ -98,6 +105,25 @@ class SymbolTable:
             if len(filtered) == 1:
                 return filtered[0]
             candidates = filtered if filtered else candidates
+        if len(candidates) > 1 and home_model:
+            # CORRIGE (Lot 33) : un meme nom court peut aussi etre declare
+            # dans PLUSIEURS MODELES du MEME fichier .ili (multi-MODEL,
+            # fix Lot 28 - ex. "PointStructure" dans BaseModel_SectoralPlans_
+            # LV03_V1_4 ET _LV95_V1_4, partageant cette MEME symbol_table).
+            # Le kind_hint seul ne peut pas lever cette ambiguite (les 2
+            # candidats sont de la MEME classe metamodele concrete, ex.
+            # Class[Kind=Structure]) - repli sur le MODEL englobant de la
+            # construction qui a demande cette resolution (voir
+            # InterlisModelBuilder._current_model_name), en cherchant
+            # directement dans `_qualified` (les candidats de `_by_short_name`
+            # ne portent pas leur propre nom qualifie).
+            candidate_ids = {id(c) for c in candidates}
+            in_model = [
+                v for k, v in self._qualified.items()
+                if k.startswith(home_model + ".") and k.rsplit(".", 1)[-1] == short and id(v) in candidate_ids
+            ]
+            if len(in_model) == 1:
+                return in_model[0]
         if len(candidates) == 1:
             return candidates[0]
         return None
@@ -169,7 +195,7 @@ class ForwardRefResolver:
                 if found is not None:
                     return found
             return UnresolvedNamedReference(ref.name, reason="external_import")
-        found = self.symbol_table.resolve(ref.name, kind_hint=kind_hint)
+        found = self.symbol_table.resolve(ref.name, kind_hint=kind_hint, home_model=ref.home_model)
         if found is not None:
             return found
         if "." in ref.name:

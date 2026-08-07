@@ -172,22 +172,41 @@ def resolve_attribute(attr: MetaInstance) -> ResolvedAttribute:
 
 
 def enum_values(enum_type: MetaInstance) -> set[str]:
-    """Tous les noms de EnumNode atteignables depuis EnumType.TopNode, en
-    descendant recursivement EnumNode.Sub (chaine construite par
-    AttachmentResolver._chain_onto_self_referencing_association - voir
-    builder/attach.py ; nom de champ "Sub" confirme empiriquement, pas
-    dans ilismeta16-associations.yml sous ce nom litteral - association
-    reelle non identifiee avec certitude, voir note dans validate.py)."""
+    """Tous les CHEMINS POINTES valides pour ce EnumType (RULE #4, Reference
+    Manual eCH-0031 V2.1.0 §4.3.11.3, citation exacte : "EnumValue =
+    (EnumElement-Name {'.' EnumElement-Name}) | 'OTHERS'." - un enum
+    HIERARCHIQUE (EnumNode avec des enfants) se transfere comme le CHEMIN
+    COMPLET depuis la racine, pas le seul nom du noeud feuille (Lot 33,
+    bug trouve sur KGS_PBC_V2_2.KGS_Kategorie reel : "A (A,
+    verstaerkter_Schutz), B" - la valeur reelle transferee est "A.A", PAS
+    "A" seul, pour le noeud "A" imbrique sous le noeud racine "A" homonyme).
+    "Pour l'encodage ... la syntaxe est appliquee INDEPENDAMMENT du fait que
+    le domaine de valeurs ne couvre que les feuilles ou aussi les noeuds" -
+    donc CHAQUE noeud contribue son propre chemin, pas seulement les
+    feuilles. EnumType.TopNode est un noeud RACINE SYNTHETIQUE (Name="TOP",
+    jamais une valeur reelle - confirme par `models/IlisMeta16.ili`,
+    commentaire sur EnumNode : "MetaElement.Name := 'TOP' for topnode" -
+    et construit comme tel depuis le Lot 33, voir InterlisModelBuilder.
+    _build_enumeration_tree) - exclu des chemins retournes, seuls SES
+    enfants (les vraies valeurs de premier niveau) demarrent un chemin.
+    Descend recursivement EnumNode.Node (association SubNode, role Node -
+    nom de champ confirme empiriquement ET par construction explicite
+    depuis le Lot 33)."""
     values: set[str] = set()
 
-    def walk(node: MetaInstance | None) -> None:
+    def walk(node: MetaInstance | None, prefix: str, *, is_synthetic_root: bool) -> None:
         if node is None:
             return
         name = getattr(node, "Name", None)
-        if name:
-            values.add(name)
-        for child in getattr(node, "Sub", None) or []:
-            walk(child)
+        if not name:
+            return
+        if is_synthetic_root:
+            path = ""
+        else:
+            path = f"{prefix}.{name}" if prefix else name
+            values.add(path)
+        for child in getattr(node, "Node", None) or []:
+            walk(child, path, is_synthetic_root=False)
 
-    walk(getattr(enum_type, "TopNode", None))
+    walk(getattr(enum_type, "TopNode", None), "", is_synthetic_root=True)
     return values

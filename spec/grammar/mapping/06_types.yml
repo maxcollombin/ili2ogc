@@ -420,9 +420,30 @@ enumElement:
     rule: enumElement
   kind: Instance
   target: IlisMeta16.ModelData.EnumNode
-  parent:
-    association: TopNode
-    role: TopNode
+  note: 'CORRIGE (Lot 33, bug reel majeur trouve en elargissant le corpus XTF a
+    ID65.1_KGS_PBC_V2_2 - "A (A, verstaerkter_Schutz), B" produisait un arbre
+    totalement faux : TopNode=A, A.Sub=[B] - les enfants REELS de A (A/
+    verstaerkter_Schutz) disparaissaient et B, un FRERE de A au niveau
+    racine, se retrouvait chaine comme enfant de A). Root cause : cet ancien
+    `parent: {association: TopNode, role: TopNode}` faisait que CHAQUE
+    enumElement (racine OU imbrique) tentait de s''auto-attacher via la
+    MEME association TopNode (EnumType {0..1} <-> TopNode {1} EnumNode,
+    upper=1 - UN SEUL noeud racine par EnumType) - le premier element
+    occupait ce slot unique, tout element suivant (frere OU authentique
+    enfant imbrique, le mecanisme ne distinguait pas les deux) declenchait
+    le repli generique "chainage sur association auto-referente"
+    (AttachmentResolver._chain_onto_self_referencing_association), qui
+    aplati TOUT en une chaine lineaire au lieu d''un arbre. Par ailleurs
+    `models/IlisMeta16.ili` documente explicitement (commentaire sur
+    EnumNode) : "MetaElement.Name := ''TOP'' for topnode" - un noeud TOP
+    SYNTHETIQUE, jamais un element reel - que ce mecanisme ne construisait
+    jamais. Corrige : `parent:` retire d''ici, la construction reelle de
+    l''arbre (noeud TOP synthetique + enfants via SubNode/role Node,
+    correctement scopes par niveau d''imbrication) est desormais geree
+    explicitement par `InterlisModelBuilder._build_enumeration_tree`, cas
+    special declenche sur `rule_name == "enumeration"` (meme famille que
+    `multi_declaration`/`_build_multi_target`, les 2 seuls autres cas
+    speciaux parmi les 121 regles).'
   attribute_bindings:
     Name:
       source:
