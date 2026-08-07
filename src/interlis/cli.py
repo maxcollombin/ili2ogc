@@ -15,6 +15,7 @@ from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_file
+from interlis.xtf.model_resolution import header_model_lookup, root_model_names
 from interlis.xtf.parse import parse_xtf
 from interlis.xtf.validate import validate_transfer
 
@@ -94,18 +95,51 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """Valide un fichier de transfert .xtf contre le schema d'un fichier
-    .ili donne (Lot 30 - types de base, MANDATORY, structure ; PAS encore
-    la resolution TID/REF cross-panier, voir docs/xtf-transfer-encoding-notes.md
-    et .claude/PROGRESS.md pour le perimetre exact)."""
-    model_path = Path(args.model)
+    """Valide un fichier de transfert .xtf contre son schema (Lot 30 - types
+    de base, MANDATORY, structure ; PAS encore la resolution TID/REF
+    cross-panier, voir docs/xtf-transfer-encoding-notes.md et
+    .claude/PROGRESS.md pour le perimetre exact).
+
+    Schema resolu de deux facons (Lot 34, voir
+    docs/model-resolution-strategy.md pour la decision d'architecture) :
+    - `--model <fichier.ili>` explicite (comportement historique, toujours
+      supporte) ;
+    - sinon, auto-detecte depuis LE TRANSFERT LUI-MEME (jamais un Model
+      Repository interroge en direct) : les modeles "racine" reellement
+      utilises par sa DATASECTION (voir xtf.model_resolution) sont cherches
+      dans les repertoires `--repo` fournis - un seul suffit comme point
+      d'entree, les autres (racine restants ou "core" importe) resolvent via
+      le mecanisme cross-modele existant (ModelRepository.resolve_external)."""
     xtf_path = Path(args.xtf)
-    if not model_path.exists():
-        print(f"fichier .ili introuvable : {model_path}", file=sys.stderr)
-        return 1
     if not xtf_path.exists():
         print(f"fichier .xtf introuvable : {xtf_path}", file=sys.stderr)
         return 1
+
+    transfer = parse_xtf(xtf_path)
+    repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+
+    if args.model:
+        model_path = Path(args.model)
+        if not model_path.exists():
+            print(f"fichier .ili introuvable : {model_path}", file=sys.stderr)
+            return 1
+    else:
+        if repository is None:
+            print("aucun --model fourni : --repo est requis pour l'auto-detection du schema.", file=sys.stderr)
+            return 1
+        model_path = None
+        for name in root_model_names(transfer):
+            candidate = repository.path_for(name)
+            if candidate is not None:
+                model_path = candidate
+                break
+        if model_path is None:
+            header = header_model_lookup(transfer)
+            print(f"aucun modele racine de {xtf_path} n'est disponible dans --repo. Modeles requis (HEADERSECTION) :", file=sys.stderr)
+            for name in root_model_names(transfer):
+                version, uri = header.get(name, ["?", "?"])
+                print(f"  {name} VERSION={version!r} URI={uri!r}", file=sys.stderr)
+            return 1
 
     tree, syntax_errors = parse_file(model_path)
     if syntax_errors:
@@ -114,13 +148,11 @@ def cmd_validate(args: argparse.Namespace) -> int:
             print(f"  {e}", file=sys.stderr)
         return 1
 
-    repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
     builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         builder.build(tree)
 
-    transfer = parse_xtf(xtf_path)
     issues = validate_transfer(transfer, symbol_table=builder.symbol_table, repository=repository)
 
     counts: dict[str, int] = {}
@@ -156,7 +188,11 @@ def main(argv: list[str] | None = None) -> int:
         "validate", help="Valide un fichier .xtf contre le schema d'un fichier .ili.",
     )
     validate_parser.add_argument("xtf", help="Chemin du fichier .xtf a valider.")
-    validate_parser.add_argument("--model", required=True, help="Chemin du fichier .ili decrivant le schema attendu.")
+    validate_parser.add_argument(
+        "--model", default=None,
+        help="Chemin du fichier .ili decrivant le schema attendu. Omis : auto-detecte depuis la HEADERSECTION/"
+        "DATASECTION du transfert lui-meme (necessite --repo, voir docs/model-resolution-strategy.md).",
+    )
     validate_parser.add_argument(
         "--repo", action="append", default=[], metavar="DIR",
         help="Repertoire de modeles .ili pour resoudre les IMPORTS du schema (repetable).",

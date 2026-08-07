@@ -101,6 +101,14 @@ class ModelRepository:
         self._cache: dict[str, Any] = {}
         self._make_sub_builder = None  # injecte par InterlisModelBuilder
 
+    def path_for(self, model_name: str) -> Path | None:
+        """Chemin du fichier `.ili` indexe pour ce nom de MODEL/REFSYSTEM, si
+        connu (Lot 34 - resolution pilotee par la HEADERSECTION/MODELS d'un
+        XTF a valider, voir xtf/model_resolution.py). `None` pour un modele
+        predefini (`_BUILTIN_SOURCES`, jamais un vrai fichier disque) ou
+        absent des repertoires `--repo` fournis."""
+        return self._index.get(model_name)
+
     def bind_builder_factory(self, factory) -> None:
         """Injecte la fabrique de sous-builder (fournie par le builder
         racine, qui possede les composants partages - schema/registre/spec/
