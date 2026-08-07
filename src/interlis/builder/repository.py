@@ -14,9 +14,26 @@ import re
 from pathlib import Path
 from typing import Any
 
+from interlis.builder.errors import BuildError
 from interlis.runtime.parse import parse_file, parse_text
 
-_MODEL_NAME_RE = re.compile(r"\b(?:MODEL|REFSYSTEM)\s+([A-Za-z_][A-Za-z0-9_]*)")
+# Lot 36 : CORRIGE - matchait a tort `(?:MODEL|REFSYSTEM)`, comme si les
+# deux keywords pouvaient chacun preceder directement le Name. Faux : la
+# grammaire reelle (`modeldef`, vendor/interlis-antlr4/InterlisParser.g4)
+# est `CONTRACTED? (TYPE | REFSYSTEM | SYMBOLOGY)? MODEL Name ...` -
+# REFSYSTEM n'est JAMAIS qu'un prefixe optionnel AVANT MODEL, jamais un
+# substitut. Sur `REFSYSTEM MODEL CoordSys`, l'ancien pattern matchait
+# "REFSYSTEM MODEL" en capturant a tort le literal "MODEL" comme nom -
+# CoordSys (importe par 100% du corpus XTF reel de ce projet) n'etait donc
+# JAMAIS indexe, degradant silencieusement toute reference vers ce modele
+# en UnresolvedNamedReference malgre le fichier present dans --repo (trouve
+# en repondant a une question utilisateur sur la completude de la
+# validation vs le header XTF, PAS un lot planifie). Meme bug pour
+# `REFSYSTEM BASKET Name` (metaDataBasketDef, une regle SANS RAPPORT) :
+# capturait a tort "BASKET" comme faux nom de modele. Fix : MODEL est
+# TOUJOURS directement suivi du vrai Name, quel que soit le prefixe
+# optionnel devant (ou son absence) - un seul mot-cle a chercher.
+_MODEL_NAME_RE = re.compile(r"\bMODEL\s+([A-Za-z_][A-Za-z0-9_]*)")
 
 # Modele "INTERLIS" predefini (Reference Manual eCH-0031 V2.1.0/2024-04-24,
 # Annexe A "Das interne INTERLIS-Datenmodell", citee telle quelle - RULE #4) :
@@ -146,7 +163,24 @@ class ModelRepository:
         # table partiellement peuplee au lieu de relancer indefiniment le
         # chargement du meme fichier.
         self._cache[model_name] = builder.symbol_table
-        result = builder.build(tree)
+        try:
+            result = builder.build(tree)
+        except BuildError:
+            # Lot 36 : un modele EXTERNE indexe avec succes peut quand meme
+            # echouer a construire pour de vrai (ex. CoordSys-20151124.ili,
+            # alternative `DOMAIN X = STRING DOTDOT STRING` de domainDef -
+            # PAS encore mappee, deja documente Lot 29 comme limitation
+            # connue de ce fichier utilise EN ROOT DIRECT ; jusqu'ici jamais
+            # exercee via ce chemin cross-modele a cause d'un bug d'indexation
+            # SEPARE, Lot 36, qui empechait CoordSys d'etre trouve du tout).
+            # Politique deja existante juste au-dessus pour une erreur de
+            # SYNTAXE (`if syntax_errors: ... return None`) : un modele
+            # externe qui ne construit pas degrade en `None` (comme absent)
+            # plutot que de faire planter tout `validate`/`build` racine -
+            # RULE #5, le placeholder deja mis en cache (garde anti-cycle
+            # ci-dessus) reste vide, jamais retente.
+            self._cache[model_name] = None
+            return None
         if model_name in _BUILTIN_SOURCES:
             # Le Model reellement declare porte un nom interne different du
             # nom reel documente par le manuel (voir

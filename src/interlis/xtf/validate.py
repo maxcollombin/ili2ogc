@@ -161,9 +161,33 @@ def _build_tid_index(transfer: XtfTransfer, catalogs: list[XtfTransfer] | None =
     return index
 
 
+def _resolved_schema_of(
+    cls: MetaInstance, symbol_table: SymbolTable, cache: dict[int, dict[str, ResolvedAttribute]],
+) -> dict[str, ResolvedAttribute]:
+    """`schema_members_of`+`resolve_attribute`, memoises par CLASSE (`id(cls)`)
+    pour la duree d'un `validate_transfer` (Lot 36 - optimisation, aucun
+    changement de comportement). `embedded_roles_of` (appele par
+    `schema_members_of`) reparcourt TOUT le symbol_table a chaque appel -
+    profile reel (cProfile, ch.astra.nationalstrassenachsen.xtf, 34533
+    objets mais SEULEMENT 4 classes distinctes) : ~82% du temps de
+    `validate_transfer` etait passe a recalculer le MEME resultat pour
+    chaque objet d'une classe deja vue, alors que le schema d'une classe ne
+    change jamais pendant une validation. Cle par identite d'objet Python
+    (`id`), pas par nom qualifie : deux `MetaInstance` differentes ne
+    doivent jamais partager une entree, meme homonymes (cas deja gere
+    ailleurs par kind_hint - RULE #1, ne pas re-introduire une ambiguite
+    par un raccourci de cache)."""
+    key = id(cls)
+    cached = cache.get(key)
+    if cached is None:
+        cached = {name: resolve_attribute(attr) for name, attr in schema_members_of(cls, symbol_table).items()}
+        cache[key] = cached
+    return cached
+
+
 def _validate_object(
     obj: XtfObject, basket: XtfBasket, *, symbol_table: SymbolTable, repository: ModelRepository | None,
-    tid_index: dict[str, XtfObject],
+    tid_index: dict[str, XtfObject], schema_cache: dict[int, dict[str, ResolvedAttribute]],
 ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
@@ -174,7 +198,7 @@ def _validate_object(
         ))
         return issues
 
-    schema_attrs = schema_members_of(cls, symbol_table)
+    schema_attrs = _resolved_schema_of(cls, symbol_table, schema_cache)
     for attr_name, raw_nodes in obj.attributes.items():
         if attr_name not in schema_attrs:
             issues.append(ValidationIssue(
@@ -183,7 +207,7 @@ def _validate_object(
                 "d'association defini dans un modele importe (non couvert par ce lot)",
             ))
             continue
-        resolved = resolve_attribute(schema_attrs[attr_name])
+        resolved = schema_attrs[attr_name]
         ctx = f"{obj.qualified_class}[{obj.tid}].{attr_name}"
         if resolved.type_kind in _REFERENCE_TYPE_KINDS:
             # Note (Lot 30) : un Type resolu en ReferenceType/Class ne
@@ -277,8 +301,7 @@ def _validate_object(
             for problem in _validate_scalar(resolved, node, ctx):
                 issues.append(ValidationIssue("error", basket.bid, obj.tid, obj.qualified_class, attr_name, problem))
 
-    for attr_name, resolved_attr in schema_attrs.items():
-        resolved = resolve_attribute(resolved_attr)
+    for attr_name, resolved in schema_attrs.items():
         if resolved.mandatory and attr_name not in obj.attributes:
             issues.append(ValidationIssue(
                 "error", basket.bid, obj.tid, obj.qualified_class, attr_name,
@@ -298,10 +321,12 @@ def validate_transfer(
     separement du transfert de donnees metier principal (voir
     `_build_tid_index`)."""
     tid_index = _build_tid_index(transfer, catalogs)
+    schema_cache: dict[int, dict[str, ResolvedAttribute]] = {}
     issues: list[ValidationIssue] = []
     for basket in transfer.baskets:
         for obj in basket.objects:
             issues.extend(_validate_object(
                 obj, basket, symbol_table=symbol_table, repository=repository, tid_index=tid_index,
+                schema_cache=schema_cache,
             ))
     return issues
