@@ -133,18 +133,31 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
     return problems
 
 
-def _build_tid_index(transfer: XtfTransfer) -> dict[str, XtfObject]:
+def _build_tid_index(transfer: XtfTransfer, catalogs: list[XtfTransfer] | None = None) -> dict[str, XtfObject]:
     """TID -> XtfObject, sur TOUS les paniers du transfert (une reference
     peut viser un objet d'un panier different du meme fichier - confirme
     reel sur wohnungsinventar-zweitwohnungsanteil_2019-10_2056.xtf, 2
-    paniers). Un TID duplique entre paniers serait deja un objet invalide
+    paniers), PUIS sur tous les paniers de chaque transfert-catalogue
+    fourni (Lot 35 - `--catalog`, voir cli.py) : un objet-catalogue EXTERNAL
+    (ex. MLocStatus, RULE #4 eCH-0031 V2.1.0 §3.6.3) vit typiquement dans un
+    panier/fichier SEPARE du transfert de donnees metier - ce fichier n'est
+    PAS auto-decouvert (aucune source publique identifiee pour ce corpus,
+    voir docs/model-resolution-strategy.md et PROGRESS.md Lot 35), mais si
+    l'operateur en fournit un, ses objets deviennent resolubles au meme
+    titre que ceux du transfert principal. Un TID duplique entre paniers
+    (transfert principal OU catalogue) serait deja un objet invalide
     (RULE #4, chaque TID doit etre unique dans un transfert) - premier
-    trouve gagne, pas un cas rencontre dans le corpus reel a ce jour."""
+    trouve gagne, transfert principal prioritaire sur les catalogues."""
     index: dict[str, XtfObject] = {}
     for basket in transfer.baskets:
         for obj in basket.objects:
             if obj.tid is not None:
                 index.setdefault(obj.tid, obj)
+    for catalog in catalogs or []:
+        for basket in catalog.baskets:
+            for obj in basket.objects:
+                if obj.tid is not None:
+                    index.setdefault(obj.tid, obj)
     return index
 
 
@@ -276,8 +289,15 @@ def _validate_object(
 
 def validate_transfer(
     transfer: XtfTransfer, *, symbol_table: SymbolTable, repository: ModelRepository | None = None,
+    catalogs: list[XtfTransfer] | None = None,
 ) -> list[ValidationIssue]:
-    tid_index = _build_tid_index(transfer)
+    """`catalogs` (Lot 35, optionnel) : transferts XTF supplementaires deja
+    parses (`parse_xtf`) dont les objets doivent aussi compter comme
+    resolubles pour la resolution TID/REF - typiquement un panier de
+    donnees-catalogue (RoadTrafficCensusCatalogues et famille) distribue
+    separement du transfert de donnees metier principal (voir
+    `_build_tid_index`)."""
+    tid_index = _build_tid_index(transfer, catalogs)
     issues: list[ValidationIssue] = []
     for basket in transfer.baskets:
         for obj in basket.objects:

@@ -216,3 +216,62 @@ def test_embedded_role_unresolved_ref_is_warning(ref_builder):
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="rLocation", severity="warning")
     assert any("introuvable dans ce transfert" in m for m in msgs)
+
+
+# --- Lot 35 : catalogue objects (REFERENCE TO (EXTERNAL), --catalog) ---
+
+def test_non_external_unresolved_ref_flags_data_issue(ref_builder):
+    """RefLocation (pas de clause EXTERNAL) : un REF non resolu doit rester
+    `warning` (RULE #5, jamais `error` sans catalogue charge) mais le
+    message doit signaler que la cible DEVRAIT normalement etre dans ce
+    meme panier (eCH-0031 V2.1.0 3.6.3)."""
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "does-not-exist")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    msgs = _messages(issues, attribute="RefLocation", severity="warning")
+    assert any("NON declaree (EXTERNAL)" in m for m in msgs)
+
+
+def test_external_unresolved_ref_reports_catalogue_expected(ref_builder):
+    """RefCatalogItem : REFERENCE TO (EXTERNAL) - un REF non resolu doit
+    rester `warning` mais le message doit signaler que c'est la situation
+    NORMALE attendue pour une reference-catalogue (pas un signal de donnee
+    incorrecte)."""
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefCatalogItem", "ext.catalog.99")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    msgs = _messages(issues, attribute="RefCatalogItem", severity="warning")
+    assert any("declaree (EXTERNAL)" in m and "situation normale" in m for m in msgs)
+
+
+def test_external_ref_resolved_via_catalog_argument_has_no_issue(ref_builder):
+    """Le TID d'un objet-catalogue EXTERNAL vit typiquement dans un fichier
+    .xtf SEPARE du transfert principal (Lot 35, `--catalog`) - passer ce
+    transfert-catalogue via `catalogs=` doit le rendre resoluble, exactement
+    comme un objet du transfert principal."""
+    catalog_item = XtfObject(tid="ext.catalog.99", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Catalogue")]))
+    catalog_basket = XtfBasket(bid="cat", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[catalog_item])
+    catalog_transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[catalog_basket])
+
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefCatalogItem", "ext.catalog.99")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+
+    issues_without_catalog = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    assert _messages(issues_without_catalog, attribute="RefCatalogItem") != []
+
+    issues_with_catalog = validate_transfer(
+        transfer, symbol_table=ref_builder.symbol_table, catalogs=[catalog_transfer],
+    )
+    assert _messages(issues_with_catalog, attribute="RefCatalogItem") == []

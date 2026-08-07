@@ -11,6 +11,7 @@ MODEL RefTest AT "https://example.org/reftest" VERSION "2026-08-07" =
     CLASS Indicator =
       Value: MANDATORY TEXT;
       RefLocation: REFERENCE TO Location;
+      RefCatalogItem: REFERENCE TO (EXTERNAL) Location;
     END Indicator;
 
     ASSOCIATION Location_Indicator =

@@ -153,7 +153,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
         warnings.simplefilter("ignore")
         builder.build(tree)
 
-    issues = validate_transfer(transfer, symbol_table=builder.symbol_table, repository=repository)
+    catalogs = [parse_xtf(Path(c)) for c in args.catalog]
+    issues = validate_transfer(transfer, symbol_table=builder.symbol_table, repository=repository, catalogs=catalogs)
 
     counts: dict[str, int] = {}
     for issue in issues:
@@ -196,6 +197,12 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser.add_argument(
         "--repo", action="append", default=[], metavar="DIR",
         help="Repertoire de modeles .ili pour resoudre les IMPORTS du schema (repetable).",
+    )
+    validate_parser.add_argument(
+        "--catalog", action="append", default=[], metavar="FILE.xtf",
+        help="Fichier .xtf de catalogue supplementaire (repetable) - ses objets comptent aussi pour la "
+        "resolution TID/REF (references EXTERNAL non incluses dans le transfert principal, voir "
+        "docs/model-resolution-strategy.md).",
     )
     validate_parser.add_argument("-q", "--quiet", action="store_true", help="N'afficher que le resume final.")
     validate_parser.add_argument(
