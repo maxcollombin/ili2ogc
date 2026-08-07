@@ -259,15 +259,35 @@ class InterlisModelBuilder(InterlisParserVisitor):
         ctx.children en segments par position plutot que par nom d'accesseur
         (aucun mecanisme generique existant, ex. for_each, ne correle
         plusieurs accesseurs DIFFERENTS - Name/type_/numeric/enumeration - a
-        la MEME position parmi N occurrences)."""
+        la MEME position parmi N occurrences).
+
+        CORRIGE (Lot 41, RoadTrafficCensus_V1_1.ili reel : "CHCantonCode_Extended
+        = CLASS RESTRICTION(sAbroadCode; sCHCantonCode);") : `RESTRICTION
+        LPAR classOrAssociationRef (SEMI classOrAssociationRef)* RPAR`
+        contient elle-meme des SEMI INTERNES (separateurs entre candidats,
+        pas des terminateurs de declaration) - une decoupe naive sur TOUT
+        SEMI coupait le segment en plein milieu de la liste de candidats
+        (ex. le SEMI entre "sAbroadCode" et "sCHCantonCode"), tronquant
+        silencieusement `_build_domain_class_restriction` a son 1er
+        candidat SEULEMENT (le reste finissant dans un segment RESIDUEL
+        sans Name en tete, rejete par `name_node is None: continue`
+        ci-dessous - jamais un crash, juste une perte silencieuse de
+        donnees). Suit desormais la profondeur LPAR/RPAR : un SEMI ne
+        delimite une declaration QUE hors de toute parenthese ouverte."""
         children = list(ctx.children or [])
         segments: list[list[Any]] = []
         current: list[Any] = []
+        paren_depth = 0
         for child in children:
             current.append(child)
-            if isinstance(child, TerminalNode) and child.symbol.type == InterlisParser.SEMI:
-                segments.append(current)
-                current = []
+            if isinstance(child, TerminalNode):
+                if child.symbol.type == InterlisParser.LPAR:
+                    paren_depth += 1
+                elif child.symbol.type == InterlisParser.RPAR:
+                    paren_depth -= 1
+                elif child.symbol.type == InterlisParser.SEMI and paren_depth == 0:
+                    segments.append(current)
+                    current = []
         if current:
             segments.append(current)
 
@@ -354,23 +374,34 @@ class InterlisModelBuilder(InterlisParserVisitor):
         alternative grammaticale n'a pas de clause EXTERNAL (confirme sur le
         code ANTLR - contrairement a referenceAttr), donc External=False
         inconditionnellement. BaseClass attache via la MEME association que
-        referenceAttr.BaseClass/roleDef.BaseClass (ClassRelatedType). Ne
-        couvre que la 1ere classOrAssociationRef (base non restreinte) -
-        meme limite deja documentee pour ces deux bindings."""
+        referenceAttr.BaseClass/roleDef.BaseClass (ClassRelatedType) - CRT
+        {0..*} <-> BaseClass {0..*} (ilismeta16-associations.yml, deja
+        multi-valuee cote BaseClass) : ATTACHE DESORMAIS TOUTES les
+        classOrAssociationRef du segment (Lot 41, pas seulement la 1ere -
+        ancienne limite documentee ici et sur referenceAttr.BaseClass/
+        roleDef.BaseClass, mais REELEMENT necessaire ici pour interpreter
+        la 3e forme d'encodage XTF - `CLASS RESTRICTION(A; B; C)` avec
+        PLUSIEURS candidats reels, ex. `Owner = CLASS RESTRICTION
+        (sCHOwnerCode; sCHCantonCode; sCHMunicipalityCode)` -
+        RoadTrafficCensus_V1_1.ili - voir xtf/schema.py:
+        restriction_candidates). Chaque `attach()` avec ce role multi-
+        valuee AJOUTE a la liste (`AttachmentResolver._set_field`, upper=
+        '*'), ne remplace jamais - aucun changement de FORME pour le cas a
+        UN SEUL candidat (REFERENCE TO ordinaire, roleDef) : `.BaseClass`
+        etait deja une liste d'un seul element avant ce lot, cette boucle
+        se contente d'y ajouter les elements suivants s'il y en a."""
         instance = self.registry.new_instance("IlisMeta16.ModelData.ReferenceType")
         instance.External = False
-        first_ref = next(
-            (c for c in segment if isinstance(c, ParserRuleContext) and self._rule_name(c) == "classOrAssociationRef"),
-            None,
-        )
-        if first_ref is not None:
-            value = self.visit(first_ref)
-            if value is not None:
-                self.attachment.attach(
-                    instance, "BaseClass", value, association="BaseClass", role="BaseClass", rule=rule_name,
-                )
-                if isinstance(value, ForwardRef):
-                    self.forward_refs.register_pending(value, instance, "BaseClass")
+        refs = [c for c in segment if isinstance(c, ParserRuleContext) and self._rule_name(c) == "classOrAssociationRef"]
+        for ref_ctx in refs:
+            value = self.visit(ref_ctx)
+            if value is None:
+                continue
+            self.attachment.attach(
+                instance, "BaseClass", value, association="BaseClass", role="BaseClass", rule=rule_name,
+            )
+            if isinstance(value, ForwardRef):
+                self.forward_refs.register_pending(value, instance, "BaseClass")
         return instance
 
     def _build_type_string_range(self, ctx: ParserRuleContext) -> MetaInstance | None:

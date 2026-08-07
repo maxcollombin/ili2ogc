@@ -46,6 +46,18 @@ Perimetre couvert :
   ne peut pas etre resolue avec certitude (cross-modele non charge via
   --repo, role d'association sans BaseClass confirme, etc.) - RULE #5,
   jamais de faux positif sur une incertitude.
+- 3e forme d'encodage XTF (Lot 41, `_validate_restriction_text`) : un
+  `CLASS RESTRICTION(A; B; C)` (voir
+  docs/xtf-transfer-encoding-notes.md "Third form found") ou CHAQUE
+  candidat est une STRUCTURE a UN SEUL attribut PROPRE se transfere comme
+  la valeur TEXTE NUE de cet attribut, sans REF - desormais interprete en
+  validant cette valeur contre CHAQUE candidat verifiable
+  (`schema.restriction_candidates`/`single_own_attribute`) : aucune issue
+  si au moins un candidat accepte la valeur, `warning` (pas `error`, choix
+  du bon candidat heuristique) si tous les candidats VERIFIABLES la
+  rejettent, `info` (statut indetermine, RULE #5) si aucun candidat n'est
+  verifiable (motif absent, ou type interne non resolu - ex. domaine
+  externe non charge via `--repo`).
 - PAS encore couvert (limites documentees, PROGRESS.md) : attributs herites
   via EXTENDS depuis un modele IMPORTE non charge (chaine Super tronquee),
   geometrie/coordonnees, roles d'association definis dans un modele
@@ -59,7 +71,7 @@ from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 from interlis.xtf.schema import (
     ResolvedAttribute, enum_values, is_class_compatible, reference_external_status, reference_target_class,
-    resolve_attribute, resolve_class, schema_members_of,
+    resolve_attribute, resolve_class, restriction_candidates, schema_members_of, single_own_attribute,
 )
 
 # Classes de Type concretes reconnues comme "reference a un objet" (valeur
@@ -146,6 +158,65 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
     return problems
 
 
+_GENERIC_RESTRICTION_INFO = (
+    "attribut de type reference/structure sans REF reconnu (valeur texte nue, "
+    "probable structure a 1 attribut - voir docs/xtf-transfer-encoding-notes.md)"
+)
+
+
+def _validate_restriction_text(
+    resolved: ResolvedAttribute, node: RawNode | None, basket: XtfBasket, obj: XtfObject, attr_name: str, ctx: str,
+) -> "ValidationIssue | None":
+    """Interprete la 3e forme d'encodage XTF (Lot 41, voir
+    docs/xtf-transfer-encoding-notes.md "Third form found") : un attribut
+    dont le Type resout en `ReferenceType` avec PLUSIEURS candidats
+    `BaseClass` (`CLASS RESTRICTION(A; B; C)`, `restriction_candidates`),
+    chaque candidat etant lui-meme une STRUCTURE a UN SEUL attribut PROPRE
+    (`single_own_attribute`) - ili2fme semble transferer ceci comme la
+    valeur TEXTE NUE de cet unique attribut, sans wrapper `<Reference>`,
+    ni meme de wrapper structure. Valide `node.text` contre CHAQUE candidat
+    dont le type interne est verifiable (`_validate_scalar` sur
+    TextType/NumType/EnumType) :
+    - au moins un candidat accepte la valeur sans probleme -> aucune issue
+      (comme un REF resolu, Lot 31/40).
+    - aucun candidat verifiable (BaseClass absent, pas de motif 1-attribut,
+      ou motif present mais le/les type(s) internes ne resolvent pas -
+      ex. domaine externe non charge via `--repo`, CHAdminCodes_V1 sur ce
+      corpus, voir PROGRESS.md Lot 39) -> `info`, statut reellement
+      indetermine, RULE #5 - IDENTIQUE au message d'avant ce lot si aucun
+      candidat structurel n'a meme ete trouve.
+    - au moins un candidat verifiable existe mais AUCUN n'accepte la
+      valeur -> `warning` (pas `error` : le choix du "bon" candidat parmi
+      plusieurs reste une heuristique structurelle, contrairement a la
+      resolution TID/REF exacte du Lot 40 - RULE #5, ne jamais surclasser
+      une interpretation heuristique en certitude)."""
+    if node is None:
+        return ValidationIssue("info", basket.bid, obj.tid, obj.qualified_class, attr_name, f"{ctx}: {_GENERIC_RESTRICTION_INFO}")
+    single_attr_candidates = [
+        (candidate, resolve_attribute(attr))
+        for candidate in restriction_candidates(resolved)
+        if (attr := single_own_attribute(candidate)) is not None
+    ]
+    if not single_attr_candidates:
+        return ValidationIssue("info", basket.bid, obj.tid, obj.qualified_class, attr_name, f"{ctx}: {_GENERIC_RESTRICTION_INFO}")
+    checkable = [(c, ir) for c, ir in single_attr_candidates if ir.type_kind in ("TextType", "NumType", "EnumType")]
+    if any(not _validate_scalar(inner, node, ctx) for _, inner in checkable):
+        return None
+    if len(checkable) < len(single_attr_candidates):
+        return ValidationIssue(
+            "info", basket.bid, obj.tid, obj.qualified_class, attr_name,
+            f"{ctx}: valeur texte nue {node.text!r} (CLASS RESTRICTION, 3e forme d'encodage) ne correspond "
+            f"a aucun des {len(checkable)}/{len(single_attr_candidates)} candidat(s) verifiable(s) - le "
+            "reste n'est pas resolu (modele externe non charge via --repo)",
+        )
+    names = [getattr(c, "Name", None) for c, _ in checkable]
+    return ValidationIssue(
+        "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
+        f"{ctx}: valeur texte nue {node.text!r} (CLASS RESTRICTION, 3e forme d'encodage) ne correspond a "
+        f"aucun des {len(checkable)} candidat(s) declares ({names!r})",
+    )
+
+
 def _build_tid_index(transfer: XtfTransfer, catalogs: list[XtfTransfer] | None = None) -> dict[str, XtfObject]:
     """TID -> XtfObject, sur TOUS les paniers du transfert (une reference
     peut viser un objet d'un panier different du meme fichier - confirme
@@ -230,15 +301,16 @@ def _validate_object(
             # `Owner`/`Canton`, restreints a sCHOwnerCode/sCHCantonCode/...)
             # semble transfere par ili2fme comme la valeur TEXTE nue de cet
             # unique attribut, PAS comme une reference - 3e forme
-            # d'encodage, toujours pas interpretee (reste "info" - on ne
-            # sait meme pas QUOI comparer dans ce cas).
+            # d'encodage, INTERPRETEE depuis le Lot 41 (voir
+            # `_validate_restriction_text` ci-dessous) quand possible,
+            # sinon repli sur le meme message "info" qu'avant.
             ref = _extract_reference(raw_nodes[0]) if raw_nodes else None
             if ref is None:
-                issues.append(ValidationIssue(
-                    "info", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                    f"{ctx}: attribut de type reference/structure sans REF reconnu (valeur texte nue, "
-                    "probable structure a 1 attribut - voir docs/xtf-transfer-encoding-notes.md)",
-                ))
+                restriction_issue = _validate_restriction_text(
+                    resolved, raw_nodes[0] if raw_nodes else None, basket, obj, attr_name, ctx,
+                )
+                if restriction_issue is not None:
+                    issues.append(restriction_issue)
             elif ref not in tid_index:
                 # Lot 31 : REF extrait avec succes mais AUCUN objet de CE
                 # transfert (tous paniers confondus) ne porte ce TID -

@@ -329,3 +329,77 @@ def test_external_ref_resolved_via_catalog_argument_has_no_issue(ref_builder):
         transfer, symbol_table=ref_builder.symbol_table, catalogs=[catalog_transfer],
     )
     assert _messages(issues_with_catalog, attribute="RefCatalogItem") == []
+
+
+# --- Lot 41 : 3e forme d'encodage XTF (CLASS RESTRICTION(A; B; ...) sur des
+# STRUCTUREs a 1 attribut, valeur texte nue - tests/fixtures/xtf/restriction_model.ili :
+# `Selector = CLASS RESTRICTION(sColor; sSize)` (2 candidats pleinement
+# verifiables, chacun un enum inline) et `SelectorWithExternal = CLASS
+# RESTRICTION(sColor; sExternal)` (1 candidat verifiable + 1 dont le type
+# interne est une reference, jamais verifiable par ce mecanisme) ---
+
+RESTRICTION_FIXTURE = Path(__file__).parent / "fixtures/xtf/restriction_model.ili"
+WIDGET_CLASS = "RestrictionTest.MainTopic.Widget"
+WIDGET_EXTERNAL_CLASS = "RestrictionTest.MainTopic.WidgetWithExternal"
+
+
+@pytest.fixture(scope="module")
+def restriction_builder():
+    tree, errors = parse_file(RESTRICTION_FIXTURE)
+    assert not errors
+    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        b.build(tree)
+    return b
+
+
+def test_restriction_text_matching_first_candidate_has_no_issue(restriction_builder):
+    """"Red" appartient au domaine inline de sColor - le 1er candidat de
+    `RESTRICTION(sColor; sSize)`."""
+    obj = XtfObject(tid="w1", qualified_class=WIDGET_CLASS, attributes=dict([_text_attr("Sel", "Red")]))
+    basket = XtfBasket(bid="b1", qualified_topic="RestrictionTest.MainTopic", kind=None, endstate=None, objects=[obj])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=restriction_builder.symbol_table)
+    assert _messages(issues, attribute="Sel") == []
+
+
+def test_restriction_text_matching_second_candidate_has_no_issue(restriction_builder):
+    """"Small" appartient au domaine inline de sSize - le 2e candidat,
+    PAS le 1er (regression Lot 41 : la segmentation SEMI-naive tronquait
+    silencieusement `_build_domain_class_restriction` a son 1er candidat
+    seulement, avant le fix de profondeur LPAR/RPAR)."""
+    obj = XtfObject(tid="w1", qualified_class=WIDGET_CLASS, attributes=dict([_text_attr("Sel", "Small")]))
+    basket = XtfBasket(bid="b1", qualified_topic="RestrictionTest.MainTopic", kind=None, endstate=None, objects=[obj])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=restriction_builder.symbol_table)
+    assert _messages(issues, attribute="Sel") == []
+
+
+def test_restriction_text_matching_no_candidate_is_warning(restriction_builder):
+    """"Purple" n'appartient a AUCUN des 2 domaines inline (sColor:
+    Red/Blue, sSize: Small/Large) - les 2 candidats sont PLEINEMENT
+    verifiables (enums inline, rien d'externe) -> `warning`, pas `info`."""
+    obj = XtfObject(tid="w1", qualified_class=WIDGET_CLASS, attributes=dict([_text_attr("Sel", "Purple")]))
+    basket = XtfBasket(bid="b1", qualified_topic="RestrictionTest.MainTopic", kind=None, endstate=None, objects=[obj])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=restriction_builder.symbol_table)
+    msgs = _messages(issues, attribute="Sel", severity="warning")
+    assert any("CLASS RESTRICTION" in m and "ne correspond a aucun des 2 candidat" in m for m in msgs)
+    assert _messages(issues, attribute="Sel", severity="error") == []
+
+
+def test_restriction_text_with_unverifiable_candidate_is_info_not_warning(restriction_builder):
+    """`SelectorWithExternal = CLASS RESTRICTION(sColor; sExternal)` : une
+    valeur qui ne correspond pas au candidat verifiable (sColor) NE DOIT
+    PAS devenir `warning` si l'AUTRE candidat (sExternal, dont l'attribut
+    interne est une REFERENCE, jamais verifiable par ce mecanisme) reste
+    non tranche - RULE #5, rester `info` (statut reellement indetermine)
+    plutot que d'affirmer a tort une non-conformite."""
+    obj = XtfObject(tid="w1", qualified_class=WIDGET_EXTERNAL_CLASS, attributes=dict([_text_attr("Sel", "not-a-color")]))
+    basket = XtfBasket(bid="b1", qualified_topic="RestrictionTest.MainTopic", kind=None, endstate=None, objects=[obj])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=restriction_builder.symbol_table)
+    msgs = _messages(issues, attribute="Sel", severity="info")
+    assert any("1/2 candidat" in m for m in msgs)
+    assert _messages(issues, attribute="Sel", severity="warning") == []

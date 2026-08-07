@@ -1,0 +1,37 @@
+INTERLIS 2.4;
+
+MODEL RestrictionTest AT "https://example.org/restrictiontest" VERSION "2026-08-07" =
+
+  TOPIC MainTopic =
+
+    STRUCTURE sColor =
+      ColorCode: (Red, Blue);
+    END sColor;
+
+    STRUCTURE sSize =
+      SizeCode: (Small, Large);
+    END sSize;
+
+    CLASS Referenced =
+      Name: MANDATORY TEXT;
+    END Referenced;
+
+    STRUCTURE sExternal =
+      ExternalCode: REFERENCE TO Referenced;
+    END sExternal;
+
+    DOMAIN
+      Selector = CLASS RESTRICTION(sColor; sSize);
+      SelectorWithExternal = CLASS RESTRICTION(sColor; sExternal);
+
+    CLASS Widget =
+      Sel: MANDATORY Selector;
+    END Widget;
+
+    CLASS WidgetWithExternal =
+      Sel: MANDATORY SelectorWithExternal;
+    END WidgetWithExternal;
+
+  END MainTopic;
+
+END RestrictionTest.

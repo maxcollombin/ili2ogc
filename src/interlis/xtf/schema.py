@@ -46,6 +46,20 @@ def _own_attributes_of(class_instance: MetaInstance) -> dict[str, MetaInstance]:
     }
 
 
+def single_own_attribute(class_instance: MetaInstance) -> MetaInstance | None:
+    """L'unique attribut PROPRE de `class_instance`, si elle EN A
+    EXACTEMENT UN (motif structurel recurrent : une STRUCTURE-enveloppe a
+    1 seul attribut) - `None` sinon (0 ou plusieurs). Reutilise par
+    `reference_external_status` (motif `MandatoryCatalogueReference`) ET
+    par `restriction_candidates`/le validateur XTF (Lot 41 - 3e forme
+    d'encodage, `CLASS RESTRICTION(A; B; C)` sur des STRUCTUREs a 1
+    attribut, voir docs/xtf-transfer-encoding-notes.md)."""
+    own = _own_attributes_of(class_instance)
+    if len(own) == 1:
+        return next(iter(own.values()))
+    return None
+
+
 def attributes_of(class_instance: MetaInstance) -> dict[str, MetaInstance]:
     """Nom d'attribut -> instance AttrOrParam, PROPRES a cette classe PUIS
     HERITEES via la chaine `EXTENDS` (AJOUTE Lot 38, demande explicite
@@ -95,6 +109,20 @@ def _class_related_base_class(instance: MetaInstance) -> MetaInstance | None:
     if isinstance(base, list):
         base = base[0] if base else None
     return base if isinstance(base, MetaInstance) else None
+
+
+def _all_class_related_base_classes(instance: MetaInstance) -> list[MetaInstance]:
+    """Version LISTE (pas seulement la 1ere) de `_class_related_base_class`
+    - necessaire pour `restriction_candidates` (Lot 41) : `CLASS
+    RESTRICTION(A; B; C)` attache DESORMAIS tous ses candidats sur
+    `BaseClass` (voir `InterlisModelBuilder._build_domain_class_restriction`),
+    pas seulement le 1er comme avant ce lot."""
+    base = getattr(instance, "BaseClass", None)
+    if base is None:
+        return []
+    if isinstance(base, list):
+        return [b for b in base if isinstance(b, MetaInstance)]
+    return [base] if isinstance(base, MetaInstance) else []
 
 
 def _role_is_multi(role: MetaInstance) -> bool:
@@ -254,6 +282,20 @@ def is_class_compatible(actual: MetaInstance, declared: MetaInstance) -> bool:
         seen.add(id(current))
         current = getattr(current, "Super", None)
     return False
+
+
+def restriction_candidates(resolved: ResolvedAttribute) -> list[MetaInstance]:
+    """Toutes les classes candidates d'un `CLASS RESTRICTION(A; B; C)`
+    (Lot 41 - 3e forme d'encodage XTF, voir
+    docs/xtf-transfer-encoding-notes.md). Longueur > 1 UNIQUEMENT pour
+    cette construction (ex. `Owner = CLASS RESTRICTION(sCHOwnerCode;
+    sCHCantonCode; sCHMunicipalityCode)`, RoadTrafficCensus_V1_1.ili) ;
+    longueur 0 ou 1 pour un `REFERENCE TO`/role ordinaire (deja couvert
+    par `reference_target_class`, qui reste la fonction a utiliser pour le
+    cas simple - celle-ci sert SPECIFIQUEMENT le cas multi-candidats)."""
+    if resolved.type_kind != "ReferenceType" or resolved.type_instance is None:
+        return []
+    return _all_class_related_base_classes(resolved.type_instance)
 
 
 def reference_external_status(resolved: ResolvedAttribute) -> bool | None:
