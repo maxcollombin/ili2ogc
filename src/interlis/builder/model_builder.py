@@ -18,7 +18,7 @@ from interlis.builder.attach import AttachmentResolver
 from interlis.builder.errors import BuildError
 from interlis.builder.forward_refs import ForwardRef, ForwardRefResolver, SymbolTable
 from interlis.builder.repository import ModelRepository
-from interlis.builder.source_resolver import _alt_matches, resolve_source
+from interlis.builder.source_resolver import resolve_source
 from interlis.metamodel.instance import MetaInstance
 from interlis.metamodel.registry import MetamodelRegistry
 from interlis.metamodel.uml_schema import MetamodelSchema
@@ -983,23 +983,23 @@ class InterlisModelBuilder(InterlisParserVisitor):
         source = binding.get("source")
         if not isinstance(source, dict):
             return None
-        # Ne pre-marquer "consomme" que si l'alternative numerotee (le cas
-        # echeant) s'applique reellement a CE ctx : plusieurs alternatives
-        # grammaticales numerotees d'une meme regle Conditional peuvent
-        # partager le meme nom d'accesseur pour des usages differents (ex.
-        # predicate : alt1 = factor nu, alt3 = DEFINED LPAR factor RPAR -
-        # meme accesseur "factor"). Sans ce garde, l'alternative NON prise
-        # marquait quand meme le noeud comme consomme, l'excluant a tort du
-        # balayage des enfants non reclames (_sweep_unclaimed_children) et
-        # laissant un bag residuel {SubExpression: None, _defined_factor:
-        # None} remonter a la place de la vraie instance (trouve sur un
-        # predicate nu dans models/IlisMeta16.ili).
-        alt = source.get("alt")
-        if alt is None or _alt_matches(ctx, alt):
-            for name in self._accessor_names_in_source(source):
-                if ca.has_accessor(ctx, name):
-                    for node in ca.call_list(ctx, name):
-                        consumed.add(id(node))
+        # CORRIGE (Lot 38) : ce garde marquait "consomme" seulement si
+        # `_alt_matches(ctx, source["alt"])` - mecanisme retire du mapping
+        # entier (voir source_resolver.py, RULE #1 : `ctx.getAltNumber()`
+        # toujours 0 pour cette grammaire, `alt: <entier>` etait donc TOUJOURS
+        # faux et ce garde ne marquait JAMAIS consomme un noeud partage entre
+        # alternatives - inoffensif seulement parce que resolve_source lui-meme
+        # retournait aussi toujours None pour ces memes bindings). Les 15
+        # bindings concernes (ex. predicate : alt1 = factor nu, alt3 = DEFINED
+        # LPAR factor RPAR - meme accesseur "factor") reposent desormais sur
+        # la presence NATURELLE de leur accesseur (deja exclusive a
+        # l'alternative visee par construction grammaticale, verifie cas par
+        # cas - voir PROGRESS.md Lot 37/38) : consommer inconditionnellement
+        # est donc correct, plus besoin de ce garde.
+        for name in self._accessor_names_in_source(source):
+            if ca.has_accessor(ctx, name):
+                for node in ca.call_list(ctx, name):
+                    consumed.add(id(node))
         rule_map = binding.get("rule") if isinstance(binding.get("rule"), dict) else binding.get("mapping")
         wrap_map = binding.get("wrap") if isinstance(binding.get("wrap"), dict) else None
         return resolve_source(

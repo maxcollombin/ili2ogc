@@ -43,9 +43,13 @@ argumentType:
     _type_ref:
       source:
         field: attrTypeDef|restrictedClassOrAssRef|viewRef
-        alt: 1|2
         optional: true
-      note: 'Quand Kind=Type, feeds l''association ArgumentType confirmee (Type end, target IlisMeta16.ModelData.Type).
+      note: 'CORRIGE (Lot 38) : `alt: 1|2` retire - documentation morte, jamais consultee par le moteur
+        pour un `field:` deja en forme pipe (le mecanisme alt_token/"|" essaie chaque nom et retient le
+        premier present, independamment de tout `alt:`, voir source_resolver.py) ; sans effet sur ce
+        binding, contrairement aux 14 autres bindings `alt: <entier>` du projet (field simple, sans "|")
+        qui etaient reellement casses (voir PROGRESS.md, Lot 37/38).
+        Quand Kind=Type, feeds l''association ArgumentType confirmee (Type end, target IlisMeta16.ModelData.Type).
         Pour alt1 (attrTypeDef), le sous-type concret suit le mecanisme deja confirme d''attrTypeDef.
         Pour alt2 (OBJECT|OBJECTS OF ...), le sous-type concret est IlisMeta16.ModelData.ObjectType (CONFIRME
         Lot 16 - voir _object_of_variant).

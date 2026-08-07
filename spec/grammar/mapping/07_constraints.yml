@@ -13,18 +13,21 @@ argument:
     Expression:
       source:
         field: expression
-        alt: 1
         optional: true
-      note: 'confirmed attribute Expression: IlisMeta16.ModelData.Expression on ActualArgument, populated
-        only for the Kind=Expression alternative'
+      note: 'CORRIGE (Lot 38) : `alt: 1` retire (`ctx.getAltNumber()` toujours 0 pour cette grammaire,
+        voir PROGRESS.md Lot 37/38) - sans consequence, `expression` n''est accessible directement que
+        sur l''alternative 1 (grammaire `argument : expression | ALL (...)`), jamais l''alternative 2.
+        Confirmed attribute Expression: IlisMeta16.ModelData.Expression on ActualArgument, populated only
+        for the Kind=Expression alternative.'
     ObjectClasses:
       source:
         field: restrictedClassOrAssRef
-        alt: 2
         optional: true
-      note: 'confirmed attribute ObjectClasses: IlisMeta16.ModelData.ClassRef (0..*) on ActualArgument,
-        for the ''ALL (restrictedClassOrAssRef)'' variant. restrictedClassOrAssRef already resolves to
-        classOrAssociationRef entries (confirmed in Lot 4), feeding this list.'
+      note: 'CORRIGE (Lot 38) : `alt: 2` retire, meme raison que Expression ci-dessus - `restrictedClassOrAssRef`
+        n''est accessible que dans la branche ALL (...) de la grammaire, jamais l''alternative 1. Confirmed
+        attribute ObjectClasses: IlisMeta16.ModelData.ClassRef (0..*) on ActualArgument, for the ''ALL
+        (restrictedClassOrAssRef)'' variant. restrictedClassOrAssRef already resolves to classOrAssociationRef
+        entries (confirmed in Lot 4), feeding this list.'
   note: 'Kind resolved dynamically: ALL present -> AllOf, otherwise Expression Paths and references ||
     Confirmed via grammar (argument(), source ~12038-12070+), 2 alternatives: alt1: expression() alt2:
     ALL (LPAR restrictedClassOrAssRef RPAR | viewableRef RPAR)'
@@ -76,10 +79,12 @@ attributeRef:
     Ref:
       source:
         field: Name
-        alt: 1
         optional: true
-      note: feeds PathEl.Ref (INTERLIS.NAME) on the enclosing pathEl (Kind=Attribute, corrected - see
-        pathEl binding)
+      note: 'CORRIGE (Lot 38) : `alt: 1` retire (`ctx.getAltNumber()` toujours 0, voir PROGRESS.md Lot
+        37/38) - sans consequence, `Name` n''est accessible directement que sur l''alternative 1
+        (grammaire `attributeRef : Name (...)? | AGGREGATES`), jamais sur AGGREGATES (alt2, aucun Name).
+        Feeds PathEl.Ref (INTERLIS.NAME) on the enclosing pathEl (Kind=Attribute, corrected - see pathEl
+        binding).'
     SpecIndex:
       source:
         field: FIRST|LAST
@@ -547,10 +552,16 @@ pathEl:
     Ref:
       source:
         field: Name
-        alt: 5|6|9
         optional: true
-      note: 'confirmed attribute Ref: INTERLIS.NAME on PathEl; populated from the plain Name token in
-        alts 5, 6 and 9 (the attribute/role name itself, before any bracket/colon/comparison suffix)'
+      note: 'CORRIGE (Lot 38) : `alt: 5|6|9` retire (`ctx.getAltNumber()` toujours 0, voir PROGRESS.md
+        Lot 37/38) - sans consequence, verifie sur la grammaire reelle (pathEl : THIS | THISAREA | THATAREA
+        | PARENT | Name (...)? | Name COLON | associationPath | attributeRef | Name EQ EQ STRING) : `Name`
+        n''est un accesseur DIRECT sur pathEl que dans exactement les alternatives 5, 6 et 9 - les
+        alternatives 1-4 sont des mots-cles seuls (aucun Name) et 7/8 delegue a une sous-regle
+        (associationPath()/attributeRef() ont bien leur PROPRE Name interne, mais non expose directement
+        sur le ctx de pathEl). Confirmed attribute Ref: INTERLIS.NAME on PathEl; populated from the plain
+        Name token in alts 5, 6 and 9 (the attribute/role name itself, before any bracket/colon/comparison
+        suffix).'
     NumIndex:
       note: 'Lot 18 (phase 2, résidus Phase 1) - CONFIRMÉ, le "mismatch" supposé n''en était pas un. Vérification
         directe du XMI source (docs/uml/IlisMeta16-formatted.xmi, l.306-307) : `MultRange` est un `uml:PrimitiveType`
@@ -634,17 +645,33 @@ predicate:
     SubExpression:
       source:
         field: expression
-        alt: 2
         optional: true
-      note: alt2's parenthesized expression, wrapped as SubExpression when NOT is present
+      note: 'CORRIGE (Lot 38) : `alt: 2` retire (`ctx.getAltNumber()` toujours 0, voir PROGRESS.md Lot
+        37/38 - ce binding etait TOUJOURS None jusqu''ici, malgre "confirme"). Sans consequence a le
+        retirer : `expression` n''est un accesseur direct de `predicate` (factor | (NOT)? LPAR expression
+        RPAR | DEFINED LPAR factor RPAR | LPAR BASKET RPAR factor) que sur l''alternative 2. Attention
+        (verifie sur `_build_conditional`, model_builder.py) : CE binding ET `_defined_factor` sont TOUS
+        LES DEUX evalues pour CHAQUE branche `when_present` prise (NOT ou DEFINED) - PAS uniquement la
+        branche a laquelle chacun "appartient" semantiquement - `optional: true` (deja present) est donc
+        INDISPENSABLE ici (accesseur reellement absent dans la branche DEFINED), pas une simple securite.
+        Alt2''s parenthesized expression, wrapped as SubExpression when NOT is present.'
     _defined_factor:
       source:
         field: factor
-        alt: 3
-      note: alt3's DEFINED LPAR factor RPAR - UnaryExpr.SubExpression is typed Expression, not Factor
-        directly (ilismeta16-datatypes.yml); ModelBuilder must wrap the factor in an Expression envelope
-        to satisfy the type, or this indicates SubExpression's declared type is looser than shown - not
-        fully reconciled here.
+        optional: true
+      note: 'CORRIGE (Lot 38) : `alt: 3` retire, meme raison/verification que SubExpression ci-dessus -
+        `factor` est aussi un accesseur direct des alternatives 1 et 4 (sans consequence, distinct de la
+        preoccupation ci-dessous). **`optional: true` AJOUTE** (absent avant ce lot) : contrairement a
+        `Format`/`Struct`/etc. (rules `Instance`/`Container`, un seul passage par ctx), `predicate` est
+        `kind: Conditional` - `_build_conditional` applique la TOTALITE de `attribute_bindings` (donc
+        AUSSI `_defined_factor`) pour CHAQUE branche `when_present` prise, pas seulement celle ou son
+        accesseur s''applique reellement. Sans `optional: true`, la branche NOT (ou `factor` est
+        legitimement absent) aurait leve un `BuildError` au lieu de retourner None - masque jusqu''ici
+        UNIQUEMENT parce que l''ancien `alt: 3` (toujours faux) court-circuitait deja tout vers None avant
+        d''atteindre ce test, quel que soit `optional`. Alt3''s DEFINED LPAR factor RPAR - UnaryExpr.SubExpression is typed Expression,
+        not Factor directly (ilismeta16-datatypes.yml); ModelBuilder must wrap the factor in an Expression
+        envelope to satisfy the type, or this indicates SubExpression''s declared type is looser than
+        shown - not fully reconciled here.'
   note: 'Conditionally produces IlisMeta16.ModelData.UnaryExpr (Operation=Not or Operation=Defined) when
     NOT/DEFINED tokens are present; otherwise pure pass-through to factor or a parenthesized expression.
     || Confirmed via grammar (predicate(), source ~11083-11148), 4 distinct alternatives (RULE #3): alt1:

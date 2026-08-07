@@ -174,17 +174,22 @@ baseAttrRef:
     Precision:
       source:
         field: PosNumber
-        alt: 1
         optional: true
-      note: 'Alternative 1 only: optional decimal-precision hint (DIV PosNumber) for the referenced numeric
-        attribute.'
+      note: 'CORRIGE (Lot 38) : `alt: 1` retire - `ctx.getAltNumber()` renvoie inconditionnellement 0
+        pour cette grammaire (aucune alternative labellisee), rendant ce filtre toujours faux et ce binding
+        toujours None (voir PROGRESS.md, Lot 37/38). Sans consequence a le retirer : `PosNumber` n''est
+        accessible directement que sur l''alternative 1 (''Name (DIV PosNumber)?''), jamais sur
+        l''alternative 2 (''Name DIV domainRef'') - confirme sur la grammaire reelle
+        (vendor/interlis-antlr4/InterlisParser.g4, baseAttrRef). Optional 1-only decimal-precision hint
+        (DIV PosNumber) for the referenced numeric attribute.'
     Unit:
       source:
         field: domainRef
-        alt: 2
         optional: true
-      note: 'Alternative 2 only: DIV domainRef supplies a unit/domain for the referenced attribute''s
-        formatted representation, instead of a plain precision number.'
+      note: 'CORRIGE (Lot 38) : `alt: 2` retire, meme raison/meme verification que Precision ci-dessus -
+        `domainRef` n''est accessible directement que sur l''alternative 2, jamais l''alternative 1.
+        Optional 2-only: DIV domainRef supplies a unit/domain for the referenced attribute''s formatted
+        representation, instead of a plain precision number.'
   note: No direct IlisMeta16 instance expected. Reference to a base attribute (Name, optionally with a
     numeric precision via DIV PosNumber) or a domainRef; used as a placeholder inside formatDef's format
     pattern.

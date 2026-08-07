@@ -249,19 +249,24 @@ def resolve_source(
     if "join" in source:
         return _resolve_join(ctx, source, builder, rule)
 
-    # --- cas standard : field (+ alt) (+ index) (+ optional). ----------------
-    alt = source.get("alt")
-    if alt is not None and not _alt_matches(ctx, alt):
-        # Meme politique que pour alt_token/alt_rule (voir plus haut) :
-        # un binding qui ne s'applique qu'a UNE alternative grammaticale
-        # numerotee est par nature conditionnel - traite comme absent/None
-        # par defaut plutot que de bloquer, `optional: true` ou pas (motif
-        # repete plus qu'il n'est commode de corriger un par un a chaque
-        # nouveau modele reel qui l'exerce, ex. predicate._defined_factor).
-        if not optional:
-            warnings.warn(f"[{rule}] alternative grammaticale {alt} non prise - traite comme absent/None")
-        return None
-
+    # --- cas standard : field (+ index) (+ optional). -------------------
+    # CORRIGE (Lot 38) : ce chemin acceptait aussi un filtre `alt: <entier>`
+    # (+ forme "N|M"), cense ne s'appliquer qu'a UNE alternative grammaticale
+    # numerotee via `ctx.getAltNumber()`. Retire entierement - RULE #1,
+    # verifie empiriquement que `getAltNumber()` renvoie INCONDITIONNELLEMENT
+    # 0 pour toute regle de `InterlisParser.g4` (aucune alternative
+    # labellisee nulle part dans la grammaire vendee), rendant ce filtre
+    # TOUJOURS faux et les 15 bindings qui l'utilisaient TOUJOURS None (bug
+    # confirme sur formattedType.Format/Min/Max, entre autres). Chacun des
+    # 15 cas reels a ete reverifie contre la grammaire (RULE #1/#2) : le nom
+    # d'accesseur (`field:`) qu'ils filtraient etait deja NATURELLEMENT
+    # exclusif a l'alternative visee par construction grammaticale (ex.
+    # `formattedType` alt1 a un accesseur `Name` direct qu'aucune autre
+    # alternative n'expose ; `pathEl` n'expose `Name` directement que dans
+    # ses alternatives 5/6/9, jamais 1-4/7/8) - le filtre `alt:` etait donc
+    # une securite redondante plutot qu'une necessite, jamais indispensable
+    # a la bonne resolution une fois retire. Voir PROGRESS.md (Lot 37/38)
+    # pour le detail complet de l'investigation.
     if not ca.has_accessor(ctx, field):
         if optional:
             return None
@@ -276,13 +281,6 @@ def resolve_source(
     if rule_map is not None:
         return rule_map.get(value, value)
     return value
-
-
-def _alt_matches(ctx: Any, alt: int) -> bool:
-    getter = getattr(ctx, "getAltNumber", None)
-    if getter is None:
-        return True  # pas d'info d'alternative disponible - ne bloque pas
-    return getter() == alt
 
 
 def _resolve_anchor(ctx: Any, field: str, anchor: str, *, optional: bool, builder: Any, rule: str) -> Any:
