@@ -13,6 +13,11 @@ MODEL RefTest AT "https://example.org/reftest" VERSION "2026-08-07" =
       RefLocation: REFERENCE TO Location;
     END Indicator;
 
+    ASSOCIATION Location_Indicator =
+      rLocation -<#> Location;
+      rIndicator -- {0..*} Indicator;
+    END Location_Indicator;
+
   END MainTopic;
 
 END RefTest.

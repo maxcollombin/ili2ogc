@@ -65,6 +65,19 @@ class SymbolTable:
         short = qualified_name.rsplit(".", 1)[-1]
         self._by_short_name.setdefault(short, []).append(instance)
 
+    def all_registered(self) -> list[Any]:
+        """Toutes les instances enregistrees (deduplique par identite - un
+        alias, ex. rekey_model_prefix, peut faire pointer 2 cles differentes
+        vers le MEME objet). Utilise par xtf/schema.py pour enumerer les
+        associations connues sans acceder a l'etat prive."""
+        seen: set[int] = set()
+        result = []
+        for instance in self._qualified.values():
+            if id(instance) not in seen:
+                seen.add(id(instance))
+                result.append(instance)
+        return result
+
     def resolve(self, name: str, kind_hint: str | list[str] | None = None) -> Any | None:
         if name in self._qualified:
             return self._qualified[name]

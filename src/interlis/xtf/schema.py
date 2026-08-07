@@ -49,14 +49,102 @@ def attributes_of(class_instance: MetaInstance) -> dict[str, MetaInstance]:
     }
 
 
+def _role_base_class(role: MetaInstance) -> MetaInstance | None:
+    base = getattr(role, "BaseClass", None)
+    if isinstance(base, list):
+        base = base[0] if base else None
+    return base if isinstance(base, MetaInstance) else None
+
+
+def _role_is_multi(role: MetaInstance) -> bool:
+    """True si la cardinalite du role est > 1 (Multiplicity.Max == '*') -
+    Min/Max sont des chaines TEXT (confirme ilismeta16-classes.yml,
+    Multiplicity.own.Max: type TEXT), jamais absentes quand une clause
+    cardinality() est presente ; `Multiplicity is None` (aucune clause dans
+    le .ili) signifie la cardinalite par defaut, jamais > 1 (confirme
+    empiriquement sur roleDef sans cardinality() explicite, ex.
+    `rMeasurementLocation -<#> MeasurementLocation;`, Lot 32)."""
+    mult = getattr(role, "Multiplicity", None)
+    return isinstance(mult, MetaInstance) and getattr(mult, "Max", None) == "*"
+
+
+def embedded_roles_of(class_instance: MetaInstance, symbol_table: SymbolTable) -> dict[str, MetaInstance]:
+    """Nom de role -> instance Role, pour les roles d'ASSOCIATION EMBARQUES
+    (transferes comme pseudo-attributs de CETTE classe dans le XTF, ex.
+    `rMeasurementLocation` sur `Indicator`) - PAS les attributs ClassAttr
+    ordinaires (voir attributes_of).
+
+    Algorithme confirme (RULE #4) contre le Reference Manual eCH-0031
+    V2.1.0 §4.3.9 "Codierung von Beziehungen" (citation directe, lue avant
+    tout code - Lot 32) :
+    - Une association a EXACTEMENT 2 roles est TOUJOURS embarquee, sauf cas
+      hors perimetre de ce lot (>2 roles, OID explicite sur l'association,
+      certaines relations inter-topics - non geres ici, association alors
+      simplement ignoree plutot que mal classee).
+    - Si UN SEUL des 2 roles (base) a une cardinalite max > 1 : embarquee
+      cote classe CIBLE de CE role ; le NOM du pseudo-attribut embarque est
+      celui de l'AUTRE role (§4.3.9.1 : "pour RoleName, le nom du role
+      pointant vers l'objet OPPOSE doit etre donne").
+    - Si les 2 roles ont une cardinalite max <= 1 : embarquee cote classe
+      cible du DEUXIEME role declare (ordre du fichier .ili) ; pseudo-attribut
+      nomme d'apres le PREMIER role.
+    - Si les 2 roles ont une cardinalite max > 1 : PAS embarquee (transferee
+      comme instance de classe separee, §4.3.9.2) - absente du resultat.
+    Limite assumee (RULE #7, hors perimetre) : la nuance "meme Topic que
+    l'association" du manuel (qui peut forcer une association a NE PAS
+    s'embarquer si les classes cibles sont dans un topic different) n'est
+    PAS verifiee - toutes les associations resolues sont traitees comme si
+    elles etaient dans le meme topic que leurs classes cibles (cas de loin
+    le plus frequent, confirme sur le corpus reel des 3 fichiers XTF
+    cibles). Ne cherche que dans `symbol_table` (associations locales au
+    modele racine) - PAS dans un ModelRepository (associations definies
+    dans un modele importe non couvertes, hors perimetre)."""
+    result: dict[str, MetaInstance] = {}
+    for candidate in symbol_table.all_registered():
+        if not isinstance(candidate, MetaInstance) or candidate._qualified_class.rsplit(".", 1)[-1] != "Class":
+            continue
+        if getattr(candidate, "Kind", None) != "Association":
+            continue
+        roles = [r for r in (getattr(candidate, "Role", None) or []) if isinstance(r, MetaInstance)]
+        if len(roles) != 2:
+            continue
+        role_a, role_b = roles
+        target_a, target_b = _role_base_class(role_a), _role_base_class(role_b)
+        if target_a is None or target_b is None:
+            continue
+        multi_a, multi_b = _role_is_multi(role_a), _role_is_multi(role_b)
+        if multi_a and multi_b:
+            continue
+        if multi_a:
+            embed_on, embedded_role = target_a, role_b
+        elif multi_b:
+            embed_on, embedded_role = target_b, role_a
+        else:
+            embed_on, embedded_role = target_b, role_a
+        if embed_on is class_instance and getattr(embedded_role, "Name", None):
+            result[embedded_role.Name] = embedded_role
+    return result
+
+
+def schema_members_of(class_instance: MetaInstance, symbol_table: SymbolTable) -> dict[str, MetaInstance]:
+    """Union de attributes_of (ClassAttr) et embedded_roles_of (roles
+    d'association embarques, Lot 32) - la vue complete des pseudo-attributs
+    qu'un objet XTF de cette classe peut porter."""
+    members = dict(attributes_of(class_instance))
+    members.update(embedded_roles_of(class_instance, symbol_table))
+    return members
+
+
 @dataclass
 class ResolvedAttribute:
     """Un attribut de schema pret a etre interprete/valide : son instance
-    AttrOrParam, son Type resolu (peut etre None si non resolu - reference
-    externe hors perimetre, cf. docs xtf-transfer-encoding-notes.md /
-    README Known limitations), et le nom court de la classe metamodele
-    concrete du Type (ex. "TextType", "NumType", "EnumType", "ReferenceType",
-    "Class" - jamais l'abstrait "DomainType")."""
+    AttrOrParam OU Role (Lot 32 : les roles d'association embarques sont
+    traites de facon uniforme, via BaseClass au lieu de Type), son Type/
+    classe-cible resolu (peut etre None si non resolu - reference externe
+    hors perimetre, cf. docs xtf-transfer-encoding-notes.md / README Known
+    limitations), et le nom court de la classe metamodele concrete du Type
+    (ex. "TextType", "NumType", "EnumType", "ReferenceType", "Class" -
+    jamais l'abstrait "DomainType")."""
     attr: MetaInstance
     type_instance: MetaInstance | None
     type_kind: str | None
@@ -64,6 +152,18 @@ class ResolvedAttribute:
 
 
 def resolve_attribute(attr: MetaInstance) -> ResolvedAttribute:
+    if attr._qualified_class.rsplit(".", 1)[-1] == "Role":
+        # Role EXTENDS ReferenceType EXTENDS ClassRelatedType EXTENDS
+        # DomainType (confirme ilismeta16-classes.yml) : porte son PROPRE
+        # Mandatory (herite de DomainType) - contrairement a AttrOrParam,
+        # pas de champ Type separe, la classe cible vient de BaseClass
+        # (attache via l'association BaseClass, comme pour tout autre
+        # ClassRelatedType - meme mecanisme que ReferenceType).
+        target = _role_base_class(attr)
+        return ResolvedAttribute(
+            attr=attr, type_instance=target, type_kind="Class" if target is not None else None,
+            mandatory=bool(getattr(attr, "Mandatory", False)),
+        )
     type_instance = getattr(attr, "Type", None)
     type_instance = type_instance if isinstance(type_instance, MetaInstance) else None
     type_kind = type_instance._qualified_class.rsplit(".", 1)[-1] if type_instance is not None else None

@@ -174,3 +174,45 @@ def test_reference_target_not_found_is_warning_not_error(ref_builder):
     msgs = _messages(issues, attribute="RefLocation", severity="warning")
     assert any("introuvable dans ce transfert" in m for m in msgs)
     assert _messages(issues, attribute="RefLocation", severity="error") == []
+
+
+# --- Lot 32 : roles d'association embarques comme pseudo-attributs
+# (tests/fixtures/xtf/reference_model.ili : ASSOCIATION Location_Indicator
+# = rLocation -<#> Location; rIndicator -- {0..*} Indicator; - meme forme
+# que ASSOCIATION MeasurementLocation_Indicator sur le corpus reel
+# RoadTrafficCensus_V1_1) ---
+
+def test_embedded_role_resolved_is_not_unknown_attribute(ref_builder):
+    """rLocation s'embarque sur Indicator (role rIndicator, cote {0..*}) -
+    doit etre reconnu comme un attribut de schema valide, PAS "inconnu"."""
+    location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("rLocation", "loc-1")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    assert _messages(issues, attribute="rLocation") == []
+
+
+def test_embedded_role_not_exposed_on_opposite_class(ref_builder):
+    """rLocation ne doit PAS apparaitre comme pseudo-attribut de Location
+    elle-meme (il s'embarque uniquement cote Indicator, la classe dont le
+    role oppose - rIndicator - a une cardinalite {0..*})."""
+    from interlis.xtf.schema import embedded_roles_of, resolve_class
+
+    location_cls = resolve_class(LOCATION_CLASS, symbol_table=ref_builder.symbol_table, repository=None)
+    assert embedded_roles_of(location_cls, ref_builder.symbol_table) == {}
+
+
+def test_embedded_role_unresolved_ref_is_warning(ref_builder):
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("rLocation", "does-not-exist")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    msgs = _messages(issues, attribute="rLocation", severity="warning")
+    assert any("introuvable dans ce transfert" in m for m in msgs)

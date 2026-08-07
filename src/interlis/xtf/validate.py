@@ -22,18 +22,24 @@ Perimetre couvert :
   mais legitime : RoadTrafficCensusCatalogues est un topic separe,
   `DEPENDS ON` declare mais pas necessairement inclus dans CE transfert) -
   degrade en `warning`, jamais `error`.
+- roles d'association embarques comme pseudo-attributs (Lot 32, ex.
+  `rMeasurementLocation` sur `Indicator`) : `schema.embedded_roles_of`
+  determine, pour une classe donnee, quels roles d'association s'y
+  embarquent (algorithme confirme contre le Reference Manual eCH-0031
+  V2.1.0 §4.3.9) - traites ensuite EXACTEMENT comme un attribut de
+  reference ordinaire (meme resolution TID/REF).
 - PAS encore couvert (limites documentees, PROGRESS.md) : attributs herites
-  via EXTENDS, roles d'association embarques comme pseudo-attributs (ex.
-  `rMeasurementLocation` reste "attribut absent du schema" tant que
-  schema.attributes_of ne les expose pas), compatibilite de classe d'une
-  reference resolue avec sa BaseClass declaree, geometrie/coordonnees."""
+  via EXTENDS, compatibilite de classe d'une reference resolue avec sa
+  BaseClass declaree, geometrie/coordonnees, roles d'association definis
+  dans un modele IMPORTE (embedded_roles_of ne cherche que dans la table
+  de symboles du modele racine)."""
 from dataclasses import dataclass
 
 from interlis.builder.repository import ModelRepository
 from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
-from interlis.xtf.schema import ResolvedAttribute, attributes_of, enum_values, resolve_attribute, resolve_class
+from interlis.xtf.schema import ResolvedAttribute, enum_values, resolve_attribute, resolve_class, schema_members_of
 
 # Classes de Type concretes reconnues comme "reference a un objet" (valeur
 # structurelle attendue : REF vers un TID/OID, pas une valeur litterale) -
@@ -145,12 +151,13 @@ def _validate_object(
         ))
         return issues
 
-    schema_attrs = attributes_of(cls)
+    schema_attrs = schema_members_of(cls, symbol_table)
     for attr_name, raw_nodes in obj.attributes.items():
         if attr_name not in schema_attrs:
             issues.append(ValidationIssue(
                 "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                "attribut absent du schema (classe connue) - inconnu ou herite (non couvert par ce lot)",
+                "attribut absent du schema (classe connue) - inconnu, herite via EXTENDS, ou role "
+                "d'association defini dans un modele importe (non couvert par ce lot)",
             ))
             continue
         resolved = resolve_attribute(schema_attrs[attr_name])
