@@ -1,17 +1,32 @@
-"""Validateur XTF (Lot 30) : croise un XtfTransfer deja parse (parse.py,
+"""Validateur XTF (Lot 30/31) : croise un XtfTransfer deja parse (parse.py,
 couche structurelle, Lot 27) avec le schema resolu par InterlisModelBuilder
 (schema.py, Lot 30) pour produire une liste d'anomalies (structure/
-MANDATORY/type de base).
+MANDATORY/type de base/reference).
 
-Perimetre de ce lot (borne intentionnellement, RULE #7) :
+Perimetre couvert :
 - correction structurelle : classe/attribut inconnus du schema.
 - MANDATORY : attribut absent alors que son Type.Mandatory est vrai.
 - type de base : TEXT (presence de texte), NUMERIC (parseable + dans
   Min/Max), ENUM (valeur parmi les noms de EnumNode atteignables).
-- reference : reconnue structurellement (les 2 encodages documentes dans
-  docs/xtf-transfer-encoding-notes.md), TID extrait, mais PAS encore
-  resolue contre les autres objets du transfert (TID/REF cross-panier) -
-  prochain lot, deja annonce dans PROGRESS.md Lot 29."""
+- reference (Lot 31) : TID/REF extrait (2 encodages documentes dans
+  docs/xtf-transfer-encoding-notes.md + la forme "REF nu sur le noeud du
+  role", confirmee Lot 31 sur `rMeasurementLocation`) et resolu contre TOUS
+  les objets du transfert (TOUS les paniers, pas seulement celui de
+  l'objet source - une reference peut viser un panier different du meme
+  transfert). Un REF non trouve dans le transfert N'EST PAS traite comme
+  une erreur ferme (RULE #5) : sans catalogue externe charge, impossible
+  de distinguer une reference cassee d'une reference EXTERNE legitime
+  (catalogue/table de reference transferee separement - cas reel confirme
+  sur RoadTrafficCensus_V1_1, ou `MLocStatus` pointe vers
+  "ch.astra.roadtrafficcensus.402", absent du fichier de donnees lui-meme
+  mais legitime : RoadTrafficCensusCatalogues est un topic separe,
+  `DEPENDS ON` declare mais pas necessairement inclus dans CE transfert) -
+  degrade en `warning`, jamais `error`.
+- PAS encore couvert (limites documentees, PROGRESS.md) : attributs herites
+  via EXTENDS, roles d'association embarques comme pseudo-attributs (ex.
+  `rMeasurementLocation` reste "attribut absent du schema" tant que
+  schema.attributes_of ne les expose pas), compatibilite de classe d'une
+  reference resolue avec sa BaseClass declaree, geometrie/coordonnees."""
 from dataclasses import dataclass
 
 from interlis.builder.repository import ModelRepository
@@ -38,19 +53,22 @@ class ValidationIssue:
     message: str
 
 
-def _first_text(nodes: list[RawNode]) -> str | None:
-    return nodes[0].text if nodes else None
-
-
 def _extract_reference(node: RawNode) -> str | None:
-    """Retrouve le TID/OID cible d'un attribut-reference, dans l'une des 2
-    formes documentees (docs/xtf-transfer-encoding-notes.md) :
+    """Retrouve le TID/OID cible d'un attribut-reference, dans l'une des 3
+    formes rencontrees (docs/xtf-transfer-encoding-notes.md) :
     - spec (INTERLIS 2.4 canonique) : attribut XML `ili:ref` directement sur
       le noeud - namespace non retire par le parseur structurel (RawNode
       garde `elem.attrib` tel quel), donc recherche par SUFFIXE de cle.
-    - reel (ili2fme, INTERLIS 2.3) : un descendant unique portant un
-      attribut `REF` (majuscules, sans prefixe de namespace), potentiellement
-      imbrique dans un element intermediaire nomme par le role qualifie."""
+    - reel, attribut de reference simple (ili2fme, INTERLIS 2.3) : un
+      descendant unique portant un attribut `REF` (majuscules, sans prefixe
+      de namespace), imbrique dans un element intermediaire nomme par le
+      role qualifie.
+    - reel, role d'association embarque (Lot 31, confirme sur
+      `rMeasurementLocation`) : attribut `REF` (majuscules) directement sur
+      le noeud du role lui-meme, sans aucun element imbrique - deja couvert
+      par le meme repli `"REF" in node.attrib` que la forme precedente, la
+      recursion sur des enfants vides (`node.children == []`) ne faisant
+      simplement rien avant d'atteindre ce repli."""
     for key, val in node.attrib.items():
         if key.rsplit("}", 1)[-1] == "ref":
             return val
@@ -99,8 +117,24 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
     return problems
 
 
+def _build_tid_index(transfer: XtfTransfer) -> dict[str, XtfObject]:
+    """TID -> XtfObject, sur TOUS les paniers du transfert (une reference
+    peut viser un objet d'un panier different du meme fichier - confirme
+    reel sur wohnungsinventar-zweitwohnungsanteil_2019-10_2056.xtf, 2
+    paniers). Un TID duplique entre paniers serait deja un objet invalide
+    (RULE #4, chaque TID doit etre unique dans un transfert) - premier
+    trouve gagne, pas un cas rencontre dans le corpus reel a ce jour."""
+    index: dict[str, XtfObject] = {}
+    for basket in transfer.baskets:
+        for obj in basket.objects:
+            if obj.tid is not None:
+                index.setdefault(obj.tid, obj)
+    return index
+
+
 def _validate_object(
     obj: XtfObject, basket: XtfBasket, *, symbol_table: SymbolTable, repository: ModelRepository | None,
+    tid_index: dict[str, XtfObject],
 ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
@@ -122,25 +156,34 @@ def _validate_object(
         resolved = resolve_attribute(schema_attrs[attr_name])
         ctx = f"{obj.qualified_class}[{obj.tid}].{attr_name}"
         if resolved.type_kind in _REFERENCE_TYPE_KINDS:
-            # Resolution TID/REF cross-panier hors perimetre de ce lot (voir
-            # docstring module). Note (Lot 30) : un Type resolu en
-            # ReferenceType/Class ne signifie pas toujours un REF/ili:ref
-            # dans le XML reel - `CLASS RESTRICTION(...)` sur des STRUCTUREs
-            # a UN SEUL attribut (motif trouve sur RoadTrafficCensus_V1_1 :
+            # Note (Lot 30) : un Type resolu en ReferenceType/Class ne
+            # signifie pas toujours un REF/ili:ref dans le XML reel -
+            # `CLASS RESTRICTION(...)` sur des STRUCTUREs a UN SEUL
+            # attribut (motif trouve sur RoadTrafficCensus_V1_1 :
             # `Owner`/`Canton`, restreints a sCHOwnerCode/sCHCantonCode/...)
             # semble transfere par ili2fme comme la valeur TEXTE nue de cet
             # unique attribut, PAS comme une reference - 3e forme
-            # d'encodage, pas encore documentee dans
-            # docs/xtf-transfer-encoding-notes.md avant ce lot. Purement
-            # informatif ici (jamais "error") tant que cette forme n'est pas
-            # interpretee.
+            # d'encodage, toujours pas interpretee (reste "info" - on ne
+            # sait meme pas QUOI comparer dans ce cas).
             ref = _extract_reference(raw_nodes[0]) if raw_nodes else None
-            shape = f"REF={ref!r} trouve" if ref is not None else "valeur texte nue (probable structure a 1 attribut)"
-            issues.append(ValidationIssue(
-                "info", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                f"{ctx}: attribut de type reference/structure - resolution non implementee ({shape}, voir "
-                "docs/xtf-transfer-encoding-notes.md)",
-            ))
+            if ref is None:
+                issues.append(ValidationIssue(
+                    "info", basket.bid, obj.tid, obj.qualified_class, attr_name,
+                    f"{ctx}: attribut de type reference/structure sans REF reconnu (valeur texte nue, "
+                    "probable structure a 1 attribut - voir docs/xtf-transfer-encoding-notes.md)",
+                ))
+            elif ref not in tid_index:
+                # Lot 31 : REF extrait avec succes mais AUCUN objet de CE
+                # transfert (tous paniers confondus) ne porte ce TID -
+                # `warning`, jamais `error` (voir docstring module : sans
+                # catalogue externe charge, une reference externe legitime
+                # est indiscernable d'une reference cassee).
+                issues.append(ValidationIssue(
+                    "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
+                    f"{ctx}: REF {ref!r} introuvable dans ce transfert (reference externe/catalogue "
+                    "probable, ou reference cassee - indiscernable sans catalogue charge)",
+                ))
+            # else : REF resolu avec succes dans le transfert - rien a signaler.
             continue
         if resolved.type_kind not in ("TextType", "NumType", "EnumType"):
             # Type resolu vers autre chose que les 3 kinds geres par ce lot
@@ -172,8 +215,11 @@ def _validate_object(
 def validate_transfer(
     transfer: XtfTransfer, *, symbol_table: SymbolTable, repository: ModelRepository | None = None,
 ) -> list[ValidationIssue]:
+    tid_index = _build_tid_index(transfer)
     issues: list[ValidationIssue] = []
     for basket in transfer.baskets:
         for obj in basket.objects:
-            issues.extend(_validate_object(obj, basket, symbol_table=symbol_table, repository=repository))
+            issues.extend(_validate_object(
+                obj, basket, symbol_table=symbol_table, repository=repository, tid_index=tid_index,
+            ))
     return issues

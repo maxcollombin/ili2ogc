@@ -106,3 +106,71 @@ def test_unknown_class_flagged(builder):
     assert len(issues) == 1
     assert issues[0].severity == "error"
     assert "absente du schema" in issues[0].message
+
+
+# --- Lot 31 : resolution TID/REF cross-panier (tests/fixtures/xtf/reference_model.ili :
+# Indicator.RefLocation, REFERENCE TO Location) ---
+
+REF_FIXTURE = Path(__file__).parent / "fixtures/xtf/reference_model.ili"
+INDICATOR_CLASS = "RefTest.MainTopic.Indicator"
+LOCATION_CLASS = "RefTest.MainTopic.Location"
+
+
+@pytest.fixture(scope="module")
+def ref_builder():
+    tree, errors = parse_file(REF_FIXTURE)
+    assert not errors
+    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        b.build(tree)
+    return b
+
+
+def _ref_attr(name: str, target_tid: str) -> tuple[str, list[RawNode]]:
+    """Forme reelle "REF nu sur le noeud du role" (Lot 31, confirmee sur
+    rMeasurementLocation) - la plus simple des 3 formes, suffisante pour
+    exercer _extract_reference (deja testee structurellement par ailleurs)."""
+    return name, [RawNode(tag=name, text=None, attrib={"REF": target_tid}, children=[])]
+
+
+def test_reference_resolved_within_same_basket_has_no_issue(ref_builder):
+    location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "loc-1")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    assert _messages(issues, attribute="RefLocation") == []
+
+
+def test_reference_resolved_across_different_baskets_has_no_issue(ref_builder):
+    """Une reference peut viser un objet d'un AUTRE panier du meme
+    transfert (cas reel confirme, voir docstring _build_tid_index) -
+    l'index doit couvrir TOUS les paniers, pas seulement celui de
+    l'objet source."""
+    location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "loc-1")]),
+    )
+    basket_a = XtfBasket(bid="a", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location])
+    basket_b = XtfBasket(bid="b", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket_a, basket_b])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    assert _messages(issues, attribute="RefLocation") == []
+
+
+def test_reference_target_not_found_is_warning_not_error(ref_builder):
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "does-not-exist")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    msgs = _messages(issues, attribute="RefLocation", severity="warning")
+    assert any("introuvable dans ce transfert" in m for m in msgs)
+    assert _messages(issues, attribute="RefLocation", severity="error") == []
