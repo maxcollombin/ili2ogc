@@ -314,6 +314,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 instance = self._build_domain_class_restriction(segment, rule_name)
                 if not isinstance(instance, MetaInstance):
                     continue
+                self._attach_domain_extends(instance, segment, rule_name)
                 if getattr(instance, "Name", None) is None:
                     instance.Name = name_node.getText()
                     self._maybe_register_symbol(instance)
@@ -341,6 +342,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 instance = self.visit_wrapped(content_node, target, rule_name)
             if not isinstance(instance, MetaInstance):
                 continue
+            self._attach_domain_extends(instance, segment, rule_name)
             if getattr(instance, "Name", None) is None:
                 instance.Name = name_node.getText()
                 self._maybe_register_symbol(instance)
@@ -356,6 +358,46 @@ class InterlisModelBuilder(InterlisParserVisitor):
         if not results:
             return None
         return results[0] if len(results) == 1 else results
+
+    def _attach_domain_extends(self, instance: MetaInstance, segment: list[Any], rule_name: str) -> None:
+        """`DOMAIN X EXTENDS Y = ...;` (Lot 44) : attache `Super` (association
+        `Inheritance`) quand un segment de `domainDef()` porte sa clause
+        `EXTENDS domainRef` optionnelle (confirme sur le code ANTLR reel,
+        `domainDef()` : `(EXTENDS domainRef)?` juste avant `EQ`, a
+        l'INTERIEUR du meme segment deja decoupe par `_build_multi_declaration` -
+        ex. `LengthRange EXTENDS MultRange = 1..2147483647;`,
+        `models/IlisMeta16.ili`, ou `DirectedLine EXTENDS Line = DIRECTED
+        POLYLINE;`, CHBase). Gap jusqu'ici TOTAL, quel que soit le type de
+        domaine concerne (`NumType`/`EnumType`/`CoordType`/`LineType`/...) -
+        AUCUNE clause `EXTENDS` de `domainDef()` n'etait attachee, la
+        construction du contenu (Min/Max/Axis/Kind/etc.) ne s'occupant que
+        de sa propre alternative de contenu, jamais du prefixe optionnel
+        `EXTENDS domainRef` qui la precede. Necessaire pour que
+        `schema.line_coord_type` (Lot 44) puisse remonter la chaine EXTENDS
+        d'un `LineType` sans `VERTEX` propre. Meme politique que
+        `classDef`/`structureDef.Super` (Lot 38, RULE #5) : `graceful=True`
+        - un domaine de base non resolu (modele externe absent du `--repo`,
+        ou lui-meme en echec de construction) degrade en
+        `UnresolvedNamedReference`, ne fait jamais planter tout le
+        fichier."""
+        extends_idx = next(
+            (i for i, c in enumerate(segment) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.EXTENDS),
+            None,
+        )
+        if extends_idx is None:
+            return
+        domain_ref_node = next(
+            (c for c in segment[extends_idx + 1:] if isinstance(c, ParserRuleContext) and self._rule_name(c) == "domainRef"),
+            None,
+        )
+        if domain_ref_node is None:
+            return
+        value = self.visit(domain_ref_node)
+        if not isinstance(value, ForwardRef):
+            return
+        value.graceful = True
+        self.attachment.attach(instance, "Super", value, association="Inheritance", role="Super", rule=rule_name)
+        self.forward_refs.register_pending(value, instance, "Super")
 
     def _build_domain_class_restriction(self, segment: list[Any], rule_name: str) -> MetaInstance:
         """DOMAIN X = CLASS RESTRICTION(A; B; ...); - la 5e alternative de

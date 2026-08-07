@@ -14,6 +14,7 @@ MODEL GeomTest AT "https://example.org/geomtest" VERSION "2026-08-07" =
         0.000 .. 200.000;
 
       Line = POLYLINE WITH (STRAIGHTS,ARCS) VERTEX Coord2;
+      DirectedLine EXTENDS Line = DIRECTED POLYLINE;
       MultiLine = MULTIPOLYLINE WITH (STRAIGHTS,ARCS) VERTEX Coord2;
       Area = SURFACE WITH (STRAIGHTS,ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.001;
 
@@ -28,6 +29,10 @@ MODEL GeomTest AT "https://example.org/geomtest" VERSION "2026-08-07" =
     CLASS Way =
       Geom: Line;
     END Way;
+
+    CLASS DirectedWay =
+      Geom: DirectedLine;
+    END DirectedWay;
 
     CLASS MultiWay =
       Geom: MultiLine;

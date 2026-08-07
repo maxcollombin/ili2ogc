@@ -415,6 +415,7 @@ GEOMETRY_FIXTURE = Path(__file__).parent / "fixtures/xtf/geometry_model.ili"
 POINT_CLASS = "GeomTest.MainTopic.Point"
 MULTIPOINT_CLASS = "GeomTest.MainTopic.MultiPoint"
 WAY_CLASS = "GeomTest.MainTopic.Way"
+DIRECTEDWAY_CLASS = "GeomTest.MainTopic.DirectedWay"
 MULTIWAY_CLASS = "GeomTest.MainTopic.MultiWay"
 ZONE_CLASS = "GeomTest.MainTopic.Zone"
 
@@ -511,6 +512,31 @@ def test_polyline_out_of_range_vertex_flagged(geometry_builder):
         _coord_node("0.0", "0.0"), _coord_node("999.0", "50.0"),
     ])
     obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    msgs = _messages(issues, attribute="Geom", severity="error")
+    assert any("Max" in m for m in msgs)
+
+
+def test_polyline_inherited_coord_type_via_extends_has_no_issue(geometry_builder):
+    """Lot 44 : DirectedLine EXTENDS Line = DIRECTED POLYLINE; (aucune
+    clause VERTEX propre, meme forme que CHBase reel) - la plage d'axe doit
+    etre retrouvee en remontant Super jusqu'a Line, pas seulement absente."""
+    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), _coord_node("50.0", "50.0"),
+    ])
+    obj = _obj(DIRECTEDWAY_CLASS, "dw1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Geom") == []
+
+
+def test_polyline_inherited_coord_type_out_of_range_flagged(geometry_builder):
+    """Preuve directe (pas seulement l'absence de faux positif) que la
+    plage HERITEE de Line est reellement appliquee a DirectedLine, pas
+    seulement que la structure passe faute de plage connue."""
+    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), _coord_node("999.0", "50.0"),
+    ])
+    obj = _obj(DIRECTEDWAY_CLASS, "dw1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     msgs = _messages(issues, attribute="Geom", severity="error")
     assert any("Max" in m for m in msgs)

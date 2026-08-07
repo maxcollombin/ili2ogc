@@ -321,14 +321,33 @@ def line_coord_type(line_type: MetaInstance | None) -> MetaInstance | None:
     (LineType <-> CoordType, 0..1 - role `CoordType`, alimente depuis le
     Lot 42 par le binding `lineType.CoordType`/`controlPoints()` ('VERTEX
     Name'), voir InterlisModelBuilder._build_control_points_ref). `None` si
-    `line_type` est `None`, ou si la clause VERTEX est absente/non resolue
-    (ex. `DirectedLine EXTENDS Line = DIRECTED POLYLINE;` - aucune clause
-    VERTEX propre, l'heritage du CoordType de `Line` n'est PAS suivi par ce
-    lot, limite documentee RULE #5)."""
-    if line_type is None:
-        return None
-    ct = getattr(line_type, "CoordType", None)
-    return ct if isinstance(ct, MetaInstance) else None
+    `line_type` est `None`, ou si aucun `LineType` de la chaine `Super`
+    (association `Inheritance`, propre PUIS herite via `EXTENDS` - Lot 44,
+    meme principe que `attributes_of` pour les classes, Lot 38) ne porte de
+    clause VERTEX propre.
+
+    Remonte la chaine EXTENDS (AJOUTE Lot 44) : `DirectedLine EXTENDS Line
+    = DIRECTED POLYLINE;` (CHBase, reel) n'a PAS de clause VERTEX propre -
+    son CoordType vit sur `Line`, le domaine de base. Necessitait au
+    prealable que `domainDef()` attache reellement `Super` pour toute
+    clause EXTENDS (Lot 44, `InterlisModelBuilder._attach_domain_extends`,
+    gap jusque-la TOTAL - AUCUNE clause EXTENDS de domainDef() n'etait
+    attachee avant ce lot, quel que soit le type de domaine).
+
+    Arret gracieux (RULE #5, meme categorie de limite que `attributes_of`) :
+    `Super` absent, ou encore un `UnresolvedNamedReference` (domaine de
+    base dans un modele non charge via `--repo`) - chaine simplement
+    tronquee a ce point, pas d'erreur. Garde anti-cycle (`seen`, par
+    identite) - meme precaution que `attributes_of`/`is_class_compatible`."""
+    seen: set[int] = set()
+    current: MetaInstance | None = line_type
+    while isinstance(current, MetaInstance) and id(current) not in seen:
+        seen.add(id(current))
+        ct = getattr(current, "CoordType", None)
+        if isinstance(ct, MetaInstance):
+            return ct
+        current = getattr(current, "Super", None)
+    return None
 
 
 def reference_external_status(resolved: ResolvedAttribute) -> bool | None:

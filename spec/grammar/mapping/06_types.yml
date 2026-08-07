@@ -415,6 +415,12 @@ domainDef:
     (Class EXTENDS Type), External toujours False (pas de clause EXTERNAL dans cette alternative),
     BaseClass = 1ere classOrAssociationRef seulement (meme limite que referenceAttr.BaseClass/
     roleDef.BaseClass, deja documentee).
+    AJOUTE (Lot 44, LineType.CoordType via EXTENDS) : la clause optionnelle "EXTENDS domainRef" de chaque
+    segment (ex. "DirectedLine EXTENDS Line = DIRECTED POLYLINE;", "LengthRange EXTENDS MultRange =
+    1..2147483647;") n''etait JUSQU''ICI PAS DU TOUT attachee, quel que soit le type de domaine concerne -
+    InterlisModelBuilder._attach_domain_extends (appelee depuis _build_multi_declaration, les 2 branches
+    contenu direct ET CLASS RESTRICTION) attache desormais Super (association Inheritance), meme
+    politique graceful=True que classDef/structureDef.Super (Lot 38).
     || No fixed target: DomainType is abstract. Concrete class resolved by type_ dispatcher (see grammar-metamodel-mapping.yml
     comment).'
 domainRef:
