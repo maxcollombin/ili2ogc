@@ -245,10 +245,15 @@ controlPoints:
       source:
         field: Name
         multi: true
-      note: No own class; 'VERTEX Name(DOT Name)*' is an attribute path (structure-nested), resolving
-        to a CoordType-typed attribute of the enclosing structure. Feeds the parent lineType's confirmed
-        LineCoord association (LineType <-> CoordType, 0..1) - see lineType binding above. The multi-Name
-        DOT chain itself is a path resolution akin to attributePath (Lot 7), not a separate class instance.
+      note: 'No own class; ''VERTEX Name(DOT Name)*'' is a qualified name reference, resolving to a
+        CoordType instance. CORRIGE (Lot 42) : ce binding declaratif (`field: Name, multi: true`) ne
+        produisait qu''une LISTE de textes de tokens, JAMAIS reellement attachee nulle part malgre la
+        note historique ci-dessous - confirme reel (LineType.CoordType toujours None). `controlPoints`
+        est desormais un cas special dedie (`InterlisModelBuilder._build_control_points_ref`, appele
+        directement depuis `_relay` avant le calcul de ce bag declaratif - cette entree `_resolution`
+        n''est donc plus jamais atteinte en pratique, gardee seulement comme trace de l''ancien etat) qui
+        construit un ForwardRef (nom qualifie joint par "." depuis les tokens Name, VERTEX ignore) attache
+        par le binding `lineType.CoordType` (association LineCoord, voir lineType ci-dessus).'
 coordinateType:
   grammar:
     rule: coordinateType
@@ -272,11 +277,22 @@ coordinateType:
         kind: alt_rule_or_token
         multi: true
         cardinality: 1..3
+      wrap:
+        numeric: IlisMeta16.ModelData.NumType
+        NUMERIC: IlisMeta16.ModelData.NumType
       note: '1 to 3 axis definitions, comma-separated, each either a full numeric() range or the bare
         NUMERIC keyword (unrestricted axis). Confirmed via the metamodel PDF: "ASSOCIATION AxisSpec =
         CoordType -- Axis (ORDERED, EXTERNAL) {1..3} NumType;" - each numeric() feeds one ordered NumType
         instance linked via AxisSpec.Axis; a bare NUMERIC keyword (no range/circular/unit) still produces
         a NumType instance (with Min/Max/Circular/Unit left unset).
+
+        CORRIGE (Lot 42, geometrie XTF) : `wrap:` ajoute - jusqu''ici ABSENT de la branche `multi: true`
+        du moteur (source_resolver.py, `_resolve_multi_node` nouveau), contrairement a la branche `alt`
+        (deja utilisee par attributeDef.Type). Consequence reelle, confirmee CoordType.Axis contenait
+        UNIQUEMENT des dicts bags bruts (`{Min:..., Max:..., ...}`), JAMAIS de veritables instances
+        `NumType` - silencieusement inexploitable par tout code aval attendant des `MetaInstance` (ex.
+        `xtf/schema.coord_axes`, Lot 42). Chaque `numeric()`/`NUMERIC` de la liste devient desormais sa
+        PROPRE instance `NumType` (vide pour le token nu, RULE #4 - note ci-dessus).
 
         '
     NullAxis:
@@ -877,10 +893,30 @@ lineType:
     Multi:
       source:
         field: MULTIPOLYLINE|MULTISURFACE|MULTIAREA
-        presence: true
-      note: confirmed LineType.own.Multi (BOOLEAN, 0..1) - true for the 3 MULTI* alternatives, absent/false
+        kind: alt_token
+      rule:
+        MULTIPOLYLINE: true
+        MULTISURFACE: true
+        MULTIAREA: true
+        absent: false
+      note: 'confirmed LineType.own.Multi (BOOLEAN, 0..1) - true for the 3 MULTI* alternatives, false
         otherwise; structural match confirmed (4 Kind values x optional Multi flag = 6 grammar alternatives
         feasible + DIRECTED sub-flag).
+
+        CORRIGE (Lot 42, geometrie XTF) : `presence: true` remplace par `kind: alt_token` + `rule:` explicite
+        - bug reel trouve en testant `MULTIPOLYLINE` sur un fixture synthetique (tests/fixtures/xtf/
+        geometry_model.ili) : un `field` COMPOSE (contenant "|") declenche TOUJOURS la branche alt du
+        moteur (`resolve_source`, "|" in field) AVANT que `presence: true` ne soit jamais consulte (verifie
+        par lecture directe de source_resolver.py - le test `if kind in ALT_KINDS or "|" in field:` precede
+        la verification `if source.get("presence")` bien plus bas) - `Multi` recevait donc le TEXTE LITTERAL
+        du token matche ("MULTIPOLYLINE"/"MULTISURFACE"/"MULTIAREA", une chaine non vide - toujours `bool()`-
+        truthy par accident, donc jamais remarque via `validate.py` qui ne fait que `bool(getattr(...))`) au
+        lieu de `True`, ET emettait un `warnings.warn` a chaque LineType SINGULIER (POLYLINE/SURFACE/AREA
+        nu, aucune alternative du groupe presente, pas de `rule_map`/"absent" pour absorber silencieusement
+        ce cas avant ce lot). Meme mecanisme explicite (`alt_token`+`rule`) que `Kind` ci-dessus, avec
+        `absent: false` desormais fourni (Multi FAUX plutot qu''un `warnings.warn` a chaque construction).
+
+        '
     _directed_flag:
       source:
         field: DIRECTED
@@ -899,6 +935,22 @@ lineType:
         CHBase_Part1_GEOMETRY_V2.ili).
 
         '
+    CoordType:
+      source:
+        field: controlPoints
+        optional: true
+      association: LineCoord
+      role: CoordType
+      note: 'AJOUTE (Lot 42, geometrie XTF) : LineCoord (LineType <-> CoordType, 0..1) restait NON attachee
+        depuis l''origine du binding controlPoints (note historique le documentait deja comme la cible,
+        mais aucun code ne le faisait reellement - confirme reel, LineType.CoordType toujours None y
+        compris sur "Line = POLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2;", CHBase_Part1_GEOMETRY_V1.ili).
+        `controlPoints()` est desormais un 5e cas special (voir InterlisModelBuilder._build_control_points_ref)
+        qui produit un ForwardRef resolu via le mecanisme generique deja en place pour tout ForwardRef
+        attache via association+role (`_apply_one_binding`) - aucune construction imbriquee (`target:`)
+        necessaire ici, `controlPoints` lui-meme n''a pas de classe metamodele propre.
+
+        '
 numeric:
   grammar:
     rule: numeric
@@ -906,20 +958,37 @@ numeric:
   attribute_bindings:
     Min:
       source:
-        field: Number|PosNumber|Dec
-        index: 0
-        kind: alt_rule
+        child_index: 0
       note: 'numeric() has 4 mutually exclusive range forms: (Number DOTDOT Number) | (Number DOTDOT PosNumber)
         | (PosNumber DOTDOT PosNumber) | (Dec DOTDOT Dec). The first operand of whichever alternative
         matched feeds NumType.Min.
 
+        CORRIGE (Lot 42, geometrie XTF) : `field: Number|PosNumber|Dec, index: 0, kind: alt_rule` remplace
+        par `child_index: 0` - bug reel trouve sur `ili_corpus/CHBase_Part1_GEOMETRY_V1.ili` (`Coord2 =
+        COORD 460000.000 .. 870000.000 [m] {CHLV03[1]}, ...`) : le mecanisme alt_rule (`ca.has_accessor` +
+        index) se laissait tromper par le `PosNumber` de la clause REFSYS optionnelle (`{CHLV03[1]}`, SANS
+        RAPPORT avec le range) des que l''alternative reellement prise etait ''Dec DOTDOT Dec'' -
+        `ctx.PosNumber(0)` retournait ce PosNumber-la (has_accessor teste la presence de la METHODE, pas
+        de CETTE occurrence precise) au lieu de None, Min resolvait donc a tort vers ''1'' (l''index du
+        refsys) au lieu de ''460000.000''. Confirme par introspection directe de l''arbre ANTLR reel (RULE
+        #1/#2) : les 4 alternatives de numeric() sont TOUJOURS de la forme ''operande DOTDOT operande'' aux
+        POSITIONS enfant 0/1/2 (DOTDOT toujours en 1), quelle que soit l''alternative - `child_index`
+        (source_resolver.py, nouveau) lit directement cette position, immune a toute ambiguite de nom
+        d''accesseur partage avec un motif sans rapport plus loin dans le meme ctx. Voir schema.coord_axes/
+        validate.py (Lot 42) qui consomment desormais reellement NumType.Min/Max pour la validation
+        geometrie XTF - c''est en batissant cette verification, sur donnees reelles, que le bug a ete
+        decouvert (jamais visible auparavant : Max, calcule en second, retombait correctement sur Dec
+        faute d''un 2e PosNumber, masquant que Min etait deja faux).
+
         '
     Max:
       source:
-        field: Number|PosNumber|Dec
-        index: 1
-        kind: alt_rule
-      note: Second operand of the matched range alternative, feeds NumType.Max.
+        child_index: 2
+      note: 'Second operand of the matched range alternative, feeds NumType.Max. CORRIGE (Lot 42) - meme
+        raison que Min ci-dessus (child_index=2, DOTDOT etant toujours l''enfant 1 entre les deux
+        operandes) ; Max lui-meme etait DEJA correct en pratique (retombait sur Dec par accident, faute
+        d''un 2e PosNumber de refsys), mais bascule aussi vers `child_index` pour la coherence/robustesse
+        du binding (le mecanisme alt_rule reste tout aussi fragile pour Max face a un autre motif futur).'
     Circular:
       source:
         field: CIRCULAR

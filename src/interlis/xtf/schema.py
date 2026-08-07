@@ -298,6 +298,39 @@ def restriction_candidates(resolved: ResolvedAttribute) -> list[MetaInstance]:
     return _all_class_related_base_classes(resolved.type_instance)
 
 
+def coord_axes(coord_type: MetaInstance | None) -> list[MetaInstance]:
+    """Liste ORDONNEE des instances `NumType` d'un `CoordType` (association
+    `AxisSpec`, role `Axis`, `{1..3} NumType ORDERED` - confirmee
+    ilismeta16-associations.yml/coordinateType binding, spec/grammar/mapping/
+    06_types.yml) - chacune porte potentiellement Min/Max/Unit (own TEXT,
+    absents pour un axe `NUMERIC` nu sans plage). Liste VIDE (pas d'erreur)
+    si `coord_type` est `None`, ou si `Axis` n'a pas ete resolu (ex. domaine
+    externe non charge via `--repo`) - RULE #5, le validateur XTF doit alors
+    se limiter a une verification de PARSEABILITE numerique, jamais de plage,
+    sur les composantes concernees (voir validate.py)."""
+    if coord_type is None:
+        return []
+    axes = getattr(coord_type, "Axis", None)
+    if isinstance(axes, list):
+        return [a for a in axes if isinstance(a, MetaInstance)]
+    return [axes] if isinstance(axes, MetaInstance) else []
+
+
+def line_coord_type(line_type: MetaInstance | None) -> MetaInstance | None:
+    """Le `CoordType` lie a un `LineType` via l'association `LineCoord`
+    (LineType <-> CoordType, 0..1 - role `CoordType`, alimente depuis le
+    Lot 42 par le binding `lineType.CoordType`/`controlPoints()` ('VERTEX
+    Name'), voir InterlisModelBuilder._build_control_points_ref). `None` si
+    `line_type` est `None`, ou si la clause VERTEX est absente/non resolue
+    (ex. `DirectedLine EXTENDS Line = DIRECTED POLYLINE;` - aucune clause
+    VERTEX propre, l'heritage du CoordType de `Line` n'est PAS suivi par ce
+    lot, limite documentee RULE #5)."""
+    if line_type is None:
+        return None
+    ct = getattr(line_type, "CoordType", None)
+    return ct if isinstance(ct, MetaInstance) else None
+
+
 def reference_external_status(resolved: ResolvedAttribute) -> bool | None:
     """Statut de la clause optionnelle `REFERENCE TO (EXTERNAL) X` pour cet
     attribut (Lot 34, `ReferenceType.External`, own BOOLEAN deja construit

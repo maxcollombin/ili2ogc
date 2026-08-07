@@ -403,3 +403,151 @@ def test_restriction_text_with_unverifiable_candidate_is_info_not_warning(restri
     msgs = _messages(issues, attribute="Sel", severity="info")
     assert any("1/2 candidat" in m for m in msgs)
     assert _messages(issues, attribute="Sel", severity="warning") == []
+
+
+# --- Lot 42 : geometrie/coordonnees (tests/fixtures/xtf/geometry_model.ili :
+# Coord2 = COORD 0..100, 0..200 ; MultiCoord2 = MULTICOORD (meme plage) ;
+# Line = POLYLINE VERTEX Coord2 ; MultiLine = MULTIPOLYLINE VERTEX Coord2 ;
+# Area = SURFACE VERTEX Coord2 - Point.Pos/MultiPoint.Pos/Way.Geom/
+# MultiWay.Geom/Zone.Geom, un attribut de chaque forme) ---
+
+GEOMETRY_FIXTURE = Path(__file__).parent / "fixtures/xtf/geometry_model.ili"
+POINT_CLASS = "GeomTest.MainTopic.Point"
+MULTIPOINT_CLASS = "GeomTest.MainTopic.MultiPoint"
+WAY_CLASS = "GeomTest.MainTopic.Way"
+MULTIWAY_CLASS = "GeomTest.MainTopic.MultiWay"
+ZONE_CLASS = "GeomTest.MainTopic.Zone"
+
+
+@pytest.fixture(scope="module")
+def geometry_builder():
+    tree, errors = parse_file(GEOMETRY_FIXTURE)
+    assert not errors
+    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        b.build(tree)
+    return b
+
+
+def _coord_node(*components: str, tag: str = "COORD") -> RawNode:
+    children = [RawNode(tag=f"C{i + 1}", text=v, attrib={}, children=[]) for i, v in enumerate(components)]
+    return RawNode(tag=tag, text=None, attrib={}, children=children)
+
+
+def _geom_attr(name: str, inner: RawNode) -> tuple[str, list[RawNode]]:
+    return name, [RawNode(tag=name, text=None, attrib={}, children=[inner])]
+
+
+def _obj(cls: str, tid: str, *attr_pairs: tuple[str, list[RawNode]]) -> XtfObject:
+    return XtfObject(tid=tid, qualified_class=cls, attributes=dict(attr_pairs))
+
+
+def _validate_one(obj: XtfObject, symbol_table):
+    basket = XtfBasket(bid="b1", qualified_topic="GeomTest.MainTopic", kind=None, endstate=None, objects=[obj])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    return validate_transfer(transfer, symbol_table=symbol_table)
+
+
+def test_coord_within_range_has_no_issue(geometry_builder):
+    obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("50.0", "100.0")))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Pos") == []
+
+
+def test_coord_out_of_range_flagged(geometry_builder):
+    """C1 (plage 0..100) depasse le Max declare."""
+    obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("150.0", "100.0")))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    msgs = _messages(issues, attribute="Pos", severity="error")
+    assert any("Max" in m for m in msgs)
+
+
+def test_coord_non_numeric_component_flagged(geometry_builder):
+    obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("abc", "100.0")))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    msgs = _messages(issues, attribute="Pos", severity="error")
+    assert any("non numerique" in m for m in msgs)
+
+
+def test_coord_component_count_mismatch_flagged(geometry_builder):
+    """CoordType.Axis declare 2 axes - un seul C1 present doit etre signale
+    (regression directe du fix Lot 42 sur CoordType.Axis/wrap - sans lui,
+    `axes` restait toujours vide et ce desaccord n'aurait jamais pu etre
+    detecte)."""
+    obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("50.0")))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    msgs = _messages(issues, attribute="Pos", severity="error")
+    assert any("composante(s) C" in m for m in msgs)
+
+
+def test_multicoord_valid_has_no_issue(geometry_builder):
+    inner = RawNode(tag="MULTICOORD", text=None, attrib={}, children=[
+        _coord_node("10.0", "20.0"), _coord_node("30.0", "40.0"),
+    ])
+    obj = _obj(MULTIPOINT_CLASS, "mp1", _geom_attr("Pos", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Pos") == []
+
+
+def test_polyline_valid_has_no_issue(geometry_builder):
+    """Exerce aussi le fix Lot 42 LineType.CoordType (VERTEX Coord2, jamais
+    attache avant ce lot) - sans lui, `axes` serait vide et le Max de C1
+    (100.0, hors plage volontairement testee ci-dessous par contraste)
+    resterait invisible."""
+    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), _coord_node("50.0", "50.0"),
+    ])
+    obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Geom") == []
+
+
+def test_polyline_out_of_range_vertex_flagged(geometry_builder):
+    """Preuve directe que le fix LineType.CoordType (Lot 42) alimente
+    reellement la verification de plage sur un segment de POLYLINE, pas
+    seulement la structure."""
+    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), _coord_node("999.0", "50.0"),
+    ])
+    obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    msgs = _messages(issues, attribute="Geom", severity="error")
+    assert any("Max" in m for m in msgs)
+
+
+def test_polyline_wrong_structure_flagged(geometry_builder):
+    """Way.Geom attend POLYLINE (LineType.Kind=Polyline, Multi=False) -
+    une balise SURFACE a sa place doit etre signalee structurellement."""
+    inner = RawNode(tag="SURFACE", text=None, attrib={}, children=[])
+    obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    msgs = _messages(issues, attribute="Geom", severity="error")
+    assert any("POLYLINE attendue" in m for m in msgs)
+
+
+def test_surface_valid_has_no_issue(geometry_builder):
+    polyline = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), _coord_node("50.0", "0.0"), _coord_node("50.0", "50.0"), _coord_node("0.0", "0.0"),
+    ])
+    boundary = RawNode(tag="BOUNDARY", text=None, attrib={}, children=[polyline])
+    inner = RawNode(tag="SURFACE", text=None, attrib={}, children=[boundary])
+    obj = _obj(ZONE_CLASS, "z1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Geom") == []
+
+
+def test_multipolyline_valid_has_no_issue(geometry_builder):
+    """MultiWay.Geom (Lot 42 - correctif Multi, `presence: true` sur un
+    field compose etait auparavant TOUJOURS ignore par le moteur - Multi
+    contenait le TEXTE LITTERAL du token matche au lieu d'un booleen)."""
+    polyline_a = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), _coord_node("10.0", "10.0"),
+    ])
+    polyline_b = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("20.0", "20.0"), _coord_node("30.0", "30.0"),
+    ])
+    inner = RawNode(tag="MULTIPOLYLINE", text=None, attrib={}, children=[polyline_a, polyline_b])
+    obj = _obj(MULTIWAY_CLASS, "mw1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Geom") == []

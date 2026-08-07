@@ -58,11 +58,30 @@ Perimetre couvert :
   rejettent, `info` (statut indetermine, RULE #5) si aucun candidat n'est
   verifiable (motif absent, ou type interne non resolu - ex. domaine
   externe non charge via `--repo`).
+- geometrie/coordonnees (Lot 42, `_validate_coord_attribute`/
+  `_validate_line_attribute`) : COORD/MULTICOORD (CoordType) et
+  POLYLINE/SURFACE/AREA/MULTI* (LineType, segments COORD/ARC) - structure
+  (balise attendue selon Kind/Multi) ET plage Min/Max par axe (association
+  AxisSpec.Axis, ordonnee) quand connue - RULE #4, eCH-0031 V2.1.0
+  §4.3.11.13/.14/.15, voir le detail complet dans la note precedant ces
+  fonctions. Necessitait un correctif prealable du ModelBuilder (Lot 42,
+  `LineType.CoordType` jamais attache depuis l'origine du binding
+  `controlPoints`/VERTEX - voir InterlisModelBuilder._build_control_points_ref) :
+  sans lui, aucune plage d'axe n'aurait ete disponible pour la MAJORITE des
+  fichiers reels de l'inventaire (POLYLINE/SURFACE dominent sur COORD nu).
+  `error` (information complete des que le Type resout, meme politique que
+  MANDATORY/NUMERIC/ENUM/Lot 40) - un segment LINE FORM personnalise
+  (structure arbitraire, ni COORD ni ARC) reste NON interprete (aucun
+  candidat reel dans l'inventaire XTF, ignore silencieusement plutot qu'une
+  fausse alerte).
 - PAS encore couvert (limites documentees, PROGRESS.md) : attributs herites
   via EXTENDS depuis un modele IMPORTE non charge (chaine Super tronquee),
-  geometrie/coordonnees, roles d'association definis dans un modele
-  IMPORTE (embedded_roles_of ne cherche que dans la table de symboles du
-  modele racine)."""
+  roles d'association definis dans un modele IMPORTE (embedded_roles_of ne
+  cherche que dans la table de symboles du modele racine), segments LINE
+  FORM personnalises (structure arbitraire, WITH (...) autre que
+  STRAIGHTS/ARCS), MULTICOORD/MULTIPOLYLINE/MULTISURFACE/MULTIAREA/AREA/ARC
+  extrapoles du manuel (aucun exemple reel dans l'inventaire XTF actuel,
+  voir note precedant _validate_coord_attribute)."""
 from dataclasses import dataclass
 
 from interlis.builder.repository import ModelRepository
@@ -70,8 +89,9 @@ from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 from interlis.xtf.schema import (
-    ResolvedAttribute, enum_values, is_class_compatible, reference_external_status, reference_target_class,
-    resolve_attribute, resolve_class, restriction_candidates, schema_members_of, single_own_attribute,
+    ResolvedAttribute, coord_axes, enum_values, is_class_compatible, line_coord_type, reference_external_status,
+    reference_target_class, resolve_attribute, resolve_class, restriction_candidates, schema_members_of,
+    single_own_attribute,
 )
 
 # Classes de Type concretes reconnues comme "reference a un objet" (valeur
@@ -155,6 +175,242 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
     elif kind == "TextType":
         if node.text is None and not node.children:
             problems.append(f"{ctx}: attribut TEXT present mais vide")
+    return problems
+
+
+# --- Geometrie/coordonnees (Lot 42) -----------------------------------------
+#
+# RULE #4, citation directe eCH-0031 V2.1.0 :
+# §4.3.11.13 "Codierung von Koordinaten" : "CoordValue = <geom:coord>
+#   <geom:c1>NumericConst</geom:c1> <geom:c2>NumericConst</geom:c2>
+#   [<geom:c3>NumericConst</geom:c3>] </geom:coord>." / "MultiCoordValue =
+#   <geom:multicoord> (* CoordValue *) </geom:multicoord>."
+# §4.3.11.14 "Codierung von Linienzuegen" : "PolylineValue = <geom:polyline>
+#   SegmentSequence </geom:polyline>." ou SegmentSequence = StartSegment
+#   (CoordValue) (* StraightSegment (CoordValue) | ArcSegment | LineFormSegment *).
+#   ArcSegment = <geom:arc> <geom:c1>..<geom:c2>..[<geom:c3>..] <geom:a1>..
+#   <geom:a2>.. [<geom:r>..] </geom:arc>. "MultiPolylineValue =
+#   <geom:multipolyline> (* PolylineValue *) </geom:multipolyline>."
+# §4.3.11.15 "Codierung von Einzelflaechen..." : "SurfaceValue = <geom:surface>
+#   Boundaries </geom:surface>." Boundaries = OuterBoundary {InnerBoundary}.
+#   "MultiSurfaceValue = <geom:multisurface> (* SurfaceValue *) </geom:multisurface>."
+#   Meme structure pour AREA (le manuel dit explicitement "SURFACE und AREA
+#   werden wie folgt codiert" - un seul jeu de regles pour les deux Kind).
+#
+# Corpus reel (RULE #1, xtf_corpus/*.xtf, 2026-08-07) CONFIRME sans le
+# namespace "geom:" (comme ili:ref/REF deja documente pour les references,
+# docs/xtf-transfer-encoding-notes.md) et en MAJUSCULES, mirroir exact du
+# mot-cle grammatical (COORD/POLYLINE/SURFACE, comme deja confirme pour
+# REFERENCE/REF) : `<AttrName><COORD><C1>x</C1><C2>y</C2>[<C3>z</C3>]</COORD>
+# </AttrName>` (RoadTrafficAccidentLocations.xtf, 3D) ; `<AttrName><SURFACE>
+# <BOUNDARY><POLYLINE><COORD>...</COORD>...</POLYLINE></BOUNDARY>[<BOUNDARY>
+# ...]</SURFACE></AttrName>` (alpenkonvention_2056.xtf, exterieur PUIS
+# interieur(s), sans distinction de balise - "OuterBoundary"/"InnerBoundary"
+# de la grammaire abstraite partagent la MEME balise concrete BOUNDARY,
+# seul l'ORDRE - premier = exterieur - porte l'information, conforme au
+# manuel : "Der erste Rand einer Flaeche (OuterBoundary) ist der aeussere
+# Rand"). AUCUN exemple reel de MULTICOORD/MULTIPOLYLINE/MULTISURFACE/
+# MULTIAREA/AREA/ARC/LINE FORM personnalise dans les 12 fichiers de
+# l'inventaire (grep verifie, RULE #1) - ces formes restent implementees par
+# EXTRAPOLATION directe du manuel + de la convention MAJUSCULES=mot-cle deja
+# confirmee deux fois (COORD/POLYLINE), documentee comme telle plutot que
+# "confirmee reel", RULE #5. Un segment LINE FORM personnalise (structure
+# arbitraire, ni COORD ni ARC) n'est PAS interprete par ce lot (aucun
+# candidat reel dans l'inventaire) - silencieusement ignore (pas de fausse
+# alerte), limite documentee dans le docstring module.
+
+
+def _find_child(node: RawNode, tag: str) -> RawNode | None:
+    return next((c for c in node.children if c.tag == tag), None)
+
+
+def _numeric_problems(text: str | None, min_raw, max_raw, ctx: str) -> list[str]:
+    """Meme logique que la branche NumType de `_validate_scalar` (Min/Max
+    textuels, tolerance sur une borne non numerique - ex. domaine predefini),
+    factorisee ici pour etre reutilisee sur les composantes de coordonnees
+    (C1/C2/C3/A1/A2/R) - `min_raw`/`max_raw` a `None` pour une composante
+    dont l'axe/la borne n'est pas connue (verification de PARSEABILITE
+    seule, jamais de plage, RULE #5) - voir schema.coord_axes."""
+    if text is None:
+        return [f"{ctx}: composante absente"]
+    try:
+        value = float(text)
+    except ValueError:
+        return [f"{ctx}: valeur {text!r} non numerique"]
+    problems: list[str] = []
+    try:
+        if min_raw is not None and value < float(min_raw):
+            problems.append(f"{ctx}: valeur {text!r} < Min {min_raw!r}")
+        if max_raw is not None and value > float(max_raw):
+            problems.append(f"{ctx}: valeur {text!r} > Max {max_raw!r}")
+    except ValueError:
+        pass
+    return problems
+
+
+def _axis_components(node: RawNode, prefix: str) -> list[RawNode]:
+    """Composantes `{prefix}1`, `{prefix}2`, ... presentes sur `node`, dans
+    l'ordre, jusqu'au premier trou (ex. prefix="C" -> C1/C2/[C3] d'un COORD/
+    ARC ; prefix="A" -> A1/A2 du point intermediaire d'un ARC)."""
+    out: list[RawNode] = []
+    i = 1
+    while True:
+        child = _find_child(node, f"{prefix}{i}")
+        if child is None:
+            break
+        out.append(child)
+        i += 1
+    return out
+
+
+def _validate_axis_values(components: list[RawNode], axes: list[MetaInstance], ctx: str, *, label: str) -> list[str]:
+    """Verifie chaque composante contre l'axe CORRESPONDANT (par position,
+    `AxisSpec.Axis` est ORDONNE - confirme ilismeta16-associations.yml/RULE
+    #4) - plage Min/Max si `axes` est connu (schema.coord_axes non vide),
+    PARSEABILITE numerique seule sinon. Signale un ecart de CARDINALITE
+    (nombre de composantes different du nombre d'axes declares) UNIQUEMENT
+    quand `axes` est connu - RULE #5, un desaccord de compte n'est un signal
+    fiable que si le nombre attendu l'est aussi."""
+    problems: list[str] = []
+    if axes and len(components) != len(axes):
+        problems.append(f"{ctx}: {len(components)} composante(s) {label}, {len(axes)} attendue(s) (CoordType.Axis)")
+    for i, comp in enumerate(components):
+        axis = axes[i] if i < len(axes) else None
+        problems.extend(_numeric_problems(
+            comp.text, getattr(axis, "Min", None), getattr(axis, "Max", None), f"{ctx}.{label}{i + 1}",
+        ))
+    return problems
+
+
+def _validate_coord_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
+    if node.tag != "COORD":
+        return [f"{ctx}: geometrie COORD attendue, balise {node.tag!r} trouvee"]
+    return _validate_axis_values(_axis_components(node, "C"), axes, ctx, label="C")
+
+
+def _validate_arc_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
+    """ArcSegment (eCH-0031 V2.1.0 §4.3.11.14) - point intermediaire A1/A2
+    verifie contre les 2 PREMIERS axes (memes composantes X/Y qu'un COORD,
+    jamais de 3e composante intermediaire pour un arc, confirme par la
+    grammaire : geom:a1/geom:a2 seulement, pas de geom:a3). R (rayon,
+    optionnel) : PARSEABILITE numerique seule, jamais de plage - aucun axe
+    ne le couvre (c'est une longueur derivee, pas une coordonnee)."""
+    if node.tag != "ARC":
+        return [f"{ctx}: geometrie ARC attendue, balise {node.tag!r} trouvee"]
+    problems = _validate_axis_values(_axis_components(node, "C"), axes, ctx, label="C")
+    mid = _axis_components(node, "A")
+    if len(mid) < 2:
+        problems.append(f"{ctx}: point intermediaire A1/A2 absent (ARC)")
+    else:
+        problems.extend(_validate_axis_values(mid, axes[:2], ctx, label="A"))
+    r_node = _find_child(node, "R")
+    if r_node is not None:
+        problems.extend(_numeric_problems(r_node.text, None, None, f"{ctx}.R"))
+    return problems
+
+
+def _validate_polyline_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
+    if node.tag != "POLYLINE":
+        return [f"{ctx}: geometrie POLYLINE attendue, balise {node.tag!r} trouvee"]
+    if not node.children:
+        return [f"{ctx}: POLYLINE vide (aucun segment)"]
+    problems: list[str] = []
+    for i, seg in enumerate(node.children):
+        seg_ctx = f"{ctx}[{i}]"
+        if seg.tag == "COORD":
+            problems.extend(_validate_coord_node(seg, axes, seg_ctx))
+        elif seg.tag == "ARC":
+            problems.extend(_validate_arc_node(seg, axes, seg_ctx))
+        # sinon : segment LINE FORM personnalise (structure arbitraire, WITH
+        # (...) autre que STRAIGHTS/ARCS) - non interprete par ce lot (aucun
+        # candidat reel dans l'inventaire XTF, voir note module), ignore
+        # silencieusement plutot qu'une fausse alerte structurelle.
+    return problems
+
+
+def _validate_boundary_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
+    if node.tag != "BOUNDARY":
+        return [f"{ctx}: geometrie BOUNDARY attendue, balise {node.tag!r} trouvee"]
+    polyline = _find_child(node, "POLYLINE")
+    if polyline is None:
+        return [f"{ctx}: BOUNDARY sans POLYLINE"]
+    return _validate_polyline_node(polyline, axes, f"{ctx}/POLYLINE")
+
+
+def _validate_surface_node(node: RawNode, expected_tag: str, axes: list[MetaInstance], ctx: str) -> list[str]:
+    """`expected_tag` = "SURFACE" ou "AREA" (meme structure Boundaries pour
+    les deux Kind, RULE #4 - voir note module)."""
+    if node.tag != expected_tag:
+        return [f"{ctx}: geometrie {expected_tag} attendue, balise {node.tag!r} trouvee"]
+    boundaries = [c for c in node.children if c.tag == "BOUNDARY"]
+    if not boundaries:
+        return [f"{ctx}: {expected_tag} sans aucun BOUNDARY"]
+    problems: list[str] = []
+    for i, boundary in enumerate(boundaries):
+        problems.extend(_validate_boundary_node(boundary, axes, f"{ctx}[{i}]"))
+    return problems
+
+
+def _validate_coord_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> list[str]:
+    """Attribut de Type resolu en CoordType (COORD/MULTICOORD, eCH-0031
+    V2.1.0 §4.3.11.13) - `node` est le noeud de l'ATTRIBUT lui-meme (ex.
+    `<AccidentLocation>`), son 1er enfant doit etre COORD (ou MULTICOORD si
+    `CoordType.Multi`)."""
+    coord_type = resolved.type_instance
+    multi = bool(getattr(coord_type, "Multi", False))
+    axes = coord_axes(coord_type)
+    expected_tag = "MULTICOORD" if multi else "COORD"
+    child = node.children[0] if node.children else None
+    if child is None or child.tag != expected_tag:
+        found = child.tag if child is not None else "(vide)"
+        return [f"{ctx}: geometrie {expected_tag} attendue (Type=CoordType, Multi={multi}), {found!r} trouvee"]
+    if not multi:
+        return _validate_coord_node(child, axes, ctx)
+    coords = [c for c in child.children if c.tag == "COORD"]
+    if not coords:
+        return [f"{ctx}: MULTICOORD sans aucun COORD interne"]
+    problems: list[str] = []
+    for i, c in enumerate(coords):
+        problems.extend(_validate_coord_node(c, axes, f"{ctx}[{i}]"))
+    return problems
+
+
+_LINE_KIND_TAGS = {"Polyline": "POLYLINE", "DirectedPolyline": "POLYLINE", "Surface": "SURFACE", "Area": "AREA"}
+_LINE_KIND_MULTI_TAGS = {
+    "Polyline": "MULTIPOLYLINE", "DirectedPolyline": "MULTIPOLYLINE", "Surface": "MULTISURFACE", "Area": "MULTIAREA",
+}
+
+
+def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> list[str]:
+    """Attribut de Type resolu en LineType (POLYLINE/SURFACE/AREA/MULTI*,
+    eCH-0031 V2.1.0 §4.3.11.14/.15). `axes` provient de `schema.
+    line_coord_type` (association LineCoord, Lot 42 - VIDE, verification
+    numerique seule sans plage, si la clause VERTEX est absente/non resolue,
+    ex. `DirectedLine EXTENDS Line = DIRECTED POLYLINE;` sans VERTEX propre -
+    limite documentee, RULE #5)."""
+    line_type = resolved.type_instance
+    kind = getattr(line_type, "Kind", None)
+    multi = bool(getattr(line_type, "Multi", False))
+    axes = coord_axes(line_coord_type(line_type))
+    single_tag = _LINE_KIND_TAGS.get(kind)
+    if single_tag is None:
+        return []  # Kind non resolu/inattendu - rien de fiable a verifier (RULE #5)
+    expected_tag = _LINE_KIND_MULTI_TAGS[kind] if multi else single_tag
+    child = node.children[0] if node.children else None
+    if child is None or child.tag != expected_tag:
+        found = child.tag if child is not None else "(vide)"
+        return [f"{ctx}: geometrie {expected_tag} attendue (LineType Kind={kind!r}, Multi={multi}), {found!r} trouvee"]
+    validator = _validate_polyline_node if single_tag == "POLYLINE" else (
+        lambda n, ax, c: _validate_surface_node(n, single_tag, ax, c)
+    )
+    if not multi:
+        return validator(child, axes, ctx)
+    parts = [c for c in child.children if c.tag == single_tag]
+    if not parts:
+        return [f"{ctx}: {expected_tag} sans aucun {single_tag} interne"]
+    problems: list[str] = []
+    for i, part in enumerate(parts):
+        problems.extend(validator(part, axes, f"{ctx}[{i}]"))
     return problems
 
 
@@ -386,17 +642,41 @@ def _validate_object(
                             "(ni identique, ni sous-classe via EXTENDS)",
                         ))
             continue
+        if resolved.type_kind == "CoordType":
+            # Geometrie/coordonnees (Lot 42) - voir note module pour le
+            # detail des formes reelles (COORD/MULTICOORD) et la citation
+            # eCH-0031 V2.1.0 §4.3.11.13. `error` : information COMPLETE des
+            # que le Type resout en CoordType (Multi/Axis toujours connus
+            # directement sur l'instance elle-meme, jamais une incertitude
+            # cross-modele) - meme politique que MANDATORY/NUMERIC/ENUM/Lot 40.
+            for node in raw_nodes:
+                for problem in _validate_coord_attribute(resolved, node, ctx):
+                    issues.append(ValidationIssue("error", basket.bid, obj.tid, obj.qualified_class, attr_name, problem))
+            continue
+        if resolved.type_kind == "LineType":
+            # Geometrie/coordonnees (Lot 42) - POLYLINE/SURFACE/AREA/MULTI*,
+            # eCH-0031 V2.1.0 §4.3.11.14/.15. `error` pour la meme raison que
+            # CoordType ci-dessus (structure/Kind/Multi toujours connus) -
+            # la seule incertitude possible (plage Min/Max par axe si VERTEX
+            # non resolu, schema.line_coord_type) degrade deja gracieusement
+            # vers une verification de parseabilite seule (RULE #5), jamais
+            # un skip complet de la structure.
+            for node in raw_nodes:
+                for problem in _validate_line_attribute(resolved, node, ctx):
+                    issues.append(ValidationIssue("error", basket.bid, obj.tid, obj.qualified_class, attr_name, problem))
+            continue
         if resolved.type_kind not in ("TextType", "NumType", "EnumType"):
-            # Type resolu vers autre chose que les 3 kinds geres par ce lot
-            # (ex. "LineType"/"CoordType" - geometrie, ou None - Type jamais
-            # resolu, cf. Municipality/AttrOrParam Lot 29) : rendu VISIBLE
-            # explicitement plutot que silencieusement ignore par
-            # `_validate_scalar` (qui renverrait une liste vide pour un
-            # `type_kind` inconnu) - eviter qu'un total "0 probleme" donne
-            # une fausse impression de conformite complete.
+            # Type resolu vers autre chose que les kinds geres par ce lot
+            # (ex. "FormattedType"/"BooleanType"/"BlackboxType"/"AnyOIDType"
+            # - jamais interpretes, ou None - Type jamais resolu, cf.
+            # Municipality/AttrOrParam Lot 29) : rendu VISIBLE explicitement
+            # plutot que silencieusement ignore par `_validate_scalar` (qui
+            # renverrait une liste vide pour un `type_kind` inconnu) - eviter
+            # qu'un total "0 probleme" donne une fausse impression de
+            # conformite complete.
             issues.append(ValidationIssue(
                 "info", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                f"{ctx}: type {resolved.type_kind!r} non verifie par ce lot (geometrie/type non resolu)",
+                f"{ctx}: type {resolved.type_kind!r} non verifie par ce lot (type non couvert/non resolu)",
             ))
             continue
         for node in raw_nodes:

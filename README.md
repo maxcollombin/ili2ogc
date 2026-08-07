@@ -89,9 +89,16 @@ objects should also count as resolvable targets - typically a
 catalogue/code-list basket distributed separately from the main data
 transfer (see [Known limitations](#known-limitations) and
 `docs/xtf-catalogue-references.md`). `-v`/`--verbose` also shows `info`-
-level issues (unresolved-type attributes, e.g. geometry); `-q`/`--quiet`
-shows only the final summary. Exit code is `1` if any `error`-severity
-issue was found, `0` otherwise (warnings/info never fail the run).
+level issues (types still unhandled by the validator, e.g. `FORMAT`ted
+values); `-q`/`--quiet` shows only the final summary. Exit code is `1` if
+any `error`-severity issue was found, `0` otherwise (warnings/info never
+fail the run).
+
+Geometry/coordinate attributes (`COORD`/`MULTICOORD`,
+`POLYLINE`/`SURFACE`/`AREA`/`MULTI*`) are validated structurally and, where
+the coordinate domain's axis ranges are resolvable, against their declared
+`Min`/`Max` per axis - see [Known limitations](#known-limitations) for the
+encoding forms this doesn't cover yet.
 
 When `--repo` is given, every model declared in the transfer's
 `HEADERSECTION/MODELS` is proactively checked for resolvability against
@@ -193,6 +200,19 @@ metamodel's own official names.
   (ANTLR rejects the whole tree on any rule failure) - not just the
   offending clause. Needs checking against the Reference Manual before
   deciding whether these are valid INTERLIS 2 forms worth supporting.
+- **Geometry/coordinate validation** (`COORD`/`MULTICOORD`/`POLYLINE`/
+  `SURFACE`/`AREA`/`MULTI*`, `xtf/validate.py`) checks structure and, where
+  resolvable, per-axis `Min`/`Max` ranges - but: a custom `LINE FORM`
+  segment (anything other than `STRAIGHTS`/`ARCS` in a `WITH (...)` clause)
+  is not interpreted (silently skipped, not flagged); `MULTICOORD`/
+  `MULTIPOLYLINE`/`MULTISURFACE`/`MULTIAREA`/`AREA`/`ARC` are implemented by
+  extrapolation from the Reference Manual and the confirmed
+  `COORD`/`POLYLINE` encoding convention, not confirmed against a real file
+  (none in this project's inventory uses them); a `LineType`'s coordinate
+  domain (`VERTEX` clause) is only followed on the attribute's own
+  declaration, not inherited from a base `LineType` via `EXTENDS` (e.g.
+  `DirectedLine EXTENDS Line = DIRECTED POLYLINE;` with no `VERTEX` of its
+  own) - falls back to a parseability-only check (no range) in that case.
 
 ## Architecture
 

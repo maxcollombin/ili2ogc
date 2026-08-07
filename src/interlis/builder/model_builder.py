@@ -482,6 +482,35 @@ class InterlisModelBuilder(InterlisParserVisitor):
         instance.Max = strings[1].getText()
         return instance
 
+    def _build_control_points_ref(self, ctx: ParserRuleContext, rule_name: str) -> ForwardRef | None:
+        """`controlPoints()` (`VERTEX Name(DOT Name)*`, ex. "VERTEX Coord2")
+        - 5e cas special (Lot 42, geometrie XTF). Jusqu'ici sa binding
+        declarative (`_resolution: {field: Name, multi: true}`) ne produisait
+        qu'une LISTE de textes de tokens Name, jamais attachee nulle part
+        (confirme reel : `LineType.CoordType` restait `None` pour TOUTE
+        instance construite, meme `Line = POLYLINE ... VERTEX Coord2;` sur
+        `CHBase_Part1_GEOMETRY_V1.ili`) - `_resolve_or_defer` (kind:
+        Reference generique) ne convient pas non plus tel quel : son
+        `ctx.getText()` capturerait le token VERTEX EN PLUS du nom qualifie
+        (`controlPoints()` porte son propre mot-cle, contrairement a
+        `domainRef()` qui ne contient QUE le nom). Reconstruit ici
+        manuellement le nom qualifie a partir des seuls tokens `Name`
+        (ignore VERTEX), meme convention de jointure par point que
+        `domainRef` (DOT == '.', confirme empiriquement). Retourne un
+        `ForwardRef` (jamais resolu ici) - attache generiquement par
+        `_apply_one_binding` via le binding `lineType.CoordType`
+        (`association: LineCoord, role: CoordType`, voir 06_types.yml), qui
+        gere deja tout seul le cas `isinstance(value, ForwardRef)` (attach +
+        `register_pending`, aucun code supplementaire necessaire ici)."""
+        names = [n.getText() for n in ca.call_list(ctx, "Name")]
+        if not names:
+            return None
+        hints = self._expand_kind_hint("CoordType")
+        return ForwardRef(
+            name=".".join(names), resolves_to_hint=hints or None, rule=rule_name,
+            home_model=self._current_model_name(), topic_extends_hint=self._current_topic_extends_hint(ctx),
+        )
+
     def _build_enumeration_tree(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry) -> None:
         """Construit correctement l'arbre EnumNode d'un `enumeration()`
         (Lot 33 - bug reel trouve en elargissant le corpus XTF a
@@ -635,6 +664,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
             instance = self._build_type_string_range(ctx)
             if instance is not None:
                 return instance
+
+        # controlPoints() : 5e cas special (Lot 42, geometrie XTF) - voir
+        # _build_control_points_ref pour le detail complet (jointure des
+        # tokens Name en ignorant VERTEX, ForwardRef ensuite attache
+        # generiquement par lineType.CoordType).
+        if rule_name == "controlPoints":
+            return self._build_control_points_ref(ctx, rule_name)
 
         # children: dispatch multi-visite (ex. definitions -> classDef*,
         # topicDef*, ...) - toutes les occurrences comptent, pas une seule
@@ -921,6 +957,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 # EXTENDS (Lot 38 point 2) : jamais fatal si non resolu, voir
                 # ForwardRef.graceful (RULE #5, symetrique a domainRef/BaseClass
                 # depuis le Lot 36).
+                value.graceful = True
+            if binding.get("association") == "LineCoord" and binding.get("role") == "CoordType":
+                # VERTEX (Lot 42, geometrie XTF) : un CoordType nomme peut
+                # vivre dans un modele importe non charge via --repo (meme
+                # categorie de limite que BaseClass/EXTENDS) - jamais fatal.
                 value.graceful = True
             self.attachment.attach(
                 instance, key, value,

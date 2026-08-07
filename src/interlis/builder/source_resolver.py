@@ -48,6 +48,33 @@ def _resolve_node(node: Any, builder: Any, rule: str) -> Any:
     return node
 
 
+def _resolve_multi_node(node: Any, builder: Any, rule: str, wrap_map: dict) -> Any:
+    """Comme `_resolve_node`, mais promeut un noeud (regle-bag OU token nu)
+    en instance typee du metamodele quand `wrap_map` couvre son nom de
+    regle/token (Lot 42 - meme principe que le repli `wrap:` deja existant
+    pour la branche alt de `resolve_source`, ici etendu a la branche `multi:
+    true` : necessaire pour `coordinateType.Axis`, `AssociationAxisSpec.Axis
+    {1..3} NumType ORDERED` - CHAQUE `numeric()`/`NUMERIC` nu de la liste
+    doit devenir son PROPRE `NumType`, jamais un bag brut partage - confirme
+    reel, `CoordType.Axis` ne contenait jusqu'ici QUE des dicts bruts, jamais
+    de vraies instances `NumType`, silencieusement inexploitables par tout
+    code aval attendant des `MetaInstance` - ex. schema.coord_axes). Un
+    token nu couvert par `wrap_map` (ex. `NUMERIC` sans plage/unite) produit
+    une instance VIDE du type cible (RULE #4, note coordinateType.Axis :
+    "a bare NUMERIC keyword ... still produces a NumType instance")."""
+    if isinstance(node, ParserRuleContext):
+        rule_name = builder._rule_name(node)
+        if rule_name in wrap_map:
+            return builder.visit_wrapped(node, wrap_map[rule_name], rule)
+        return _resolve_node(node, builder, rule)
+    if isinstance(node, TerminalNode):
+        token_name = _token_name(node, builder)
+        if token_name is not None and token_name in wrap_map:
+            return builder.registry.new_instance(wrap_map[token_name])
+        return node.getText()
+    return _resolve_node(node, builder, rule)
+
+
 def _token_name(node: Any, builder: Any) -> str | None:
     symbol = getattr(node, "symbol", None)
     if symbol is None:
@@ -73,6 +100,41 @@ def resolve_source(
 
     if source.get("kind") == "constant":
         return source.get("value")
+
+    # --- child_index : position BRUTE dans ctx.children (pas un accesseur
+    # nomme) - necessaire quand plusieurs alternatives grammaticales
+    # partagent le MEME jeu de noms de token a des positions DIFFERENTES, et
+    # qu'un AUTRE occurrence du meme token type existe AILLEURS dans le MEME
+    # ctx pour un motif SANS RAPPORT (Lot 42, bug reel trouve en construisant
+    # la validation geometrie XTF - voir numeric.Min/Max, 06_types.yml).
+    # `numeric()` a 4 alternatives ('(Number|PosNumber|Dec) DOTDOT
+    # (Number|PosNumber|Dec)', confirme sur le code ANTLR reel) TOUJOURS aux
+    # positions enfant 0/1/2 (operande, DOTDOT, operande) quelle que soit
+    # l'alternative prise - mais le mecanisme `alt_rule` generique (field
+    # compose + has_accessor + index) se laissait tromper par un `PosNumber`
+    # NON LIE existant plus loin dans le MEME ctx (la clause REFSYS optionnelle
+    # `{ Name PosNumber }`, ex. `{CHLV03[1]}`) : `ca.has_accessor(ctx,
+    # "PosNumber")` est TOUJOURS vrai (methode toujours presente sur
+    # NumericContext), et `ctx.PosNumber(0)` retournait ce PosNumber de
+    # refsys au lieu de None des que l'alternative REELLEMENT prise etait
+    # 'Dec DOTDOT Dec' (has_accessor teste la presence de la METHODE, pas de
+    # CETTE occurrence precise) - confirme reel sur `ili_corpus/
+    # CHBase_Part1_GEOMETRY_V1.ili` (`Coord2 = COORD 460000.000 ..
+    # 870000.000 [m] {CHLV03[1]}, ...` : Min resolvait a tort vers '1' - le
+    # PosNumber du refsys - au lieu de '460000.000', alors que Max (index 1,
+    # qui retombait correctement sur Dec faute d'un 2e PosNumber) restait
+    # juste). Une simple position BRUTE (enfant 0 = 1er operande, enfant 2 =
+    # 2e operande - DOTDOT est toujours l'enfant 1) est fiable pour ce motif
+    # precis, contrairement au nom d'accesseur.
+    if "child_index" in source:
+        idx = source["child_index"]
+        children = list(ctx.children or [])
+        node = children[idx] if 0 <= idx < len(children) else None
+        if node is None:
+            if optional:
+                return None
+            raise BuildError(f"child_index={idx!r} absent sur {type(ctx).__name__}", rule=rule, ctx=ctx)
+        return _resolve_node(node, builder, rule)
 
     field = source.get("field")
     optional = bool(source.get("optional"))
@@ -126,6 +188,8 @@ def resolve_source(
                 nodes = [n for n in nodes if lo < children.index(n) < hi]
             else:
                 nodes = []
+        if wrap_map:
+            return [_resolve_multi_node(n, builder, rule, wrap_map) for n in nodes]
         return [_resolve_node(n, builder, rule) for n in nodes]
 
     # --- alternatives (alt_token / alt_rule / alt_token_or_rule /

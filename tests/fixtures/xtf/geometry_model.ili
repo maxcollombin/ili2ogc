@@ -1,0 +1,42 @@
+INTERLIS 2.4;
+
+MODEL GeomTest AT "https://example.org/geomtest" VERSION "2026-08-07" =
+
+  TOPIC MainTopic =
+
+    DOMAIN
+      Coord2 = COORD
+        0.000 .. 100.000,
+        0.000 .. 200.000;
+
+      MultiCoord2 = MULTICOORD
+        0.000 .. 100.000,
+        0.000 .. 200.000;
+
+      Line = POLYLINE WITH (STRAIGHTS,ARCS) VERTEX Coord2;
+      MultiLine = MULTIPOLYLINE WITH (STRAIGHTS,ARCS) VERTEX Coord2;
+      Area = SURFACE WITH (STRAIGHTS,ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.001;
+
+    CLASS Point =
+      Pos: Coord2;
+    END Point;
+
+    CLASS MultiPoint =
+      Pos: MultiCoord2;
+    END MultiPoint;
+
+    CLASS Way =
+      Geom: Line;
+    END Way;
+
+    CLASS MultiWay =
+      Geom: MultiLine;
+    END MultiWay;
+
+    CLASS Zone =
+      Geom: Area;
+    END Zone;
+
+  END MainTopic;
+
+END GeomTest.
