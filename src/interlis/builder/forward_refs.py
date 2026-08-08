@@ -64,6 +64,16 @@ class ForwardRef:
     # InterlisModelBuilder._apply_one_binding, jamais par _resolve_or_defer
     # (qui ne connait pas encore le role/association cible a ce stade).
     graceful: bool = False
+    # True UNIQUEMENT pour le Super d'un `TOPIC EXTENDS topicRef` (Lot 46
+    # point 2) : `topicRef` resout vers un SubModel (le "Topic" au sens
+    # Package, confirme ilismeta16-classes.yml - n'etend PAS ExtendableME),
+    # alors que l'association Inheritance (Sub/Super) cible ExtendableME -
+    # seule la DataUnit JUMELLE de ce SubModel (meme topicDef, voir
+    # `InterlisModelBuilder._build_multi_target`/`_twin`) en est une
+    # instance reelle. `resolve_all` substitue ce jumeau APRES resolution
+    # du nom, plutot que de stocker directement le SubModel resolu (type
+    # incompatible avec l'attribut cible).
+    resolve_via_twin: bool = False
 
 
 @dataclass
@@ -198,6 +208,10 @@ class ForwardRefResolver:
     def resolve_all(self, repository=None) -> None:
         for entry in self._pending:
             resolved = self._resolve_one(entry.ref, repository)
+            if entry.ref.resolve_via_twin:
+                twin = getattr(resolved, "_twin", None)
+                if twin is not None:
+                    resolved = twin
             current = getattr(entry.container, entry.field, None)
             if isinstance(current, list):
                 for i, item in enumerate(current):

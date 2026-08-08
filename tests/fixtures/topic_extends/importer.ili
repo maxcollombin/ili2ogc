@@ -1,0 +1,10 @@
+INTERLIS 2.4;
+
+MODEL ExtendsImporter AT "https://example.org/extendsimporter" VERSION "2026-08-08" =
+
+  IMPORTS ExtendsBase;
+
+  TOPIC MainTopic EXTENDS ExtendsBase.MainTopic =
+  END MainTopic;
+
+END ExtendsImporter.

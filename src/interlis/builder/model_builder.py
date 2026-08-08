@@ -1000,6 +1000,15 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 # ForwardRef.graceful (RULE #5, symetrique a domainRef/BaseClass
                 # depuis le Lot 36).
                 value.graceful = True
+                hint = value.resolves_to_hint
+                hints = hint if isinstance(hint, list) else ([hint] if hint else [])
+                if "SubModel" in hints:
+                    # TOPIC EXTENDS (Lot 46 point 2) : seul ce cas resout vers
+                    # un SubModel plutot que directement vers la bonne
+                    # sous-classe d'ExtendableME (classDef/structureDef/
+                    # domainDef resolvent deja vers Class/DomainType) - voir
+                    # ForwardRef.resolve_via_twin.
+                    value.resolve_via_twin = True
             if binding.get("association") == "LineCoord" and binding.get("role") == "CoordType":
                 # VERTEX (Lot 42, geometrie XTF) : un CoordType nomme peut
                 # vivre dans un modele importe non charge via --repo (meme

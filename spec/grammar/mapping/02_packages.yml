@@ -302,17 +302,53 @@ topicDef:
         field: FINAL
         presence: true
       note: voir DataUnit.Abstract ci-dessus - meme slot de modificateur partage.
-    DataUnit.extends_topicRef:
+    DataUnit.Super:
+      association: Inheritance
+      role: Super
       source:
         field: topicRef
-        index: 0
+        anchor: EXTENDS
         optional: true
-      note: 'CONFIRME (Lot 15, point 18). ''EXTENDS topicRef()'' - DataUnit extends ExtendableME, donc
-        l''association generique Inheritance (Sub {0..*} ExtendableME <-> Super {0..1} ExtendableME, deja
-        confirmee pour classDef/structureDef/viewDef/graphicDef/unitDef - Lots 12/13) s''applique ici
-        aussi : feeds Inheritance (Sub=cette DataUnit, Super=DataUnit de la topicRef() resolue).
+      note: 'CONFIRME (Lot 15, point 18), binding REELLEMENT active au Lot 46 point 2 - voir ci-dessous.
+        ''EXTENDS topicRef()'' - DataUnit extends ExtendableME, donc l''association generique Inheritance
+        (Sub {0..*} ExtendableME <-> Super {0..1} ExtendableME, deja confirmee pour classDef/structureDef/
+        viewDef/graphicDef/unitDef - Lots 12/13) s''applique ici aussi : feeds Inheritance (Sub=cette
+        DataUnit, Super=DataUnit de la topicRef() resolue).
 
-        '
+        CORRIGE (Lot 46 point 2, RULE #1/#2/#4 - investigation AVANT tout code, voir PROGRESS.md pour le
+        detail complet du traçage empirique). Cle renommee ''extends_topicRef'' -> ''Super'' + ajout de
+        `association`/`role` explicites : SANS ces deux cles, `AttachmentResolver.attach()` ne trouvait ni
+        un attribut own/inherited ''extends_topicRef'' (nom fabrique, jamais reel) ni une association dont
+        un role porte ce nom - `BuildError` systematique, silencieusement absorbe par `_apply_bindings`
+        (`source.optional: true` -> `continue` sur `BuildError`, voir model_builder.py) : confirme
+        empiriquement (trace directe de `AttachmentResolver.attach`) sur les 2 occurrences reelles de
+        `TOPIC ... EXTENDS ...` du corpus (`SectoralPlanForRoadInfrastructure_V1_4.ili`) - Super restait
+        `None` sur les 2 DataUnit concernees, aucune exception visible, aucune regression de comportement
+        externe (le build entier reussissait quand meme).
+
+        `index: 0` -> `anchor: EXTENDS` (RULE #1/#2, meme mecanisme deja utilise pour `Model.Language`/
+        `CharSetIANAName`/`xmlns` ci-dessus) : bug SEPARE trouve en tracant - `ctx.topicRef(0)` prend le
+        PREMIER `topicRef()` de la regle SANS DISTINGUER celui de la clause EXTENDS (avant le `=`) de ceux
+        de la clause `DEPENDS ON topicRef (COMMA topicRef)*` (apres le `=`, grammaire confirmee via
+        `mappings/antlr-rule-index.yml`) : pour un TOPIC SANS EXTENDS mais AVEC `DEPENDS ON` (cas reel,
+        ex. `BaseModel_SectoralPlans_LV03/LV95_V1_4.SectoralPlans_WithLatestModification`, `DEPENDS ON
+        BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_CoordinationLevel,...`), `topicRef(0)` capturait
+        a tort la 1ere cible `DEPENDS ON` comme si c''etait une cible EXTENDS - deja inoffensif avant ce
+        lot (attach() echouait de toute facon sur la cle fabriquee), mais serait devenu un LIEN Super
+        INCORRECT une fois `association`/`role` ajoutes seuls. `anchor: EXTENDS` : `None` si `EXTENDS()`
+        absent (jamais confondu avec un DEPENDS ON), le 1er `topicRef()` suivant le token EXTENDS sinon -
+        toujours le bon (les cibles DEPENDS ON, plus loin dans `ctx.children`, sont egalement "apres"
+        EXTENDS mais JAMAIS les premieres rencontrees dans l''ordre du document).
+
+        `topicRef` resout vers `SubModel` (son propre binding, `resolves_to: SubModel`) - PAS directement
+        vers la DataUnit attendue par Inheritance.Super (ExtendableME) : SubModel EXTENDS Package/
+        MetaElement, jamais ExtendableME (confirme `ilismeta16-classes.yml`). Nouveau mecanisme
+        `ForwardRef.resolve_via_twin` (forward_refs.py) : positionne par `InterlisModelBuilder.
+        _apply_one_binding` UNIQUEMENT quand `resolves_to_hint` contient ''SubModel'' (donc jamais pour
+        classDef/structureDef/domainDef.Super, qui resolvent deja directement vers Class/DomainType) -
+        `ForwardRefResolver.resolve_all` substitue alors le SubModel resolu par son JUMEAU DataUnit
+        (`_twin`, deja pose par `_build_multi_target` pour CHAQUE topicDef, jusqu''ici jamais lu ailleurs)
+        avant l''assignation finale.'
     DataUnit.BasketOID:
       source:
         field: BASKET

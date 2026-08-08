@@ -1,0 +1,22 @@
+INTERLIS 2.4;
+
+MODEL ExtendsBase AT "https://example.org/extendsbase" VERSION "2026-08-08" =
+
+  TOPIC MainTopic =
+
+    CLASS Item =
+      Name: MANDATORY TEXT;
+    END Item;
+
+  END MainTopic;
+
+  TOPIC DependsOnly =
+    DEPENDS ON MainTopic;
+
+    CLASS OtherItem =
+      Name: MANDATORY TEXT;
+    END OtherItem;
+
+  END DependsOnly;
+
+END ExtendsBase.
