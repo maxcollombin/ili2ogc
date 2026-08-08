@@ -28,6 +28,15 @@ MODEL RefTest AT "https://example.org/reftest" VERSION "2026-08-07" =
       rExtIndicator -- {0..*} Indicator;
     END Location_ExternalIndicator;
 
+    CLASS Note =
+      Text: MANDATORY TEXT;
+    END Note;
+
+    ASSOCIATION Location_Note =
+      rNote -<#> {1} Note;
+      rLocationForNote -- {0..*} Location;
+    END Location_Note;
+
   END MainTopic;
 
 END RefTest.

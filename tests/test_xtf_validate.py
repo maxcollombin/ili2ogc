@@ -254,11 +254,13 @@ def test_embedded_role_resolved_is_not_unknown_attribute(ref_builder):
 def test_embedded_role_not_exposed_on_opposite_class(ref_builder):
     """rLocation ne doit PAS apparaitre comme pseudo-attribut de Location
     elle-meme (il s'embarque uniquement cote Indicator, la classe dont le
-    role oppose - rIndicator - a une cardinalite {0..*})."""
+    role oppose - rIndicator - a une cardinalite {0..*}) - meme si Location
+    porte par ailleurs un AUTRE role reellement embarque sur elle-meme
+    (rNote, ASSOCIATION Location_Note, voir tests Lot 47 ci-dessous)."""
     from interlis.xtf.schema import embedded_roles_of, resolve_class
 
     location_cls = resolve_class(LOCATION_CLASS, symbol_table=ref_builder.symbol_table, repository=None)
-    assert embedded_roles_of(location_cls, ref_builder.symbol_table) == {}
+    assert "rLocation" not in embedded_roles_of(location_cls, ref_builder.symbol_table)
 
 
 def test_embedded_role_unresolved_ref_is_warning(ref_builder):
@@ -271,6 +273,43 @@ def test_embedded_role_unresolved_ref_is_warning(ref_builder):
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="rLocation", severity="warning")
     assert any("introuvable dans ce transfert" in m for m in msgs)
+
+
+# --- Lot 47 : embedded_roles_of doit suivre la chaine EXTENDS (tests/fixtures/
+# xtf/reference_model.ili : ASSOCIATION Location_Note embarque rNote sur
+# Location - CLASS SpecialLocation EXTENDS Location (deja utilisee par les
+# tests Lot 40 ci-dessus) doit donc HERITER ce pseudo-attribut, confirme reel
+# (RULE #4) responsable de 93-95% des avertissements sur
+# IVS_V2_1_national/regional_lokal_LV95.xtf avant ce lot - CLASS ivs_punkt-
+# objekte_base (ABSTRACT) porte le role embarque, les objets XTF reels sont
+# tous de la sous-classe concrete ivs_punktobjekte_lv95/_lv03.) ---
+
+SPECIAL_LOCATION_CLASS = "RefTest.MainTopic.SpecialLocation"
+
+
+def test_embedded_role_from_base_class_is_inherited_by_subclass(ref_builder):
+    from interlis.xtf.schema import embedded_roles_of, resolve_class
+
+    location_cls = resolve_class(LOCATION_CLASS, symbol_table=ref_builder.symbol_table, repository=None)
+    special_cls = resolve_class(SPECIAL_LOCATION_CLASS, symbol_table=ref_builder.symbol_table, repository=None)
+    assert "rNote" in embedded_roles_of(location_cls, ref_builder.symbol_table)
+    assert "rNote" in embedded_roles_of(special_cls, ref_builder.symbol_table)
+
+
+def test_embedded_role_from_base_class_resolved_on_subclass_instance_has_no_issue(ref_builder):
+    """Regression bout-en-bout (RULE #4, meme forme que le corpus reel
+    IVS_V2_1) : un objet de la SOUS-CLASSE porte le REF du role embarque
+    declare sur la classe de BASE - doit resoudre sans issue, PAS
+    "attribut absent du schema"."""
+    note = XtfObject(tid="note-1", qualified_class="RefTest.MainTopic.Note", attributes=dict([_text_attr("Text", "hello")]))
+    special = XtfObject(
+        tid="special-1", qualified_class=SPECIAL_LOCATION_CLASS,
+        attributes=dict([_text_attr("Name", "Bern"), _ref_attr("rNote", "note-1")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[note, special])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    assert _messages(issues, attribute="rNote") == []
 
 
 # --- Lot 43 (suite Lot 45) : statut EXTERNAL d'un role d'association

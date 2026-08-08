@@ -204,7 +204,25 @@ def embedded_roles_of(class_instance: MetaInstance, symbol_table: SymbolTable) -
     (via `home_symbol_table` ci-dessus), pas systematiquement celle du
     modele racine : couvre le cas d'une association definie dans un modele
     IMPORTE par le modele racine (ex. classe embarquee via `TOPIC EXTENDS`,
-    ou plus generalement toute classe resolue via `ModelRepository`)."""
+    ou plus generalement toute classe resolue via `ModelRepository`).
+
+    CORRIGE (Lot 47, RULE #1/#4 - confirme empiriquement responsable de
+    93-95% des avertissements sur `IVS_V2_1_national/regional_lokal_LV95.xtf`) :
+    `embed_on is class_instance` comparait par IDENTITE STRICTE, sans
+    remonter la chaine `EXTENDS`/`Super` de `class_instance` - un role
+    embarque declare sur une classe ABSTRAITE de base (ex.
+    `IVS_V2_1.ivs_punktobjekte_base`, `ASSOCIATION
+    ivs_signatur_punkt__ivs_punktobjekte_base`) n'etait donc JAMAIS
+    reconnu pour les sous-classes CONCRETES reellement transferees dans le
+    XTF (`ivs_punktobjekte_lv95`/`_lv03`, `CLASS ... EXTENDS
+    ivs_punktobjekte_base`) - le pseudo-attribut restait "absent du
+    schema" (warning) pour CHAQUE objet de ces sous-classes. `embed_on is
+    class_instance` -> `is_class_compatible(class_instance, embed_on)`
+    (definie plus bas dans ce module, meme relation de compatibilite deja
+    utilisee par le Lot 40 pour la cible REELLE d'une reference resolue -
+    RULE #1, aucune logique dupliquee/inventee) : vrai si `class_instance`
+    EST `embed_on`, OU une sous-classe (directe ou indirecte) via la
+    chaine `Super`."""
     result: dict[str, MetaInstance] = {}
     for candidate in symbol_table.all_registered():
         if not isinstance(candidate, MetaInstance) or candidate._qualified_class.rsplit(".", 1)[-1] != "Class":
@@ -227,7 +245,7 @@ def embedded_roles_of(class_instance: MetaInstance, symbol_table: SymbolTable) -
             embed_on, embedded_role = target_b, role_a
         else:
             embed_on, embedded_role = target_b, role_a
-        if embed_on is class_instance and getattr(embedded_role, "Name", None):
+        if is_class_compatible(class_instance, embed_on) and getattr(embedded_role, "Name", None):
             result[embedded_role.Name] = embedded_role
     return result
 
