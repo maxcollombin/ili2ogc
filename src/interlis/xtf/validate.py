@@ -83,6 +83,22 @@ Perimetre couvert :
   (770 occurrences, panier qualifie sous le modele EXTENSION alors que
   chaque objet reste qualifie sous le modele de BASE qui declare les
   associations).
+- tolerance d'arrondi sur les bornes Min/Max numeriques (Lot 48,
+  `_numeric_range_tolerance`, utilisee par `_validate_scalar`/NumType ET
+  `_numeric_problems`/composantes COORD-ARC) : RULE #4, citation directe
+  eCH-0031 V2.1.0 §2.8 "Umgang mit Rundung von numerischen Werten und
+  Koordinaten" + §4.3.11.4 "Codierung von numerischen Datentypen" - un
+  emetteur peut transferer une valeur avec une precision SUPERIEURE a
+  celle du domaine (ex. "100.0000001"/"10.0e1" pour un domaine 0..999) ;
+  seul compte qu'une fois ARRONDIE a la precision du domaine (deduite du
+  nombre de decimales de Min/Max, seul signal disponible - NumType n'a
+  aucun attribut Precision dedie), la valeur reste dans la plage. Demande
+  explicite utilisateur (question directe sur les coordonnees a 3
+  decimales de GeometryCHLV95_V1/V2) - inerte sur l'inventaire XTF actuel
+  (aucune regression, aucun changement de comptage : les 12 fichiers du
+  corpus transferent deja leurs valeurs a la precision exacte du modele)
+  mais evite un futur faux positif sur tout transfert exercant legitimement
+  cette tolerance (ex. broker geodienste.ch).
 - PAS encore couvert (limites documentees, PROGRESS.md) : attributs herites
   via EXTENDS depuis un modele IMPORTE non charge (chaine Super tronquee),
   segments LINE FORM personnalises (structure arbitraire, WITH (...) autre
@@ -147,6 +163,45 @@ def _extract_reference(node: RawNode) -> str | None:
     return None
 
 
+def _decimal_places(raw: str) -> int:
+    """Nombre de chiffres apres le point decimal dans `raw` (0 si absent) -
+    utilise pour deriver la PRECISION du domaine directement depuis la
+    forme textuelle de Min/Max (ex. '850000.000' -> 3), preservee telle
+    quelle depuis le fichier .ili source (confirme empiriquement,
+    `tests/test_numeric_domain_min_max.py` : `0.000 .. 850000.000` ->
+    `Min='0.000'`/`Max='850000.000'`, aucune normalisation) - le metamodele
+    IlisMeta16 n'a AUCUN attribut Precision/decimales dedie sur NumType
+    (own: {Min, Max, Circular, Clockwise} uniquement, confirme
+    `mappings/ilismeta16-classes.yml`), c'est le SEUL signal disponible."""
+    return len(raw.split(".", 1)[1]) if "." in raw else 0
+
+
+def _numeric_range_tolerance(min_raw, max_raw) -> float:
+    """Lot 48 - RULE #4, citation directe eCH-0031 V2.1.0 :
+    §2.8 "Umgang mit Rundung von numerischen Werten und Koordinaten" :
+    "Numerische Werte werden [...] im INTERLIS2-Transfer gemaess der
+    Wertebereichsdefinition [...] dargestellt. Konsistenzbedingungen
+    muessen mit den gerundeten Werten (auf- oder abgerundet) eingehalten
+    sein. [...] Pruefprogramme muessen also bei ihrer Pruefung auf- und
+    abgerundete Werte als in Ordnung taxieren." / §4.3.11.4 "Codierung von
+    numerischen Datentypen" : "Sie [numerische Werte] koennen mit hoeherer
+    Genauigkeit transferiert werden als durch den Wertebereich verlangt.
+    [...] Damit kann z.B. 100 (bei einem angenommenen Wertebereich von
+    0..999) als 100, 100.0000001, 10.0e1 oder 1.0e2 uebertragen werden."
+    Un emetteur peut donc transferer PLUS de decimales que le domaine n'en
+    definit - seul compte que la valeur, une fois arrondie a la precision
+    du domaine (deduite de Min/Max via `_decimal_places`), reste dans la
+    plage. Tolerance = demi-unite de la plus petite decimale representable
+    (0.5 * 10^-decimales) : une valeur situee EXACTEMENT a cette distance
+    d'une borne arrondit encore dedans (arrondi standard, symetrique aux
+    deux bornes - "auf- oder abgerundet" ne privilegie aucun sens)."""
+    decimals = 0
+    for raw in (min_raw, max_raw):
+        if raw is not None:
+            decimals = max(decimals, _decimal_places(str(raw)))
+    return 0.5 * (10 ** -decimals)
+
+
 def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> list[str]:
     """Verifications de type de base sur UN noeud attribut present -
     retourne une liste de messages d'erreur (vide si conforme, ou si le
@@ -164,9 +219,10 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
         min_raw = getattr(resolved.type_instance, "Min", None)
         max_raw = getattr(resolved.type_instance, "Max", None)
         try:
-            if min_raw is not None and numeric_value < float(min_raw):
+            tolerance = _numeric_range_tolerance(min_raw, max_raw)
+            if min_raw is not None and numeric_value < float(min_raw) - tolerance:
                 problems.append(f"{ctx}: valeur {text!r} < Min {min_raw!r}")
-            if max_raw is not None and numeric_value > float(max_raw):
+            if max_raw is not None and numeric_value > float(max_raw) + tolerance:
                 problems.append(f"{ctx}: valeur {text!r} > Max {max_raw!r}")
         except ValueError:
             pass  # Min/Max non numeriques (ex. domaine predefini) - hors perimetre de ce lot
@@ -233,7 +289,8 @@ def _find_child(node: RawNode, tag: str) -> RawNode | None:
 
 def _numeric_problems(text: str | None, min_raw, max_raw, ctx: str) -> list[str]:
     """Meme logique que la branche NumType de `_validate_scalar` (Min/Max
-    textuels, tolerance sur une borne non numerique - ex. domaine predefini),
+    textuels, tolerance d'arrondi via `_numeric_range_tolerance` - Lot 48 -
+    et tolerance sur une borne non numerique - ex. domaine predefini),
     factorisee ici pour etre reutilisee sur les composantes de coordonnees
     (C1/C2/C3/A1/A2/R) - `min_raw`/`max_raw` a `None` pour une composante
     dont l'axe/la borne n'est pas connue (verification de PARSEABILITE
@@ -246,9 +303,10 @@ def _numeric_problems(text: str | None, min_raw, max_raw, ctx: str) -> list[str]
         return [f"{ctx}: valeur {text!r} non numerique"]
     problems: list[str] = []
     try:
-        if min_raw is not None and value < float(min_raw):
+        tolerance = _numeric_range_tolerance(min_raw, max_raw)
+        if min_raw is not None and value < float(min_raw) - tolerance:
             problems.append(f"{ctx}: valeur {text!r} < Min {min_raw!r}")
-        if max_raw is not None and value > float(max_raw):
+        if max_raw is not None and value > float(max_raw) + tolerance:
             problems.append(f"{ctx}: valeur {text!r} > Max {max_raw!r}")
     except ValueError:
         pass

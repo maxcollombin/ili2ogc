@@ -79,6 +79,28 @@ def test_numeric_out_of_range_flagged(builder):
     assert any("Min" in m for m in msgs)
 
 
+def test_numeric_within_rounding_tolerance_has_no_issue(builder):
+    """Lot 48 - RULE #4, eCH-0031 V2.1.0 §2.8 "Umgang mit Rundung von
+    numerischen Werten und Koordinaten" / §4.3.11.4 "Codierung von
+    numerischen Datentypen" : une valeur peut etre transferee avec une
+    precision SUPERIEURE a celle du domaine (BirthYear: 1800..2100, 0
+    decimale) - seul compte qu'elle arrondit dans la plage. 1799.6
+    arrondit a 1800, ne doit PAS etre signalee < Min."""
+    transfer = _transfer(_object("t1", {"Name": "Alice", "BirthYear": "1799.6"}))
+    issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
+    assert _messages(issues, attribute="BirthYear") == []
+
+
+def test_numeric_beyond_rounding_tolerance_still_flagged(builder):
+    """Regression-guard : au-dela de la demi-unite de tolerance (0.5 pour 0
+    decimale), une valeur qui arrondit encore HORS plage reste une erreur -
+    1799.4 arrondit a 1799, toujours < Min 1800."""
+    transfer = _transfer(_object("t1", {"Name": "Alice", "BirthYear": "1799.4"}))
+    issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
+    msgs = _messages(issues, attribute="BirthYear", severity="error")
+    assert any("Min" in m for m in msgs)
+
+
 def test_numeric_non_numeric_value_flagged(builder):
     transfer = _transfer(_object("t1", {"Name": "Alice", "BirthYear": "not-a-number"}))
     issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
@@ -531,6 +553,27 @@ def test_coord_within_range_has_no_issue(geometry_builder):
     obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("50.0", "100.0")))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     assert _messages(issues, attribute="Pos") == []
+
+
+def test_coord_within_rounding_tolerance_has_no_issue(geometry_builder):
+    """Lot 48 - RULE #4, eCH-0031 V2.1.0 §2.8/§4.3.11.4 (meme raisonnement
+    que test_numeric_within_rounding_tolerance_has_no_issue) : Coord2 (3
+    decimales, `0.000 .. 100.000`) - une valeur transferee avec une
+    precision superieure qui arrondit encore dans la plage (100.0004 ->
+    100.000, exactement Max) ne doit PAS etre signalee."""
+    obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("100.0004", "100.0")))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Pos") == []
+
+
+def test_coord_beyond_rounding_tolerance_still_flagged(geometry_builder):
+    """Regression-guard : au-dela de la tolerance (0.0005 pour 3
+    decimales), la valeur arrondit encore AU-DELA du Max declare -
+    100.0006 -> 100.001, toujours hors plage."""
+    obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("100.0006", "100.0")))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    msgs = _messages(issues, attribute="Pos", severity="error")
+    assert any("Max" in m for m in msgs)
 
 
 def test_coord_out_of_range_flagged(geometry_builder):
