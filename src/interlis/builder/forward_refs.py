@@ -124,6 +124,24 @@ class SymbolTable:
     def resolve(self, name: str, kind_hint: str | list[str] | None = None, home_model: str | None = None) -> Any | None:
         if name in self._qualified:
             return self._qualified[name]
+        # CORRIGE (Lot 49, RULE #1 - bug trouve en verifiant la recursion de
+        # structure sur le corpus reel) : un nom QUALIFIE dont le prefixe ne
+        # designe PAS cette table (`has_prefix` False - modele importe, PAS
+        # le fichier courant) ne doit JAMAIS retomber sur le repli par nom
+        # court ci-dessous - sinon une collision de nom court avec un symbole
+        # LOCAL (ex. `STRUCTURE ModInfo EXTENDS WithLatestModification_V1.
+        # ModInfo` - "ModInfo" existe LOCALEMENT ET dans le modele importe)
+        # resout silencieusement vers le MAUVAIS candidat (confirme reel :
+        # ModInfo.Super pointant vers LUI-MEME, un self-loop, avant ce fix).
+        # `ForwardRefResolver._resolve_one` appelle CE `resolve()` en premier
+        # et ne tente son propre repli cross-fichier (`has_prefix`/
+        # `ModelRepository.resolve_external`) que si `resolve()` renvoie
+        # `None` - sans cette garde, ce repli n'etait donc JAMAIS atteint des
+        # qu'une collision de nom court existait. Les noms NON qualifies
+        # (`"." not in name`) restent inchanges (`has_prefix` renvoie
+        # toujours False pour eux, cas hors de portee de cette garde).
+        if "." in name and not self.has_prefix(name):
+            return None
         short = name.rsplit(".", 1)[-1]
         candidates = self._by_short_name.get(short, [])
         if kind_hint is not None and len(candidates) > 1:

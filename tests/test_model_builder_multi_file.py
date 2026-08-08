@@ -133,3 +133,43 @@ def test_topic_without_extends_but_with_depends_on_has_no_super():
     _builder, model = _build_topic_extends("base.ili")
     depends_only = next(t for t in model.Element if getattr(t, "Name", None) == "DependsOnly")
     assert getattr(depends_only._twin, "Super", None) is None
+
+
+# --- Lot 49 : SymbolTable.resolve() sur une collision de nom court entre un
+# symbole LOCAL et un symbole IMPORTE (tests/fixtures/cross_model_short_name_
+# collision/{base,importer}.ili) - CollisionBase.ModInfo (LatestModification:
+# MANDATORY TEXT) + CollisionImporter.MainTopic.ModInfo EXTENDS
+# CollisionBase.ModInfo (vide, aucun attribut propre) : meme forme EXACTE que
+# le cas reel trouve sur BaseModel_SectoralPlans_V1_4.ili/
+# CHBase_Part5_MODIFICATIONINFO_V1.ili (WithLatestModification_V1.ModInfo),
+# "ModInfo" existant LOCALEMENT ET dans le modele importe. ---
+
+COLLISION_FIXTURES_DIR = Path(__file__).parent / "fixtures/cross_model_short_name_collision"
+
+
+def test_extends_cross_model_short_name_collision_resolves_to_imported_class():
+    """`STRUCTURE ModInfo EXTENDS CollisionBase.ModInfo` (nom qualifie, PAS
+    le nom court "ModInfo" seul) doit resoudre vers le ModInfo IMPORTE - pas
+    vers le ModInfo LOCAL lui-meme (self-loop, bug avant ce lot : `resolve()`
+    retombait sur le repli par nom court AVANT que le repli cross-fichier
+    n'ait sa chance, des qu'une correspondance qualifiee exacte manquait -
+    meme si le prefixe qualifie ("CollisionBase") ne designait PAS du tout
+    ce fichier)."""
+    tree, errors = parse_file(COLLISION_FIXTURES_DIR / "importer.ili")
+    assert not errors, errors
+    repository = ModelRepository([COLLISION_FIXTURES_DIR])
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+
+    from interlis.xtf.schema import attributes_of, resolve_class
+
+    cls = resolve_class(
+        "CollisionImporter.MainTopic.ModInfo", symbol_table=builder.symbol_table, repository=repository,
+    )
+    sup = getattr(cls, "Super", None)
+    assert sup is not None
+    assert sup is not cls  # RULE #6 - le self-loop exact du bug
+    assert sup.Name == "ModInfo"
+    assert list(attributes_of(cls)) == ["LatestModification"]

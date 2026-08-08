@@ -1,0 +1,18 @@
+INTERLIS 2.4;
+
+MODEL CollisionImporter AT "https://example.org/collisionimporter" VERSION "2026-08-08" =
+
+  IMPORTS CollisionBase;
+
+  TOPIC MainTopic =
+
+    STRUCTURE ModInfo EXTENDS CollisionBase.ModInfo =
+    END ModInfo;
+
+    CLASS Thing =
+      Info: ModInfo;
+    END Thing;
+
+  END MainTopic;
+
+END CollisionImporter.
