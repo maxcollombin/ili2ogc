@@ -1,0 +1,12 @@
+INTERLIS 2.4;
+
+MODEL GregorianYearRef AT "https://example.org/gregorian-year-ref" VERSION "2026-08-08" =
+
+  TOPIC T =
+    CLASS Thing =
+      Ident: INTERLIS.I32OID;
+      Year: INTERLIS.GregorianYear;
+    END Thing;
+  END T;
+
+END GregorianYearRef.

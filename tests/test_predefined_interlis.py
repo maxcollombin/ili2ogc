@@ -73,6 +73,26 @@ def test_import_instance_resolves_to_real_interlis_model():
     assert imported_model.Name == "INTERLIS"
 
 
+def test_qualified_gregorian_year_resolves_to_numtype_with_manual_range():
+    """Lot 47 point 3 : `INTERLIS.GregorianYear` (RULE #4, eCH-0031 V2.1.0
+    §3.8.7 "Datum und Zeit", `DOMAIN GregorianYear = 1582 .. 2999 [Y]
+    {GregorianCalendar};` - unite/annotation volontairement omises, voir
+    repository.py) doit resoudre en NumType Min=1582/Max=2999, comme
+    I32OID ci-dessus - PAS un type_kind=None jamais verifie (bug confirme
+    reel sur RoadTrafficAccidentLocation_V2.ili/RoadTrafficCensus_V1_1.ili
+    avant ce lot)."""
+    _, model = _build("gregorian_year_ref.ili", repository=None)
+    topic = model.Element[0]
+    thing = topic.Element[0]
+    year_attr = next(a for a in thing.ClassAttribute if a.Name == "Year")
+    type_value = year_attr.Type
+    assert not isinstance(type_value, UnresolvedNamedReference)
+    assert type_value._qualified_class == "IlisMeta16.ModelData.NumType"
+    assert type_value.Name == "GregorianYear"
+    assert type_value.Min == "1582"
+    assert type_value.Max == "2999"
+
+
 def test_unqualified_reference_without_imports_unqualified_still_raises():
     # Regression guard : le bug corrige (has_prefix toujours True pour un nom
     # non qualifie) masquait TOUTE reference locale non resolue derriere un

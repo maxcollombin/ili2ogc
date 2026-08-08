@@ -75,6 +75,53 @@ _MODEL_NAME_RE = re.compile(r"\bMODEL\s+([A-Za-z_][A-Za-z0-9_]*)")
 # n'est actuellement cible par aucun ForwardRef reel du corpus - I32OID
 # n'EXTENDS plus ANYOID (impossible) mais reste un DOMAIN OID numerique
 # independant, comportementalement equivalent pour toute resolution par nom.
+#
+# GregorianYear AJOUTE (Lot 47 point 3, demande explicite utilisateur suite
+# a la categorisation des issues XTF - RULE #4, citation directe eCH-0031
+# V2.1.0 §3.8.7 "Datum und Zeit" : `DOMAIN GregorianYear = 1582 .. 2999 [Y]
+# {GregorianCalendar};`) : contrairement a BOOLEAN/ANYOID/UUIDOID ci-dessous,
+# `GregorianYear` est un `Name` ORDINAIRE (pas un token lexer reserve) -
+# `INTERLIS.GregorianYear` resout via le MEME chemin `domainRef` (confirme
+# par tracage direct de l'arbre ANTLR, RULE #2) que I32OID/NOOID/STANDARDOID
+# ci-dessus - aucun binding dedie necessaire. Unite `[Y]` et annotation
+# `{GregorianCalendar}` volontairement OMISES (perimetre reduit,
+# deliberement) : confirme empiriquement qu'une reference d'unite non
+# resolue (`unitRef` degrade gracieusement, ex. `INTERLIS.M`/`INTERLIS.h`
+# deja references ainsi par `RoadTrafficAccidentLocation_V2.ili` sans jamais
+# bloquer la resolution Min/Max du NumType englobant) ne genait deja pas la
+# verification NUMERIC reelle qui motive cet ajout - modeliser `UNIT Year
+# [Y]`/`REFSYSTEM BASKET BaseTimeSystems` pour rester fidele a la citation
+# complete n'apporterait donc aucun benefice fonctionnel supplementaire.
+# Resultat confirme (RULE #6) : `AccidentYear`/`Year` (RoadTrafficAccidentLocation_V2.ili/
+# RoadTrafficCensus_V1_1.ili, `INTERLIS.GregorianYear`) beneficient desormais
+# d'une VRAIE verification NumType (Min=1582/Max=2999) au lieu d'un `type
+# None` jamais verifie.
+#
+# BOOLEAN VOLONTAIREMENT ABSENT (meme categorie de limite qu'ANYOID/UUIDOID
+# ci-dessus, investigue au Lot 47 point 3) : `BOOLEAN` EST un token lexer
+# reserve (`vendor/interlis-antlr4/InterlisLexer.g4`, `BOOLEAN : 'BOOLEAN';`)
+# - MAIS, contrairement a ANYOID/UUIDOID (inaccessibles hors de leurs formes
+# qualifiees dediees), `INTERLIS.BOOLEAN` resout en realite via
+# `structureRef` (`InterlisParser.g4` : `structureRef : (INTERLIS DOT (Name
+# | BOOLEAN | UUIDOID | URI) ...)`), PAS `domainRef` - confirme par tracage
+# direct de l'arbre ANTLR (RULE #2, meme methode que pour GregorianYear
+# ci-dessus). `structureRef` (spec/grammar/mapping/03_classes_and_structures.yml)
+# resout SEULEMENT vers `IlisMeta16.ModelData.Class` (`resolves_to: Class`) -
+# jamais vers un `EnumType`, alors que la citation manuel reelle (§3.8.4,
+# RULE #4) definit BOOLEAN comme `DOMAIN BOOLEAN (FINAL) = (false, true)
+# ORDERED;`, une ENUMERATION. Deux options ecartees : (1) enregistrer une
+# fausse instance `Class[Kind=Structure]` nommee "BOOLEAN" resoudrait le nom
+# mais MENTIRAIT sur le metamodele reel (BOOLEAN n'est structurellement pas
+# une STRUCTURE) ; (2) meme resolue "correctement", le `type_kind` resultant
+# resterait hors du perimetre couvert par `xtf/validate.py` (seuls
+# TextType/NumType/EnumType sont interpretes - un `Class`/STRUCTURE resolu
+# resterait "info: type non verifie", EXACTEMENT le meme resultat qu'un
+# `type_kind=None` non resolu) : AUCUN benefice fonctionnel a corriger ce
+# cas, contrairement a GregorianYear. Necessiterait un binding dedie
+# discriminant PAR ALTERNATIVE grammaticale de `structureRef` (Name vs
+# BOOLEAN vs UUIDOID vs URI) - mecanisme de resolution actuel (`kind_hint`
+# statique par regle) n'offre pas ce niveau de granularite - hors perimetre
+# de ce lot.
 _PREDEFINED_MODEL_INTERNAL_NAME = "PredefinedInterlisNamespace"
 _PREDEFINED_INTERLIS_SOURCE = f"""\
 INTERLIS 2.4;
@@ -85,6 +132,7 @@ MODEL {_PREDEFINED_MODEL_INTERNAL_NAME} AT "http://www.interlis.ch" VERSION "202
     NOOID = OID ANY;
     I32OID = OID 0..2147483647;
     STANDARDOID = OID TEXT*16;
+    GregorianYear = 1582..2999;
 
 END {_PREDEFINED_MODEL_INTERNAL_NAME}.
 """
