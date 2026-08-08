@@ -147,16 +147,28 @@ roleDef:
         Conclusion : `EmbeddedTransfer` (nom laissant supposer un lien avec (2)) ne peut PAS etre derive de
         la seule clause EXTERNAL PROPRE a ce role (qui relève de (1), un mecanisme different) sans preuve
         empirique - aucune trouvee (ni prose explicative dans le PDF metamodele autour de la declaration
-        `EmbeddedTransfer: MANDATORY BOOLEAN;`, ni commentaire dans `models/IlisMeta16.ili`). Seul exemple
-        REEL du corpus combinant les deux ingredients necessaires pour trancher empiriquement (association a
-        2 roles, cardinalites <=1 des deux cotes, UN role marque EXTERNAL - ex. `ASSOCIATION Hierarchy =
-        UpperLevelUnit (EXTERNAL) -<> {0..1} AdministrativeUnit; LowerLevelUnit -- AdministrativeUnit; END
-        Hierarchy;`, `CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili`) : BLOQUE, ce fichier echoue actuellement au
-        PARSING (gap grammatical CONFIRME REEL, PROGRESS.md Lot 39/45 - `DEPENDS ON` repetees separement,
-        sans rapport avec ce point) - jamais atteint le ModelBuilder pour verification. RESTE `unconfirmed`,
-        toujours PAS reutilise par `xtf/validate.py`/`schema.reference_external_status` (RULE #5, ne jamais
-        deguiser une incertitude en fait) - a reexaminer si/quand le gap grammatical CHBase est corrige,
-        seul chemin connu vers une verification empirique reelle sur ce point precis.
+        `EmbeddedTransfer: MANDATORY BOOLEAN;`, ni commentaire dans `models/IlisMeta16.ili`).
+
+        REEXAMINE au Lot 45 (suite), une fois le gap grammatical CHBase corrige (le blocage ci-dessus est
+        leve) : `CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili` construit desormais, l''exemple reel cite ci-dessus
+        (`ASSOCIATION Hierarchy = UpperLevelUnit (EXTERNAL) -<> {0..1} AdministrativeUnit; LowerLevelUnit --
+        AdministrativeUnit; END Hierarchy;`) verifie EMPIRIQUEMENT sur l''instance `Role` reellement
+        construite : `UpperLevelUnit.EmbeddedTransfer == ''EXTERNAL''` (le texte brut du token, PAS un vrai
+        booleen - `presence: false` ci-dessus n''a en realite JAMAIS d''effet, `bool(source.get("presence"))`
+        etant faux, le calcul retombe sur le "cas standard" field+index qui renvoie le texte du token via
+        `_resolve_node` sur une LISTE a 1 element), `LowerLevelUnit.EmbeddedTransfer == None` (role sans
+        EXTERNAL). Donc CE BINDING PRECIS calcule structurellement, de maniere confirmee et reproductible,
+        "le texte du token EXTERNAL si ce role le porte, None sinon" - `bool(...)` en extrait exactement le
+        meme signal binaire que `ReferenceType.External` (Lot 34), et c''est suffisant pour l''usage vise
+        (`schema.reference_external_status`, distinguer REF externe legitime de REF potentiellement cassee)
+        SANS avoir besoin d''elucider la correspondance exacte de ce champ avec le concept (2) du manuel -
+        la VALEUR est fiable, seul le NOM metamodele "EmbeddedTransfer" (et sa correspondance a (1) vs (2))
+        reste formellement non elucide. Verifie AUSSI (RULE #4) que `embedded_roles_of` (Lot 32, algorithme
+        (2)) predit correctement `UpperLevelUnit` comme embarque sur `AdministrativeUnit` MALGRE le EXTERNAL
+        - confirme que (1) et (2) sont bien independants comme conclu ci-dessus (EXTERNAL ne change PAS la
+        decision d''embarquement XTF, seulement la legitimite d''une cible cross-panier). Desormais reutilise
+        par `xtf/validate.py`/`schema.reference_external_status` (role d''association embarque) - voir sa
+        note.
 
         '
   note: 'Strongness resolved dynamically: LT/GT -> Assoc, HASH -> Comp, default -> Aggr (needs confirmation

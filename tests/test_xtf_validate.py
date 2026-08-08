@@ -272,6 +272,43 @@ def test_embedded_role_unresolved_ref_is_warning(ref_builder):
     assert any("introuvable dans ce transfert" in m for m in msgs)
 
 
+# --- Lot 43 (suite Lot 45) : statut EXTERNAL d'un role d'association
+# embarque lui-meme (tests/fixtures/xtf/reference_model.ili : ASSOCIATION
+# Location_ExternalIndicator, rExtLocation (EXTERNAL) -<#> Location) ---
+
+def test_embedded_role_external_unresolved_ref_reports_catalogue_expected(ref_builder):
+    """rExtLocation porte sa PROPRE clause (EXTERNAL) sur le role - un REF
+    non resolu doit etre signale comme la situation NORMALE attendue
+    (meme message qu'une REFERENCE TO (EXTERNAL) ordinaire, Lot 35), pas
+    comme un signal de donnee incorrecte."""
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("rExtLocation", "ext.catalog.1")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    msgs = _messages(issues, attribute="rExtLocation", severity="warning")
+    assert any("declaree (EXTERNAL)" in m and "situation normale" in m for m in msgs)
+
+
+def test_embedded_role_non_external_unresolved_ref_flags_data_issue(ref_builder):
+    """rLocation (meme association Location_Indicator qu'avant) n'a PAS de
+    clause EXTERNAL - un REF non resolu doit continuer a signaler que la
+    cible DEVRAIT normalement etre dans ce meme panier, PAS regresser vers
+    le message neutre "indetermine" maintenant que le statut des roles est
+    resolu."""
+    indicator = XtfObject(
+        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "42"), _ref_attr("rLocation", "does-not-exist")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
+    msgs = _messages(issues, attribute="rLocation", severity="warning")
+    assert any("NON declaree (EXTERNAL)" in m for m in msgs)
+
+
 # --- Lot 35 : catalogue objects (REFERENCE TO (EXTERNAL), --catalog) ---
 
 def test_non_external_unresolved_ref_flags_data_issue(ref_builder):

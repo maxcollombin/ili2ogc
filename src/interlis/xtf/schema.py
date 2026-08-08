@@ -375,19 +375,45 @@ def reference_external_status(resolved: ResolvedAttribute) -> bool | None:
       structure elle-meme), pas directement ReferenceType ; descend d'UN
       niveau pour retrouver le VRAI `.External`.
 
+    3e forme CONFIRMEE (Lot 43/45) - role d'association embarque (Lot 32,
+    `resolved.attr` est directement l'instance `Role`, `type_kind=="Class"`
+    comme le motif structure ci-dessous mais PAS le meme cas - distingue
+    par la classe reelle de `resolved.attr`) : `roleDef()` porte sa PROPRE
+    clause optionnelle `(EXTERNAL)` (meme groupe `Properties<...
+    ,EXTERNAL>` que ABSTRACT/EXTENDED/FINAL/HIDING/ORDERED, confirme
+    ilismeta16-associations.yml / vendor/interlis-antlr4/InterlisParser.g4).
+    RULE #4, citation directe eCH-0031 V2.1.0 §3.7.5 "Beziehungszugaenge" :
+    "... soll es zulaessig sein, dass ein der Rolle entsprechendes
+    Bezugsobjekt in einem anderen Behaelter als die Beziehungsinstanz
+    liegen darf, muss dies bei der Rolle speziell angemerkt werden
+    (EXTERNAL...)" - meme semantique PRATIQUE que `ReferenceType.External`
+    (l'objet cible peut vivre dans un panier different). Le binding
+    `roleDef.EmbeddedTransfer` (spec/grammar/mapping/05_associations.yml)
+    reste de correspondance metamodele "unconfirmed" avec le VRAI attribut
+    IlisMeta16 `Role.EmbeddedTransfer` (2 concepts distincts du manuel,
+    §3.7.5 AssociationAccess vs §4.3.9 embedding XTF - voir sa note
+    detaillee) - mais ce que CE BINDING PRECIS calcule STRUCTURELLEMENT
+    est confirme sans ambiguite par lecture directe du moteur ET verifie
+    empiriquement (Lot 43, `CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili`,
+    `ASSOCIATION Hierarchy = UpperLevelUnit (EXTERNAL) -<> {0..1}
+    AdministrativeUnit; ...`) : la valeur brute vaut le texte du token
+    `"EXTERNAL"` si la clause est presente sur CE role, `None` sinon -
+    `bool(...)` en extrait exactement la meme information binaire que
+    `ReferenceType.External`, suffisant pour cet usage precis (le nom
+    metamodele "EmbeddedTransfer" n'a pas besoin d'etre elucide pour
+    exploiter cette valeur en toute confiance ici).
+
     `None` (statut REELLEMENT indetermine, PAS "suppose False") pour tout
     le reste : ex. `resolved.type_kind == "Class"` enveloppant un attribut
     UNIQUE qui n'est PAS une reference (trouve reel sur
     `Axis_V1_1.AxisSegmentGeometry` - une STRUCTURE a un seul attribut,
     mais de type geometrie `LineWithAltitude`, pas une reference du tout -
     memes conditions structurelles que le motif catalogue, contenu
-    different) ; roles d'association embarques (Lot 32, `Role` - le manuel
-    permet AUSSI un `EXTERNAL` sur un role, mais son mapping actuel,
-    `roleDef.EmbeddedTransfer`, est documente "polarity unconfirmed" depuis
-    ce lot, spec/grammar/mapping/05_associations.yml - PAS reutilise ici
-    tant que non confirme)."""
+    different)."""
     if resolved.type_kind == "ReferenceType" and resolved.type_instance is not None:
         return bool(getattr(resolved.type_instance, "External", False))
+    if resolved.attr._qualified_class.rsplit(".", 1)[-1] == "Role":
+        return bool(getattr(resolved.attr, "EmbeddedTransfer", None))
     if resolved.type_kind == "Class" and resolved.type_instance is not None:
         # `_own_attributes_of` (PAS `attributes_of`, Lot 38) : ce test
         # verifie un motif structurel sur LA STRUCTURE ELLE-MEME (enveloppe

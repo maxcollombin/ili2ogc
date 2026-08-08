@@ -597,12 +597,16 @@ def _validate_object(
                 # Catalogues.MandatoryCatalogueReference, ex. MLocStatusRef)
                 # - confirme empiriquement etre la forme REELLE la plus
                 # frequente dans ce corpus, pas seulement le cas
-                # ReferenceType direct. Tri-state (RULE #5) : `None` (statut
-                # reellement indetermine - ex. role d'association embarque,
-                # ou structure enveloppant un contenu non-reference comme
-                # une geometrie, confirme reel sur Axis_V1_1.
-                # AxisSegmentGeometry) garde le libelle neutre d'origine,
-                # PLUTOT que d'affirmer a tort "NON declaree" par defaut.
+                # ReferenceType direct - ET (Lot 43/45) le role d'association
+                # embarque lui-meme, via sa PROPRE clause (EXTERNAL) sur
+                # roleDef (RULE #4, eCH-0031 V2.1.0 §3.7.5, confirme
+                # empiriquement sur CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili,
+                # ASSOCIATION Hierarchy). Tri-state (RULE #5) : `None`
+                # (statut reellement indetermine - ex. structure enveloppant
+                # un contenu non-reference comme une geometrie, confirme
+                # reel sur Axis_V1_1.AxisSegmentGeometry) garde le libelle
+                # neutre d'origine, PLUTOT que d'affirmer a tort "NON
+                # declaree" par defaut.
                 status = reference_external_status(resolved)
                 if status is True:
                     detail = (
@@ -617,7 +621,7 @@ def _validate_object(
                 else:
                     detail = (
                         "reference externe/catalogue probable, ou reference cassee - statut EXTERNAL "
-                        "indetermine par ce validateur (role d'association, ou structure non reconnue)"
+                        "indetermine par ce validateur (structure non reconnue)"
                     )
                 issues.append(ValidationIssue(
                     "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,

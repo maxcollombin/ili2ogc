@@ -23,6 +23,11 @@ MODEL RefTest AT "https://example.org/reftest" VERSION "2026-08-07" =
       rIndicator -- {0..*} Indicator;
     END Location_Indicator;
 
+    ASSOCIATION Location_ExternalIndicator =
+      rExtLocation (EXTERNAL) -<#> Location;
+      rExtIndicator -- {0..*} Indicator;
+    END Location_ExternalIndicator;
+
   END MainTopic;
 
 END RefTest.
