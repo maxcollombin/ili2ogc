@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from interlis.builder.model_builder import InterlisModelBuilder
+from interlis.builder.repository import ModelRepository
 from interlis.runtime.parse import parse_file
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 from interlis.xtf.validate import validate_transfer
@@ -614,3 +615,60 @@ def test_multipolyline_valid_has_no_issue(geometry_builder):
     obj = _obj(MULTIWAY_CLASS, "mw1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     assert _messages(issues, attribute="Geom") == []
+
+
+# --- Lot 46 : role d'association embarque, defini dans un modele IMPORTE
+# (tests/fixtures/embedded_roles_cross_model/{base,importer}.ili) - EmbedBase
+# declare ASSOCIATION Parent_Child (Children -- {0..*} Child; Parent -<#> {1}
+# Parent;), donc embarque le role "Parent" sur Child. EmbedImporter (racine
+# de la validation, comme SectoralPlanForRoadInfrastructure_LV95_V1_4 dans le
+# corpus reel) IMPORTS EmbedBase mais n'a AUCUNE association propre - seule
+# la table de symboles d'EmbedBase (via ModelRepository, PAS celle
+# d'EmbedImporter) contient Parent_Child. Confirme reel (RULE #4) sur
+# 2021-01-12_SectoralPlanForRoadInfrastructure_LV95.xtf : 770 pseudo-
+# attributs (Object/SectoralPlan) faussement "absents du schema" avant ce
+# lot, correctement reconnus apres. ---
+
+CROSS_MODEL_FIXTURES_DIR = Path(__file__).parent / "fixtures/embedded_roles_cross_model"
+EMBED_PARENT_CLASS = "EmbedBase.MainTopic.Parent"
+EMBED_CHILD_CLASS = "EmbedBase.MainTopic.Child"
+
+
+@pytest.fixture(scope="module")
+def cross_model_builder():
+    tree, errors = parse_file(CROSS_MODEL_FIXTURES_DIR / "importer.ili")
+    assert not errors
+    repository = ModelRepository([CROSS_MODEL_FIXTURES_DIR])
+    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        b.build(tree)
+    return b, repository
+
+
+def test_embedded_role_from_imported_model_is_not_unknown_attribute(cross_model_builder):
+    builder, repository = cross_model_builder
+    parent = XtfObject(tid="p1", qualified_class=EMBED_PARENT_CLASS, attributes=dict([_text_attr("Name", "P")]))
+    child = XtfObject(
+        tid="c1", qualified_class=EMBED_CHILD_CLASS,
+        attributes=dict([_text_attr("Name", "C"), _ref_attr("Parent", "p1")]),
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="EmbedBase.MainTopic", kind=None, endstate=None, objects=[parent, child])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    issues = validate_transfer(transfer, symbol_table=builder.symbol_table, repository=repository)
+    assert _messages(issues, attribute="Parent") == []
+
+
+def test_embedded_role_from_imported_model_missing_without_home_table_lookup(cross_model_builder):
+    """Regression-guard direct sur schema.py : chercher l'association dans
+    la table RACINE (EmbedImporter, sans association propre) plutot que
+    dans la table qui la declare REELLEMENT (EmbedBase, via
+    home_symbol_table) ne trouve pas le role embarque - la faute corrigee
+    par ce lot, isolee de toute la couche validate.py."""
+    from interlis.xtf.schema import embedded_roles_of, home_symbol_table, resolve_class
+
+    builder, repository = cross_model_builder
+    cls = resolve_class(EMBED_CHILD_CLASS, symbol_table=builder.symbol_table, repository=repository)
+    assert embedded_roles_of(cls, builder.symbol_table) == {}
+    home_table = home_symbol_table(EMBED_CHILD_CLASS, symbol_table=builder.symbol_table, repository=repository)
+    assert set(embedded_roles_of(cls, home_table)) == {"Parent"}

@@ -34,6 +34,39 @@ def resolve_class(qualified_class: str, *, symbol_table: SymbolTable, repository
     return None
 
 
+def home_symbol_table(qualified_class: str, *, symbol_table: SymbolTable, repository: ModelRepository | None) -> SymbolTable:
+    """Table de symboles qui declare REELLEMENT `qualified_class` - celle du
+    modele racine si elle y enregistre deja cette classe, sinon (Lot 46) la
+    table du modele designe par le premier segment qualifie, via
+    `ModelRepository.symbol_table_for` (meme mecanisme de resolution que
+    `resolve_class` ci-dessus, RULE #1 - jamais duplique/invente).
+
+    Necessaire pour que `embedded_roles_of` (ci-dessous) cherche les
+    associations d'embarquement dans la BONNE table : jusqu'ici toujours
+    la table racine, quel que soit le modele proprietaire reel de la classe -
+    confirme reel (RULE #4) sur `2021-01-12_SectoralPlanForRoadInfrastructure_LV95.xtf`
+    (770 occurrences) : le panier XTF est qualifie sous le modele qui
+    ETEND le topic (`SectoralPlanForRoadInfrastructure_LV95_V1_4`, via
+    `TOPIC ... EXTENDS Base.Topic`, aucune association propre), alors que
+    CHAQUE objet individuel reste qualifie sous le modele de BASE
+    (`BaseModel_SectoralPlans_LV95_V1_4`, qui lui declare les associations
+    `Object_SP`/`Document_Object`/`Facility_Object`/`Measure_Facility`
+    embarquant reellement des roles sur ces memes classes) - la table
+    racine (modele extension) ne les contient jamais, seule la table du
+    modele de base les a. Retombe silencieusement sur la table racine si le
+    modele n'est pas resolvable (RULE #5, meme degradation que
+    `resolve_class` : classe alors simplement non trouvee plus loin)."""
+    found = symbol_table.resolve(qualified_class, kind_hint=["Class"])
+    if isinstance(found, MetaInstance):
+        return symbol_table
+    if repository is not None and "." in qualified_class:
+        model_name = qualified_class.split(".", 1)[0]
+        table = repository.symbol_table_for(model_name)
+        if table is not None:
+            return table
+    return symbol_table
+
+
 def _own_attributes_of(class_instance: MetaInstance) -> dict[str, MetaInstance]:
     """Nom d'attribut -> instance AttrOrParam, pour les attributs PROPRES a
     CETTE classe uniquement (association ClassAttr, role ClassAttribute -
@@ -165,9 +198,13 @@ def embedded_roles_of(class_instance: MetaInstance, symbol_table: SymbolTable) -
     PAS verifiee - toutes les associations resolues sont traitees comme si
     elles etaient dans le meme topic que leurs classes cibles (cas de loin
     le plus frequent, confirme sur le corpus reel des 3 fichiers XTF
-    cibles). Ne cherche que dans `symbol_table` (associations locales au
-    modele racine) - PAS dans un ModelRepository (associations definies
-    dans un modele importe non couvertes, hors perimetre)."""
+    cibles). Ne cherche que dans `symbol_table` tel que fourni par
+    l'appelant - depuis le Lot 46, `schema_members_of`/`_validate_object`
+    passe desormais la table du modele qui declare REELLEMENT la classe
+    (via `home_symbol_table` ci-dessus), pas systematiquement celle du
+    modele racine : couvre le cas d'une association definie dans un modele
+    IMPORTE par le modele racine (ex. classe embarquee via `TOPIC EXTENDS`,
+    ou plus generalement toute classe resolue via `ModelRepository`)."""
     result: dict[str, MetaInstance] = {}
     for candidate in symbol_table.all_registered():
         if not isinstance(candidate, MetaInstance) or candidate._qualified_class.rsplit(".", 1)[-1] != "Class":

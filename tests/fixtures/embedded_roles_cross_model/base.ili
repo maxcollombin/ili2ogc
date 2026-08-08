@@ -1,0 +1,22 @@
+INTERLIS 2.4;
+
+MODEL EmbedBase AT "https://example.org/embedbase" VERSION "2026-08-08" =
+
+  TOPIC MainTopic =
+
+    CLASS Parent =
+      Name: MANDATORY TEXT;
+    END Parent;
+
+    CLASS Child =
+      Name: MANDATORY TEXT;
+    END Child;
+
+    ASSOCIATION Parent_Child =
+      Children -- {0..*} Child;
+      Parent -<#> {1} Parent;
+    END Parent_Child;
+
+  END MainTopic;
+
+END EmbedBase.

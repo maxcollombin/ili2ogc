@@ -74,14 +74,21 @@ Perimetre couvert :
   (structure arbitraire, ni COORD ni ARC) reste NON interprete (aucun
   candidat reel dans l'inventaire XTF, ignore silencieusement plutot qu'une
   fausse alerte).
+- roles d'association definis dans un modele IMPORTE (Lot 46) : `cls`
+  resolu via `ModelRepository` (classe hors du modele racine, ex. classe
+  du modele de BASE d'un `TOPIC EXTENDS`) cherche desormais ses roles
+  embarques dans la table de symboles qui le declare REELLEMENT
+  (`schema.home_symbol_table`), pas systematiquement celle du modele
+  racine - confirme reel sur `2021-01-12_SectoralPlanForRoadInfrastructure_LV95.xtf`
+  (770 occurrences, panier qualifie sous le modele EXTENSION alors que
+  chaque objet reste qualifie sous le modele de BASE qui declare les
+  associations).
 - PAS encore couvert (limites documentees, PROGRESS.md) : attributs herites
   via EXTENDS depuis un modele IMPORTE non charge (chaine Super tronquee),
-  roles d'association definis dans un modele IMPORTE (embedded_roles_of ne
-  cherche que dans la table de symboles du modele racine), segments LINE
-  FORM personnalises (structure arbitraire, WITH (...) autre que
-  STRAIGHTS/ARCS), MULTICOORD/MULTIPOLYLINE/MULTISURFACE/MULTIAREA/AREA/ARC
-  extrapoles du manuel (aucun exemple reel dans l'inventaire XTF actuel,
-  voir note precedant _validate_coord_attribute)."""
+  segments LINE FORM personnalises (structure arbitraire, WITH (...) autre
+  que STRAIGHTS/ARCS), MULTICOORD/MULTIPOLYLINE/MULTISURFACE/MULTIAREA/AREA/
+  ARC extrapoles du manuel (aucun exemple reel dans l'inventaire XTF
+  actuel, voir note precedant _validate_coord_attribute)."""
 from dataclasses import dataclass
 
 from interlis.builder.repository import ModelRepository
@@ -89,9 +96,9 @@ from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 from interlis.xtf.schema import (
-    ResolvedAttribute, coord_axes, enum_values, is_class_compatible, line_coord_type, reference_external_status,
-    reference_target_class, resolve_attribute, resolve_class, restriction_candidates, schema_members_of,
-    single_own_attribute,
+    ResolvedAttribute, coord_axes, enum_values, home_symbol_table, is_class_compatible, line_coord_type,
+    reference_external_status, reference_target_class, resolve_attribute, resolve_class, restriction_candidates,
+    schema_members_of, single_own_attribute,
 )
 
 # Classes de Type concretes reconnues comme "reference a un objet" (valeur
@@ -538,13 +545,18 @@ def _validate_object(
         ))
         return issues
 
-    schema_attrs = _resolved_schema_of(cls, symbol_table, schema_cache)
+    # Lot 46 : la table qui declare REELLEMENT `cls` peut differer de la
+    # table racine (ex. classe resolue via ModelRepository, TOPIC EXTENDS
+    # d'un modele de base) - necessaire pour qu'embedded_roles_of trouve les
+    # associations d'embarquement la ou elles sont vraiment declarees.
+    cls_table = home_symbol_table(obj.qualified_class, symbol_table=symbol_table, repository=repository)
+    schema_attrs = _resolved_schema_of(cls, cls_table, schema_cache)
     for attr_name, raw_nodes in obj.attributes.items():
         if attr_name not in schema_attrs:
             issues.append(ValidationIssue(
                 "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                "attribut absent du schema (classe connue) - inconnu, herite via EXTENDS, ou role "
-                "d'association defini dans un modele importe (non couvert par ce lot)",
+                "attribut absent du schema (classe connue) - inconnu, ou herite via EXTENDS depuis un "
+                "modele importe non charge (non couvert par ce lot)",
             ))
             continue
         resolved = schema_attrs[attr_name]

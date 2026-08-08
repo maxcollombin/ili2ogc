@@ -170,6 +170,15 @@ class ModelRepository:
             return None
         return table.resolve(full_dotted_name, kind_hint=kind_hint)
 
+    def symbol_table_for(self, model_name: str):
+        """Table de symboles complete d'un modele CHARGE (meme cache que
+        `resolve_external`/`availability`) - expose separement pour permettre
+        a un appelant de reutiliser la table ENTIERE (ex.
+        `schema.home_symbol_table`, Lot 46 : `embedded_roles_of` doit
+        chercher les associations la ou elles sont REELLEMENT declarees,
+        pas seulement resoudre UN nom a la fois comme `resolve_external`)."""
+        return self._get_table(model_name)
+
     def _get_table(self, model_name: str):
         if model_name in self._cache:
             return self._cache[model_name]

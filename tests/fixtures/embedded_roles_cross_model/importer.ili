@@ -1,0 +1,15 @@
+INTERLIS 2.4;
+
+MODEL EmbedImporter AT "https://example.org/embedimporter" VERSION "2026-08-08" =
+
+  IMPORTS EmbedBase;
+
+  TOPIC UseTopic =
+
+    CLASS Unrelated =
+      Note: TEXT;
+    END Unrelated;
+
+  END UseTopic;
+
+END EmbedImporter.
