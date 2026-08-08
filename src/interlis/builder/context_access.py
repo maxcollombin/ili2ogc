@@ -65,7 +65,27 @@ def call_list(ctx: Any, field: str) -> list:
 
 
 def is_present(ctx: Any, field: str, index: int | None = None) -> bool:
-    return call(ctx, field, index) is not None
+    """CORRIGE (Lot 45, grammaire) : `call(ctx, field, None)` sur un
+    accesseur "multi" (i.e. qui accepte un parametre `i=None`) sans index
+    explicite renvoie sa LISTE COMPLETE via `method()` (`getTokens`/
+    `getTypedRuleContexts`) - TOUJOURS une liste, JAMAIS `None`, meme
+    quand elle est VIDE (aucune occurrence). L'ancien test `is not None`
+    la traitait alors a tort comme "presente" inconditionnellement des
+    qu'un accesseur devenait multi - jusqu'ici jamais un souci en pratique
+    (aucun binding `presence: true` ne visait un accesseur DEJA multi sans
+    index), mais devenu un bug reel des que le Lot 45 (Properties<>
+    corrigees en listes separees par virgule dans la grammaire, ex.
+    `CLASS X (ABSTRACT,FINAL)`) a fait passer ABSTRACT/FINAL/TRANSIENT/...
+    de simple a multi (repetable au sein du groupe `(COMMA ...)*`) -
+    `Abstract`/`Final`/`Transient` (`presence: true` sans index,
+    03_classes_and_structures.yml/04_attributes.yml/etc.) valaient alors
+    `True` INCONDITIONNELLEMENT, confirme reel sur models/IlisMeta16.ili
+    (diff massif, aucune classe de ce fichier n'utilise pourtant
+    ABSTRACT/FINAL/TRANSIENT en combinaison)."""
+    result = call(ctx, field, index)
+    if isinstance(result, list):
+        return len(result) > 0
+    return result is not None
 
 
 def text(ctx: Any, field: str, index: int | None = None) -> str | None:
