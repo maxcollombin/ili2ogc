@@ -2,7 +2,7 @@
 (Lexer+Parser)."""
 from pathlib import Path
 
-from antlr4 import CommonTokenStream, FileStream, InputStream
+from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
 from interlis.antlr.InterlisLexer import InterlisLexer
@@ -33,8 +33,24 @@ def _parse_stream(stream):
 
 def parse_file(path: Path):
     """Parse un fichier .ili, retourne (arbre interlis2def, liste d'erreurs
-    de syntaxe). N'appelle PAS le ModelBuilder - separation lecture/construction."""
-    return _parse_stream(FileStream(str(path), encoding="utf-8"))
+    de syntaxe). N'appelle PAS le ModelBuilder - separation lecture/construction.
+
+    Lot 52 : repli ISO-8859-1 si le fichier n'est pas de l'UTF-8 valide -
+    confirme reel (RULE #1, inspection directe des octets) sur des fichiers
+    plus anciens du corpus large models.geo.admin.ch (ex. variantes
+    "obsolete/*_o0.ili") : `file` les identifie "ISO-8859 text", et l'octet
+    fautif (0xDC en position du mot allemand "FÜR") decode correctement en
+    latin-1 mais pas en UTF-8. Le manuel de reference (eCH-0031 V2.1.0
+    §3.5.1, clause CHARSET) ne fixe QUE le jeu de caracteres autorise dans
+    les VALEURS transferees, jamais l'encodage sur DISQUE du fichier .ili
+    source lui-meme - aucune regle a violer en repliant sur latin-1, qui ne
+    peut JAMAIS lever UnicodeDecodeError (mapping 1 octet <-> 1 caractere
+    sur les 256 valeurs) - pas de 3e repli necessaire."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = path.read_text(encoding="iso-8859-1")
+    return _parse_stream(InputStream(text))
 
 
 def parse_text(text: str):

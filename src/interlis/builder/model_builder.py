@@ -1444,25 +1444,52 @@ class InterlisModelBuilder(InterlisParserVisitor):
                                     attached_field = role
                                     break
                         if attached_on is None:
-                            if has_unresolved_sibling and not isinstance(sub_value, ForwardRef):
+                            if not isinstance(sub_value, ForwardRef) and (has_unresolved_sibling or not siblings):
                                 # Best-effort (docstring de cette methode) :
                                 # une cle soeur du bag (ex. attrTypeDef.Mandatory,
                                 # destinee au Type produit a cote) n'a nulle part
-                                # ou s'attacher CE ctx-ci parce que ce Type est
-                                # encore un ForwardRef non resolu (ex. reference
-                                # a un DOMAIN nomme existant, potentiellement
-                                # PARTAGE entre plusieurs usages de l'attribut -
-                                # ex. "Owner: MANDATORY Owner;" - domaine et
-                                # attribut homonymes, Lot 29). Appliquer Mandatory
-                                # sur l'instance PARTAGEE une fois resolue serait
-                                # incertain (quel usage aurait raison si
-                                # plusieurs different ?) - abandonne silencieusement
-                                # plutot que de faire planter tout le build pour
-                                # une info secondaire non critique. Un `sub_value`
-                                # qui est LUI-MEME le ForwardRef non resolu (ex.
-                                # Type) doit en revanche toujours lever - une
-                                # reference cassee ne doit jamais etre masquee
-                                # (RULE #5), voir le `raise` ci-dessous.
+                                # ou s'attacher. Deux cas distincts, tous deux
+                                # non-critiques (RULE #5, jamais un `sub_value`
+                                # qui EST LUI-MEME la reference cassee - voir
+                                # `raise` ci-dessous, qui reste inchange pour ce
+                                # cas) :
+                                # 1. has_unresolved_sibling : ce Type est encore
+                                #    un ForwardRef non resolu (ex. reference a un
+                                #    DOMAIN nomme existant, potentiellement
+                                #    PARTAGE entre plusieurs usages de l'attribut -
+                                #    ex. "Owner: MANDATORY Owner;" - domaine et
+                                #    attribut homonymes, Lot 29). Appliquer
+                                #    Mandatory sur l'instance PARTAGEE une fois
+                                #    resolue serait incertain (quel usage aurait
+                                #    raison si plusieurs different ?).
+                                # 2. not siblings (AJOUTE, Lot 52) : AUCUNE
+                                #    MetaInstance/ForwardRef soeur n'existe DU
+                                #    TOUT dans ce bag pour meme tenter un attach -
+                                #    confirme reel sur `HAli: MANDATORY
+                                #    HALIGNMENT;` (CHBase_Part6_GRAPHICANNOTATIONS_V1/V2.ili) :
+                                #    `alignmentType()` (grammar, "HALIGNMENT"/
+                                #    "VALIGNMENT" sont des tokens RESERVES,
+                                #    grammaticalement impossibles a declarer via
+                                #    domainDef - confirme, `DOMAIN HALIGNMENT = ...`
+                                #    est un rejet de syntaxe, pas une omission de
+                                #    binding) ne construit deliberement AUCUNE
+                                #    instance (target: null, meme categorie que
+                                #    booleanType/oIDType pour BOOLEAN/ANYOID/
+                                #    UUIDOID, Lot 23/47 point 3) - son bag ne
+                                #    contient donc qu'une valeur TEXTE opaque
+                                #    ("resolved_type"), jamais une instance sur
+                                #    laquelle Mandatory pourrait atterrir. Avant
+                                #    ce lot, `has_unresolved_sibling` restait
+                                #    FAUX (aucun ForwardRef, juste un dict inerte)
+                                #    et le code tombait dans le `raise` -
+                                #    `interlis build`/`validate` plantait
+                                #    integralement des qu'un attribut typait
+                                #    HALIGNMENT/VALIGNMENT MANDATORY, alors que
+                                #    ce type reste par ailleurs deliberement non
+                                #    interprete (meme limite documentee que
+                                #    BOOLEAN) - abandon silencieux de Mandatory
+                                #    (info secondaire) plutot qu'un crash total
+                                #    pour un attribut par ailleurs valide.
                                 continue
                             raise
                     if attached_on is not None and isinstance(sub_value, ForwardRef):

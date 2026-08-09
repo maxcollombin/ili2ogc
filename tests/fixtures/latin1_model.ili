@@ -1,0 +1,12 @@
+INTERLIS 2.3;
+
+/* Modell für Tests (Kommentar mit Umlaut, ISO-8859-1 encoded) */
+MODEL Latin1Test (de) AT "http://example.org" VERSION "2024-04-24" =
+
+  TOPIC MainTopic =
+    CLASS Person =
+      Name: MANDATORY TEXT;
+    END Person;
+  END MainTopic;
+
+END Latin1Test.

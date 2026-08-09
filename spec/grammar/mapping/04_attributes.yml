@@ -259,11 +259,21 @@ restrictedClassOrAssRef:
       source:
         field: classOrAssociationRef
         index: 0
+        optional: true
       note: '"(classOrAssociationRef | ANYCLASS) (RESTRICTION LPAR classOrAssociationRef (SEMI classOrAssociationRef)*
         RPAR)?". Per grammar-metamodel-mapping.yml: no direct IlisMeta16 instance expected (kind: Container);
         "feeds Role.BaseClass (via ClassRef) or the equivalent association-side reference". The first
         classOrAssociationRef (or the ANYCLASS wildcard, meaning "any class") is the unrestricted base
         reference.
+
+        CORRIGE (Lot 52) : `optional: true` ajoute - absent legitimement quand l''alternative ANYCLASS
+        (deja geree separement par le binding `AnyClass` ci-dessous) est choisie au lieu d''un
+        classOrAssociationRef concret - confirme reel sur `Objects: OBJECTS OF ANYCLASS` (functionDecl,
+        Gefahrenkartierung_V1_de.ili) : `BuildError [restrictedClassOrAssRef] ''classOrAssociationRef''
+        absent (non optionnel)`, jamais exerce avant ce lot puisque `functionDecl` (seul consommateur
+        reel de ce chemin ANYCLASS via `argumentType`) etait grammaticalement INATTEIGNABLE au niveau
+        TOPIC (voir binding functionDecl/regle definitions) - gap latent, jamais un changement de
+        comportement pour un `classOrAssociationRef` concret (deja present, jamais optionnel dans ce cas).
 
         '
     AnyClass:

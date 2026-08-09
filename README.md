@@ -144,6 +144,12 @@ metamodel's own official names.
 
 ## Known limitations
 
+- **INTERLIS 2 only, by design - not INTERLIS 1**: the grammar, metamodel
+  (IlisMeta16), and every mapping in this project target INTERLIS 2
+  exclusively. `.ili` files declaring `INTERLIS1` at the top fail to parse
+  with a syntax error (`expecting 'INTERLIS1'`) - this is not a bug or a
+  gap to close, INTERLIS 1 is a different, older language with its own
+  grammar and metamodel, out of scope for this project entirely.
 - **`IMPORTS` resolution is local-only, opt-in, and best-effort**: without
   `--repo`/`repository=...`, a reference into an imported model stays an
   unresolved named reference (`UnresolvedNamedReference`) rather than an
@@ -188,31 +194,30 @@ metamodel's own official names.
   Swiss pattern, e.g. CHBase) also makes `A`'s own short names resolvable
   unqualified inside `B`, per eCH-0031 V2.1.0 §3.5.4 - this only degrades
   gracefully (`UnresolvedNamedReference`, never a crash) when the base
-  model itself cannot be built, which can currently happen for reasons
-  unrelated to `EXTENDS` (see the grammar-coverage bullet below).
-- **Two possible grammar-coverage gaps found while testing `EXTENDS`
-  resolution against the real CHBase corpus, not yet confirmed as real
-  bugs or fixed**: a `MANDATORY CONSTRAINT` clause combining two
-  conditions with `OR` (`CHBase_Part3_CATALOGUEOBJECTS_V1.ili`), and a
-  `TOPIC` with two separate `DEPENDS ON X;` statements instead of one
-  comma-separated clause (`CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili`) both
-  currently fail to parse, which blocks the *entire* `.ili` file
-  (ANTLR rejects the whole tree on any rule failure) - not just the
-  offending clause. Needs checking against the Reference Manual before
-  deciding whether these are valid INTERLIS 2 forms worth supporting.
+  model itself cannot be built.
 - **Geometry/coordinate validation** (`COORD`/`MULTICOORD`/`POLYLINE`/
   `SURFACE`/`AREA`/`MULTI*`, `xtf/validate.py`) checks structure and, where
-  resolvable, per-axis `Min`/`Max` ranges - but: a custom `LINE FORM`
+  resolvable, per-axis `Min`/`Max` ranges (with a rounding tolerance, Lot
+  48, per Reference Manual §2.8/§4.3.11.4) - but: a custom `LINE FORM`
   segment (anything other than `STRAIGHTS`/`ARCS` in a `WITH (...)` clause)
   is not interpreted (silently skipped, not flagged); `MULTICOORD`/
   `MULTIPOLYLINE`/`MULTISURFACE`/`MULTIAREA`/`AREA`/`ARC` are implemented by
   extrapolation from the Reference Manual and the confirmed
   `COORD`/`POLYLINE` encoding convention, not confirmed against a real file
-  (none in this project's inventory uses them); a `LineType`'s coordinate
-  domain (`VERTEX` clause) is only followed on the attribute's own
-  declaration, not inherited from a base `LineType` via `EXTENDS` (e.g.
-  `DirectedLine EXTENDS Line = DIRECTED POLYLINE;` with no `VERTEX` of its
-  own) - falls back to a parseability-only check (no range) in that case.
+  (none in this project's inventory uses them). A `LineType`'s coordinate
+  domain (`VERTEX` clause) IS now followed up the `EXTENDS` chain when the
+  attribute's own declaration has none (Lot 44).
+- **`DataUnit.Super` (`TOPIC ... EXTENDS`) is deliberately never read by the
+  XTF validator - investigated (Lot 52), confirmed not a gap**: unlike
+  `Class`/`Structure EXTENDS` (previous bullet), a `TOPIC EXTENDS` is a
+  *namespace-only* construct (eCH-0031 V2.1.0 §3.5.4 - it makes the base
+  topic's own names resolvable unqualified, nothing more); it never implies
+  attribute inheritance for classes, which always goes through their own
+  `Class.Super`/`Inheritance` link regardless of which topic they live in.
+  There is therefore no attribute-resolution behavior `DataUnit.Super`
+  could add to the validator - the earlier note here questioning this was
+  speculative and has been resolved by re-deriving the semantics from the
+  Reference Manual, not by writing new code.
 
 ## Architecture
 

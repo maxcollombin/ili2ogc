@@ -811,13 +811,29 @@ intersectionDef:
   attribute_bindings:
     _resolution:
       source:
-        field: Dec
-        index: 0
-      note: No own class; 'WITHOUT OVERLAPS GT Dec' (e.g. 'WITHOUT OVERLAPS >0.001') directly feeds the
-        parent lineType's confirmed LineType.own.MaxOverlap (TEXT, 0..1) with the Dec token's raw value
-        - see lineType binding above.
-  note: 'No direct IlisMeta16 instance expected. WITHOUT OVERLAPS > <dec>: single decimal value feeding
-    LineType.MaxOverlap.'
+        field: Dec|Number|PosNumber
+        kind: alt_token
+      note: 'No own class; ''WITHOUT OVERLAPS GT (Dec|Number|PosNumber)'' (e.g. ''WITHOUT OVERLAPS >0.001''
+        or ''WITHOUT OVERLAPS >5'') directly feeds the parent lineType''s confirmed LineType.own.MaxOverlap
+        (TEXT, 0..1) with the matched token''s raw value - see lineType binding above.
+
+
+        CORRIGE (Lot 52, bug moteur reel confirme sur 4 fichiers reels du corpus large models.geo.admin.ch
+        - ISOS_V1.ili/rebbaukataster_20120601.ili/Bewirtschaftungseinheit_V1_3.ili) : la grammaire vendee
+        exigeait auparavant EXCLUSIVEMENT le token ''Dec'' apres GT, mais le LEXER ANTLR ne peut JAMAIS
+        emettre ce type de token pour un entier NU sans point decimal (ex. ''> 5'') - ''PosNumber''/''Number''
+        (regles lexer definies AVANT ''Dec'', meme longueur de match) gagnent systematiquement la desambiguation
+        ANTLR pour ce cas precis, rendant ''WITHOUT OVERLAPS > 5;'' (forme tres frequente, confirmee reelle -
+        eCH-0031 V2.1.0 section citee ci-dessous exige explicitement la MEME precision numerique que le
+        domaine de coordonnees, donc un entier nu est legitime pour un domaine a 0 decimale) grammaticalement
+        IMPOSSIBLE a parser malgre la citation manuel ''IntersectionDef = WITHOUT OVERLAPS [ > Dec ].'' - RULE
+        #4, meme categorie de divergence lexer/parser deja rencontree et contournee ailleurs dans CETTE MEME
+        grammaire (regle numeric(), qui liste deja explicitement ''Number DOTDOT Number | Number DOTDOT
+        PosNumber | PosNumber DOTDOT PosNumber | Dec DOTDOT Dec'' pour la meme raison - precedent direct,
+        pas une improvisation). Grammaire vendee (vendor/interlis-antlr4/InterlisParser.g4) corrigee :
+        ''intersectionDef : WITHOUT OVERLAPS GT (Dec | Number | PosNumber);'' - parser regenere.'
+  note: 'No direct IlisMeta16 instance expected. WITHOUT OVERLAPS > <dec|number|posnumber>: single value
+    feeding LineType.MaxOverlap.'
 lineForm:
   grammar:
     rule: lineForm
