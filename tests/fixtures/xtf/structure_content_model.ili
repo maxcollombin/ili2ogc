@@ -1,0 +1,24 @@
+INTERLIS 2.4;
+
+MODEL StructContentTest AT "https://example.org/structcontenttest" VERSION "2026-08-08" =
+
+  TOPIC MainTopic =
+
+    STRUCTURE Note =
+      Text: MANDATORY TEXT;
+    END Note;
+
+    STRUCTURE Address =
+      Street: MANDATORY TEXT;
+      Notes: BAG {0..*} OF Note;
+    END Address;
+
+    CLASS Person =
+      Name: MANDATORY TEXT;
+      HomeAddress: Address;
+      Tags: BAG {0..*} OF Note;
+    END Person;
+
+  END MainTopic;
+
+END StructContentTest.

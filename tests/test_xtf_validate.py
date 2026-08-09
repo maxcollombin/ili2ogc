@@ -754,3 +754,108 @@ def test_embedded_role_from_imported_model_missing_without_home_table_lookup(cro
     assert embedded_roles_of(cls, builder.symbol_table) == {}
     home_table = home_symbol_table(EMBED_CHILD_CLASS, symbol_table=builder.symbol_table, repository=repository)
     assert set(embedded_roles_of(cls, home_table)) == {"Parent"}
+
+
+# --- Lot 50 : validation recursive du contenu des STRUCTURE (attributs
+# propres + BAG/LIST de structure, MultiValue) - tests/fixtures/xtf/
+# structure_content_model.ili : STRUCTURE Note (Text: MANDATORY TEXT) ;
+# STRUCTURE Address (Street: MANDATORY TEXT ; Notes: BAG {0..*} OF Note) ;
+# CLASS Person (Name, HomeAddress: Address, Tags: BAG {0..*} OF Note).
+# Confirme reel (RULE #1/#4) responsable de la quasi-totalite des `info`
+# "type non verifie"/"structure sans REF reconnu" restants sur le corpus
+# XTF complet avant ce lot (MultilingualText/ModInfo/Point/Surface/
+# KGS_PBC.Objektart-EGID-Adressen...). ---
+
+STRUCT_CONTENT_FIXTURE = Path(__file__).parent / "fixtures/xtf/structure_content_model.ili"
+PERSON_CLASS = "StructContentTest.MainTopic.Person"
+
+
+@pytest.fixture(scope="module")
+def struct_content_builder():
+    tree, errors = parse_file(STRUCT_CONTENT_FIXTURE)
+    assert not errors
+    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        b.build(tree)
+    return b
+
+
+def _struct_wrapper(*attr_pairs: tuple[str, list[RawNode]]) -> RawNode:
+    """Une occurrence de structure DEJA "enveloppee" - equivalent XML d'un
+    `<QualifiedStructName>...</QualifiedStructName>` - le nom du wrapper
+    lui-meme n'est jamais verifie (voir _validate_resolved_attr/RULE #5,
+    meme tolerance deja etablie pour COORD/POLYLINE sans namespace)."""
+    children: list[RawNode] = []
+    for _, nodes in attr_pairs:
+        children.extend(nodes)
+    return RawNode(tag="Wrapper", text=None, attrib={}, children=children)
+
+
+def _multi_attr(name: str, *occurrences: RawNode) -> tuple[str, list[RawNode]]:
+    """Attribut BAG/LIST (MultiValue) - UN SEUL element porte le nom de
+    l'attribut, contenant chaque occurrence EN ENFANT DIRECT (confirme
+    reel, RULE #1, `ID65.1_KGS_PBC_V2_2__20250506.xtf` : `Objektart`)."""
+    return name, [RawNode(tag=name, text=None, attrib={}, children=list(occurrences))]
+
+
+def _validate_struct_person(obj: XtfObject, symbol_table):
+    basket = XtfBasket(bid="b1", qualified_topic="StructContentTest.MainTopic", kind=None, endstate=None, objects=[obj])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    return validate_transfer(transfer, symbol_table=symbol_table)
+
+
+def test_nested_structure_own_attribute_validated(struct_content_builder):
+    """`HomeAddress.Street` (MANDATORY, present) doit etre reconnu et valide
+    - PAS "type non verifie" (comportement d'avant ce lot pour toute
+    STRUCTURE sans REF)."""
+    wrapper = _struct_wrapper(_text_attr("Street", "Bahnhofstrasse 1"))
+    obj = _obj(PERSON_CLASS, "p1", _text_attr("Name", "Alice"), _geom_attr("HomeAddress", wrapper))
+    issues = _validate_struct_person(obj, struct_content_builder.symbol_table)
+    assert issues == []
+
+
+def test_nested_structure_missing_mandatory_sub_attribute_flagged(struct_content_builder):
+    """`HomeAddress` present mais SANS son `Street` MANDATORY - doit etre
+    signale au chemin imbrique `HomeAddress.Street`, PAS silencieusement
+    ignore (aucune verification n'existait sur ce contenu avant ce lot)."""
+    wrapper = _struct_wrapper()
+    obj = _obj(PERSON_CLASS, "p1", _text_attr("Name", "Alice"), _geom_attr("HomeAddress", wrapper))
+    issues = _validate_struct_person(obj, struct_content_builder.symbol_table)
+    msgs = _messages(issues, attribute="HomeAddress.Street", severity="error")
+    assert any("MANDATORY" in m for m in msgs)
+
+
+def test_nested_structure_unknown_sub_attribute_flagged(struct_content_builder):
+    wrapper = _struct_wrapper(_text_attr("Street", "Bahnhofstrasse 1"), _text_attr("Ghost", "x"))
+    obj = _obj(PERSON_CLASS, "p1", _text_attr("Name", "Alice"), _geom_attr("HomeAddress", wrapper))
+    issues = _validate_struct_person(obj, struct_content_builder.symbol_table)
+    msgs = _messages(issues, attribute="HomeAddress.Ghost", severity="warning")
+    assert any("absent du schema" in m for m in msgs)
+
+
+def test_multivalue_root_attribute_each_occurrence_validated(struct_content_builder):
+    """`Tags` (BAG {0..*} OF Note, attribut RACINE) - CHAQUE occurrence est
+    validee independamment, avec un chemin indexe `Tags[i]` (confirme reel,
+    RULE #1 : `KGS_PBC_V2_2.ili` `Objektart`/`EGID`/`Adressen`)."""
+    valid = _struct_wrapper(_text_attr("Text", "hello"))
+    invalid = _struct_wrapper()  # Text MANDATORY absent
+    obj = _obj(PERSON_CLASS, "p1", _text_attr("Name", "Alice"), _multi_attr("Tags", valid, invalid))
+    issues = _validate_struct_person(obj, struct_content_builder.symbol_table)
+    assert _messages(issues, attribute="Tags[0].Text") == []
+    msgs = _messages(issues, attribute="Tags[1].Text", severity="error")
+    assert any("MANDATORY" in m for m in msgs)
+
+
+def test_multivalue_nested_inside_structure_validated(struct_content_builder):
+    """`HomeAddress.Notes` (BAG {0..*} OF Note, attribut d'une STRUCTURE
+    imbriquee, PAS racine) - meme mecanisme, chemin `HomeAddress.Notes[i].Text`
+    (confirme reel : `LocalisationCH_V1.MultilingualText.LocalisedText`)."""
+    note_ok = _struct_wrapper(_text_attr("Text", "hello"))
+    note_bad = _struct_wrapper()
+    home = _struct_wrapper(_text_attr("Street", "Bahnhofstrasse 1"), _multi_attr("Notes", note_ok, note_bad))
+    obj = _obj(PERSON_CLASS, "p1", _text_attr("Name", "Alice"), _geom_attr("HomeAddress", home))
+    issues = _validate_struct_person(obj, struct_content_builder.symbol_table)
+    assert _messages(issues, attribute="HomeAddress.Notes[0].Text") == []
+    msgs = _messages(issues, attribute="HomeAddress.Notes[1].Text", severity="error")
+    assert any("MANDATORY" in m for m in msgs)

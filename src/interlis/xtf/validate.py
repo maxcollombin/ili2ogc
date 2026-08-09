@@ -99,6 +99,31 @@ Perimetre couvert :
   corpus transferent deja leurs valeurs a la precision exacte du modele)
   mais evite un futur faux positif sur tout transfert exercant legitimement
   cette tolerance (ex. broker geodienste.ch).
+- validation RECURSIVE du contenu des STRUCTURE + BAG/LIST (Lot 50,
+  `_validate_attrs`/`_validate_resolved_attr`) : un attribut de Type
+  `Class[Kind=Structure]` sans REF extractible (donc PAS le motif
+  MandatoryCatalogueReference deja gere ci-dessus) n'est plus laisse comme
+  "info: non verifie" generique - ses PROPRES attributs (MANDATORY, type
+  de base, reference, geometrie, structure imbriquee - meme dispatch,
+  recursion illimitee) sont valides EXACTEMENT comme pour un objet racine,
+  avec un chemin d'attribut a POINTS (ex. `HomeAddress.Street`). De meme
+  pour `Class[Kind=Class]`+MultiValue dans un sous-attribut. `MultiValue`
+  (BAG/LIST, `TypeRelatedType.BaseType` - PAS `ClassRelatedType.BaseClass`,
+  jamais couvert avant ce lot, ni au niveau racine ni imbrique) : chaque
+  occurrence redispatchee individuellement, chemin indexe (ex.
+  `Tags[2].Text`) - encodage XTF CONFIRME (RULE #1, `ID65.1_KGS_PBC_V2_2__
+  20250506.xtf`) : UN SEUL element nomme d'apres l'attribut, occurrences
+  en ENFANTS DIRECTS (PAS des repetitions du tag attribut lui-meme,
+  contrairement a la convention `XtfObject.attributes` du niveau objet -
+  deux encodages distincts pour le meme concept de multiplicite). Trouve
+  et confirme reel en repondant a la demande explicite utilisateur de
+  traiter tous les avertissements/info restants du corpus XTF - domine
+  desormais la reduction du volume d'`info` "type non verifie"/"structure
+  sans REF reconnu" sur la quasi-totalite des fichiers du corpus
+  (`LocalisationCH_V1.MultilingualText`, `ModInfo`, `GeometryCHLV95_V1.
+  MultiPoint/MultiLine/MultiSurface`, `KGS_PBC_V2_2.Objektart/EGID/
+  Adressen`...) - un cas a d'ailleurs revele un bug SEPARE et plus large
+  (`SymbolTable.resolve()`, Lot 49, corrige avant celui-ci).
 - PAS encore couvert (limites documentees, PROGRESS.md) : attributs herites
   via EXTENDS depuis un modele IMPORTE non charge (chaine Super tronquee),
   segments LINE FORM personnalises (structure arbitraire, WITH (...) autre
@@ -486,7 +511,8 @@ _GENERIC_RESTRICTION_INFO = (
 
 
 def _validate_restriction_text(
-    resolved: ResolvedAttribute, node: RawNode | None, basket: XtfBasket, obj: XtfObject, attr_name: str, ctx: str,
+    resolved: ResolvedAttribute, node: RawNode | None, *, basket_bid: str, tid: str | None, qualified_class: str,
+    path: str, ctx: str,
 ) -> "ValidationIssue | None":
     """Interprete la 3e forme d'encodage XTF (Lot 41, voir
     docs/xtf-transfer-encoding-notes.md "Third form found") : un attribut
@@ -512,27 +538,27 @@ def _validate_restriction_text(
       resolution TID/REF exacte du Lot 40 - RULE #5, ne jamais surclasser
       une interpretation heuristique en certitude)."""
     if node is None:
-        return ValidationIssue("info", basket.bid, obj.tid, obj.qualified_class, attr_name, f"{ctx}: {_GENERIC_RESTRICTION_INFO}")
+        return ValidationIssue("info", basket_bid, tid, qualified_class, path, f"{ctx}: {_GENERIC_RESTRICTION_INFO}")
     single_attr_candidates = [
         (candidate, resolve_attribute(attr))
         for candidate in restriction_candidates(resolved)
         if (attr := single_own_attribute(candidate)) is not None
     ]
     if not single_attr_candidates:
-        return ValidationIssue("info", basket.bid, obj.tid, obj.qualified_class, attr_name, f"{ctx}: {_GENERIC_RESTRICTION_INFO}")
+        return ValidationIssue("info", basket_bid, tid, qualified_class, path, f"{ctx}: {_GENERIC_RESTRICTION_INFO}")
     checkable = [(c, ir) for c, ir in single_attr_candidates if ir.type_kind in ("TextType", "NumType", "EnumType")]
     if any(not _validate_scalar(inner, node, ctx) for _, inner in checkable):
         return None
     if len(checkable) < len(single_attr_candidates):
         return ValidationIssue(
-            "info", basket.bid, obj.tid, obj.qualified_class, attr_name,
+            "info", basket_bid, tid, qualified_class, path,
             f"{ctx}: valeur texte nue {node.text!r} (CLASS RESTRICTION, 3e forme d'encodage) ne correspond "
             f"a aucun des {len(checkable)}/{len(single_attr_candidates)} candidat(s) verifiable(s) - le "
             "reste n'est pas resolu (modele externe non charge via --repo)",
         )
     names = [getattr(c, "Name", None) for c, _ in checkable]
     return ValidationIssue(
-        "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
+        "warning", basket_bid, tid, qualified_class, path,
         f"{ctx}: valeur texte nue {node.text!r} (CLASS RESTRICTION, 3e forme d'encodage) ne correspond a "
         f"aucun des {len(checkable)} candidat(s) declares ({names!r})",
     )
@@ -590,179 +616,319 @@ def _resolved_schema_of(
     return cached
 
 
+def _group_by_tag(nodes: list[RawNode]) -> dict[str, list[RawNode]]:
+    """Regroupe une liste PLATE de `RawNode` (ex. les enfants d'UNE
+    occurrence de structure) par nom de balise - meme convention que
+    `XtfObject.attributes` (`xtf/parse.py`), pour reutiliser TELLE QUELLE
+    la logique de validation par attribut sur un contenu imbrique (Lot 49)."""
+    grouped: dict[str, list[RawNode]] = {}
+    for n in nodes:
+        grouped.setdefault(n.tag, []).append(n)
+    return grouped
+
+
 def _validate_object(
     obj: XtfObject, basket: XtfBasket, *, symbol_table: SymbolTable, repository: ModelRepository | None,
     tid_index: dict[str, XtfObject], schema_cache: dict[int, dict[str, ResolvedAttribute]],
 ) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
     cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
     if cls is None:
-        issues.append(ValidationIssue(
+        return [ValidationIssue(
             "error", basket.bid, obj.tid, obj.qualified_class, None,
             "classe absente du schema resolu (modele non charge/introuvable via --repo, ou nom qualifie incorrect)",
-        ))
-        return issues
+        )]
 
     # Lot 46 : la table qui declare REELLEMENT `cls` peut differer de la
     # table racine (ex. classe resolue via ModelRepository, TOPIC EXTENDS
     # d'un modele de base) - necessaire pour qu'embedded_roles_of trouve les
     # associations d'embarquement la ou elles sont vraiment declarees.
     cls_table = home_symbol_table(obj.qualified_class, symbol_table=symbol_table, repository=repository)
-    schema_attrs = _resolved_schema_of(cls, cls_table, schema_cache)
-    for attr_name, raw_nodes in obj.attributes.items():
+    return _validate_attrs(
+        cls, obj.attributes, path_prefix="", basket_bid=basket.bid, tid=obj.tid, qualified_class=obj.qualified_class,
+        home_table=cls_table, symbol_table=symbol_table, repository=repository, tid_index=tid_index,
+        schema_cache=schema_cache,
+    )
+
+
+def _validate_attrs(
+    cls: MetaInstance, attrs: dict[str, list[RawNode]], *, path_prefix: str, basket_bid: str, tid: str | None,
+    qualified_class: str, home_table: SymbolTable, symbol_table: SymbolTable, repository: ModelRepository | None,
+    tid_index: dict[str, XtfObject], schema_cache: dict[int, dict[str, ResolvedAttribute]],
+) -> list[ValidationIssue]:
+    """Valide chaque attribut de `attrs` contre le schema de `cls` (MANDATORY,
+    type de base, reference, geometrie...) - factorise (Lot 49) pour
+    s'appliquer aussi bien a un `XtfObject` racine (`path_prefix=""`,
+    `cls`=sa Class) qu'au contenu d'UNE occurrence de STRUCTURE imbriquee
+    (`path_prefix`=chemin de l'attribut parent, `cls`=la Structure elle-meme -
+    memes AttrOrParam/embedded roles via `schema_members_of`, la distinction
+    Class/Structure n'affecte que le `Kind` discriminant, jamais la forme du
+    schema lui-meme). `home_table` reste CELLE calculee pour l'objet racine,
+    jamais recalculee par niveau de recursion (les structures imbriquees du
+    corpus reel sont toutes declarees dans le MEME modele que leur classe
+    englobante - RULE #5, perimetre delibere, a revoir si un cas cross-modele
+    reel apparait)."""
+    issues: list[ValidationIssue] = []
+    schema_attrs = _resolved_schema_of(cls, home_table, schema_cache)
+    for attr_name, raw_nodes in attrs.items():
+        path = f"{path_prefix}.{attr_name}" if path_prefix else attr_name
         if attr_name not in schema_attrs:
             issues.append(ValidationIssue(
-                "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
+                "warning", basket_bid, tid, qualified_class, path,
                 "attribut absent du schema (classe connue) - inconnu, ou herite via EXTENDS depuis un "
                 "modele importe non charge (non couvert par ce lot)",
             ))
             continue
         resolved = schema_attrs[attr_name]
-        ctx = f"{obj.qualified_class}[{obj.tid}].{attr_name}"
-        if resolved.type_kind in _REFERENCE_TYPE_KINDS:
-            # Note (Lot 30) : un Type resolu en ReferenceType/Class ne
-            # signifie pas toujours un REF/ili:ref dans le XML reel -
-            # `CLASS RESTRICTION(...)` sur des STRUCTUREs a UN SEUL
-            # attribut (motif trouve sur RoadTrafficCensus_V1_1 :
-            # `Owner`/`Canton`, restreints a sCHOwnerCode/sCHCantonCode/...)
-            # semble transfere par ili2fme comme la valeur TEXTE nue de cet
-            # unique attribut, PAS comme une reference - 3e forme
-            # d'encodage, INTERPRETEE depuis le Lot 41 (voir
-            # `_validate_restriction_text` ci-dessous) quand possible,
-            # sinon repli sur le meme message "info" qu'avant.
-            ref = _extract_reference(raw_nodes[0]) if raw_nodes else None
-            if ref is None:
-                restriction_issue = _validate_restriction_text(
-                    resolved, raw_nodes[0] if raw_nodes else None, basket, obj, attr_name, ctx,
-                )
-                if restriction_issue is not None:
-                    issues.append(restriction_issue)
-            elif ref not in tid_index:
-                # Lot 31 : REF extrait avec succes mais AUCUN objet de CE
-                # transfert (tous paniers confondus) ne porte ce TID -
-                # `warning`, jamais `error` (voir docstring module : sans
-                # catalogue externe charge, une reference externe legitime
-                # est indiscernable d'une reference cassee).
-                #
-                # Lot 34 : le schema DISTINGUE deja les deux cas via
-                # ReferenceType.External (own BOOLEAN, deja construit par
-                # referenceAttr() - spec/grammar/mapping/04_attributes.yml -
-                # depuis la clause optionnelle "(EXTERNAL)" sur `REFERENCE TO
-                # (EXTERNAL) X`). RULE #4, citation directe eCH-0031 V2.1.0
-                # §3.6.3 : "Soll die Referenz auf ein Objekt eines anderen
-                # Behaelters ... verweisen duerfen, muss die Eigenschaft
-                # EXTERNAL angegeben werden" - SANS cette clause, la cible
-                # DOIT normalement resoudre dans le MEME panier ; un REF non
-                # resolu sur une reference NON-EXTERNAL est donc un signal
-                # plus probable d'une donnee reellement incorrecte qu'une
-                # reference EXTERNAL non resolue (catalogue legitime,
-                # confirme reel sur MLocStatusRef.Reference.Type.External =
-                # True). Severite volontairement INCHANGEE (toujours
-                # `warning`, jamais `error`) - ce lot ne fait QUE distinguer
-                # les deux cas dans le message, il ne pretend pas verifier
-                # positivement la premiere hypothese (aucun catalogue
-                # n'est charge, voir docs/model-resolution-strategy.md).
-                # `reference_external_status` gere aussi le motif
-                # STRUCTURE-enveloppe standard (CatalogueObjects_V1.
-                # Catalogues.MandatoryCatalogueReference, ex. MLocStatusRef)
-                # - confirme empiriquement etre la forme REELLE la plus
-                # frequente dans ce corpus, pas seulement le cas
-                # ReferenceType direct - ET (Lot 43/45) le role d'association
-                # embarque lui-meme, via sa PROPRE clause (EXTERNAL) sur
-                # roleDef (RULE #4, eCH-0031 V2.1.0 §3.7.5, confirme
-                # empiriquement sur CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili,
-                # ASSOCIATION Hierarchy). Tri-state (RULE #5) : `None`
-                # (statut reellement indetermine - ex. structure enveloppant
-                # un contenu non-reference comme une geometrie, confirme
-                # reel sur Axis_V1_1.AxisSegmentGeometry) garde le libelle
-                # neutre d'origine, PLUTOT que d'affirmer a tort "NON
-                # declaree" par defaut.
-                status = reference_external_status(resolved)
-                if status is True:
-                    detail = (
-                        "reference declaree (EXTERNAL) : objet cible attendu dans un panier/catalogue "
-                        "externe (DEPENDS ON), non resolu faute de catalogue charge - situation normale"
-                    )
-                elif status is False:
-                    detail = (
-                        "reference NON declaree (EXTERNAL) : devrait normalement resoudre dans ce meme "
-                        "panier (eCH-0031 V2.1.0 3.6.3) - signal plus probable d'une donnee incorrecte"
-                    )
-                else:
-                    detail = (
-                        "reference externe/catalogue probable, ou reference cassee - statut EXTERNAL "
-                        "indetermine par ce validateur (structure non reconnue)"
-                    )
-                issues.append(ValidationIssue(
-                    "warning", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                    f"{ctx}: REF {ref!r} introuvable dans ce transfert ({detail})",
-                ))
-            else:
-                # Lot 40 : REF resolu avec succes - verifie desormais la
-                # compatibilite de classe de l'objet cible reel avec la
-                # classe DECLAREE par la reference/le role. Silencieux (pas
-                # d'issue) si l'une des deux classes ne peut pas etre
-                # etablie avec certitude, ou si compatible - RULE #5, jamais
-                # de faux positif sur une incertitude cross-modele.
-                declared = reference_target_class(resolved)
-                if declared is not None:
-                    target_obj = tid_index[ref]
-                    actual_cls = resolve_class(target_obj.qualified_class, symbol_table=symbol_table, repository=repository)
-                    if actual_cls is not None and not is_class_compatible(actual_cls, declared):
-                        issues.append(ValidationIssue(
-                            "error", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                            f"{ctx}: REF {ref!r} resolu vers {target_obj.qualified_class!r}, incompatible "
-                            f"avec la classe declaree {getattr(declared, 'Name', '?')!r} "
-                            "(ni identique, ni sous-classe via EXTENDS)",
-                        ))
-            continue
-        if resolved.type_kind == "CoordType":
-            # Geometrie/coordonnees (Lot 42) - voir note module pour le
-            # detail des formes reelles (COORD/MULTICOORD) et la citation
-            # eCH-0031 V2.1.0 §4.3.11.13. `error` : information COMPLETE des
-            # que le Type resout en CoordType (Multi/Axis toujours connus
-            # directement sur l'instance elle-meme, jamais une incertitude
-            # cross-modele) - meme politique que MANDATORY/NUMERIC/ENUM/Lot 40.
-            for node in raw_nodes:
-                for problem in _validate_coord_attribute(resolved, node, ctx):
-                    issues.append(ValidationIssue("error", basket.bid, obj.tid, obj.qualified_class, attr_name, problem))
-            continue
-        if resolved.type_kind == "LineType":
-            # Geometrie/coordonnees (Lot 42) - POLYLINE/SURFACE/AREA/MULTI*,
-            # eCH-0031 V2.1.0 §4.3.11.14/.15. `error` pour la meme raison que
-            # CoordType ci-dessus (structure/Kind/Multi toujours connus) -
-            # la seule incertitude possible (plage Min/Max par axe si VERTEX
-            # non resolu, schema.line_coord_type) degrade deja gracieusement
-            # vers une verification de parseabilite seule (RULE #5), jamais
-            # un skip complet de la structure.
-            for node in raw_nodes:
-                for problem in _validate_line_attribute(resolved, node, ctx):
-                    issues.append(ValidationIssue("error", basket.bid, obj.tid, obj.qualified_class, attr_name, problem))
-            continue
-        if resolved.type_kind not in ("TextType", "NumType", "EnumType"):
-            # Type resolu vers autre chose que les kinds geres par ce lot
-            # (ex. "FormattedType"/"BooleanType"/"BlackboxType"/"AnyOIDType"
-            # - jamais interpretes, ou None - Type jamais resolu, cf.
-            # Municipality/AttrOrParam Lot 29) : rendu VISIBLE explicitement
-            # plutot que silencieusement ignore par `_validate_scalar` (qui
-            # renverrait une liste vide pour un `type_kind` inconnu) - eviter
-            # qu'un total "0 probleme" donne une fausse impression de
-            # conformite complete.
-            issues.append(ValidationIssue(
-                "info", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                f"{ctx}: type {resolved.type_kind!r} non verifie par ce lot (type non couvert/non resolu)",
-            ))
-            continue
-        for node in raw_nodes:
-            for problem in _validate_scalar(resolved, node, ctx):
-                issues.append(ValidationIssue("error", basket.bid, obj.tid, obj.qualified_class, attr_name, problem))
+        ctx = f"{qualified_class}[{tid}].{path}"
+        issues.extend(_validate_resolved_attr(
+            resolved, raw_nodes, path=path, ctx=ctx, basket_bid=basket_bid, tid=tid, qualified_class=qualified_class,
+            home_table=home_table, symbol_table=symbol_table, repository=repository, tid_index=tid_index,
+            schema_cache=schema_cache,
+        ))
 
     for attr_name, resolved in schema_attrs.items():
-        if resolved.mandatory and attr_name not in obj.attributes:
+        if resolved.mandatory and attr_name not in attrs:
+            path = f"{path_prefix}.{attr_name}" if path_prefix else attr_name
             issues.append(ValidationIssue(
-                "error", basket.bid, obj.tid, obj.qualified_class, attr_name,
-                f"{obj.qualified_class}[{obj.tid}]: attribut MANDATORY {attr_name!r} absent",
+                "error", basket_bid, tid, qualified_class, path,
+                f"{qualified_class}[{tid}].{path}: attribut MANDATORY {attr_name!r} absent",
             ))
+    return issues
+
+
+def _validate_resolved_attr(
+    resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, path: str, ctx: str, basket_bid: str, tid: str | None,
+    qualified_class: str, home_table: SymbolTable, symbol_table: SymbolTable, repository: ModelRepository | None,
+    tid_index: dict[str, XtfObject], schema_cache: dict[int, dict[str, ResolvedAttribute]],
+    already_unwrapped: bool = False,
+) -> list[ValidationIssue]:
+    """Dispatch par `type_kind` pour UN attribut deja resolu - coeur de
+    `_validate_attrs`, extrait a part pour etre appelable RECURSIVEMENT (Lot
+    49) : une fois sur un attribut d'objet racine, une fois par occurrence
+    d'une collection `MultiValue` (BAG/LIST), et indirectement via
+    `_validate_attrs` pour le contenu d'une STRUCTURE imbriquee.
+
+    `already_unwrapped` (Lot 49, RULE #6 - bug trouve en verifiant sur le
+    corpus reel, `Facility.Name.LocalisedText[i].Text` faussement "MANDATORY
+    absent" a 100%) distingue DEUX formes de `raw_nodes[0]` qui ne portent
+    PAS le meme niveau d'imbrication : `False` (defaut, cas racine/structure
+    imbriquee "normale") - `raw_nodes[0]` est le noeud NOMME D'APRES
+    L'ATTRIBUT (ex. `<Name>`), dont l'UNIQUE enfant est l'enveloppe de
+    structure (`<...MultilingualText>`) - un niveau de deballage necessaire.
+    `True` (occurrence individuelle d'un `MultiValue`, ci-dessous) -
+    `raw_nodes[0]` EST DEJA cette enveloppe (ex. chaque `<...LocalisedText>`
+    trouve comme enfant direct du conteneur `<LocalisedText>`) - la
+    deballer une SECONDE fois grouperait les petits-enfants (`<Language>`/
+    `<Text>`... eux-memes sans enfants) au lieu des vrais attributs,
+    produisant de FAUX MANDATORY manquants sur 100% des occurrences."""
+    issues: list[ValidationIssue] = []
+    kind = resolved.type_kind
+
+    if kind == "MultiValue":
+        # Lot 49 - RULE #1/#4 : `(BAG|LIST) cardinality? OF
+        # restrictedStructureRef` (spec/grammar/mapping/04_attributes.yml,
+        # attributeDef._collection) construit un `MultiValue` (TypeRelatedType,
+        # PAS ClassRelatedType - `BaseType`, pas `BaseClass`) - jamais couvert
+        # avant ce lot (tombait dans le repli generique "type non verifie" ci-
+        # dessous), qu'il s'agisse d'un attribut RACINE (confirme reel,
+        # `KGS_PBC_V2_2.ili` : `Objektart`/`EGID`/`Adressen`) ou du propre
+        # attribut d'une STRUCTURE imbriquee (`LocalisationCH_V1.
+        # MultilingualText.LocalisedText`). Encodage XTF CONFIRME empirique
+        # (RULE #1, `ID65.1_KGS_PBC_V2_2__20250506.xtf`) : UN SEUL element
+        # portant le nom de l'attribut, contenant EN ENFANTS DIRECTS chaque
+        # occurrence (`<Objektart><...Objektarten_CatRef>...</...><...
+        # Objektarten_CatRef>...</...></Objektart>`) - PAS des occurrences
+        # repetees du tag attribut lui-meme (contrairement a la convention
+        # `XtfObject.attributes`, qui elle capture des REPETITIONS de balise
+        # au niveau OBJET - deux encodages distincts pour le meme concept de
+        # multiplicite, confirmes chacun independamment). Chaque occurrence
+        # est re-dispatchee comme une valeur SIMPLE du type enveloppe
+        # (`BaseType` - Structure, Reference, scalaire... meme mecanisme
+        # generique, recursion illimitee) via un `ResolvedAttribute` synthetique.
+        base_type = getattr(resolved.type_instance, "BaseType", None)
+        if not isinstance(base_type, MetaInstance):
+            issues.append(ValidationIssue(
+                "info", basket_bid, tid, qualified_class, path,
+                f"{ctx}: type 'MultiValue' non verifie (BaseType non resolu - modele externe non charge via --repo)",
+            ))
+            return issues
+        base_kind = base_type._qualified_class.rsplit(".", 1)[-1]
+        for node in raw_nodes:
+            for i, occurrence in enumerate(node.children):
+                occ_path = f"{path}[{i}]"
+                occ_resolved = ResolvedAttribute(attr=resolved.attr, type_instance=base_type, type_kind=base_kind, mandatory=False)
+                issues.extend(_validate_resolved_attr(
+                    occ_resolved, [occurrence], path=occ_path, ctx=f"{qualified_class}[{tid}].{occ_path}",
+                    basket_bid=basket_bid, tid=tid, qualified_class=qualified_class, home_table=home_table,
+                    symbol_table=symbol_table, repository=repository, tid_index=tid_index, schema_cache=schema_cache,
+                    already_unwrapped=True,
+                ))
+        return issues
+
+    if kind in _REFERENCE_TYPE_KINDS:
+        # Note (Lot 30) : un Type resolu en ReferenceType/Class ne
+        # signifie pas toujours un REF/ili:ref dans le XML reel -
+        # `CLASS RESTRICTION(...)` sur des STRUCTUREs a UN SEUL
+        # attribut (motif trouve sur RoadTrafficCensus_V1_1 :
+        # `Owner`/`Canton`, restreints a sCHOwnerCode/sCHCantonCode/...)
+        # semble transfere par ili2fme comme la valeur TEXTE nue de cet
+        # unique attribut, PAS comme une reference - 3e forme
+        # d'encodage, INTERPRETEE depuis le Lot 41 (voir
+        # `_validate_restriction_text` ci-dessous) quand possible,
+        # sinon repli sur le meme message "info" qu'avant.
+        ref = _extract_reference(raw_nodes[0]) if raw_nodes else None
+        if ref is None:
+            if kind == "Class" and getattr(resolved.type_instance, "Kind", None) == "Structure":
+                # Lot 49 - RULE #1 : `restriction_candidates()` ne renvoie
+                # JAMAIS rien pour `type_kind == "Class"` (garde interne
+                # `!= "ReferenceType"`) - `_validate_restriction_text`
+                # n'aurait donc JAMAIS pu faire autre chose ici que le repli
+                # generique. Une vraie STRUCTURE (Kind=Structure, PAS de REF
+                # extrait nulle part dans son sous-arbre - contrairement au
+                # motif MandatoryCatalogueReference deja gere plus haut, qui
+                # LUI porte un REF trouvable par `_extract_reference`) :
+                # recursion GENERIQUE dans son propre contenu, EXACTEMENT le
+                # meme mecanisme qu'un objet racine - confirme reel
+                # responsable de la quasi-totalite des `info` "non verifie"
+                # restants avant ce lot (Name/ModInfo/Point/Surface/Line...).
+                for node in raw_nodes:
+                    wrapper = node if already_unwrapped else (node.children[0] if node.children else None)
+                    child_attrs = _group_by_tag(wrapper.children) if wrapper is not None else {}
+                    issues.extend(_validate_attrs(
+                        resolved.type_instance, child_attrs, path_prefix=path, basket_bid=basket_bid, tid=tid,
+                        qualified_class=qualified_class, home_table=home_table, symbol_table=symbol_table,
+                        repository=repository, tid_index=tid_index, schema_cache=schema_cache,
+                    ))
+                return issues
+            restriction_issue = _validate_restriction_text(
+                resolved, raw_nodes[0] if raw_nodes else None, basket_bid=basket_bid, tid=tid,
+                qualified_class=qualified_class, path=path, ctx=ctx,
+            )
+            if restriction_issue is not None:
+                issues.append(restriction_issue)
+        elif ref not in tid_index:
+            # Lot 31 : REF extrait avec succes mais AUCUN objet de CE
+            # transfert (tous paniers confondus) ne porte ce TID -
+            # `warning`, jamais `error` (voir docstring module : sans
+            # catalogue externe charge, une reference externe legitime
+            # est indiscernable d'une reference cassee).
+            #
+            # Lot 34 : le schema DISTINGUE deja les deux cas via
+            # ReferenceType.External (own BOOLEAN, deja construit par
+            # referenceAttr() - spec/grammar/mapping/04_attributes.yml -
+            # depuis la clause optionnelle "(EXTERNAL)" sur `REFERENCE TO
+            # (EXTERNAL) X`). RULE #4, citation directe eCH-0031 V2.1.0
+            # §3.6.3 : "Soll die Referenz auf ein Objekt eines anderen
+            # Behaelters ... verweisen duerfen, muss die Eigenschaft
+            # EXTERNAL angegeben werden" - SANS cette clause, la cible
+            # DOIT normalement resoudre dans le MEME panier ; un REF non
+            # resolu sur une reference NON-EXTERNAL est donc un signal
+            # plus probable d'une donnee reellement incorrecte qu'une
+            # reference EXTERNAL non resolue (catalogue legitime,
+            # confirme reel sur MLocStatusRef.Reference.Type.External =
+            # True). Severite volontairement INCHANGEE (toujours
+            # `warning`, jamais `error`) - ce lot ne fait QUE distinguer
+            # les deux cas dans le message, il ne pretend pas verifier
+            # positivement la premiere hypothese (aucun catalogue
+            # n'est charge, voir docs/model-resolution-strategy.md).
+            # `reference_external_status` gere aussi le motif
+            # STRUCTURE-enveloppe standard (CatalogueObjects_V1.
+            # Catalogues.MandatoryCatalogueReference, ex. MLocStatusRef)
+            # - confirme empiriquement etre la forme REELLE la plus
+            # frequente dans ce corpus, pas seulement le cas
+            # ReferenceType direct - ET (Lot 43/45) le role d'association
+            # embarque lui-meme, via sa PROPRE clause (EXTERNAL) sur
+            # roleDef (RULE #4, eCH-0031 V2.1.0 §3.7.5, confirme
+            # empiriquement sur CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili,
+            # ASSOCIATION Hierarchy). Tri-state (RULE #5) : `None`
+            # (statut reellement indetermine - ex. structure enveloppant
+            # un contenu non-reference comme une geometrie, confirme
+            # reel sur Axis_V1_1.AxisSegmentGeometry) garde le libelle
+            # neutre d'origine, PLUTOT que d'affirmer a tort "NON
+            # declaree" par defaut.
+            status = reference_external_status(resolved)
+            if status is True:
+                detail = (
+                    "reference declaree (EXTERNAL) : objet cible attendu dans un panier/catalogue "
+                    "externe (DEPENDS ON), non resolu faute de catalogue charge - situation normale"
+                )
+            elif status is False:
+                detail = (
+                    "reference NON declaree (EXTERNAL) : devrait normalement resoudre dans ce meme "
+                    "panier (eCH-0031 V2.1.0 3.6.3) - signal plus probable d'une donnee incorrecte"
+                )
+            else:
+                detail = (
+                    "reference externe/catalogue probable, ou reference cassee - statut EXTERNAL "
+                    "indetermine par ce validateur (structure non reconnue)"
+                )
+            issues.append(ValidationIssue(
+                "warning", basket_bid, tid, qualified_class, path,
+                f"{ctx}: REF {ref!r} introuvable dans ce transfert ({detail})",
+            ))
+        else:
+            # Lot 40 : REF resolu avec succes - verifie desormais la
+            # compatibilite de classe de l'objet cible reel avec la
+            # classe DECLAREE par la reference/le role. Silencieux (pas
+            # d'issue) si l'une des deux classes ne peut pas etre
+            # etablie avec certitude, ou si compatible - RULE #5, jamais
+            # de faux positif sur une incertitude cross-modele.
+            declared = reference_target_class(resolved)
+            if declared is not None:
+                target_obj = tid_index[ref]
+                actual_cls = resolve_class(target_obj.qualified_class, symbol_table=symbol_table, repository=repository)
+                if actual_cls is not None and not is_class_compatible(actual_cls, declared):
+                    issues.append(ValidationIssue(
+                        "error", basket_bid, tid, qualified_class, path,
+                        f"{ctx}: REF {ref!r} resolu vers {target_obj.qualified_class!r}, incompatible "
+                        f"avec la classe declaree {getattr(declared, 'Name', '?')!r} "
+                        "(ni identique, ni sous-classe via EXTENDS)",
+                    ))
+        return issues
+
+    if kind == "CoordType":
+        # Geometrie/coordonnees (Lot 42) - voir note module pour le
+        # detail des formes reelles (COORD/MULTICOORD) et la citation
+        # eCH-0031 V2.1.0 §4.3.11.13. `error` : information COMPLETE des
+        # que le Type resout en CoordType (Multi/Axis toujours connus
+        # directement sur l'instance elle-meme, jamais une incertitude
+        # cross-modele) - meme politique que MANDATORY/NUMERIC/ENUM/Lot 40.
+        for node in raw_nodes:
+            for problem in _validate_coord_attribute(resolved, node, ctx):
+                issues.append(ValidationIssue("error", basket_bid, tid, qualified_class, path, problem))
+        return issues
+
+    if kind == "LineType":
+        # Geometrie/coordonnees (Lot 42) - POLYLINE/SURFACE/AREA/MULTI*,
+        # eCH-0031 V2.1.0 §4.3.11.14/.15. `error` pour la meme raison que
+        # CoordType ci-dessus (structure/Kind/Multi toujours connus) -
+        # la seule incertitude possible (plage Min/Max par axe si VERTEX
+        # non resolu, schema.line_coord_type) degrade deja gracieusement
+        # vers une verification de parseabilite seule (RULE #5), jamais
+        # un skip complet de la structure.
+        for node in raw_nodes:
+            for problem in _validate_line_attribute(resolved, node, ctx):
+                issues.append(ValidationIssue("error", basket_bid, tid, qualified_class, path, problem))
+        return issues
+
+    if kind not in ("TextType", "NumType", "EnumType"):
+        # Type resolu vers autre chose que les kinds geres par ce lot
+        # (ex. "FormattedType"/"BooleanType"/"BlackboxType"/"AnyOIDType"
+        # - jamais interpretes, ou None - Type jamais resolu, cf.
+        # Municipality/AttrOrParam Lot 29) : rendu VISIBLE explicitement
+        # plutot que silencieusement ignore par `_validate_scalar` (qui
+        # renverrait une liste vide pour un `type_kind` inconnu) - eviter
+        # qu'un total "0 probleme" donne une fausse impression de
+        # conformite complete.
+        issues.append(ValidationIssue(
+            "info", basket_bid, tid, qualified_class, path,
+            f"{ctx}: type {kind!r} non verifie par ce lot (type non couvert/non resolu)",
+        ))
+        return issues
+
+    for node in raw_nodes:
+        for problem in _validate_scalar(resolved, node, ctx):
+            issues.append(ValidationIssue("error", basket_bid, tid, qualified_class, path, problem))
     return issues
 
 
