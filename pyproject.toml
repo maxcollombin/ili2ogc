@@ -27,3 +27,22 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/interlis"]
+
+# Embarque les donnees spec/mapping dans le wheel (interlis.cli les charge
+# via importlib.resources a l'execution) - source des fichiers laissee a la
+# racine du depot pour ne pas casser le pipeline de maintenance existant
+# (scripts/, RULE #2bis) qui les reference a cet emplacement. Liste
+# explicite plutot que le dossier mappings/ entier : seuls les 6 fichiers
+# ilismeta16-*.yml effectivement lus a l'execution (UML_FILES +
+# kind-values.yml, voir src/interlis/spec/uml_index.py et
+# src/interlis/metamodel/uml_schema.py) sont embarques, pas
+# antlr-rule-index.yml/grammar-rules.yml/ilismeta16-model.yml (tooling de
+# dev, jamais lus par le runtime).
+[tool.hatch.build.targets.wheel.force-include]
+"spec/grammar/mapping" = "interlis/spec_data/grammar/mapping"
+"mappings/ilismeta16-classes.yml" = "interlis/mappings_data/ilismeta16-classes.yml"
+"mappings/ilismeta16-datatypes.yml" = "interlis/mappings_data/ilismeta16-datatypes.yml"
+"mappings/ilismeta16-associations.yml" = "interlis/mappings_data/ilismeta16-associations.yml"
+"mappings/ilismeta16-enumerations.yml" = "interlis/mappings_data/ilismeta16-enumerations.yml"
+"mappings/ilismeta16-extensions.yml" = "interlis/mappings_data/ilismeta16-extensions.yml"
+"mappings/ilismeta16-kind-values.yml" = "interlis/mappings_data/ilismeta16-kind-values.yml"

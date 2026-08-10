@@ -1,14 +1,17 @@
 """CLI du runtime INTERLIS : `interlis build <fichier.ili>`.
 
 Point d'entree fin - toute la logique vit dans interlis.runtime/interlis.builder.
-Suppose une execution depuis un checkout du depot (mappings/ et
-spec/grammar/mapping/ resolus relativement a la racine du projet, pas
-empaquetes comme donnees de distribution) - coherent avec l'etat actuel du
-projet (runtime lie a son propre depot, pas encore une librairie
-distribuable independamment)."""
+mappings/ et spec/grammar/mapping/ sont resolus via _resource_dirs() ci-dessous :
+donnees embarquees dans le paquet installe (force-include au build du
+wheel, voir pyproject.toml) si presentes, sinon repli sur un checkout du
+depot en developpement (install editable/`uv run` - les donnees
+n'existent qu'a la racine du depot dans ce mode, jamais copiees sous
+src/interlis/)."""
 import argparse
+import importlib.resources
 import sys
 import warnings
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
@@ -19,9 +22,25 @@ from interlis.xtf.model_resolution import header_completeness, header_model_look
 from interlis.xtf.parse import parse_xtf
 from interlis.xtf.validate import validate_transfer
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
+_DEV_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+@contextmanager
+def _resource_dirs():
+    """Cede (mappings_dir, spec_dir) comme de vrais `Path` filesystem -
+    depuis les donnees du paquet installe (`importlib.resources.as_file`,
+    extrait dans un dossier temporaire si le paquet est zippe) quand elles
+    existent, sinon depuis la racine du depot (mode dev)."""
+    spec_pkg = importlib.resources.files("interlis") / "spec_data" / "grammar" / "mapping"
+    if spec_pkg.is_dir():
+        with ExitStack() as stack:
+            mappings_dir = stack.enter_context(
+                importlib.resources.as_file(importlib.resources.files("interlis") / "mappings_data"),
+            )
+            spec_dir = stack.enter_context(importlib.resources.as_file(spec_pkg))
+            yield mappings_dir, spec_dir
+    else:
+        yield _DEV_ROOT / "mappings", _DEV_ROOT / "spec/grammar/mapping"
 
 
 def _describe(value, indent: int = 0, seen: set[int] | None = None) -> None:
@@ -79,7 +98,8 @@ def cmd_build(args: argparse.Namespace) -> int:
         return 1
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
+    with _resource_dirs() as (mappings_dir, spec_dir):
+        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         model = builder.build(tree)
@@ -150,7 +170,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
             print(f"  {e}", file=sys.stderr)
         return 1
 
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
+    with _resource_dirs() as (mappings_dir, spec_dir):
+        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         builder.build(tree)
