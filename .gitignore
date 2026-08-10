@@ -3,7 +3,8 @@ __pycache__/
 .venv/
 /xtf_corpus/
 /ili_corpus/
+/.claude/fair-use-state/
+/scripts/fetch_geodienste_corpus.py
 /scripts/fetch_xtf_corpus.py
 /scripts/fetch_ili_models.py
 /scripts/data/xtf_sources.csv
-/scripts/fetch_geodienste_corpus.py
