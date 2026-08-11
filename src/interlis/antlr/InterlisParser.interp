@@ -506,8 +506,8 @@ associationPath
 attributeRef
 functionCall
 argument
-functionDecl
 functionDef
+functionallyDerivedUnit
 argumentDef
 argumentType
 viewDef

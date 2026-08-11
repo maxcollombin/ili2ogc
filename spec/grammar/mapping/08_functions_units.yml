@@ -90,9 +90,9 @@ derivedUnit:
     ((MUL|DIV|POW) decConst)* LSBR unitRef RSBR. Unreachable in practice (see
     _status above), and in any case already covered via unitDef''s own
     bracket-unitRef branches.'
-functionDecl:
+functionDef:
   grammar:
-    rule: functionDecl
+    rule: functionDef
   kind: Instance
   target: IlisMeta16.ModelData.FunctionDef
   parent:
@@ -104,35 +104,43 @@ functionDecl:
         field: Name
         index: 0
       note: Inherited attribute FunctionDef.Name (mandatory, ilismeta16-classes.yml).
-  note: 'Grammar (functionDecl()): FUNCTION Name LPAR argumentDef (SEMI
-    argumentDef)* RPAR COLON (BOOLEAN | attrTypeDef | Name) SEMI.'
-functionDef:
+  note: 'Grammar (functionDef()): FUNCTION Name LPAR argumentDef (SEMI
+    argumentDef)* RPAR COLON (BOOLEAN | attrTypeDef | Name) SEMI. Renamed
+    from functionDecl (upstream issue #2, geostandards-ch/interlis-antlr4) -
+    this rule builds the real FunctionDef of the INTERLIS 2 spec; the
+    unrelated unit-adjacent rule below was renamed to functionallyDerivedUnit
+    to free up this name.'
+functionallyDerivedUnit:
   grammar:
-    rule: functionDef
+    rule: functionallyDerivedUnit
   kind: Container
   attribute_bindings:
     _status:
       status: not_applicable
-      note: 'Design decision: (a) an adjacent [functionDef-alt1 (header),
-        functionDef-alt2-bare-SEMI] pair is merged and treated as a unitDef
-        with Kind=BaseU (Name/ShortName/EXTENDS -> Inheritance, same bindings
-        as unitDef); (b) a complete functionDef-alt2 (EQ FUNCTION Explanation
-        LSBR unitRef RSBR) encountered without an immediately preceding alt1
-        has no Name and cannot build a Unit instance, so it raises an
-        explicit error rather than guessing a name. This "functionDef" rule
-        is distinct from the real FunctionDef of the INTERLIS 2 spec (=
-        functionDecl in this project) - the .g4 source itself
-        (vendor/interlis-antlr4/InterlisParser.g4) flags this naming
-        confusion. Background: docs/dev-notes/unit-function-def-investigation.md.'
-  note: 'No direct IlisMeta16 instance expected. Despite its name, this rule
-    does NOT create the FunctionDef instance (that''s functionDecl) - it''s
-    an optional trailing clause on a function/unit name specifying its result
-    unit ([unitRef], EXTENDS unitRef) and Explanation text, feeding
-    attributes/associations of the enclosing construct. Grammar (.g4 lines
-    509-515): functionDef : UNIT? Name (LSBR Name RSBR)? (EXTENDS unitRef)? |
-    (EQ FUNCTION Explanation LSBR unitRef RSBR)? SEMI. Full background on the
-    3 real call sites and how alt2 (EQ FUNCTION Explanation LSBR unitRef RSBR)
-    maps onto IlisMeta16.ModelData.UnitFunction:
+      note: 'Design decision: (a) an adjacent [functionallyDerivedUnit-alt1
+        (header), functionallyDerivedUnit-alt2-bare-SEMI] pair is merged and
+        treated as a unitDef with Kind=BaseU (Name/ShortName/EXTENDS ->
+        Inheritance, same bindings as unitDef); (b) a complete
+        functionallyDerivedUnit-alt2 (EQ FUNCTION Explanation LSBR unitRef
+        RSBR) encountered without an immediately preceding alt1 has no Name
+        and cannot build a Unit instance, so it raises an explicit error
+        rather than guessing a name. This rule, formerly named functionDef
+        in this project (a name reused - confusingly - by the real FunctionDef
+        rule below, before upstream issue #2''s rename), is distinct from
+        the real FunctionDef of the INTERLIS 2 spec. Background:
+        docs/dev-notes/unit-function-def-investigation.md.'
+  note: 'No direct IlisMeta16 instance expected. Despite the grammar keyword
+    FUNCTION appearing in its 2nd alternative, this rule does NOT create the
+    FunctionDef instance (that''s functionDef above) - it''s an optional
+    trailing clause on a function/unit name specifying its result unit
+    ([unitRef], EXTENDS unitRef) and Explanation text, feeding
+    attributes/associations of the enclosing construct - matching ili2c''s
+    own FunctionallyDerivedUnit concept (interlis24.g, derivedUnit rule),
+    which this project''s rule name now mirrors. Grammar (.g4 lines
+    509-515): functionallyDerivedUnit : UNIT? Name (LSBR Name RSBR)? (EXTENDS
+    unitRef)? | (EQ FUNCTION Explanation LSBR unitRef RSBR)? SEMI. Full
+    background on the 3 real call sites and how alt2 (EQ FUNCTION Explanation
+    LSBR unitRef RSBR) maps onto IlisMeta16.ModelData.UnitFunction:
     docs/dev-notes/unit-function-def-investigation.md.'
 parameterDef:
   grammar:
@@ -228,8 +236,8 @@ unitDef:
   note: 'Kind resolved dynamically: plain unitRef -> BaseU, derivedUnit ->
     DerivedU, composedUnit -> ComposedU. Grammar (.g4 lines 339-349): UNIT?
     Name (LSBR Name RSBR)? (LPAR ABSTRACT RPAR)? (EXTENDS unitRef)? EQ
-    ( expression (LSBR unitRef RSBR)? | composedUnit | functionDef | LSBR
-    unitRef RSBR )? SEMI.'
+    ( expression (LSBR unitRef RSBR)? | composedUnit | functionallyDerivedUnit
+    | LSBR unitRef RSBR )? SEMI.'
 unitRef:
   grammar:
     rule: unitRef

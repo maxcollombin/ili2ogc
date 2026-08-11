@@ -1193,8 +1193,8 @@ class InterlisParser ( Parser ):
     RULE_attributeRef = 94
     RULE_functionCall = 95
     RULE_argument = 96
-    RULE_functionDecl = 97
-    RULE_functionDef = 98
+    RULE_functionDef = 97
+    RULE_functionallyDerivedUnit = 98
     RULE_argumentDef = 99
     RULE_argumentType = 100
     RULE_viewDef = 101
@@ -1243,10 +1243,10 @@ class InterlisParser ( Parser ):
                    "expression", "term", "term0", "term1", "term2", "predicate", 
                    "relation", "factor", "objectOrAttributePath", "attributePath", 
                    "pathEl", "associationPath", "attributeRef", "functionCall", 
-                   "argument", "functionDecl", "functionDef", "argumentDef", 
-                   "argumentType", "viewDef", "viewRef", "formationDef", 
-                   "projection", "join", "union", "aggregation", "inspection", 
-                   "renamedViewableRef", "viewableRef", "baseExtensionDef", 
+                   "argument", "functionDef", "functionallyDerivedUnit", 
+                   "argumentDef", "argumentType", "viewDef", "viewRef", 
+                   "formationDef", "projection", "join", "union", "aggregation", 
+                   "inspection", "renamedViewableRef", "viewableRef", "baseExtensionDef", 
                    "selection", "viewAttributes", "graphicDef", "graphicRef", 
                    "drawingRule", "condSignParamAssignment", "signParamAssignment", 
                    "enumAssignment", "enumRange" ]
@@ -1655,18 +1655,18 @@ class InterlisParser ( Parser ):
                 return self.getTypedRuleContext(InterlisParser.UnitDefContext,i)
 
 
+        def functionallyDerivedUnit(self, i:int=None):
+            if i is None:
+                return self.getTypedRuleContexts(InterlisParser.FunctionallyDerivedUnitContext)
+            else:
+                return self.getTypedRuleContext(InterlisParser.FunctionallyDerivedUnitContext,i)
+
+
         def functionDef(self, i:int=None):
             if i is None:
                 return self.getTypedRuleContexts(InterlisParser.FunctionDefContext)
             else:
                 return self.getTypedRuleContext(InterlisParser.FunctionDefContext,i)
-
-
-        def functionDecl(self, i:int=None):
-            if i is None:
-                return self.getTypedRuleContexts(InterlisParser.FunctionDeclContext)
-            else:
-                return self.getTypedRuleContext(InterlisParser.FunctionDeclContext,i)
 
 
         def lineFormTypeDef(self, i:int=None):
@@ -1965,12 +1965,12 @@ class InterlisParser ( Parser ):
 
                 elif la_ == 3:
                     self.state = 330
-                    self.functionDef()
+                    self.functionallyDerivedUnit()
                     pass
 
                 elif la_ == 4:
                     self.state = 331
-                    self.functionDecl()
+                    self.functionDef()
                     pass
 
                 elif la_ == 5:
@@ -2439,12 +2439,12 @@ class InterlisParser ( Parser ):
             return self.getTypedRuleContext(InterlisParser.UnitDefContext,0)
 
 
+        def functionallyDerivedUnit(self):
+            return self.getTypedRuleContext(InterlisParser.FunctionallyDerivedUnitContext,0)
+
+
         def functionDef(self):
             return self.getTypedRuleContext(InterlisParser.FunctionDefContext,0)
-
-
-        def functionDecl(self):
-            return self.getTypedRuleContext(InterlisParser.FunctionDeclContext,0)
 
 
         def domainDef(self):
@@ -2514,13 +2514,13 @@ class InterlisParser ( Parser ):
             elif la_ == 3:
                 self.enterOuterAlt(localctx, 3)
                 self.state = 451
-                self.functionDef()
+                self.functionallyDerivedUnit()
                 pass
 
             elif la_ == 4:
                 self.enterOuterAlt(localctx, 4)
                 self.state = 452
-                self.functionDecl()
+                self.functionDef()
                 pass
 
             elif la_ == 5:
@@ -9093,8 +9093,8 @@ class InterlisParser ( Parser ):
             return self.getTypedRuleContext(InterlisParser.ComposedUnitContext,0)
 
 
-        def functionDef(self):
-            return self.getTypedRuleContext(InterlisParser.FunctionDefContext,0)
+        def functionallyDerivedUnit(self):
+            return self.getTypedRuleContext(InterlisParser.FunctionallyDerivedUnitContext,0)
 
 
         def getRuleIndex(self):
@@ -9187,7 +9187,7 @@ class InterlisParser ( Parser ):
 
             elif la_ == 3:
                 self.state = 1508
-                self.functionDef()
+                self.functionallyDerivedUnit()
 
             elif la_ == 4:
                 self.state = 1509
@@ -12429,7 +12429,7 @@ class InterlisParser ( Parser ):
         return localctx
 
 
-    class FunctionDeclContext(ParserRuleContext):
+    class FunctionDefContext(ParserRuleContext):
         __slots__ = 'parser'
 
         def __init__(self, parser, parent:ParserRuleContext=None, invokingState:int=-1):
@@ -12475,21 +12475,21 @@ class InterlisParser ( Parser ):
 
 
         def getRuleIndex(self):
-            return InterlisParser.RULE_functionDecl
+            return InterlisParser.RULE_functionDef
 
         def accept(self, visitor:ParseTreeVisitor):
-            if hasattr( visitor, "visitFunctionDecl" ):
-                return visitor.visitFunctionDecl(self)
+            if hasattr( visitor, "visitFunctionDef" ):
+                return visitor.visitFunctionDef(self)
             else:
                 return visitor.visitChildren(self)
 
 
 
 
-    def functionDecl(self):
+    def functionDef(self):
 
-        localctx = InterlisParser.FunctionDeclContext(self, self._ctx, self.state)
-        self.enterRule(localctx, 194, self.RULE_functionDecl)
+        localctx = InterlisParser.FunctionDefContext(self, self._ctx, self.state)
+        self.enterRule(localctx, 194, self.RULE_functionDef)
         self._la = 0 # Token type
         try:
             self.enterOuterAlt(localctx, 1)
@@ -12547,7 +12547,7 @@ class InterlisParser ( Parser ):
         return localctx
 
 
-    class FunctionDefContext(ParserRuleContext):
+    class FunctionallyDerivedUnitContext(ParserRuleContext):
         __slots__ = 'parser'
 
         def __init__(self, parser, parent:ParserRuleContext=None, invokingState:int=-1):
@@ -12589,21 +12589,21 @@ class InterlisParser ( Parser ):
             return self.getToken(InterlisParser.Explanation, 0)
 
         def getRuleIndex(self):
-            return InterlisParser.RULE_functionDef
+            return InterlisParser.RULE_functionallyDerivedUnit
 
         def accept(self, visitor:ParseTreeVisitor):
-            if hasattr( visitor, "visitFunctionDef" ):
-                return visitor.visitFunctionDef(self)
+            if hasattr( visitor, "visitFunctionallyDerivedUnit" ):
+                return visitor.visitFunctionallyDerivedUnit(self)
             else:
                 return visitor.visitChildren(self)
 
 
 
 
-    def functionDef(self):
+    def functionallyDerivedUnit(self):
 
-        localctx = InterlisParser.FunctionDefContext(self, self._ctx, self.state)
-        self.enterRule(localctx, 196, self.RULE_functionDef)
+        localctx = InterlisParser.FunctionallyDerivedUnitContext(self, self._ctx, self.state)
+        self.enterRule(localctx, 196, self.RULE_functionallyDerivedUnit)
         self._la = 0 # Token type
         try:
             self.state = 2028

@@ -494,13 +494,13 @@ class InterlisParserVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by InterlisParser#functionDecl.
-    def visitFunctionDecl(self, ctx:InterlisParser.FunctionDeclContext):
+    # Visit a parse tree produced by InterlisParser#functionDef.
+    def visitFunctionDef(self, ctx:InterlisParser.FunctionDefContext):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by InterlisParser#functionDef.
-    def visitFunctionDef(self, ctx:InterlisParser.FunctionDefContext):
+    # Visit a parse tree produced by InterlisParser#functionallyDerivedUnit.
+    def visitFunctionallyDerivedUnit(self, ctx:InterlisParser.FunctionallyDerivedUnitContext):
         return self.visitChildren(ctx)
 
 

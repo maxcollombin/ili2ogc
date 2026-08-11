@@ -8,6 +8,7 @@ definitions:
   - associationDef
   - domainDef
   - functionDef
+  - functionallyDerivedUnit
   - unitDef
   - metaDataBasketDef
   - contextDef
@@ -16,15 +17,17 @@ definitions:
   - graphicDef
   attribute_bindings:
     _dispatch:
-      note: 'Pure dispatcher, no own class (11 mutually exclusive alternatives, each delegating to its
-        own already-bound or later-bound rule: metaDataBasketDef/unitDef/functionDef/domainDef/contextDef/classDef/structureDef/associationDef/constraintsDef/viewDef/graphicDef).'
-  note: '`children` listed `topicDef` (inaccessible from DefinitionsContext) and omitted 6 of the 11
-    real accessors. The 11 exact accessors (via inspect.signature on DefinitionsContext) are
-    associationDef/classDef/constraintsDef/contextDef/domainDef/functionDef/graphicDef/
-    metaDataBasketDef/structureDef/unitDef/viewDef - already correctly listed in the `_dispatch` note
-    above (which was right), only the `children` field itself was wrong. topicDef has no place here:
-    a TOPIC is defined at the modeldef level (definitions is the content OF a topic, not topicDef
-    itself).'
+      note: 'Pure dispatcher, no own class (12 mutually exclusive alternatives, each delegating to its
+        own already-bound or later-bound rule: metaDataBasketDef/unitDef/functionallyDerivedUnit/
+        functionDef/domainDef/contextDef/classDef/structureDef/associationDef/constraintsDef/viewDef/
+        graphicDef).'
+  note: 'The 12 exact accessors (via inspect.signature on DefinitionsContext) are
+    associationDef/classDef/constraintsDef/contextDef/domainDef/functionDef/functionallyDerivedUnit/
+    graphicDef/metaDataBasketDef/structureDef/unitDef/viewDef. topicDef has no place here: a TOPIC is
+    defined at the modeldef level (definitions is the content OF a topic, not topicDef itself).
+    functionDef/functionallyDerivedUnit are the renamed functionDecl/functionDef rules (upstream issue
+    #2, geostandards-ch/interlis-antlr4) - see the functionDef binding in 08_functions_units.yml for the
+    full rename rationale.'
 genericRef:
   grammar:
     rule: genericRef

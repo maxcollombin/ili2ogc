@@ -245,11 +245,11 @@ restrictedClassOrAssRef:
 
         `optional: true` is required - legitimately absent when the ANYCLASS alternative
         (handled separately by the `AnyClass` binding below) is chosen instead of a
-        concrete classOrAssociationRef - e.g. `Objects: OBJECTS OF ANYCLASS` (functionDecl,
+        concrete classOrAssociationRef - e.g. `Objects: OBJECTS OF ANYCLASS` (functionDef,
         Gefahrenkartierung_V1_de.ili) previously raised `BuildError [restrictedClassOrAssRef] ''classOrAssociationRef''
-        absent (non optionnel)`. `functionDecl` (the only real consumer
+        missing (not optional)`. `functionDef` (the only real consumer
         of this ANYCLASS path via `argumentType`) was grammatically UNREACHABLE at the
-        TOPIC level (see the functionDecl binding) - a latent gap, never a behavior
+        TOPIC level (see the functionDef binding) - a latent gap, never a behavior
         change for a concrete `classOrAssociationRef` (already present, never optional in that case).
 
         '
