@@ -313,6 +313,18 @@ coordinateType:
         there is nothing more to look for under the name "Rotation".
 
         '
+    _refsys_string:
+      status: not_applicable
+      source:
+        field: STRING
+        optional: true
+      note: 'Reference Manual eCH-0031 V2.1.0 §3.8.8, exact EBNF: CoordinateType = (''COORD''|''MULTICOORD'')
+        NumericType [ '',''NumericType [ '',''NumericType ] [ '',''RotationDef ] [ ''REFSYS'' Name-String
+        ] ]. Real example from the manual: COORD 480000.00..850000.00 [m] {CHLV03[1]}, 60000.00..320000.00
+        [m] {CHLV03[2]}, ROTATION 2 -> 1 REFSYS "EPSG:21781";. CoordType has no attribute to hold this
+        EPSG-code string (ilismeta16-classes.yml: only NullAxis/PiHalfAxis/Multi are own, same gap as
+        modeldef''s Explanation clause) - the grammar now accepts it (widening-only fix, no real corpus
+        file uses it yet), ModelBuilder parses and discards it rather than forcing a binding.'
 dateTimeType:
   grammar:
     rule: dateTimeType
