@@ -2,17 +2,26 @@
 
 A pure-Python INTERLIS runtime: parses an `.ili` file (INTERLIS 2 model)
 and builds a graph of typed Python objects conforming to the IlisMeta16
-metamodel - without depending on ili2c (the reference Java compiler) at
-runtime.
+metamodel, and validates `.xtf` data transfers against that model - without
+depending on ili2c (the reference Java compiler) at runtime.
 
 ## Installation
 
 ```sh
-git submodule update --init --recursive   # INTERLIS grammar (vendor/interlis-antlr4)
 uv sync
 ```
 
-## Usage - CLI
+or, with pip, from a checkout:
+
+```sh
+pip install .
+```
+
+The generated ANTLR lexer/parser are already committed under
+`src/interlis/antlr/`, so no separate grammar build step is needed to use
+the runtime.
+
+## Validate/build an INTERLIS model (`.ili`)
 
 ```sh
 uv run interlis build path/to/model.ili
@@ -64,35 +73,39 @@ Options:
 - `-q`/`--quiet`: hide warnings (known, non-fatal spec gaps flagged during
   construction - see [Known limitations](#known-limitations)).
 - `--repo DIR`: directory of `.ili` files to resolve `IMPORTS` references
-  against (repeatable). Omit for the previous single-file behavior.
+  against (repeatable). Omit for single-file resolution only.
 
-## Usage - XTF validation
+## Validate a data transfer (`.xtf`)
 
 ```sh
 uv run interlis validate path/to/transfer.xtf --repo path/to/model-directory
 ```
 
-Validates a `.xtf` data transfer against the schema it declares using
-(structure, `MANDATORY`, base types, TID/REF resolution, embedded
-association roles). `--repo` (repeatable) resolves the `.ili` schema(s):
-the root model is auto-detected from the transfer's own `HEADERSECTION`/
-`DATASECTION` (see `docs/model-resolution-strategy.md` for why this is
-never a live Model Repository lookup) - pass `--model FILE.ili` to
-override with an explicit file instead.
+Validates a `.xtf` data transfer against the schema it declares (structure,
+`MANDATORY`, base types, TID/REF resolution, embedded association roles).
+`--repo` (repeatable) resolves the `.ili` schema(s): the root model is
+auto-detected from the transfer's own `HEADERSECTION`/`DATASECTION` - pass
+`--model FILE.ili` to override with an explicit file instead.
 
 ```sh
 uv run interlis validate transfer.xtf --repo models/ --catalog codes.xtf -v
 ```
 
-`--catalog FILE.xtf` (repeatable) supplies additional transfers whose
-objects should also count as resolvable targets - typically a
-catalogue/code-list basket distributed separately from the main data
-transfer (see [Known limitations](#known-limitations) and
-`docs/xtf-catalogue-references.md`). `-v`/`--verbose` also shows `info`-
-level issues (types still unhandled by the validator, e.g. `FORMAT`ted
-values); `-q`/`--quiet` shows only the final summary. Exit code is `1` if
-any `error`-severity issue was found, `0` otherwise (warnings/info never
-fail the run).
+Options:
+- `--model FILE.ili`: explicit schema file, instead of auto-detecting it
+  from the transfer's header.
+- `--repo DIR`: directory of `.ili` files to resolve the schema's `IMPORTS`
+  against (repeatable).
+- `--catalog FILE.xtf`: additional transfer (repeatable) whose objects
+  should also count as resolvable targets - typically a catalogue/code-list
+  basket distributed separately from the main data transfer (see
+  [Known limitations](#known-limitations)).
+- `-v`/`--verbose`: also show `info`-level issues (types still unhandled by
+  the validator, e.g. `FORMAT`ted values).
+- `-q`/`--quiet`: only print the final summary.
+
+Exit code is `1` if any `error`-severity issue was found, `0` otherwise
+(warnings/info never fail the run).
 
 Geometry/coordinate attributes (`COORD`/`MULTICOORD`,
 `POLYLINE`/`SURFACE`/`AREA`/`MULTI*`) are validated structurally and, where
@@ -101,16 +114,12 @@ the coordinate domain's axis ranges are resolvable, against their declared
 encoding forms this doesn't cover yet.
 
 When `--repo` is given, every model declared in the transfer's
-`HEADERSECTION/MODELS` is proactively checked for resolvability against
-it (Lot 39) - not just the ones actually touched by the data - and any
-gap (model missing from `--repo`, or indexed but failing to build) is
-reported up front, with a resolved-count folded into the final summary
-line. This can surface issues invisible to earlier, purely lazy
-validation, where a `--repo` directory that looked complete could still
-be missing a model that no attribute in *this particular* transfer
-happened to reference.
+`HEADERSECTION/MODELS` is proactively checked for resolvability against it
+- not just the ones actually touched by the data - and any gap (model
+missing from `--repo`, or indexed but failing to build) is reported up
+front, with a resolved-count folded into the final summary line.
 
-## Usage - Python API
+## Python API - the executable metamodel
 
 ```python
 from pathlib import Path
@@ -138,9 +147,23 @@ model = builder.build(tree)
 ```
 
 Every returned object is a Pydantic model class generated dynamically from
-the IlisMeta16 metamodel (see Architecture below) - navigate it by
-attribute (`.Name`, `.Element`, `.ClassAttribute`, ...), matching the
-metamodel's own official names.
+the IlisMeta16 metamodel (see [Architecture](#architecture) below) -
+navigate it by attribute (`.Name`, `.Element`, `.ClassAttribute`, ...),
+matching the metamodel's own official names.
+
+To validate an already-parsed `.xtf` transfer directly from Python:
+
+```python
+from interlis.xtf.parse import parse_xtf
+from interlis.xtf.validate import validate_transfer
+
+transfer = parse_xtf(Path("transfer.xtf"))
+issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
+```
+
+Each `issue` carries a `severity` (`error`/`warning`/`info`), a `message`,
+and enough context (class, attribute, object TID) to locate the problem in
+the source data.
 
 ## Known limitations
 
@@ -159,8 +182,8 @@ metamodel's own official names.
   (`Units`, `CoordSys`, ...) that real-world data commonly imports but
   that are NOT hosted on models.geo.admin.ch - they live at
   `https://models.interlis.ch/ilimodels.xml` instead (same
-  `IliRepository20.RepositoryIndex.ModelMetadata` index format, confirmed
-  Lot 26) - pass a directory populated from there as an additional
+  `IliRepository20.RepositoryIndex.ModelMetadata` index format) - pass a
+  directory populated from there as an additional
   `--repo`/`ModelRepository([...])` entry to resolve them too. Exception:
   the predefined `INTERLIS` namespace (see next bullet) always resolves,
   `--repo` or not - it needs no directory lookup.
@@ -183,41 +206,35 @@ metamodel's own official names.
   common Swiss pattern via `CatalogueObjects_V1.Catalogues.
   MandatoryCatalogueReference`) resolve only if their target basket is
   supplied via `--catalog` - `interlis validate` cannot locate it on its
-  own (neither `.ili` nor `.xtf` encode a physical location for it, and no
-  public catalogue file was found for this project's real-world
-  inventory). See `docs/xtf-catalogue-references.md` for the full
-  investigation and how unresolved references are classified either way.
-- **Attributes inherited via `EXTENDS`** are now seen by the XTF
-  validator's schema lookup (`xtf/schema.py:attributes_of`, Lot 38) -
-  resolved transitively up the `Super` chain, own attributes winning over
-  inherited ones of the same name. A `TOPIC B EXTENDS TOPIC A` (common
-  Swiss pattern, e.g. CHBase) also makes `A`'s own short names resolvable
-  unqualified inside `B`, per eCH-0031 V2.1.0 §3.5.4 - this only degrades
-  gracefully (`UnresolvedNamedReference`, never a crash) when the base
-  model itself cannot be built.
+  own (neither `.ili` nor `.xtf` encode a physical location for it). See
+  `docs/xtf-catalogue-references.md` for the full investigation and how
+  unresolved references are classified either way.
+- **Attributes inherited via `EXTENDS`** are seen by the XTF validator's
+  schema lookup, resolved transitively up the `Super` chain, own
+  attributes winning over inherited ones of the same name. A `TOPIC B
+  EXTENDS TOPIC A` (common Swiss pattern, e.g. CHBase) also makes `A`'s own
+  short names resolvable unqualified inside `B`, per eCH-0031 V2.1.0
+  §3.5.4 - this only degrades gracefully (`UnresolvedNamedReference`,
+  never a crash) when the base model itself cannot be built.
 - **Geometry/coordinate validation** (`COORD`/`MULTICOORD`/`POLYLINE`/
-  `SURFACE`/`AREA`/`MULTI*`, `xtf/validate.py`) checks structure and, where
-  resolvable, per-axis `Min`/`Max` ranges (with a rounding tolerance, Lot
-  48, per Reference Manual §2.8/§4.3.11.4) - but: a custom `LINE FORM`
-  segment (anything other than `STRAIGHTS`/`ARCS` in a `WITH (...)` clause)
-  is not interpreted (silently skipped, not flagged); `MULTICOORD`/
-  `MULTIPOLYLINE`/`MULTISURFACE`/`MULTIAREA`/`AREA`/`ARC` are implemented by
-  extrapolation from the Reference Manual and the confirmed
-  `COORD`/`POLYLINE` encoding convention, not confirmed against a real file
-  (none in this project's inventory uses them). A `LineType`'s coordinate
-  domain (`VERTEX` clause) IS now followed up the `EXTENDS` chain when the
-  attribute's own declaration has none (Lot 44).
-- **`DataUnit.Super` (`TOPIC ... EXTENDS`) is deliberately never read by the
-  XTF validator - investigated (Lot 52), confirmed not a gap**: unlike
-  `Class`/`Structure EXTENDS` (previous bullet), a `TOPIC EXTENDS` is a
-  *namespace-only* construct (eCH-0031 V2.1.0 §3.5.4 - it makes the base
-  topic's own names resolvable unqualified, nothing more); it never implies
-  attribute inheritance for classes, which always goes through their own
-  `Class.Super`/`Inheritance` link regardless of which topic they live in.
-  There is therefore no attribute-resolution behavior `DataUnit.Super`
-  could add to the validator - the earlier note here questioning this was
-  speculative and has been resolved by re-deriving the semantics from the
-  Reference Manual, not by writing new code.
+  `SURFACE`/`AREA`/`MULTI*`) checks structure and, where resolvable,
+  per-axis `Min`/`Max` ranges (with a rounding tolerance, per Reference
+  Manual §2.8/§4.3.11.4) - but: a custom `LINE FORM` segment (anything
+  other than `STRAIGHTS`/`ARCS` in a `WITH (...)` clause) is not
+  interpreted (silently skipped, not flagged); `MULTICOORD`/
+  `MULTIPOLYLINE`/`MULTISURFACE`/`MULTIAREA`/`AREA`/`ARC` are implemented
+  by extrapolation from the Reference Manual and the confirmed
+  `COORD`/`POLYLINE` encoding convention, not confirmed against a real
+  file (none in this project's inventory uses them). A `LineType`'s
+  coordinate domain (`VERTEX` clause) is followed up the `EXTENDS` chain
+  when the attribute's own declaration has none.
+- **`DataUnit.Super` (`TOPIC ... EXTENDS`) is deliberately never read by
+  the XTF validator**: unlike `Class`/`Structure EXTENDS` (previous
+  bullet), a `TOPIC EXTENDS` is a *namespace-only* construct (eCH-0031
+  V2.1.0 §3.5.4 - it makes the base topic's own names resolvable
+  unqualified, nothing more); it never implies attribute inheritance for
+  classes, which always goes through their own `Class.Super`/`Inheritance`
+  link regardless of which topic they live in.
 
 ## Architecture
 
@@ -251,28 +268,9 @@ driven by this data, not 121 hand-written Python methods.
 
 ```sh
 uv run python3 scripts/validate_spec.py   # validates spec/grammar/mapping/ against the metamodel
-uv run python3 -m pytest tests/           # ModelBuilder tests
+uv run python3 -m pytest tests/           # ModelBuilder + XTF validator tests
 ```
 
-## ANTLR lexer/parser generation
-
-Only needs re-running if `vendor/interlis-antlr4` changes version.
-
-```sh
-uv run --env-file .env antlr4 \
-    -Dlanguage=Python3 \
-    -visitor \
-    -no-listener \
-    -Xexact-output-dir \
-    -o src/interlis/antlr \
-    vendor/interlis-antlr4/InterlisLexer.g4
-
-uv run --env-file .env antlr4 \
-    -Dlanguage=Python3 \
-    -visitor \
-    -no-listener \
-    -Xexact-output-dir \
-    -lib src/interlis/antlr \
-    -o src/interlis/antlr \
-    vendor/interlis-antlr4/InterlisParser.g4
-```
+Regenerating the vendored ANTLR grammar (only needed when
+`vendor/interlis-antlr4` changes) is a maintainer-only step, not required
+to use or contribute to the runtime itself - see `docs/grammar-regeneration.md`.
