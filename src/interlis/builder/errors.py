@@ -1,14 +1,15 @@
-"""Erreurs et objets de diagnostic du ModelBuilder."""
+"""Errors and diagnostic objects for the ModelBuilder."""
 from typing import Any
 
 
 class BuildError(Exception):
-    """Erreur de construction non recuperable - binding mal forme, valeur
-    introuvable sur le ctx ANTLR, association/role inconnu, etc. Porte la
-    regle grammaticale et, si disponible, la position source (ligne/colonne
-    du token de depart du ctx) pour un diagnostic actionnable plutot qu'un
-    crash Python opaque (RULE #5 du skill interlis-mapping : documenter
-    l'incertitude/l'erreur plutot que la masquer)."""
+    """Unrecoverable build error.
+
+    Raised for a malformed binding, a value not found on the ANTLR ctx, an
+    unknown association/role, etc. Carries the grammar rule and, when
+    available, the source position (line/column of the ctx's start token)
+    for an actionable diagnostic instead of an opaque Python crash.
+    """
 
     def __init__(self, message: str, *, rule: str | None = None, ctx: Any = None):
         self.rule = rule
@@ -16,20 +17,22 @@ class BuildError(Exception):
         location = ""
         start = getattr(ctx, "start", None)
         if start is not None:
-            location = f" (ligne {start.line}, colonne {start.column})"
+            location = f" (line {start.line}, column {start.column})"
         prefix = f"[{rule}]" if rule else ""
         super().__init__(f"{prefix}{location} {message}".strip())
 
 
 class UnresolvedNamedReference:
-    """Reference nommee non resolue - une reference vers un modele importe
-    (IMPORTS) devient cet objet documente explicitement plutot qu'une
-    exception ou un None silencieux. Reste le comportement par defaut (aucun
-    ModelRepository configure) et le repli pour tout modele reellement
-    introuvable meme avec un repository (hors du/des repertoire(s) fourni(s),
-    fichier avec erreur de syntaxe, import circulaire non entierement
-    resolu) - voir ModelRepository (repository.py) pour la resolution
-    multi-fichiers reelle."""
+    """A named reference that couldn't be resolved.
+
+    A reference into an imported model (IMPORTS) becomes this explicit,
+    documented object instead of an exception or a silent None. This is
+    both the default behavior (no ModelRepository configured) and the
+    fallback for any model genuinely not found even with a repository
+    (outside the given director(y/ies), file with a syntax error, circular
+    import not fully resolved) - see ModelRepository (repository.py) for
+    actual multi-file resolution.
+    """
 
     __slots__ = ("name", "reason")
 

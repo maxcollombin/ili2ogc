@@ -111,66 +111,29 @@ roleDef:
         field: restrictedClassOrAssRef
         path: BaseRef
         optional: true
-      note: 'CORRIGE (audit CLI ModelBuilder, 2026-08-03) : aucun binding ne couvrait la reference de classe
-        cible de restrictedClassOrAssRef() - documentee "not yet mapped" ci-dessous depuis l''origine.
-        Role EXTENDS ReferenceType EXTENDS ClassRelatedType (confirme ilismeta16-classes.yml) : la meme
-        association BaseClass (CRT{0..*} ClassRelatedType <-> BaseClass{0..*} Class, ilismeta16-associations.yml)
-        deja utilisee pour toute autre ClassRelatedType s''applique ici. restrictedClassOrAssRef() retourne
-        un bag {BaseRef: ForwardRef, AnyClass, Restrictions} - BaseRef est LE nom de base resolu. Couvre
-        uniquement la 1ere occurrence (le cas usuel) ; la boucle ''(OR restrictedClassOrAssRef)*'' pour des
-        restrictions multiples reste hors perimetre de cette correction.'
+      note: 'No binding used to cover the target class reference
+        of restrictedClassOrAssRef().
+        Role EXTENDS ReferenceType EXTENDS ClassRelatedType (ilismeta16-classes.yml): the same
+        BaseClass association (CRT{0..*} ClassRelatedType <-> BaseClass{0..*} Class, ilismeta16-associations.yml)
+        already used for any other ClassRelatedType applies here. restrictedClassOrAssRef() returns
+        a bag {BaseRef: ForwardRef, AnyClass, Restrictions} - BaseRef is the resolved base name. Covers
+        only the first occurrence (the usual case); the ''(OR restrictedClassOrAssRef)*'' loop for multiple
+        restrictions is out of scope here.'
     EmbeddedTransfer:
       source:
         field: EXTERNAL
         presence: false
-      note: 'STATUS toujours unconfirmed (RULE #5) - reinvestigue au Lot 43 (geometrie/roles embarques),
-        conclusion : la justification precedente ("spec 2.6.3/2.7.5") etait probablement une erreur de
-        categorie, PAS confirmee comme correcte pour autant.
-
-        Investigation RULE #4 (Lot 43) : le manuel eCH-0031 V2.1.0 decrit DEUX concepts distincts qui
-        partagent un vocabulaire proche ("Beziehungszugang"/acces vs "eingebettete Beziehung"/embarquement) -
-        a ne pas confondre :
-        (1) §3.7.5 "Beziehungszugaenge" (AssociationAccess) : capacite de NAVIGUER par expression de chemin
-        (`obj.RoleName`, §3.13) depuis un objet vers les instances de relation - lie au meme Topic ET a la
-        clause EXTERNAL ("... muss dies bei der Rolle speziell angemerkt werden (EXTERNAL...). Die Klasse
-        erhaelt dann keine Beziehungszugaenge.", citation directe) - CONFIRME comme un construit metamodele
-        SEPARE (`ExplicitAssocAccess`, association `AssocAcc` roles `AssocAccOrigin`/`AssocAccTarget`,
-        visible sur le diagramme "Abbildung 3: Uebersicht Hauptkonstrukte" du PDF metamodele ili24-metamodel_2022-06-17,
-        totalement distinct de `Role.EmbeddedTransfer`).
-        (2) §4.3.9 "Codierung von Beziehungen" (XTF embedding, deja implemente Lot 32 via
-        `schema.embedded_roles_of`) : algorithme confirme base UNIQUEMENT sur le nombre de roles (2),
-        la cardinalite max de chaque role, la presence d''un OID, et le Topic de la classe cible vs celui
-        de l''association ("Beziehungen werden immer eingebettet, ausser wenn... mehr als zwei Rollen...
-        beide Rollen max Kardinalitaet > 1... eine OID gefordert... bei gewissen themenuebergreifenden
-        Beziehungen" - citation directe, RIEN sur EXTERNAL dans cette liste d''exceptions).
-
-        Conclusion : `EmbeddedTransfer` (nom laissant supposer un lien avec (2)) ne peut PAS etre derive de
-        la seule clause EXTERNAL PROPRE a ce role (qui relève de (1), un mecanisme different) sans preuve
-        empirique - aucune trouvee (ni prose explicative dans le PDF metamodele autour de la declaration
-        `EmbeddedTransfer: MANDATORY BOOLEAN;`, ni commentaire dans `models/IlisMeta16.ili`).
-
-        REEXAMINE au Lot 45 (suite), une fois le gap grammatical CHBase corrige (le blocage ci-dessus est
-        leve) : `CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili` construit desormais, l''exemple reel cite ci-dessus
-        (`ASSOCIATION Hierarchy = UpperLevelUnit (EXTERNAL) -<> {0..1} AdministrativeUnit; LowerLevelUnit --
-        AdministrativeUnit; END Hierarchy;`) verifie EMPIRIQUEMENT sur l''instance `Role` reellement
-        construite : `UpperLevelUnit.EmbeddedTransfer == ''EXTERNAL''` (le texte brut du token, PAS un vrai
-        booleen - `presence: false` ci-dessus n''a en realite JAMAIS d''effet, `bool(source.get("presence"))`
-        etant faux, le calcul retombe sur le "cas standard" field+index qui renvoie le texte du token via
-        `_resolve_node` sur une LISTE a 1 element), `LowerLevelUnit.EmbeddedTransfer == None` (role sans
-        EXTERNAL). Donc CE BINDING PRECIS calcule structurellement, de maniere confirmee et reproductible,
-        "le texte du token EXTERNAL si ce role le porte, None sinon" - `bool(...)` en extrait exactement le
-        meme signal binaire que `ReferenceType.External` (Lot 34), et c''est suffisant pour l''usage vise
-        (`schema.reference_external_status`, distinguer REF externe legitime de REF potentiellement cassee)
-        SANS avoir besoin d''elucider la correspondance exacte de ce champ avec le concept (2) du manuel -
-        la VALEUR est fiable, seul le NOM metamodele "EmbeddedTransfer" (et sa correspondance a (1) vs (2))
-        reste formellement non elucide. Verifie AUSSI (RULE #4) que `embedded_roles_of` (Lot 32, algorithme
-        (2)) predit correctement `UpperLevelUnit` comme embarque sur `AdministrativeUnit` MALGRE le EXTERNAL
-        - confirme que (1) et (2) sont bien independants comme conclu ci-dessus (EXTERNAL ne change PAS la
-        decision d''embarquement XTF, seulement la legitimite d''une cible cross-panier). Desormais reutilise
-        par `xtf/validate.py`/`schema.reference_external_status` (role d''association embarque) - voir sa
-        note.
-
-        '
+      note: 'This binding structurally computes "the EXTERNAL token''s text if this role carries it, None
+        otherwise" (`presence: false` above has no actual effect - `bool(source.get("presence"))`
+        being false, the calculation falls back to the "standard case" field+index) - `bool(...)` extracts the same
+        binary signal as `ReferenceType.External`, which is reliable and sufficient for its intended use
+        (`schema.reference_external_status`, distinguishing a legitimate external REF from a potentially broken one).
+        The metamodel NAME "EmbeddedTransfer" suggests a link with the XTF embedding mechanism
+        (`schema.embedded_roles_of`, eCH-0031 §4.3.9), but no evidence confirms an
+        exact correspondence - the two mechanisms are verified to be independent (EXTERNAL does not affect
+        the XTF embedding decision, only the legitimacy of a cross-basket target). Full
+        investigation history (distinguishing eCH-0031 §3.7.5 AssociationAccess vs §4.3.9 XTF embedding,
+        empirical verification on CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili): docs/dev-notes/embedded-transfer-investigation.md.'
   note: 'Strongness resolved dynamically: LT/GT -> Assoc, HASH -> Comp, default -> Aggr (needs confirmation
     against kind-values.yml) || Grammar covers two distinct alternatives sharing this rule name: --- Alternative
     1 (spec-documented, §2.7.1 EBNF): full role declaration --- Name (modifiers)? (--|-<>|-<#>) cardinality?

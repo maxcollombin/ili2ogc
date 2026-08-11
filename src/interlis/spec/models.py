@@ -1,9 +1,9 @@
-"""Schema Pydantic pour une entree de spec/grammar/mapping/*.yml.
+"""Pydantic schema for a spec/grammar/mapping/*.yml entry.
 
-Schema unique partage entre la validation statique (scripts/validate_spec.py)
-et l'execution du ModelBuilder (interlis.builder) - une seule definition de
-"a quoi ressemble une entree de mapping", pour ne jamais faire diverger les
-deux avec le temps.
+Single schema shared between static validation (scripts/validate_spec.py)
+and the ModelBuilder's execution (interlis.builder) - one single
+definition of "what a mapping entry looks like", so the two never drift
+apart over time.
 """
 from typing import Any
 

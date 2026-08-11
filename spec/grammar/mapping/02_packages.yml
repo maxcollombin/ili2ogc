@@ -18,16 +18,13 @@ definitions:
     _dispatch:
       note: 'Pure dispatcher, no own class (11 mutually exclusive alternatives, each delegating to its
         own already-bound or later-bound rule: metaDataBasketDef/unitDef/functionDef/domainDef/contextDef/classDef/structureDef/associationDef/constraintsDef/viewDef/graphicDef).'
-  note: 'CORRIGE (audit pendant le smoke test ModelBuilder, 2026-08-02) : `children`
-    listait `topicDef` (INACCESSIBLE depuis DefinitionsContext - jamais verifie
-    contre le code ANTLR reel, RULE #2) et omettait 6 des 11 accesseurs reels.
-    Verifie maintenant (inspect.signature sur DefinitionsContext reel) : les 11
-    accesseurs exacts sont associationDef/classDef/constraintsDef/contextDef/
-    domainDef/functionDef/graphicDef/metaDataBasketDef/structureDef/unitDef/
-    viewDef - deja correctement enumeres dans la note `_dispatch` ci-dessus
-    (qui, elle, etait juste), seul le champ structure `children` etait faux.
-    topicDef n''a jamais sa place ici : un TOPIC est defini au niveau de
-    modeldef (definitions en est le contenu D''UN topic, pas topicDef lui-meme).'
+  note: '`children` listed `topicDef` (inaccessible from DefinitionsContext) and omitted 6 of the 11
+    real accessors. The 11 exact accessors (via inspect.signature on DefinitionsContext) are
+    associationDef/classDef/constraintsDef/contextDef/domainDef/functionDef/graphicDef/
+    metaDataBasketDef/structureDef/unitDef/viewDef - already correctly listed in the `_dispatch` note
+    above (which was right), only the `children` field itself was wrong. topicDef has no place here:
+    a TOPIC is defined at the modeldef level (definitions is the content OF a topic, not topicDef
+    itself).'
 genericRef:
   grammar:
     rule: genericRef
@@ -40,13 +37,11 @@ genericRef:
       note: No own class; pure single-child wrapper around domainRef() (same pattern as expression/uniqueEl).
         Resolves the generic domain type; the topicDef DEFERRED GENERICS clause using this feeds GenericDef.GenericDomain
         (unresolved cross-reference, see topicDef.deferred_generics note above).
-  note: 'CORRIGE (audit croisé grammar-metamodel-mapping.yml/python-bindings.yml, 2026-08-02, avant fusion
-    spec). "reference.target: [Context, GenericDef]" n''a jamais ete verifie contre le code ANTLR reel
-    (RULE #2 - le code source generel n''a pas ete lu avant d''ecrire cette entree). Verifie maintenant
-    (src/interlis/antlr/InterlisParser.py:2580-2594) : genericRef est un wrapper a enfant unique inconditionnel,
-    "domainRef()" seul, aucune branche. Deja correctement documente cote python-bindings.yml : "No own
-    class; pure single-child wrapper around domainRef() (same pattern as expression/uniqueEl)." 03_classes_and_structures
-    Class and structure definitions'
+  note: '`reference.target: [Context, GenericDef]` was checked against the real ANTLR code
+    (src/interlis/antlr/InterlisParser.py:2580-2594): genericRef is an unconditional single-child
+    wrapper, `domainRef()` alone, no branching - consistent with what''s already documented on the
+    python-bindings side: "No own class; pure single-child wrapper around domainRef() (same pattern
+    as expression/uniqueEl)."'
 modeldef:
   grammar:
     rule: modeldef
@@ -100,20 +95,16 @@ modeldef:
         field: Name
         anchor: LPAR
         optional: true
-      note: 'CONFIRME (Lot 16, sous-groupe modeldef). Reference Manual eCH-0031 V2.1.0/2024-04-24 (§3.5.1,
-        EBNF exacte) et edition 2006-04-13 (identiques sur ce point) : ''ModelDef = ... ''MODEL'' Model-Name
-        [ ''('' Language-Name '')'' ] ...'' - c''est EXACTEMENT le ''(LPAR Name RPAR)?'' qui suit le Name
-        du modele dans ModeldefContext. Le texte du manuel precise que Language-Name devrait suivre ISO
-        639 (2 lettres, ex. ''en''/''fr''/''de''/''it''/''rm''), optionnellement suivi d''un code pays
-        ISO 3166 (''de_CH''). Fusionne avec l''ancienne entree ''generic_alias'' (meme champ grammatical,
-        hypothese erronee "alias pre-2.3" abandonnee).
-        CORRIGE (audit CLI ModelBuilder, 2026-08-03) : "index: 1" etait faux quand
-        aucune clause de langue n''est presente - Name(1) devient alors le nom
-        de fermeture "END Model-Name" (meme regle que le "Name(1) after END"
-        deja documente sur classDef), pas la langue. "anchor: LPAR" resout
-        correctement les deux cas : absent si LPAR absent (pas de clause de
-        langue), le Name immediatement apres LPAR sinon - meme mecanisme deja
-        confirme sur CharSetIANAName/xmlns ci-dessus.
+      note: 'Reference Manual eCH-0031 V2.1.0/2024-04-24 (§3.5.1, exact EBNF) and the 2006-04-13 edition
+        (identical on this point): "ModelDef = ... ''MODEL'' Model-Name [ ''('' Language-Name '')'' ] ...''
+        - this is exactly the ''(LPAR Name RPAR)?'' that follows the model''s Name in ModeldefContext.
+        Language-Name should follow ISO 639 (2 letters, e.g. ''en''/''fr''/''de''/''it''/''rm''),
+        optionally followed by an ISO 3166 country code (''de_CH''). Merged with the former
+        ''generic_alias'' entry (same grammar field).
+        "index: 1" is wrong when no language clause is present - Name(1) then becomes the closing name
+        "END Model-Name" (same rule as "Name(1) after END" on classDef), not the language. "anchor: LPAR"
+        resolves both cases correctly: absent if LPAR is absent (no language clause), the Name
+        immediately after LPAR otherwise - same mechanism as CharSetIANAName/xmlns below.
 
         '
     CharSetIANAName:
@@ -121,21 +112,15 @@ modeldef:
         field: STRING
         anchor: CHARSET
         optional: true
-      note: 'CORRIGE PAR FIX DE GRAMMAIRE (Lot 16, bug reel trouve pendant l''audit des residus). Le token
-        CHARSET existait dans InterlisLexer.g4 (ligne 39) mais n''etait REFERENCE NULLE PART dans la regle
-        ''modeldef'' de InterlisParser.g4 - impossible a atteindre, confirme par test empirique de parsing
-        (erreur "mismatched input ''CHARSET''"). Reference Manual eCH-0031 V2.1.0 (2024-04-24), EBNF exacte
-        du ModelDef : ''... ''='' [ ''CHARSET'' IANA-Name-String '';'' ] [ ''XMLNS'' XMLNS-String '';''
-        ] { ''IMPORTS'' ... } ...'' - absent de l''edition 2006 (extension 2.4, texte l''indique explicitement
-        : "CHARSET ... (voir chapitre 3.8.1 Chaines de caracteres)"). CORRIGE dans vendor/interlis-antlr4/InterlisParser.g4
-        : ajout de ''(CHARSET STRING SEMI)?'' juste apres EQ (et apres l''extension CONTRACT ISSUED BY
-        deja presente). Runtime Python regenere, non-regression confirmee sur le corpus de 342 modeles
-        reels (339/342, memes 3 echecs preexistants sans rapport) + tests empiriques dedies (CHARSET seul,
-        CHARSET+XMLNS, CHARSET+XMLNS+ IMPORTS, CHARSET apres CONTRACT ISSUED BY - 0 erreur). ''anchor:
-        CHARSET'' signifie : le STRING immediatement adjacent au token CHARSET dans ctx.children, PAS
-        un index plat STRING(i) fixe (la position plate depend des clauses optionnelles precedentes reellement
-        presentes - AT/VERSION, TRANSLATION - voir aussi xmlns ci-dessous). Voir grammar-divergences.md
-        pour le detail complet du bug et sa correction.
+      note: 'The CHARSET token existed in InterlisLexer.g4 but was not referenced anywhere in the
+        ''modeldef'' rule of InterlisParser.g4 - unreachable (parsing fails with "mismatched input
+        ''CHARSET''"). Reference Manual eCH-0031 V2.1.0 (2024-04-24), exact EBNF: ''... ''='' [ ''CHARSET''
+        IANA-Name-String '';'' ] [ ''XMLNS'' XMLNS-String '';'' ] { ''IMPORTS'' ... } ...'' - absent from
+        the 2006 edition (a 2.4 extension). Fixed in vendor/interlis-antlr4/InterlisParser.g4: added
+        ''(CHARSET STRING SEMI)?'' right after EQ (and after the existing CONTRACT ISSUED BY extension).
+        ''anchor: CHARSET'' means: the STRING immediately adjacent to the CHARSET token in ctx.children,
+        not a flat STRING(i) index (the flat position depends on which optional clauses actually precede
+        it - AT/VERSION, TRANSLATION - see also xmlns below).
 
         '
     xmlns:
@@ -143,55 +128,51 @@ modeldef:
         field: STRING
         anchor: XMLNS
         optional: true
-      note: 'MEME BUG ET MEME CORRECTION que CharSetIANAName ci-dessus (Lot 16) : token XMLNS lexe (InterlisLexer.g4
-        ligne 176) mais absent de la regle ''modeldef'', confirme inatteignable par test empirique, corrige
-        par ajout de ''(XMLNS STRING SEMI)?'' dans InterlisParser.g4 juste apres la clause CHARSET (ordre
-        EBNF eCH-0031 V2.1.0 §3.5.1 : CHARSET puis XMLNS puis IMPORTS*). Non-regression confirmee (corpus
-        339/342 inchange + tests empiriques dedies). ''anchor: XMLNS'' : meme convention que CharSetIANAName
-        (STRING adjacent au token XMLNS, pas un index plat).
+      note: 'Same bug and same fix as CharSetIANAName above: the XMLNS token is lexed (InterlisLexer.g4)
+        but absent from the ''modeldef'' rule - unreachable. Fixed by adding ''(XMLNS STRING SEMI)?'' in
+        InterlisParser.g4 right after the CHARSET clause (eCH-0031 V2.1.0 §3.5.1 EBNF order: CHARSET
+        then XMLNS then IMPORTS*). ''anchor: XMLNS'': same convention as CharSetIANAName (the STRING
+        adjacent to the XMLNS token, not a flat index).
 
         '
     NoIncrementalTransfer:
       source:
         field: NOINCREMENTALTRANSFER
         presence: true
-      note: 'CORRIGE PAR FIX DE GRAMMAIRE (Lot 16, meme audit). Token NOINCREMENTALTRANSFER lexe (InterlisLexer.g4
-        ligne 117) mais absent de ''modeldef'' - confirme inatteignable, meme categorie de bug que CHARSET/XMLNS.
-        Reference Manual eCH-0031 V2.1.0 (2024-04-24), EBNF exacte : ''... MODEL Model-Name [ ''('' Language-Name
-        '')'' ] [ ''NOINCREMENTALTRANSFER'' ] ''AT'' URI-String ...'' - place APRES le ''(Language-Name)''
-        optionnel et AVANT ''AT'', confirmant sa position dans le fix. Texte du manuel (juste avant l''EBNF)
-        : "NOINCREMENTALTRANSFER indique qu''aucun transfert incremental n''a besoin d''etre accepte lors
-        du transfert de donnees" - extension 2.4, absente de l''edition 2006. CORRIGE : ajout de ''NOINCREMENTALTRANSFER?''
-        dans InterlisParser.g4 a la position EBNF exacte. Non-regression confirmee (corpus 339/342 inchange
-        + tests empiriques dedies, y compris combine avec CHARSET/XMLNS). Accessor simple (presence de
-        token), pas d''ambiguite d''index comme CHARSET/XMLNS (pas de STRING associe).
+      note: 'Same grammar-gap category as CHARSET/XMLNS: the NOINCREMENTALTRANSFER token is lexed
+        (InterlisLexer.g4) but was absent from ''modeldef'' - unreachable. Reference Manual eCH-0031
+        V2.1.0 (2024-04-24), exact EBNF: ''... MODEL Model-Name [ ''('' Language-Name '')'' ]
+        [ ''NOINCREMENTALTRANSFER'' ] ''AT'' URI-String ...'' - placed after the optional
+        ''(Language-Name)'' and before ''AT''. Per the manual, NOINCREMENTALTRANSFER indicates that no
+        incremental transfer needs to be accepted for the data transfer - a 2.4 extension, absent from
+        the 2006 edition. Fixed by adding ''NOINCREMENTALTRANSFER?'' in InterlisParser.g4 at the exact
+        EBNF position. A simple presence accessor (no associated STRING, so no index ambiguity like
+        CHARSET/XMLNS).
 
         '
     ili1Transfername:
       status: not_applicable
-      note: 'CONFIRME not_applicable (Lot 16, sous-groupe modeldef) : Metamodel edition 2022-06-17 (ligne
-        ~895, STRUCTURE Ili1Format + CLASS Model) documente ili1Transfername/ili1Format comme des METADONNEES
-        DE COMPATIBILITE INTERLIS 1 (nom de format de transfert legacy, parametres TID/blank/undefined/continue-code,
-        police de caracteres) - AUCUNE des deux editions du Reference Manual (2006 ni 2024) ne documente
-        de clause EBNF dans ModelDef pour ces valeurs ; elles sont alimentees par un mecanisme externe
-        a la syntaxe .ili 2.x (ex. options de ligne de commande ili2c ou fichier de description de format
-        INTERLIS 1 separe), pas par le parsing du modele lui-meme. Confirme non exprimable en syntaxe
-        .ili - fermeture legitime, pas un residu de mapping.
+      note: 'not_applicable confirmed: Metamodel edition 2022-06-17 documents ili1Transfername/
+        ili1Format as INTERLIS 1 compatibility metadata (legacy transfer format name, TID/blank/
+        undefined/continue-code parameters, character set) - neither Reference Manual edition (2006 nor
+        2024) documents an EBNF clause in ModelDef for these values; they are fed by a mechanism
+        external to the .ili 2.x syntax (e.g. ili2c command-line options or a separate INTERLIS 1
+        format description file), not by parsing the model itself. Not expressible in .ili syntax - a
+        legitimate closure, not a mapping gap.
 
         '
     contract_issued_by:
       status: not_applicable
-      note: 'DIVERGENCE DE GRAMMAIRE CONFIRMEE (Lot 16, pas un bug) : la clause ''(CONTRACT ISSUED BY
-        Name SEMI)?'' presente dans InterlisParser.g4 n''existe dans AUCUNE des deux editions de l''EBNF
-        officiel du ModelDef (ni 2006-04-13 ni eCH-0031 V2.1.0/ 2024-04-24, verifiees toutes deux - RULE
-        #4) ; IlisMeta16. ModelData.Model n''a AUCUN attribut own pour un "emetteur de contrat" (attributs
-        own confirmes par grep exhaustif : iliVersion/Contracted/Kind/Language/At/Version/ NoIncrementalTransfer/CharSetIANAName/xmlns/ili1Transfername/
-        ili1Format - rien d''autre). Le manuel 2024 precise par ailleurs (§ intro) que "le concept des
-        contrats n''a trouve aucun echo en pratique, raison pour laquelle il a ete abandonne" - coherent
-        avec une extension de grammaire residuelle d''une notion abandonnee par le standard, analogue
-        a la divergence POW (composedUnit, point 12). Grammaire inchangee (extension harmless, deja optionnelle,
-        ne casse rien) ; documentee comme divergence dans grammar-divergences.md. ModelBuilder : ignorer
-        cette clause si rencontree (pas de cible metamodele).
+      note: 'Confirmed grammar divergence (not a bug): the ''(CONTRACT ISSUED BY Name SEMI)?'' clause
+        present in InterlisParser.g4 exists in neither edition of the official ModelDef EBNF (2006-04-13
+        nor eCH-0031 V2.1.0/2024-04-24); IlisMeta16.ModelData.Model has no own attribute for a
+        "contract issuer" (own attributes confirmed by exhaustive grep: iliVersion/Contracted/Kind/
+        Language/At/Version/NoIncrementalTransfer/CharSetIANAName/xmlns/ili1Transfername/ili1Format -
+        nothing else). The 2024 manual also notes that the concept of contracts found no practical use
+        and was abandoned - consistent with a residual grammar extension for a notion the standard
+        itself dropped, similar to the POW (composedUnit) divergence. Grammar left unchanged (a
+        harmless, already-optional extension). ModelBuilder ignores this clause if encountered (no
+        metamodel target).
 
         '
     imports:
@@ -215,31 +196,31 @@ modeldef:
         source:
           field: null
           context_key: modeldef
-      note: 'CONFIRME (Lot 16, sous-groupe modeldef). ''(IMPORTS UNQUALIFIED? (Name|INTERLIS) (COMMA UNQUALIFIED?
-        (Name|INTERLIS))* SEMI)*'' alimente IlisMeta16.ModelData.Import (ImportingP {0..*} Package <->
-        ImportedP {0..*} Package, ilismeta16-associations.yml et confirme metamodel.txt ''ASSOCIATION
-        Import'') : une instance Import par Name/INTERLIS reference dans la boucle - ImportingP = ce Model,
-        ImportedP = le Package resolu par ce nom (ou le pseudo-modele INTERLIS lui-meme si le token INTERLIS
-        est utilise). PARTIELLEMENT residuel : le modificateur UNQUALIFIED n''a AUCUNE cible metamodele
-        - l''Association Import n''a AUCUN attribut propre (metamodel.txt, ''ASSOCIATION Import = ImportingP
-        -- Package; ImportedP (EXTERNAL) -- Package; END Import;'' - rien d''autre) ; UNQUALIFIED est
-        donc un detail de resolution de noms interne a ili2c (autorise ou non la reference non qualifiee
-        aux elements du modele importe), non persiste dans le metamodele - status: not_applicable pour
-        ce sous-point specifique (voir _imports_unqualified ci-dessous), la construction Import elle-meme
-        est CONFIRMEE.
-        CABLE (audit CLI ModelBuilder, 2026-08-03) : mecanisme moteur `for_each` ajoute specifiquement
-        pour ce cas (une boucle grammaticale -> N instances liees, pas une seule construction imbriquee) -
-        ImportedP devient un ForwardRef (resolu en UnresolvedNamedReference en V1 single-fichier, le modele
-        importe n''etant jamais charge - decision de perimetre deja actee). Aucune association inverse
-        Model->Import n''existe cote metamodele (Import n''est reference que depuis ses propres bouts) :
-        les instances construites sont conservees sous la cle brute "imports" sur le Model (pas un role
-        officiel du metamodele) uniquement pour rester atteignables depuis Python, pas une omission.
+      note: '''(IMPORTS UNQUALIFIED? (Name|INTERLIS) (COMMA UNQUALIFIED? (Name|INTERLIS))* SEMI)*''
+        feeds IlisMeta16.ModelData.Import (ImportingP {0..*} Package <-> ImportedP {0..*} Package,
+        ilismeta16-associations.yml and metamodel.txt ''ASSOCIATION Import''): one Import instance per
+        Name/INTERLIS referenced in the loop - ImportingP = this Model, ImportedP = the Package resolved
+        by that name (or the INTERLIS pseudo-model itself if the INTERLIS token is used). The UNQUALIFIED
+        modifier has no metamodel target of its own - the Import association has no own attribute
+        (metamodel.txt: ''ASSOCIATION Import = ImportingP -- Package; ImportedP (EXTERNAL) -- Package;
+        END Import;'' - nothing else); UNQUALIFIED is therefore an ili2c-internal name-resolution detail
+        (whether an unqualified reference to the imported model''s elements is allowed), not persisted
+        in the metamodel - status: not_applicable for that specific sub-point (see
+        _imports_unqualified below); the Import construction itself is confirmed.
+
+        Uses the engine''s `for_each` mechanism (a grammar loop -> N linked instances, not a single
+        nested construction) - ImportedP becomes a ForwardRef (resolved to UnresolvedNamedReference in
+        the single-file V1, since the imported model is never loaded - an accepted scope decision). No
+        inverse Model->Import association exists on the metamodel side (Import is only referenced from
+        its own ends): the built instances are kept under the raw "imports" key on the Model (not an
+        official metamodel role), just to stay reachable from Python.
 
         '
     _imports_unqualified:
       status: not_applicable
-      note: 'Voir note ''imports'' ci-dessus : le modificateur UNQUALIFIED n''a aucune cible dans IlisMeta16.ModelData.Import
-        (association sans attribut propre) - detail de resolution de noms interne a ili2c, non persiste.'
+      note: 'See the ''imports'' note above: the UNQUALIFIED modifier has no target in
+        IlisMeta16.ModelData.Import (an association with no own attribute) - an ili2c-internal
+        name-resolution detail, not persisted.'
 topicDef:
   grammar:
     rule: topicDef
@@ -250,58 +231,58 @@ topicDef:
   parent:
     association: PackageElements
     role: Element
-    note: s'applique aux DEUX instances (SubModel ET DataUnit) - Element cible MetaElement au sens large
-      (ilismeta16-associations.yml), DataUnit en est un via ExtendableME.
+    note: applies to BOTH instances (SubModel AND DataUnit) - Element targets MetaElement broadly
+      (ilismeta16-associations.yml), DataUnit qualifies via ExtendableME.
   attribute_bindings:
     SubModel.Name:
       source:
         field: Name
         index: 0
-      note: 'confirmed inherited Name (MetaElement via Package) - le nom du TOPIC lui-meme (ex. ''MyTopic'').
-        SubModel n''a AUCUN autre attribut propre (own: {}, confirme ilismeta16-classes.yml) - tous les
-        autres clauses de topicDef alimentent desormais DataUnit (voir ci-dessous), pas SubModel.'
+      note: 'confirmed inherited Name (MetaElement via Package) - the TOPIC''s own name (e.g.
+        ''MyTopic''). SubModel has no other own attribute (own: {}, confirmed in
+        ilismeta16-classes.yml) - every other topicDef clause now feeds DataUnit (see below), not
+        SubModel.'
     DataUnit.Name:
       source:
         field: null
         kind: constant
         value: BASKET
-      note: 'CONFIRME (Lot 15, point 18). Citation IDL exacte du Metamodel 2022-06-17 §2.1.4 : "the metaelement
-        ''DataUnit'' (Name: ''BASKET'', DataUnitName: Modelname.Topicname)" - Name est une CONSTANTE litterale
-        "BASKET" pour TOUTE instance DataUnit issue d''un topicDef, PAS une valeur tiree de la grammaire.
+      note: 'Exact IDL citation from Metamodel 2022-06-17 §2.1.4: "the metaelement ''DataUnit''
+        (Name: ''BASKET'', DataUnitName: Modelname.Topicname)" - Name is a literal constant "BASKET"
+        for every DataUnit instance built from a topicDef, not a value taken from the grammar.
 
         '
     DataUnit.DataUnitName:
-      note: 'Lot 19 (phase 2) - CONFIRMÉ. Citation confirmée "DataUnitName: Modelname.Topicname" (même
-        source que Name ci-dessus) - VALEUR CALCULÉE, pas un accesseur direct sur topicDef() : nécessite
-        le Name du MODEL englobant (non accessible depuis topicDef() lui-même). Ce n''est PAS une ambiguïté
-        de mapping métamodèle (la cible et la formule sont toutes deux confirmées) - c''est un pur détail
-        de plomberie ModelBuilder (remonter au Model parent au moment de la construction, déjà résolu
-        structurellement dans le pipeline puisque topicDef() est toujours invoqué DANS le contexte d''un
-        modeldef() englobant). Fermé.
+      note: 'Confirmed by the same citation as Name above ("DataUnitName: Modelname.Topicname") - a
+        computed value, not a direct accessor on topicDef(): it needs the enclosing MODEL''s Name (not
+        accessible from topicDef() itself). Not a metamodel-mapping ambiguity (both target and formula
+        are confirmed) - purely a ModelBuilder plumbing detail (reaching the parent Model at
+        construction time), already resolved structurally since topicDef() is always invoked within an
+        enclosing modeldef() context.
 
         '
     DataUnit.ViewUnit:
       source:
         field: VIEW
         presence: true
-      note: 'CONFIRME (Lot 15, point 18). L''optionnel token VIEW en tete ("VIEW TOPIC Name...") correspond
-        a DataUnit.own.ViewUnit (BOOLEAN, mandatory, confirme ilismeta16-classes.yml) - match de nom direct
-        + coherent avec le Reference Manual 2006-04-13 §2.15 : "Views are only transferred if they have
-        been defined in a VIEW TOPIC". true si VIEW present, false sinon.
+      note: 'The optional leading VIEW token ("VIEW TOPIC Name...") maps to DataUnit.own.ViewUnit
+        (BOOLEAN, mandatory, confirmed in ilismeta16-classes.yml) - direct name match, consistent with
+        Reference Manual 2006-04-13 §2.15: "Views are only transferred if they have been defined in a
+        VIEW TOPIC". True if VIEW is present, false otherwise.
 
         '
     DataUnit.Abstract:
       source:
         field: ABSTRACT
         presence: true
-      note: CONFIRME (Lot 15, point 18). DataUnit EXTENDS ExtendableME (confirme ilismeta16-classes.yml),
-        qui porte Abstract/Generic/Final - alimente par l'optionnel '(ABSTRACT|FINAL)' apres le nom du
-        topic. PAS SubModel (qui n'etend pas ExtendableME).
+      note: DataUnit EXTENDS ExtendableME (confirmed in ilismeta16-classes.yml), which carries
+        Abstract/Generic/Final - fed by the optional '(ABSTRACT|FINAL)' after the topic name. Not
+        SubModel (which does not extend ExtendableME).
     DataUnit.Final:
       source:
         field: FINAL
         presence: true
-      note: voir DataUnit.Abstract ci-dessus - meme slot de modificateur partage.
+      note: See DataUnit.Abstract above - same shared modifier slot.
     DataUnit.Super:
       association: Inheritance
       role: Super
@@ -309,46 +290,16 @@ topicDef:
         field: topicRef
         anchor: EXTENDS
         optional: true
-      note: 'CONFIRME (Lot 15, point 18), binding REELLEMENT active au Lot 46 point 2 - voir ci-dessous.
-        ''EXTENDS topicRef()'' - DataUnit extends ExtendableME, donc l''association generique Inheritance
-        (Sub {0..*} ExtendableME <-> Super {0..1} ExtendableME, deja confirmee pour classDef/structureDef/
-        viewDef/graphicDef/unitDef - Lots 12/13) s''applique ici aussi : feeds Inheritance (Sub=cette
-        DataUnit, Super=DataUnit de la topicRef() resolue).
+      note: '''EXTENDS topicRef()'' - DataUnit extends ExtendableME, so the generic Inheritance
+        association (Sub {0..*} ExtendableME <-> Super {0..1} ExtendableME, already confirmed for
+        classDef/structureDef/viewDef/graphicDef/unitDef) applies here too: feeds Inheritance
+        (Sub=this DataUnit, Super=the DataUnit of the resolved topicRef()).
 
-        CORRIGE (Lot 46 point 2, RULE #1/#2/#4 - investigation AVANT tout code, voir PROGRESS.md pour le
-        detail complet du traçage empirique). Cle renommee ''extends_topicRef'' -> ''Super'' + ajout de
-        `association`/`role` explicites : SANS ces deux cles, `AttachmentResolver.attach()` ne trouvait ni
-        un attribut own/inherited ''extends_topicRef'' (nom fabrique, jamais reel) ni une association dont
-        un role porte ce nom - `BuildError` systematique, silencieusement absorbe par `_apply_bindings`
-        (`source.optional: true` -> `continue` sur `BuildError`, voir model_builder.py) : confirme
-        empiriquement (trace directe de `AttachmentResolver.attach`) sur les 2 occurrences reelles de
-        `TOPIC ... EXTENDS ...` du corpus (`SectoralPlanForRoadInfrastructure_V1_4.ili`) - Super restait
-        `None` sur les 2 DataUnit concernees, aucune exception visible, aucune regression de comportement
-        externe (le build entier reussissait quand meme).
-
-        `index: 0` -> `anchor: EXTENDS` (RULE #1/#2, meme mecanisme deja utilise pour `Model.Language`/
-        `CharSetIANAName`/`xmlns` ci-dessus) : bug SEPARE trouve en tracant - `ctx.topicRef(0)` prend le
-        PREMIER `topicRef()` de la regle SANS DISTINGUER celui de la clause EXTENDS (avant le `=`) de ceux
-        de la clause `DEPENDS ON topicRef (COMMA topicRef)*` (apres le `=`, grammaire confirmee via
-        `mappings/antlr-rule-index.yml`) : pour un TOPIC SANS EXTENDS mais AVEC `DEPENDS ON` (cas reel,
-        ex. `BaseModel_SectoralPlans_LV03/LV95_V1_4.SectoralPlans_WithLatestModification`, `DEPENDS ON
-        BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_CoordinationLevel,...`), `topicRef(0)` capturait
-        a tort la 1ere cible `DEPENDS ON` comme si c''etait une cible EXTENDS - deja inoffensif avant ce
-        lot (attach() echouait de toute facon sur la cle fabriquee), mais serait devenu un LIEN Super
-        INCORRECT une fois `association`/`role` ajoutes seuls. `anchor: EXTENDS` : `None` si `EXTENDS()`
-        absent (jamais confondu avec un DEPENDS ON), le 1er `topicRef()` suivant le token EXTENDS sinon -
-        toujours le bon (les cibles DEPENDS ON, plus loin dans `ctx.children`, sont egalement "apres"
-        EXTENDS mais JAMAIS les premieres rencontrees dans l''ordre du document).
-
-        `topicRef` resout vers `SubModel` (son propre binding, `resolves_to: SubModel`) - PAS directement
-        vers la DataUnit attendue par Inheritance.Super (ExtendableME) : SubModel EXTENDS Package/
-        MetaElement, jamais ExtendableME (confirme `ilismeta16-classes.yml`). Nouveau mecanisme
-        `ForwardRef.resolve_via_twin` (forward_refs.py) : positionne par `InterlisModelBuilder.
-        _apply_one_binding` UNIQUEMENT quand `resolves_to_hint` contient ''SubModel'' (donc jamais pour
-        classDef/structureDef/domainDef.Super, qui resolvent deja directement vers Class/DomainType) -
-        `ForwardRefResolver.resolve_all` substitue alors le SubModel resolu par son JUMEAU DataUnit
-        (`_twin`, deja pose par `_build_multi_target` pour CHAQUE topicDef, jusqu''ici jamais lu ailleurs)
-        avant l''assignation finale.'
+        Getting there took 3 fixes: the binding key (needs explicit `association`/`role`, not just a
+        renamed field), the accessor (`anchor: EXTENDS` instead of a flat index, so as not to confuse
+        EXTENDS with DEPENDS ON targets), and the resolution mechanism itself (topicRef() resolves to a
+        SubModel, but Super needs the DataUnit twin - see `ForwardRef.resolve_via_twin`). Full history:
+        docs/dev-notes/topicdef-super-binding-investigation.md.'
     DataUnit.BasketOID:
       source:
         field: BASKET
@@ -356,30 +307,28 @@ topicDef:
         Name: null
         index: 0
         optional: true
-      note: 'CONFIRME (Lot 15, point 18) pour la 1ere clause OID uniquement. RULE #4, Reference Manual
-        2006-04-13 §2.5.2, EBNF exact : "[''BASKET'' ''OID'' ''AS'' OID-DomainRef '';'']" (1ere clause,
-        avec BASKET) vs "[''OID'' ''AS'' OID-DomainRef '';'']" (2e clause, sans BASKET, semantique differente
-        - voir default_class_oid ci-dessous). La 1ere clause correspond exactement a IlisMeta16.ModelData.BasketOID
-        (ForDataUnit {0..*} DataUnit <-> Oid {0..1} DomainType, ilismeta16-associations.yml) : feeds BasketOID(ForDataUnit=cette
-        DataUnit, Oid=domaine resolu).
+      note: 'Confirmed for the first OID clause only. Reference Manual 2006-04-13 §2.5.2, exact EBNF:
+        "[''BASKET'' ''OID'' ''AS'' OID-DomainRef '';'']" (first clause, with BASKET) vs
+        "[''OID'' ''AS'' OID-DomainRef '';'']" (second clause, without BASKET, different semantics -
+        see default_class_oid below). The first clause maps exactly to
+        IlisMeta16.ModelData.BasketOID (ForDataUnit {0..*} DataUnit <-> Oid {0..1} DomainType,
+        ilismeta16-associations.yml): feeds BasketOID(ForDataUnit=this DataUnit, Oid=resolved domain).
 
         '
     default_class_oid:
       target: IlisMeta16.ModelData.ObjectOID
-      note: 'Lot 19 (phase 2) - CONFIRMÉ. RULE #4, Reference Manual eCH-0031 V2.1.0 (2024-04-24) §3.5.2
-        "Themen", texte exact : "BASKET OID AS für die Objektidentifikationen der Datenbehälter, OID AS
-        für die Objektidentifikationen der Objekte, SOFERN BEI DER JEWEILIGEN KLASSE KEINE SPEZIFISCHE
-        DEFINITION DAFÜR GEMACHT WIRD." (OID AS [définit le domaine] pour les identifications d''objets,
-        POUR AUTANT QU''AUCUNE DÉFINITION SPÉCIFIQUE NE SOIT FAITE POUR LA CLASSE CONCERNÉE) - confirme
-        la sémantique de "valeur par défaut". Confirmé en plus par le commentaire du fichier .ili canonique
-        du métamodèle lui-même (`models/IlisMeta16.ili`, association `ObjectOID`) : "!! No OID, if no
-        assoc" - une Class SANS instance `ObjectOID` associée n''a simplement pas d''OID. Ceci confirme
-        la cible : cette 2e clause alimente la MÊME association `ObjectOID` (Class <-> Oid:DomainType,
-        ilismeta16-associations.yml) que celle utilisée pour les OID explicites par classe - pas un attribut
-        distinct. Décision ModelBuilder (mécanisme de construction, pas une ambiguïté de cible) : au moment
-        de construire chaque `Class` de ce topic qui NE DÉFINIT PAS elle-même de clause OID propre, créer
-        une instance `ObjectOID(Class=cette Class, Oid=domaine résolu ici)` - une propagation de valeur
-        par défaut, appliquée après coup sur chaque Class concernée, pas un attribut séparé sur `DataUnit`.
+      note: 'Reference Manual eCH-0031 V2.1.0 (2024-04-24) §3.5.2 "Themen": "BASKET OID AS ... OID AS
+        für die Objektidentifikationen der Objekte, sofern bei der jeweiligen Klasse keine spezifische
+        Definition dafür gemacht wird" (OID AS defines the domain for object identifications, as long
+        as no specific definition is made for the class in question) - confirms the "default value"
+        semantics. Also confirmed by the canonical metamodel .ili file itself
+        (`models/IlisMeta16.ili`, association `ObjectOID`): "!! No OID, if no assoc" - a Class with no
+        associated `ObjectOID` instance simply has no OID. This confirms the target: this second clause
+        feeds the SAME `ObjectOID` association (Class <-> Oid:DomainType, ilismeta16-associations.yml)
+        used for explicit per-class OIDs, not a separate attribute. ModelBuilder decision: when
+        building each `Class` of this topic that does not define its own OID clause, create an
+        `ObjectOID(Class=this Class, Oid=domain resolved here)` instance - a default-value propagation
+        applied after the fact to each relevant Class, not a separate attribute on `DataUnit`.
 
         '
     DataUnit.Dependency:
@@ -387,32 +336,30 @@ topicDef:
         field: topicRef
         multi: true
         optional: true
-      note: 'CONFIRME (Lot 15, point 18) pour la cible. ''DEPENDS ON topicRef(,topicRef)*'' -> IlisMeta16.ModelData.Dependency
-        (Using {0..*} DataUnit <-> Dependent {0..*} DataUnit, ilismeta16-associations.yml) : feeds Dependency
-        entre cette DataUnit et chaque DataUnit resolue via topicRef(). Lot 19 : DIRECTIONNALITE désormais
-        CONFIRMÉE via le fichier .ili canonique du métamodèle (`models/IlisMeta16.ili`, RULE #4) : `ASSOCIATION
-        Dependency = Using -- DataUnit; Dependent (EXTERNAL) -- DataUnit; END Dependency;` - le rôle `Dependent`
-        est marqué `(EXTERNAL)`, cohérent avec le fait que `DEPENDS ON topicRef` référence TOUJOURS un
-        AUTRE topic (potentiellement hors du panier/transfert courant, d''où EXTERNAL), jamais le topic
-        courant lui-même. Donc : Using = CETTE DataUnit (celle qui déclare DEPENDS ON), Dependent = la
-        DataUnit résolue via chaque topicRef(). Entièrement fermé.
+      note: 'Confirmed for the target. ''DEPENDS ON topicRef(,topicRef)*'' -> IlisMeta16.ModelData.Dependency
+        (Using {0..*} DataUnit <-> Dependent {0..*} DataUnit, ilismeta16-associations.yml): feeds a
+        Dependency between this DataUnit and each DataUnit resolved via topicRef(). Directionality
+        confirmed via the canonical metamodel .ili file (`models/IlisMeta16.ili`): `ASSOCIATION
+        Dependency = Using -- DataUnit; Dependent (EXTERNAL) -- DataUnit; END Dependency;` - the
+        `Dependent` role is marked `(EXTERNAL)`, consistent with `DEPENDS ON topicRef` always
+        referencing ANOTHER topic (potentially outside the current basket/transfer, hence EXTERNAL),
+        never the current topic itself. So: Using = this DataUnit (the one declaring DEPENDS ON),
+        Dependent = the DataUnit resolved via each topicRef().
 
         '
     deferred_generics:
       target: IlisMeta16.ModelData.GenericDef
-      note: 'Lot 19 (phase 2) - CONFIRMÉ par raisonnement structurel (RULE #4, Reference Manual §3.5.2
-        confirme le rôle sémantique : "Referenziert ein Thema... generische Festlegungen, die erst im
-        Transfer festgelegt werden, müssen sie explizit aufgeführt werden (DEFERRED GENERICS)" - liste
-        les domaines génériques dont l''assignation concrète reste différée au transfert, limité aux domaines
-        de coordonnées actuellement : "GenericRef = GenericCoordType-DomainRef"). `IlisMeta16.ModelData.GenericDef`
-        (Context {0..1} <-> GenericDomain {0..*}:DomainType, ilismeta16-associations.yml) a sa fin `Context`
-        OPTIONNELLE (0..1) - ce qui permet PRÉCISÉMENT une instance `GenericDef` SANS Context associé,
-        distincte du cas `contextDef` (déjà confirmé, Lot 18) où un `Context` réel est toujours présent.
-        Construction : chaque `genericRef` de `DEFERRED GENERICS` alimente `GenericDef(Context=None, GenericDomain=[domaine(s)
-        résolu(s)])` - un mécanisme "déclaration sans contexte" par opposition au mécanisme "assignation
-        avec contexte" de `contextDef`, réutilisant la MÊME association. Hypothèse structurante appuyée
-        par la multiplicité 0..1 de `Context` (conçue pour permettre ce cas), pas une citation IDL directe
-        du lien topicDef->GenericDef, mais cohérente avec toutes les pièces déjà confirmées.
+      note: 'Confirmed by structural reasoning (Reference Manual §3.5.2 confirms the semantic role:
+        generic assignments not fixed until transfer must be explicitly listed under DEFERRED
+        GENERICS) - lists the generic domains whose concrete assignment stays deferred to the
+        transfer, currently limited to coordinate domains: "GenericRef = GenericCoordType-DomainRef".
+        `IlisMeta16.ModelData.GenericDef` (Context {0..1} <-> GenericDomain {0..*}:DomainType,
+        ilismeta16-associations.yml) has an OPTIONAL `Context` end (0..1) - which allows precisely a
+        `GenericDef` instance with no associated Context, distinct from the `contextDef` case (already
+        confirmed) where a real `Context` is always present. Construction: each `genericRef` under
+        `DEFERRED GENERICS` feeds `GenericDef(Context=None, GenericDomain=[resolved domain(s)])` - a
+        "declaration without context" mechanism, as opposed to the "assignment with context" mechanism
+        of `contextDef`, reusing the same association.
 
         '
     definitions:
@@ -422,21 +369,19 @@ topicDef:
       note: loop of definitions() - each dispatches to its own construction (classDef/structureDef/associationDef/domainDef/etc.),
         attached to SubModel via their own confirmed parent associations (PackageElements) - SubModel
         remains the 'package' facet holding the topic's contents, unaffected by the DataUnit fix.
-  note: 'CORRIGE (Lot 15, point 18 - LE PLUS IMPORTANT, decision utilisateur confirmee). RULE #4, INTERLIS
-    2 Metamodel edition 2022-06-17, §2.1.4 "Models and topics", texte exact : "A ''Topic'' of the INTERLIS-language
-    is represented by one metaelement of EACH of the classes ''SubModel'' and ''DataUnit''. By means of
-    the class SubModel a topic may be considered a package in the UML sense of the term; within this package
-    the metaelement ''DataUnit'' (Name: ''BASKET'', DataUnitName: Modelname.Topicname) describes the structure
-    and organization of corresponding INTERLIS-data baskets (''Basket'')." - CE N''EST PAS UNE ERREUR
-    D''EXTRACTION : topicDef doit construire DEUX instances liees, pas une seule. Voir "targets" ci-dessous
-    (remplace l''ancien target singulier SubModel-seul, qui laissait Dependency/AllowedInBasket/ BasketOID
-    sans cible valide puisque ces 3 associations ciblent DataUnit, jamais SubModel). Package contents
-    container || CORRIGE (Lot 15, point 18 - LE PLUS IMPORTANT, decision utilisateur confirmee). topicDef
-    construit maintenant DEUX instances liees, pas une seule - voir grammar-metamodel-mapping.yml pour
-    la citation RULE #4 complete (Metamodel 2022-06-17 §2.1.4). Ce qui suit se lit comme "attribute_bindings
-    pour l''instance SubModel" et "attribute_bindings pour l''instance DataUnit" (prefixes explicites,
-    le schema de ce fichier n''a pas de notion native de bindings par cible - cf. grammar-metamodel-mapping.yml
-    "targets:"). 4, Reference Manual §3.5.2 confirme le rôle sémantique :'
+  note: 'INTERLIS 2 Metamodel edition 2022-06-17, §2.1.4 "Models and topics", exact text: "A ''Topic''
+    of the INTERLIS-language is represented by one metaelement of EACH of the classes ''SubModel'' and
+    ''DataUnit''. By means of the class SubModel a topic may be considered a package in the UML sense
+    of the term; within this package the metaelement ''DataUnit'' (Name: ''BASKET'', DataUnitName:
+    Modelname.Topicname) describes the structure and organization of corresponding INTERLIS-data
+    baskets (''Basket'')." - topicDef genuinely builds TWO linked instances, not one (see "targets"
+    below, replacing the former single SubModel-only target, which left Dependency/AllowedInBasket/
+    BasketOID without a valid target since those 3 associations target DataUnit, never SubModel).
+    Package contents container.
+
+    || topicDef builds two linked instances (Metamodel 2022-06-17 §2.1.4). What follows reads as
+    "attribute_bindings for the SubModel instance" and "attribute_bindings for the DataUnit instance"
+    (explicit prefixes - this file''s schema has no native notion of per-target bindings).'
 topicRef:
   grammar:
     rule: topicRef

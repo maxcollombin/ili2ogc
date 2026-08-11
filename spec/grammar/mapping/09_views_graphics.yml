@@ -13,11 +13,11 @@ aggregation:
       source:
         field: uniqueEl
         index: null
-      note: 'CONFIRME (Lot 14, point 14). EQUAL(uniqueEl) alternative uniquement (ALL n''a pas de parametre
-        - confirme par le Metamodel PDF, "only indicated... provided EQUAL is requested"). uniqueEl (deja
-        confirme target: PathOrInspFactor) alimente directement View.FormationParameter (LIST OF Expression,
-        restreint aux PathOrInspFactor) - citation exacte IDL : "Aggr.Equal: UniqueEl". Voir viewDef.FormationParameter
-        ci-dessus pour la citation complete.
+      note: 'EQUAL(uniqueEl) alternative only (ALL has no parameter
+        - per the Metamodel PDF, "only indicated... provided EQUAL is requested"). uniqueEl (target:
+        PathOrInspFactor) feeds View.FormationParameter (LIST OF Expression,
+        restricted to PathOrInspFactor) directly - exact IDL citation: "Aggr.Equal: UniqueEl". See
+        viewDef.FormationParameter above for the full citation.
 
         '
     renamedViewableRef:
@@ -81,20 +81,19 @@ drawingRule:
       source:
         field: ABSTRACT
         presence: true
-      note: 'CONFIRME (audit residus post-Lot 15) - meme pattern que classDef.Abstract : accesseur ABSTRACT()
-        independant sur DrawingRuleContext, presence: true suffit.'
+      note: 'Same pattern as classDef.Abstract: independent ABSTRACT()
+        accessor on DrawingRuleContext, presence: true suffices.'
     Final:
       source:
         field: FINAL
         presence: true
-      note: voir Abstract ci-dessus - meme pattern, accesseur FINAL() independant.
+      note: see Abstract above - same pattern, independent FINAL() accessor.
     Generic:
       status: not_applicable
-      note: 'CONFIRME not_applicable (audit residus post-Lot 15). Verifie sur le code compile (RULE #2/#3)
-        : DrawingRuleContext N''A PAS d''accesseur GENERIC() (seuls ABSTRACT/EXTENDED/FINAL existent,
-        l''ancienne note listait a tort GENERIC parmi les tokens possibles). Confirme par RULE #4 (Reference
-        Manual, editions 2006 et 2024 identiques) : "DrawingRule = DrawingRule-Name Properties<ABSTRACT,EXTENDED,FINAL>
-        ..." - GENERIC absent de la liste. Decision ModelBuilder : toujours False par defaut.
+      note: 'DrawingRuleContext has no GENERIC() accessor (only ABSTRACT/EXTENDED/FINAL exist).
+        Reference Manual (2006 and 2024 editions identical): "DrawingRule = DrawingRule-Name
+        Properties<ABSTRACT,EXTENDED,FINAL> ..." - GENERIC is absent from the list. Design decision:
+        always False by default.
 
         '
     Rule:
@@ -131,15 +130,14 @@ enumAssignment:
       source:
         field: metaObjectRef
         index: 0
-      note: 'Lot 17 (phase 2), point 17 FERME pour cette branche - meme mecanisme et meme evidence que
-        signParamAssignment.metaobjectref_alt (voir ce binding pour le detail complet : PathEl.Ref confirme
-        `INTERLIS.NAME` via le XMI source, correspondance exacte avec la sortie de metaObjectRef()) :
-        PathOrInspFactor(PathEls=[PathEl( Kind=MetaObject, Ref=metaObjectRef resolu)]), assignee a ValueToAssign
-        (Factor->Expression). Corroboration corpus reel (2026-08-02) : voir la note de corroboration sur
-        signParamAssignment.metaobjectref_alt (meme mecanisme, meme corpus FGDM4GS) - aucun exemple direct
-        de la forme ACCORDING...enumAssignment observe dans ce corpus specifique (qui n''utilise que la
-        forme directe Sign := {...}), mais le mecanisme LCBR metaObjectRef RCBR sous-jacent est le meme
-        et deja corrobore.
+      note: 'Same mechanism and evidence as
+        signParamAssignment.metaobjectref_alt (see that binding for the full detail: PathEl.Ref is
+        `INTERLIS.NAME` per the XMI source, an exact type match with metaObjectRef()''s output):
+        PathOrInspFactor(PathEls=[PathEl(Kind=MetaObject, Ref=resolved metaObjectRef)]), assigned to
+        ValueToAssign (Factor->Expression). No direct example of the ACCORDING...enumAssignment form was
+        observed in the corpus used to corroborate signParamAssignment.metaobjectref_alt (which only uses
+        the direct Sign := {...} form), but the underlying LCBR metaObjectRef RCBR mechanism is the same
+        one already corroborated there.
 
         '
     MinEnumValue:
@@ -195,21 +193,19 @@ graphicDef:
       source:
         field: ABSTRACT
         presence: true
-      note: 'CONFIRME (audit residus post-Lot 15) - meme pattern que classDef.Abstract/viewDef.Abstract
-        : accesseur ABSTRACT() independant sur GraphicDefContext, presence: true suffit.'
+      note: 'Same pattern as classDef.Abstract/viewDef.Abstract:
+        independent ABSTRACT() accessor on GraphicDefContext, presence: true suffices.'
     Final:
       source:
         field: FINAL
         presence: true
-      note: voir Abstract ci-dessus - meme pattern, accesseur FINAL() independant.
+      note: see Abstract above - same pattern, independent FINAL() accessor.
     Generic:
       status: not_applicable
-      note: 'CONFIRME not_applicable (audit residus post-Lot 15, entree manquante ajoutee - Graphic herite
-        Generic via ExtendableME mais n''avait aucun binding jusqu''ici, ni confirme ni marque unresolved).
-        Meme raisonnement que viewDef.Generic : aucun accesseur GENERIC() sur GraphicDefContext (verifie
-        sur le code compile), confirme par RULE #4 (Reference Manual, editions 2006 et 2024 identiques)
-        : "GraphicDef = ''GRAPHIC'' Graphic-Name Properties<ABSTRACT,FINAL> ..." - GENERIC absent de la
-        liste. Decision ModelBuilder : toujours False par defaut.
+      note: 'Graphic inherits Generic via ExtendableME but has no GENERIC() accessor on
+        GraphicDefContext (same reasoning as viewDef.Generic), confirmed by the Reference Manual (2006
+        and 2024 editions identical): "GraphicDef = ''GRAPHIC'' Graphic-Name Properties<ABSTRACT,FINAL> ..."
+        - GENERIC is absent from the list. Design decision: always False by default.
 
         '
     Where:
@@ -217,25 +213,22 @@ graphicDef:
         field: selection
         index: null
       note: confirmed IlisMeta16.ModelData.Graphic.own.Where (Expression, 0..1), fed by selection()'s
-        expression() - same 0..1 vs grammar 0..* loop mismatch already documented for viewDef/selection
-        (Lot 9).
+        expression() - same 0..1 vs grammar 0..* loop mismatch already documented for viewDef/selection.
     extends_graphicRef:
       source:
         field: graphicRef
         optional: true
-      note: 'CONFIRME (Lot 13, point 16, phase 2). EXTENDS graphicRef() alternative (graphic etendant
-        un autre graphic). GraphicBase reste ecarte a juste titre (role Base -> Class, sans lien avec
-        Graphic-a-Graphic) mais la recherche precedente cherchait une association SPECIFIQUE a Graphic
-        au lieu du mecanisme generique IlisMeta16.ModelData.Inheritance (Sub {0..*} ExtendableME <-> Super
-        {0..1} ExtendableME, ilismeta16-associations.yml) - meme mecanisme deja confirme pour classDef/structureDef
-        ET viewDef (point 13 ci-dessus). Graphic qualifie : extends directement ExtendableME (ilismeta16-classes.yml,
-        confirme). Confirme aussi par RULE #4 : INTERLIS 2 Reference Manual edition 2006-04-13, section
+      note: 'EXTENDS graphicRef() alternative (a graphic extending
+        another graphic), via the generic IlisMeta16.ModelData.Inheritance mechanism (Sub {0..*} ExtendableME
+        <-> Super {0..1} ExtendableME, ilismeta16-associations.yml) - the same mechanism already used for
+        classDef/structureDef and viewDef. Graphic extends ExtendableME directly (ilismeta16-classes.yml).
+        INTERLIS 2 Reference Manual edition 2006-04-13, section
         2.16 "Graphic descriptions" (p.68-69), EBNF "GraphicDef = ''GRAPHIC'' Graphic-Name Properties<ABSTRACT,FINAL>
         [''EXTENDS'' GraphicRef] [''BASED'' ''ON'' ViewableRef] ''='' {Selection} {DrawingRule} ''END''
-        Graphic-Name '';''." et texte : "The extension of a graphic must be based upon the same class
-        as the base graphic (BASED ON lacks) or upon one of its extensions" - confirmant EXTENDS comme
-        un vrai mecanisme d''heritage entre descriptions graphiques. Binding : feeds Inheritance (Sub=ce
-        Graphic, Super=graphicRef() resolu en un autre Graphic).
+        Graphic-Name '';''." and text: "The extension of a graphic must be based upon the same class
+        as the base graphic (BASED ON lacks) or upon one of its extensions" - confirming EXTENDS as
+        a genuine inheritance mechanism between graphic descriptions. Binding: feeds Inheritance (Sub=this
+        Graphic, Super=graphicRef() resolved to another Graphic).
 
         '
     based_on:
@@ -255,7 +248,7 @@ graphicRef:
     _resolution:
       note: 'Pure reference resolution: qualified name (Name (DOT Name)?)? Name resolves to an existing
         IlisMeta16.ModelData.Graphic by qualified_name; no own attributes constructed (same pattern as
-        classRef/viewRef, Lots 4/9).'
+        classRef/viewRef).'
   note: Drawing rules
 inspection:
   grammar:
@@ -272,12 +265,12 @@ inspection:
       source:
         field: Name
         index: null
-      note: 'CONFIRME (Lot 14, point 14). Citation exacte IDL du Metamodel : "Inspection: Attributepath"
-        - la chaine "-> StructureOrLine Attribute-Name" (Name (MINUS GT Name)* dans la grammaire) doit
-        etre construite comme un PathOrInspFactor (meme cible que uniqueEl/aggregation ci-dessus), chaque
-        Name de la chaine formant un Attribute-kind PathEl successif dans PathEls - pas une simple liste
-        de tokens bruts. Alimente View.FormationParameter (LIST OF Expression). Voir viewDef.FormationParameter
-        pour la citation complete.
+      note: 'Exact IDL citation from the Metamodel: "Inspection: Attributepath"
+        - the chain "-> StructureOrLine Attribute-Name" (Name (MINUS GT Name)* in the grammar) must
+        be built as a PathOrInspFactor (same target as uniqueEl/aggregation above), each
+        Name in the chain forming a successive Attribute-kind PathEl in PathEls - not a plain
+        list of raw tokens. Feeds View.FormationParameter (LIST OF Expression). See viewDef.FormationParameter
+        for the full citation.
 
         '
     renamedViewableRef:
@@ -306,8 +299,7 @@ projection:
   attribute_bindings:
     _resolution:
       note: No own class; single renamedViewableRef() feeds View.FormationParameter/FormationKind=Projection
-        (via parent formationDef/viewDef). No dedicated Projection class found in metamodel (grep confirmed
-        no IlisMeta16.ModelData.Projection).
+        (via parent formationDef/viewDef). No IlisMeta16.ModelData.Projection class exists in the metamodel.
   note: No direct IlisMeta16 instance expected. Sets FormationKind=Projection on the enclosing View; renamedViewableRef
     provides the single base RenamedBaseView.
 renamedViewableRef:
@@ -324,10 +316,9 @@ renamedViewableRef:
         field: Name
         index: 0
         optional: true
-      note: 'optional ''Name TILDE'' rename alias -> RenamedBaseView.inherited.Name. optional: true ajoute
-        (audit corpus reel models.geo.admin.ch, 2026-08-03) : le cas sans alias (ex. "ALL OF Localisation;",
-        DMAV_AdressesDeBatiments_V1_0.ili) est majoritaire dans le corpus reel, la note documentait deja
-        "optional" mais le flag manquait sur le binding lui-meme.
+      note: 'optional ''Name TILDE'' rename alias -> RenamedBaseView.inherited.Name. `optional: true` is
+        required: the no-alias case (e.g. "ALL OF Localisation;",
+        DMAV_AdressesDeBatiments_V1_0.ili) is the majority case in real-world data.
 
         '
     viewableRef:
@@ -338,12 +329,11 @@ renamedViewableRef:
         index: 0
       note: 'confirmed IlisMeta16.ModelData.BaseViewRef: RenamedBaseView -> BaseView:Class'
     OrNull:
-      note: 'Lot 18 (phase 2, résidus Phase 1) - CONFIRMÉ, pas une ambiguïté de cible (RenamedBaseView.own.OrNull,
-        BOOLEAN 0..1, est déjà la bonne cible), juste une valeur alimentée par l''appelant plutôt que
-        par cette règle. Confirmé par le binding `join()` (déjà précis) : `LPAR`/`OR`/`NULL`/`RPAR` sont
-        tous `token_multi` sur `JoinContext` - un `(OR NULL)` optionnel PAR PARTENAIRE de la liste `renamedViewableRef`
-        (pas une ambiguïté globale sur laquelle instance il s''applique) ; propager index par index depuis
-        `join()` vers l''instance `RenamedBaseView` correspondante.
+      note: 'RenamedBaseView.own.OrNull (BOOLEAN 0..1) is the correct target - the value is fed by the
+        caller rather than by this rule itself. Per the `join()` binding: `LPAR`/`OR`/`NULL`/`RPAR` are
+        all `token_multi` on `JoinContext` - an optional `(OR NULL)` PER PARTNER of the `renamedViewableRef`
+        list (not a global ambiguity about which instance it applies to); propagate index by index from
+        `join()` to the corresponding `RenamedBaseView` instance.
 
         '
 selection:
@@ -390,24 +380,21 @@ signParamAssignment:
       source:
         field: metaObjectRef
         index: 0
-      note: 'Lot 17 (phase 2), point 17 FERME pour cette branche. 1ere alternative "LCBR metaObjectRef
-        RCBR". Construction : PathOrInspFactor(PathEls=[PathEl(Kind=MetaObject, Ref=metaObjectRef resolu)]),
-        assignee a Assignment (Factor->Expression). CONFIRME (ce qui manquait pour clore) : verification
-        directe du XMI source (docs/uml/IlisMeta16-formatted.xmi, l.1280-1296, meme source que mappings/ilismeta16-datatypes.yml)
-        - `PathEl.Ref` est type `INTERLIS.NAME` (un nom simple, PAS une reference typee vers une instance
-        de classe), et `PathEl.Kind` inclut bien la valeur `MetaObject` (mappings/ilismeta16-kind-values.yml,
-        confirmee Lot 13 point 9). `metaObjectRef()` (mappings/python-bindings.yml, binding dedie) produit
-        exactement un nom simple, optionnellement qualifie par un metaDataBasketRef ("(metaDataBasketRef
-        DOT)? Name") - correspondance de type EXACTE avec `PathEl.Ref: INTERLIS.NAME`, sans ambiguite
-        residuelle (contrairement a l''hypothese precedente qui envisageait a tort `Ref` comme une reference
-        typee vers un MetaElement). Point 17 desormais clos pour cette branche (both signParamAssignment
-        et enumAssignment, meme mecanisme). Corroboration corpus reel (2026-08-02, corpus FGDM4GS fourni
-        par l''utilisateur) : construction utilisee massivement en pratique dans les 6 modeles applicatifs
-        du corpus (modelPond.ili, RoadsExgm2ien.ili, Text/Surface/Polyline_Graphics.ili) - ex. "Sign :=
-        {goodhealth}", "Sign := {continuous}", "Sign := {Building}", "Sign := {Linefont_18}" - meme forme
-        LCBR metaObjectRef RCBR que celle confirmee ci-dessus, aucune divergence observee. Voir aussi
-        la note de corroboration sur parameterDef._metaobject_variant pour la provenance du parametre
-        "Sign" lui-meme (classe predefinie INTERLIS.SIGN).
+      note: 'First alternative, "LCBR metaObjectRef
+        RCBR". Construction: PathOrInspFactor(PathEls=[PathEl(Kind=MetaObject, Ref=resolved metaObjectRef)]),
+        assigned to Assignment (Factor->Expression). Per the XMI source
+        (docs/uml/IlisMeta16-formatted.xmi, same source as mappings/ilismeta16-datatypes.yml):
+        `PathEl.Ref` is typed `INTERLIS.NAME` (a plain name, not a typed reference to a class
+        instance), and `PathEl.Kind` does include the value `MetaObject`
+        (mappings/ilismeta16-kind-values.yml). `metaObjectRef()` (mappings/python-bindings.yml, dedicated
+        binding) produces exactly a plain name, optionally qualified by a metaDataBasketRef ("(metaDataBasketRef
+        DOT)? Name") - an exact type match with `PathEl.Ref: INTERLIS.NAME`. Used in practice across
+        several real-world models (modelPond.ili, RoadsExgm2ien.ili, Text/Surface/Polyline_Graphics.ili
+        from the FGDM4GS corpus) - e.g. "Sign :=
+        {goodhealth}", "Sign := {continuous}", "Sign := {Building}", "Sign := {Linefont_18}" - always the same
+        LCBR metaObjectRef RCBR form. See also
+        the corroboration note on parameterDef._metaobject_variant for where the "Sign" parameter itself
+        comes from (the predefined INTERLIS.SIGN class).
 
         '
     according_alt:
@@ -416,14 +403,14 @@ signParamAssignment:
         field: attributePath
         enumAssignment: null
         multi: true
-      note: 'CONFIRME (Lot 14, point 17). 3e alternative "ACCORDING attributePath LPAR enumAssignment(,enumAssignment)*
-        RPAR". RULE #4, INTERLIS 2 Metamodel edition 2022-06-17, texte IDL exact : "STRUCTURE EnumMapping
+      note: 'Third alternative, "ACCORDING attributePath LPAR enumAssignment(,enumAssignment)*
+        RPAR". INTERLIS 2 Metamodel edition 2022-06-17, exact IDL text: "STRUCTURE EnumMapping
         EXTENDS Factor = EnumValue: PathOrInspFactor; Cases: LIST OF EnumAssignment; END EnumMapping;"
-        - correspondance PARFAITE : attributePath (deja PathOrInspFactor-compatible) -> EnumMapping.EnumValue
-        ; la liste enumAssignment(,enumAssignment)* -> EnumMapping.Cases. EnumMapping EXTENDS Factor EXTENDS
-        Expression (confirme ilismeta16-datatypes.yml), donc l''instance EnumMapping construite ici est
-        directement assignee a SignParamAssignment.Assignment (meme slot que les 2 autres alternatives,
-        type Expression compatible).
+        - an exact match: attributePath (already PathOrInspFactor-compatible) -> EnumMapping.EnumValue
+        ; the enumAssignment(,enumAssignment)* list -> EnumMapping.Cases. EnumMapping EXTENDS Factor EXTENDS
+        Expression (ilismeta16-datatypes.yml), so the EnumMapping instance built here is
+        assigned directly to SignParamAssignment.Assignment (same slot as the other 2 alternatives,
+        Expression-compatible type).
 
         '
 union:
@@ -448,56 +435,53 @@ viewAttributes:
         field: attributeDef
         index: 0
         optional: true
-      note: '3rd grammatical alternative (bare attrTypeDef/attributeDef) - confirmed IlisMeta16.ModelData.ClassAttr:
+      note: '3rd grammatical alternative (bare attrTypeDef/attributeDef) - feeds IlisMeta16.ModelData.ClassAttr:
         Class(AttrParent) <-> AttrOrParam(ClassAttribute, composite); parent Class end is the enclosing
-        View. optional: true ajoute (audit corpus reel models.geo.admin.ch, 2026-08-03) : la 1ere alternative
-        "ALL OF ..." (deja confirmee not_applicable, voir all_of_redefinition ci-dessous) n''a AUCUN
-        attributeDef du tout dans le meme viewAttributes() - trouve sur DMAV_AssiettesDeServitudes_V1_0.ili
+        View. `optional: true` is required: the 1st alternative
+        "ALL OF ..." (see all_of_redefinition below) has no
+        attributeDef at all in the same viewAttributes() - e.g. DMAV_AssiettesDeServitudes_V1_0.ili
         ("ALL OF AssietteDeServitude; UNIQUE CH050701: EREID;").
 
         '
     all_of_redefinition:
       status: not_applicable
-      note: 'Lot 17 (phase 2), point 15 FERME. 1ere alternative "ALL OF Name; (Name ASSIGN expression;)*".
-        RULE #4, Reference Manual 2006-04-13 §2.15 "Views" (p.67) : "we further offer the possibility
-        to transfer all attributes of a view-base in the same order (ALL OF)" - deja confirme par usage
-        reel (corpus de 342 modeles de production, models.geo.admin.ch, 44 occurrences, ex. V_D/DMAV_Grundstuecke_V1_1.ili).
-        Preuve d''ABSENCE desormais obtenue (ce qui manquait pour passer de unresolved a not_applicable)
-        : listing exhaustif de `IlisMeta16.ModelData.RenamedBaseView` (mappings/ilismeta16-classes.yml)
-        - attributs own = {OrNull} seulement (+ Name/Documentation/ Abstract/Generic/Final herites d''ExtendableME/MetaElement),
-        AUCUN attribut de type "projeter tout" - et listing exhaustif des associations la touchant (mappings/ilismeta16-associations.yml)
-        : seulement `BaseViewDef` (View<->RenamedBaseView, composite) et `BaseViewRef` (RenamedBaseView<->Class
-        via role BaseView). Aucune des deux ne porte de marqueur "ALL OF". Confirme donc definitivement
-        l''hypothese : "ALL OF Name" reference juste le RenamedBaseView (via BaseViewRef -> Class) dont
-        on projette tous les attributs, sans creer d''instances AttrOrParam ni de flag metamodele dedie
-        - un pur raccourci de syntaxe cote ModelBuilder (au moment de la construction, iterer les attributs
-        de la Class BaseView resolue et creer un ClassAttr par attribut, Derivates vide). Point 15 desormais
-        entierement clos.
+      note: '1st alternative, "ALL OF Name; (Name ASSIGN expression;)*".
+        Reference Manual 2006-04-13 §2.15 "Views" (p.67): "we further offer the possibility
+        to transfer all attributes of a view-base in the same order (ALL OF)" - used in real-world data
+        (e.g. V_D/DMAV_Grundstuecke_V1_1.ili).
+        `IlisMeta16.ModelData.RenamedBaseView` (mappings/ilismeta16-classes.yml) has own attributes =
+        {OrNull} only (+ Name/Documentation/Abstract/Generic/Final inherited from ExtendableME/MetaElement),
+        no "project everything" attribute - and the associations touching it (mappings/ilismeta16-associations.yml)
+        are only `BaseViewDef` (View<->RenamedBaseView, composite) and `BaseViewRef` (RenamedBaseView<->Class
+        via role BaseView). Neither carries an "ALL OF" marker. So "ALL OF Name" just references the
+        RenamedBaseView (via BaseViewRef -> Class) whose attributes are all projected, without creating
+        AttrOrParam instances or a dedicated metamodel flag
+        - a pure syntax shortcut on the ModelBuilder side (at construction time, iterate the attributes
+        of the resolved BaseView Class and create one ClassAttr per attribute, empty Derivates).
 
         '
     bare_redefinition_list:
       source:
         field: expression
         multi: true
-      note: 'CONFIRME (Lot 14, point 15). 2e alternative "(Name ASSIGN expression;)+". Precedent DIRECT
-        deja confirme dans ce meme fichier : attributeDef (voir binding ci-dessus, ligne ~621) alimente
-        deja AttrOrParam.Derivates (Expression, 0..*, ilismeta16-classes.yml) depuis un pattern identique
-        "factor (apres ASSIGN optionnel)". Meme mecanisme ici : chaque paire "Name ASSIGN expression"
-        cree/redefinit un AttrOrParam (ClassAttr, parent=cette View, Name=le Name capture) dont Derivates
-        recoit l''expression assignee - coherent avec le texte du Reference Manual 2006-04-13 §2.15 :
+      note: '2nd alternative, "(Name ASSIGN expression;)+". Direct precedent in this same file:
+        attributeDef (see binding above) already feeds
+        AttrOrParam.Derivates (Expression, 0..*, ilismeta16-classes.yml) from the same
+        "factor (after optional ASSIGN)" pattern. Same mechanism here: each "Name ASSIGN expression"
+        pair creates/redefines an AttrOrParam (ClassAttr, parent=this View, Name=the captured Name) whose
+        Derivates receives the assigned expression - consistent with the Reference Manual 2006-04-13 §2.15:
         "it is sufficient to indicate the attribute name and the assignation to the basic attribute. Such
-        definitions are always final" (Final=true sur cet AttrOrParam, cf. ExtendableME.Final deja confirme
-        ailleurs).
+        definitions are always final" (Final=true on this AttrOrParam, per ExtendableME.Final).
 
         '
     modifier_reassignment:
       source:
         field: expression
         multi: true
-      note: 'CONFIRME (Lot 14, point 15) - meme mecanisme que bare_redefinition_list ci-dessus (AttrOrParam.Derivates),
-        avec en plus le token modificateur (ABSTRACT|GENERIC|FINAL| TRANSIENT) alimentant le champ ExtendableME
-        correspondant sur cet AttrOrParam (meme pattern partage Abstract/Final/Generic/ Transient deja
-        documente ailleurs, ex. viewDef.Abstract) plutot qu''une cible separee.
+      note: 'Same mechanism as bare_redefinition_list above (AttrOrParam.Derivates),
+        with the modifier token (ABSTRACT|GENERIC|FINAL|TRANSIENT) additionally feeding the corresponding
+        ExtendableME field on this AttrOrParam (same shared Abstract/Final/Generic/Transient pattern
+        documented elsewhere, e.g. viewDef.Abstract) rather than a separate target.
 
         '
   note: 'No direct IlisMeta16 instance expected. Three forms: "ALL OF Name" (inherit all attrs from a
@@ -524,40 +508,38 @@ viewDef:
       source:
         field: ABSTRACT
         presence: true
-      note: 'CONFIRME (audit residus post-Lot 15). Meme pattern DEJA confirme sur classDef.Abstract (ilismeta16-classes.yml,
-        pas de status unresolved la-bas) : ABSTRACT/EXTENDED/FINAL/TRANSIENT sont certes une alternation
-        exclusive au niveau grammaire (un seul present a la fois), mais ANTLR genere un accesseur SEPARE
-        par token sur le Context (confirme ViewDefContext : ABSTRACT()/EXTENDED()/FINAL()/ TRANSIENT(),
-        verifie sur le code compile) - donc "presence: true" par attribut suffit et est non ambigu (si
-        ABSTRACT matche, Abstract=true et les 3 autres sont absents automatiquement, aucune inspection
-        de texte de token necessaire). L''ancienne note "ModelBuilder must inspect matched token text"
-        partait d''une fausse premisse.
+      note: 'Same pattern as classDef.Abstract (ilismeta16-classes.yml):
+        ABSTRACT/EXTENDED/FINAL/TRANSIENT are an exclusive alternation at the grammar level (only one
+        present at a time), but ANTLR generates a SEPARATE accessor
+        per token on the Context (ViewDefContext: ABSTRACT()/EXTENDED()/FINAL()/TRANSIENT()) -
+        so "presence: true" per attribute is sufficient and unambiguous (if
+        ABSTRACT matches, Abstract=true and the other 3 are automatically absent, no
+        token-text inspection needed).
 
         '
     Final:
       source:
         field: FINAL
         presence: true
-      note: voir Abstract ci-dessus - meme pattern, accesseur FINAL() independant.
+      note: see Abstract above - same pattern, independent FINAL() accessor.
     Generic:
       status: not_applicable
-      note: 'CONFIRME not_applicable (audit residus post-Lot 15). Verifie sur le code compile (RULE #2/#3)
-        : ViewDefContext N''A PAS d''accesseur GENERIC() (seuls ABSTRACT/EXTENDED/FINAL/TRANSIENT existent)
-        - ce n''est pas un oubli d''extraction AST, GENERIC n''est simplement jamais dans la grammaire
-        de cette regle. Confirme aussi par RULE #4 (Reference Manual, edition 2024 V2.1.0 et edition 2006,
-        identiques sur ce point) : "ViewDef = ''VIEW'' View-Name Properties<ABSTRACT,EXTENDED,FINAL,TRANSIENT>
-        ..." - GENERIC n''est delibarement PAS dans la liste des Properties admissibles pour une vue (contrairement
-        a AttrOrParam/DataUnit qui l''ont). View.Generic (herite d''ExtendableME via Class->Type) ne peut
-        donc jamais etre positionne via la syntaxe VIEW - decision ModelBuilder : toujours False par defaut
-        pour toute instance View.
+      note: 'ViewDefContext has no GENERIC() accessor (only ABSTRACT/EXTENDED/FINAL/TRANSIENT
+        exist) - GENERIC is simply never in this rule''s grammar. Confirmed by the Reference Manual
+        (2024 V2.1.0 and 2006 editions,
+        identical on this point): "ViewDef = ''VIEW'' View-Name Properties<ABSTRACT,EXTENDED,FINAL,TRANSIENT>
+        ..." - GENERIC is deliberately not in the list of admissible Properties for a view (unlike
+        AttrOrParam/DataUnit, which do have it). View.Generic (inherited from ExtendableME via Class->Type)
+        can therefore never be set via the VIEW syntax - design decision: always False by default
+        for any View instance.
 
         '
     Transient:
       source:
         field: TRANSIENT
         presence: true
-      note: View.own.Transient (INTERLIS.BOOLEAN) - voir Abstract ci-dessus, meme pattern, accesseur TRANSIENT()
-        independant (token 150).
+      note: View.own.Transient (INTERLIS.BOOLEAN) - see Abstract above, same pattern, independent TRANSIENT()
+        accessor.
     FormationKind:
       source:
         field: formationDef
@@ -569,15 +551,15 @@ viewDef:
       source:
         field: formationDef
         index: null
-      note: 'CONFIRME (Lot 14, point 14, phase 2). RULE #4, INTERLIS 2 Metamodel edition 2022-06-17, texte
-        IDL exact de CLASS View : "FormationParameter: LIST OF Expression; !! PathOrInspFactor only /**
-        Aggr.Equal: UniqueEl * Inspection: Attributepath */" - confirme aussi par le texte descriptif
-        (meme edition) : "... are only indicated in the case of aggregation (provided EQUAL is requested)
-        and for inspections aiming at the designation of the attribute to be inspected". Pas d''accesseur
-        direct sur viewDef lui-meme (confirme) - alimente via le sous-noeud formationDef/aggregation (branche
-        EQUAL(uniqueEl)) ou formationDef/inspection (chaine Name(->Name)*), jamais pour Projection/Join/Union/Aggregation-ALL.
-        Voir bindings aggregation.FormationParameter et inspection.FormationParameter ci-dessous pour
-        le detail par variante.
+      note: 'INTERLIS 2 Metamodel edition 2022-06-17, exact
+        IDL text of CLASS View: "FormationParameter: LIST OF Expression; !! PathOrInspFactor only /**
+        Aggr.Equal: UniqueEl * Inspection: Attributepath */" - and the descriptive text
+        (same edition): "... are only indicated in the case of aggregation (provided EQUAL is requested)
+        and for inspections aiming at the designation of the attribute to be inspected". No
+        direct accessor on viewDef itself - fed via the formationDef/aggregation sub-node (branch
+        EQUAL(uniqueEl)) or formationDef/inspection (Name(->Name)* chain), never for Projection/Join/Union/Aggregation-ALL.
+        See the aggregation.FormationParameter and inspection.FormationParameter bindings below
+        for the per-variant detail.
 
         '
     Where:
@@ -591,23 +573,22 @@ viewDef:
       source:
         field: viewRef
         optional: true
-      note: 'CONFIRME (Lot 13, point 13, phase 2). EXTENDS viewRef() alternative (view etendant une autre
-        vue, mutuellement exclusive avec formationDef dans la grammaire). Le candidat BaseClass precedemment
-        ecarte etait la mauvaise piste (role Base -> Class, effectivement sans lien avec View). Le bon
-        mecanisme est l''association generique IlisMeta16.ModelData.Inheritance (Sub {0..*} ExtendableME
-        <-> Super {0..1} ExtendableME, ilismeta16-associations.yml) - DEJA le mecanisme confirme et utilise
-        pour classDef/structureDef EXTENDS (voir leurs bindings "extends:" ci-dessus, note "feeds Inheritance
-        (Sub=this Class, Super=resolved ...Ref target)"). View qualifie : chaine d''heritage confirmee
-        View -> Class -> Type -> ExtendableME (ilismeta16-classes.yml). Confirme aussi par RULE #4 : INTERLIS
+      note: 'EXTENDS viewRef() alternative (a view extending another
+        view, mutually exclusive with formationDef in the grammar), via the generic
+        IlisMeta16.ModelData.Inheritance association (Sub {0..*} ExtendableME
+        <-> Super {0..1} ExtendableME, ilismeta16-associations.yml) - the same mechanism already used
+        for classDef/structureDef EXTENDS (see their "extends:" bindings, note "feeds Inheritance
+        (Sub=this Class, Super=resolved ...Ref target)"). View qualifies via the inheritance chain
+        View -> Class -> Type -> ExtendableME (ilismeta16-classes.yml). INTERLIS
         2 Reference Manual edition 2006-04-13, section 2.15 "Views" (p.64), EBNF "ViewDef = ''VIEW'' View-Name
         Properties<...> [FormationDef | ''EXTENDS'' ViewRef] {BaseExtensionDef} {Selection} ''='' [ViewAttributes]
-        {ConstraintDef} ''END'' View-Name '';''." et texte : "Views can also be extended (EXTENDED or
+        {ConstraintDef} ''END'' View-Name '';''." and text: "Views can also be extended (EXTENDED or
         EXTENDS)... Thanks to the extension it is possible to conceive extensions of views, classes and
-        structures that serve as foundation to the view." Binding : feeds Inheritance (Sub=cette View,
-        Super=viewRef() resolu en une autre View).
+        structures that serve as foundation to the view." Binding: feeds Inheritance (Sub=this View,
+        Super=viewRef() resolved to another View).
 
         '
-  note: View references || 4 (Reference Manual, edition 2024 V2.1.0 et edition 2006,
+  note: View references
 viewRef:
   grammar:
     rule: viewRef
@@ -616,8 +597,7 @@ viewRef:
   attribute_bindings:
     _resolution:
       note: 'Pure reference resolution: qualified name (Name (DOT Name)?)? Name resolves to an existing
-        IlisMeta16.ModelData.View by qualified_name; no own attributes constructed (same pattern as classRef,
-        Lot 4).'
+        IlisMeta16.ModelData.View by qualified_name; no own attributes constructed (same pattern as classRef).'
   note: View formation operators
 viewableRef:
   grammar:
@@ -632,12 +612,12 @@ viewableRef:
         mandatory token (token 194 = Name itself per InterlisParser.tokens - the grammar''s ''(Name|Name|Name|Name)''
         alternation in InterlisParser.g4 line 561-565 is degenerate/collapsed, all 4 branches being plain
         Name). Resolves to any IlisMeta16.ModelData.Class (Structure/Class/Association/View) via BaseViewRef.BaseView;
-        no own attributes constructed (same pattern as classOrStructureRef, Lot 4).'
+        no own attributes constructed (same pattern as classOrStructureRef).'
   note: 'No fixed target: resolves to either IlisMeta16.ModelData.Class or IlisMeta16.ModelData.View depending
-    on what the qualified name actually refers to in the model. resolves_to: [Class, View] ajoute (audit
-    corpus reel models.geo.admin.ch, 2026-08-03) : sans hint, un role anonyme homonyme (ex. "Localisation
-    -<> {0..1} Localisation;", meme mecanisme que roleDef sur IlisMeta16.ili) rendait la resolution
-    ambigue - trouve sur DMAV_AdressesDeBatiments_V1_0.ili ("VIEW Localisation_Valable PROJECTION OF
+    on what the qualified name actually refers to in the model. `resolves_to: [Class, View]` is required:
+    without a hint, an anonymous role sharing a name with a class (e.g. "Localisation
+    -<> {0..1} Localisation;", same mechanism as roleDef on IlisMeta16.ili) makes the
+    resolution ambiguous - e.g. DMAV_AdressesDeBatiments_V1_0.ili ("VIEW Localisation_Valable PROJECTION OF
     Localisation;").
 
     '

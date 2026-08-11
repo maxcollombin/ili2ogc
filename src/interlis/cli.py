@@ -1,12 +1,12 @@
-"""CLI du runtime INTERLIS : `interlis build <fichier.ili>`.
+"""INTERLIS runtime CLI: `interlis build <file.ili>`.
 
-Point d'entree fin - toute la logique vit dans interlis.runtime/interlis.builder.
-mappings/ et spec/grammar/mapping/ sont resolus via _resource_dirs() ci-dessous :
-donnees embarquees dans le paquet installe (force-include au build du
-wheel, voir pyproject.toml) si presentes, sinon repli sur un checkout du
-depot en developpement (install editable/`uv run` - les donnees
-n'existent qu'a la racine du depot dans ce mode, jamais copiees sous
-src/interlis/)."""
+Thin entry point - all the logic lives in interlis.runtime/interlis.builder.
+mappings/ and spec/grammar/mapping/ are resolved via _resource_dirs() below:
+data embedded in the installed package (force-include at wheel build time,
+see pyproject.toml) if present, otherwise falls back to a development repo
+checkout (editable install/`uv run` - the data only exists at the repo
+root in that mode, never copied under src/interlis/).
+"""
 import argparse
 import importlib.resources
 import sys
@@ -27,10 +27,12 @@ _DEV_ROOT = Path(__file__).resolve().parent.parent.parent
 
 @contextmanager
 def _resource_dirs():
-    """Cede (mappings_dir, spec_dir) comme de vrais `Path` filesystem -
-    depuis les donnees du paquet installe (`importlib.resources.as_file`,
-    extrait dans un dossier temporaire si le paquet est zippe) quand elles
-    existent, sinon depuis la racine du depot (mode dev)."""
+    """Yield (mappings_dir, spec_dir) as real filesystem `Path`s.
+
+    Uses the installed package's data (`importlib.resources.as_file`,
+    extracted to a temp dir if the package is zipped) when present,
+    otherwise falls back to the repo root (dev mode).
+    """
     spec_pkg = importlib.resources.files("interlis") / "spec_data" / "grammar" / "mapping"
     if spec_pkg.is_dir():
         with ExitStack() as stack:
@@ -48,7 +50,7 @@ def _describe(value, indent: int = 0, seen: set[int] | None = None) -> None:
     pad = "  " * indent
     if isinstance(value, MetaInstance):
         if id(value) in seen:
-            print(f"{pad}<{value._qualified_class} Name={getattr(value, 'Name', None)!r}> (deja affiche)")
+            print(f"{pad}<{value._qualified_class} Name={getattr(value, 'Name', None)!r}> (already shown)")
             return
         seen.add(id(value))
         name = getattr(value, "Name", None)
@@ -87,12 +89,12 @@ def _describe_field(field: str, value, indent: int, seen: set[int]) -> None:
 def cmd_build(args: argparse.Namespace) -> int:
     path = Path(args.file)
     if not path.exists():
-        print(f"fichier introuvable : {path}", file=sys.stderr)
+        print(f"file not found: {path}", file=sys.stderr)
         return 1
 
     tree, syntax_errors = parse_file(path)
     if syntax_errors:
-        print(f"{len(syntax_errors)} erreur(s) de syntaxe :", file=sys.stderr)
+        print(f"{len(syntax_errors)} syntax error(s):", file=sys.stderr)
         for e in syntax_errors:
             print(f"  {e}", file=sys.stderr)
         return 1
@@ -107,7 +109,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     _describe(model)
 
     if caught and not args.quiet:
-        print(f"\n{len(caught)} avertissement(s) (gaps de spec connus, voir .claude/PROGRESS.md) :", file=sys.stderr)
+        print(f"\n{len(caught)} warning(s) (known spec gaps):", file=sys.stderr)
         for w in caught:
             print(f"  {w.message}", file=sys.stderr)
 
@@ -115,24 +117,25 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """Valide un fichier de transfert .xtf contre son schema (Lot 30 - types
-    de base, MANDATORY, structure ; PAS encore la resolution TID/REF
-    cross-panier, voir docs/xtf-transfer-encoding-notes.md et
-    .claude/PROGRESS.md pour le perimetre exact).
+    """Validate an .xtf transfer file against its schema.
 
-    Schema resolu de deux facons (Lot 34, voir
-    docs/model-resolution-strategy.md pour la decision d'architecture) :
-    - `--model <fichier.ili>` explicite (comportement historique, toujours
-      supporte) ;
-    - sinon, auto-detecte depuis LE TRANSFERT LUI-MEME (jamais un Model
-      Repository interroge en direct) : les modeles "racine" reellement
-      utilises par sa DATASECTION (voir xtf.model_resolution) sont cherches
-      dans les repertoires `--repo` fournis - un seul suffit comme point
-      d'entree, les autres (racine restants ou "core" importe) resolvent via
-      le mecanisme cross-modele existant (ModelRepository.resolve_external)."""
+    Checks base types, MANDATORY, structure, and cross-basket TID/REF
+    resolution (see docs/xtf-transfer-encoding-notes.md for exact scope).
+
+    The schema is resolved in one of two ways (see
+    docs/model-resolution-strategy.md for the architecture decision):
+    - an explicit `--model <file.ili>` (historical behavior, still
+      supported);
+    - otherwise, auto-detected from the transfer itself (never a Model
+      Repository queried directly): the "root" models actually used by its
+      DATASECTION (see xtf.model_resolution) are looked up in the given
+      `--repo` directories - one is enough as an entry point, the rest
+      (remaining roots, or an imported "core" model) resolve through the
+      existing cross-model mechanism (ModelRepository.resolve_external).
+    """
     xtf_path = Path(args.xtf)
     if not xtf_path.exists():
-        print(f"fichier .xtf introuvable : {xtf_path}", file=sys.stderr)
+        print(f".xtf file not found: {xtf_path}", file=sys.stderr)
         return 1
 
     transfer = parse_xtf(xtf_path)
@@ -142,11 +145,11 @@ def cmd_validate(args: argparse.Namespace) -> int:
     if args.model:
         model_path = Path(args.model)
         if not model_path.exists():
-            print(f"fichier .ili introuvable : {model_path}", file=sys.stderr)
+            print(f".ili file not found: {model_path}", file=sys.stderr)
             return 1
     else:
         if repository is None:
-            print("aucun --model fourni : --repo est requis pour l'auto-detection du schema.", file=sys.stderr)
+            print("no --model given: --repo is required for schema auto-detection.", file=sys.stderr)
             return 1
         model_path = None
         for name in root_model_names(transfer):
@@ -157,7 +160,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 break
         if model_path is None:
             header = header_model_lookup(transfer)
-            print(f"aucun modele racine de {xtf_path} n'est disponible dans --repo. Modeles requis (HEADERSECTION) :", file=sys.stderr)
+            print(f"no root model of {xtf_path} is available in --repo. Required models (HEADERSECTION):", file=sys.stderr)
             for name in root_model_names(transfer):
                 version, uri = header.get(name, ["?", "?"])
                 print(f"  {name} VERSION={version!r} URI={uri!r}", file=sys.stderr)
@@ -165,7 +168,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     tree, syntax_errors = parse_file(model_path)
     if syntax_errors:
-        print(f"{len(syntax_errors)} erreur(s) de syntaxe dans {model_path} :", file=sys.stderr)
+        print(f"{len(syntax_errors)} syntax error(s) in {model_path}:", file=sys.stderr)
         for e in syntax_errors:
             print(f"  {e}", file=sys.stderr)
         return 1
@@ -177,27 +180,26 @@ def cmd_validate(args: argparse.Namespace) -> int:
         builder.build(tree)
 
     if repository is not None and root_model_name is not None:
-        # Evite de reconstruire en double le modele racine (deja construit
-        # ci-dessus via son propre parse_file/build()) quand
-        # header_completeness() verifie sa resolvabilite ci-dessous (Lot 39).
+        # Avoids rebuilding the root model twice (already built above via
+        # its own parse_file/build()) when header_completeness() checks its
+        # resolvability below.
         repository.register_prebuilt(root_model_name, builder.symbol_table)
 
-    # header_completeness (Lot 39) n'a de sens QUE si un --repo est fourni -
-    # sans lui, aucun modele ne peut de toute facon etre verifie/resolu, et
-    # ce mode (`--model` seul, historique) n'a jamais suppose de resolution
-    # cross-modele : ne pas changer son comportement/sa sortie par defaut.
-    # Meme suppression d'avertissements que le build racine ci-dessus : sans
-    # elle, chaque modele du header construit ICI (potentiellement jamais
-    # touche par ailleurs) emettrait ses propres UserWarning (gaps de spec
-    # connus) directement sur stderr, y compris sous -q.
+    # header_completeness only makes sense when a --repo is given - without
+    # it, no model can be checked/resolved anyway, and this mode (`--model`
+    # alone, historical) never assumed cross-model resolution: don't change
+    # its default behavior/output. Same warning suppression as the root
+    # build above: without it, every header model built HERE (potentially
+    # never touched otherwise) would emit its own UserWarning (known spec
+    # gaps) straight to stderr, even under -q.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         header_status = header_completeness(transfer, repository) if repository is not None else []
     incomplete = [s for s in header_status if s.status not in ("builtin", "available")]
     if incomplete and not args.quiet:
-        print(f"Modeles du header (HEADERSECTION/MODELS) : {len(header_status) - len(incomplete)}/{len(header_status)} resolus")
+        print(f"Header models (HEADERSECTION/MODELS): {len(header_status) - len(incomplete)}/{len(header_status)} resolved")
         for s in incomplete:
-            label = {"missing": "absent de --repo", "indexed_but_failed": "trouve mais echoue a construire"}[s.status]
+            label = {"missing": "not in --repo", "indexed_but_failed": "found but failed to build"}[s.status]
             print(f"  [{label}] {s.name} VERSION={s.version!r} URI={s.uri!r}")
         print()
 
@@ -212,54 +214,54 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"[{issue.severity:7s}] {issue.qualified_class}[{issue.object_tid}].{issue.attribute}: {issue.message}")
 
     header_suffix = (
-        f" - {len(header_status) - len(incomplete)}/{len(header_status)} modeles du header resolus"
+        f" - {len(header_status) - len(incomplete)}/{len(header_status)} header models resolved"
         if header_status else ""
     )
     print(
-        f"\n{len(issues)} probleme(s) : "
-        f"{counts.get('error', 0)} erreur(s), {counts.get('warning', 0)} avertissement(s), "
-        f"{counts.get('info', 0)} info(s){'' if args.verbose else ' (masquees, --verbose pour les voir)'}"
+        f"\n{len(issues)} issue(s): "
+        f"{counts.get('error', 0)} error(s), {counts.get('warning', 0)} warning(s), "
+        f"{counts.get('info', 0)} info(s){'' if args.verbose else ' (hidden, --verbose to show)'}"
         f"{header_suffix}",
     )
     return 1 if counts.get("error") else 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="interlis", description="Runtime INTERLIS en Python pur.")
+    parser = argparse.ArgumentParser(prog="interlis", description="Pure-Python INTERLIS runtime.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    build_parser = subparsers.add_parser("build", help="Parse un fichier .ili et affiche le modele construit.")
-    build_parser.add_argument("file", help="Chemin du fichier .ili a construire.")
-    build_parser.add_argument("-q", "--quiet", action="store_true", help="Ne pas afficher les avertissements.")
+    build_parser = subparsers.add_parser("build", help="Parse an .ili file and print the built model.")
+    build_parser.add_argument("file", help="Path to the .ili file to build.")
+    build_parser.add_argument("-q", "--quiet", action="store_true", help="Don't print warnings.")
     build_parser.add_argument(
         "--repo", action="append", default=[], metavar="DIR",
-        help="Repertoire de modeles .ili a utiliser pour resoudre les references vers des modeles importes "
-             "(IMPORTS) - repetable. Absent par defaut : aucune resolution cross-fichier (comportement V1).",
+        help="Directory of .ili models used to resolve references to imported models "
+             "(IMPORTS) - repeatable. Absent by default: no cross-file resolution (V1 behavior).",
     )
     build_parser.set_defaults(func=cmd_build)
 
     validate_parser = subparsers.add_parser(
-        "validate", help="Valide un fichier .xtf contre le schema d'un fichier .ili.",
+        "validate", help="Validate an .xtf file against an .ili file's schema.",
     )
-    validate_parser.add_argument("xtf", help="Chemin du fichier .xtf a valider.")
+    validate_parser.add_argument("xtf", help="Path to the .xtf file to validate.")
     validate_parser.add_argument(
         "--model", default=None,
-        help="Chemin du fichier .ili decrivant le schema attendu. Omis : auto-detecte depuis la HEADERSECTION/"
-        "DATASECTION du transfert lui-meme (necessite --repo, voir docs/model-resolution-strategy.md).",
+        help="Path to the .ili file describing the expected schema. Omitted: auto-detected from the "
+        "transfer's own HEADERSECTION/DATASECTION (requires --repo, see docs/model-resolution-strategy.md).",
     )
     validate_parser.add_argument(
         "--repo", action="append", default=[], metavar="DIR",
-        help="Repertoire de modeles .ili pour resoudre les IMPORTS du schema (repetable).",
+        help="Directory of .ili models to resolve the schema's IMPORTS (repeatable).",
     )
     validate_parser.add_argument(
         "--catalog", action="append", default=[], metavar="FILE.xtf",
-        help="Fichier .xtf de catalogue supplementaire (repetable) - ses objets comptent aussi pour la "
-        "resolution TID/REF (references EXTERNAL non incluses dans le transfert principal, voir "
+        help="Additional catalogue .xtf file (repeatable) - its objects also count for TID/REF "
+        "resolution (EXTERNAL references not included in the main transfer, see "
         "docs/model-resolution-strategy.md).",
     )
-    validate_parser.add_argument("-q", "--quiet", action="store_true", help="N'afficher que le resume final.")
+    validate_parser.add_argument("-q", "--quiet", action="store_true", help="Only print the final summary.")
     validate_parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Afficher aussi les problemes de severite 'info' (references non resolues).",
+        "-v", "--verbose", action="store_true", help="Also print 'info'-severity issues (unresolved references).",
     )
     validate_parser.set_defaults(func=cmd_validate)
 

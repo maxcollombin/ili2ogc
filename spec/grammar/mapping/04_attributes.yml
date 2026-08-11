@@ -36,37 +36,23 @@ attrTypeDef:
       wrap:
         numeric: IlisMeta16.ModelData.NumType
         enumeration: IlisMeta16.ModelData.EnumType
-      note: 'First alternative dispatches to one of: attrType() |  enumeration() (anonymous EnumType)
-        | numeric() CIRCULAR? (LSBR unitRef RSBR)? (anonymous NumType, reusing the numeric() bindings
-        already documented) | bare NUMERIC LSBR unitRef RSBR (anonymous NumType with only a Unit, no Min/Max).
-        Feeds the enclosing AttrOrParamType.Type association end (handled by the parent attributeDef/roleDef/
-        etc. construct).
-        CORRIGE (audit CLI ModelBuilder, 2026-08-03) : numeric()/enumeration() retournent un bag (dict de
-        champs partages avec numericType/coordinateType/etc., voir path: ailleurs) jamais enveloppe dans
-        une instance concrete - Type restait absent pour tout attribut numerique/enumeration anonyme.
-        "wrap:" promeut le bag en instance NumType/EnumType reelle (cles du bag attachees telles quelles,
-        deja nommees comme les attributs/associations reelles - Min/Max/Circular/Clockwise/Unit pour
-        NumType, Order/Elements pour EnumType). NUMERIC bare et attrType() restent hors de ce mecanisme
-        (attrType produit deja une instance propre ; NUMERIC bare, cas plus rare, pas encore cable).
-        CORRIGE (Lot 29 - bug moteur reel, trouve en construisant le validateur XTF) : l''ancien
-        `dispatches_to: [attrType, lineType]` faisait court-circuiter TOUT le calcul de ce binding
-        (ainsi que Mandatory et _collection) des que `ctx.attrType()` matchait (la branche la_==1,
-        de LOIN la plus frequente en pratique - tout attribut simplement type TEXT/domaine/reference/
-        structure) : `_relay` retournait `self.visit(attrType_node)` immediatement, AVANT meme de
-        calculer les attribute_bindings de attrTypeDef lui-meme. Consequence reelle, VERIFIEE
-        empiriquement sur RoadTrafficCensus_V1_1.ili : `MLocId : MANDATORY TEXT*50;` produisait un
-        TextType avec Mandatory=None (jamais True) - silencieux, aucune erreur, decouvert seulement en
-        interrogeant directement une instance construite (RULE #6 "0 erreur" ne l''aurait jamais
-        detecte, le mapping/schema restant valide). `lineType` etait en plus une entree FAUSSE
-        (`AttrTypeDefContext` n''a AUCUN accesseur `lineType()` - confirme sur le code ANTLR reel,
-        attrTypeDef() n''appelle jamais `self.lineType()` ; lineType() n''est atteint que via
-        `type_()` -> `attrType()`, un niveau plus bas, sans rapport direct avec attrTypeDef). Le champ
-        `attrType` de CE binding (`Type.source.field`) couvre DEJA integralement le meme cas via le
-        mecanisme generique alt ("|" dans field) - `dispatches_to` etait a la fois faux (lineType) et
-        redondant/nuisible (attrType). Supprime entierement ; Mandatory/Type/_collection passent
-        desormais TOUJOURS par le calcul de bag normal de `_relay`, quelle que soit l''alternative
-        grammaticale prise. Non-regression verifiee : corpus 3 fichiers XTF cibles + models/IlisMeta16.ili
-        + 23 tests pytest, aucun changement de sortie hors l''ajout du Mandatory desormais correct.
+      note: 'First alternative dispatches to one of: attrType() | enumeration() (anonymous EnumType) |
+        numeric() CIRCULAR? (LSBR unitRef RSBR)? (anonymous NumType, reusing the numeric() bindings
+        already documented) | bare NUMERIC LSBR unitRef RSBR (anonymous NumType with only a Unit, no
+        Min/Max). Feeds the enclosing AttrOrParamType.Type association end (handled by the parent
+        attributeDef/roleDef/etc. construct). numeric()/enumeration() return a bag (a dict of fields
+        shared with numericType/coordinateType/etc., see path: elsewhere), never wrapped in a concrete
+        instance on their own - "wrap:" promotes the bag into a real NumType/EnumType instance (the bag''s
+        keys attached as-is, already named like the real attributes/associations - Min/Max/Circular/
+        Clockwise/Unit for NumType, Order/Elements for EnumType). Bare NUMERIC and attrType() stay outside
+        this mechanism (attrType already produces its own instance; bare NUMERIC, a rarer case, is not yet
+        wired).
+
+        Mandatory/Type/_collection must always be computed through `_relay`''s normal bag calculation,
+        regardless of which grammar alternative matched - short-circuiting on `ctx.attrType()` before that
+        calculation runs silently drops Mandatory (e.g. `MANDATORY TEXT*50;` would build a TextType with
+        Mandatory=None instead of True, with no validator error, since the mapping/schema stays otherwise
+        valid).
 
         '
     _collection:
@@ -87,22 +73,21 @@ attrTypeDef:
         role: BaseType
         source:
           field: restrictedStructureRef
-      note: 'CONFIRME (Lot 13, point 2, phase 2). La recherche precedente cherchait une classe nommee
-        litteralement "Bag"/ "List"/"Collection" - elle existe sous un AUTRE nom : IlisMeta16.ModelData.MultiValue
-        (ilismeta16-classes.yml, extends TypeRelatedType), avec attributs own Ordered:BOOLEAN (mandatory)
-        et Multiplicity:IlisMeta16.ModelData.Multiplicity. Confirme par RULE #4, INTERLIS 2 Metamodel
-        edition 2022-06-17, section 2.3.1 (p.10) : "The class TypeRelatedType serves as basis for all
+      note: 'No class is literally named
+        "Bag"/"List"/"Collection" - it exists under a different name: IlisMeta16.ModelData.MultiValue
+        (ilismeta16-classes.yml, extends TypeRelatedType), with own attributes Ordered:BOOLEAN (mandatory)
+        and Multiplicity:IlisMeta16.ModelData.Multiplicity. Per INTERLIS 2 Metamodel
+        edition 2022-06-17, section 2.3.1 (p.10): "The class TypeRelatedType serves as basis for all
         types, which use another type (by means of the relationship BaseType)... Currently there is only
         one extending class for TypeRelatedType: MultiValue. It serves to describe a set of sub elements.
         Attributes further describe whether this set is ordered (LIST) or not (BAG), and what cardinality
-        it features." Binding : "(BAG|LIST) cardinality? OF restrictedStructureRef" -> target MultiValue,
-        Ordered (BAG->false, LIST->true), Multiplicity (depuis cardinality(), optionnel), BaseType (association
-        confirmee TRT{0..*} TypeRelatedType <-> BaseType{1} Type, ilismeta16-associations.yml - alimentee
-        par restrictedStructureRef() resolu). Point 2 EXTRACT SCRIPT check : scripts/extract_ilismeta16.py
-        n''a aucun filtre excluant ces concepts (parse_classes/datatypes/associations/ enumerations couvrent
-        tous les kinds UML pertinents, packaged_elements() parcourt l''arbre XMI recursivement via root.iter()
-        - pas de lacune d''extraction, juste une recherche precedente par mauvais nom de classe (RULE
-        #1 respectee : le nom correct a ete confirme par grep avant d''etre propose ici).
+        it features." Binding: "(BAG|LIST) cardinality? OF restrictedStructureRef" -> target MultiValue,
+        Ordered (BAG->false, LIST->true), Multiplicity (from cardinality(), optional), BaseType (association
+        TRT{0..*} TypeRelatedType <-> BaseType{1} Type, ilismeta16-associations.yml - fed
+        by the resolved restrictedStructureRef()). `scripts/extract_ilismeta16.py`
+        has no filter excluding these concepts (parse_classes/datatypes/associations/enumerations cover
+        all relevant UML kinds, packaged_elements() walks the XMI tree recursively via root.iter()) -
+        no extraction gap, just a class looked up under the wrong name previously.
 
         '
 attributeDef:
@@ -164,7 +149,7 @@ baseAttrRef:
     AttrName:
       source:
         field: Name
-      note: '"Name (DIV PosNumber)?" or "Name DIV domainRef". Per grammar-metamodel-mapping.yml: no direct
+      note: '"Name (DIV PosNumber)?" or "Name DIV domainRef". No direct
         IlisMeta16 instance expected; "reference to a base attribute (Name, optionally with a numeric
         precision via DIV PosNumber) or a domainRef; used as a placeholder inside formatDef''s format
         pattern." Feeds the struct attribute name being referenced in the formatDef() template (see formatDef
@@ -175,19 +160,17 @@ baseAttrRef:
       source:
         field: PosNumber
         optional: true
-      note: 'CORRIGE (Lot 38) : `alt: 1` retire - `ctx.getAltNumber()` renvoie inconditionnellement 0
-        pour cette grammaire (aucune alternative labellisee), rendant ce filtre toujours faux et ce binding
-        toujours None (voir PROGRESS.md, Lot 37/38). Sans consequence a le retirer : `PosNumber` n''est
-        accessible directement que sur l''alternative 1 (''Name (DIV PosNumber)?''), jamais sur
-        l''alternative 2 (''Name DIV domainRef'') - confirme sur la grammaire reelle
+      note: '`PosNumber` is
+        directly accessible only on alternative 1 (''Name (DIV PosNumber)?''), never on
+        alternative 2 (''Name DIV domainRef'') - per the real grammar
         (vendor/interlis-antlr4/InterlisParser.g4, baseAttrRef). Optional 1-only decimal-precision hint
         (DIV PosNumber) for the referenced numeric attribute.'
     Unit:
       source:
         field: domainRef
         optional: true
-      note: 'CORRIGE (Lot 38) : `alt: 2` retire, meme raison/meme verification que Precision ci-dessus -
-        `domainRef` n''est accessible directement que sur l''alternative 2, jamais l''alternative 1.
+      note: 'Same reasoning/check as Precision above -
+        `domainRef` is directly accessible only on alternative 2, never alternative 1.
         Optional 2-only: DIV domainRef supplies a unit/domain for the referenced attribute''s formatted
         representation, instead of a plain precision number.'
   note: No direct IlisMeta16 instance expected. Reference to a base attribute (Name, optionally with a
@@ -229,27 +212,21 @@ referenceAttr:
         field: restrictedClassOrAssRef
         path: BaseRef
         optional: true
-      note: 'CORRIGE (audit CLI ModelBuilder, 2026-08-03) : le binding assignait le bag brut
-        {BaseRef, AnyClass, Restrictions} entier (dict, avec ForwardRef non extrait) au lieu
-        d''en extraire BaseRef via path: - meme bug/meme correctif que roleDef.BaseClass (voir
-        spec/grammar/mapping/05_associations.yml), copie ici a l''identique : ReferenceType extends
-        ClassRelatedType (confirme ilismeta16-classes.yml), meme association BaseClass. Couvre
-        uniquement la 1ere occurrence ; AnyClass/Restrictions restent hors perimetre (meme limite
-        que roleDef.BaseClass).
+      note: 'The binding used to assign the raw bag
+        {BaseRef, AnyClass, Restrictions} as a whole (a dict, with ForwardRef not extracted) instead
+        of extracting BaseRef via path: - same bug/same fix as roleDef.BaseClass (see
+        spec/grammar/mapping/05_associations.yml), copied here identically: ReferenceType extends
+        ClassRelatedType (ilismeta16-classes.yml), same BaseClass association. Covers
+        only the first occurrence; AnyClass/Restrictions are out of scope (same limit
+        as roleDef.BaseClass).
 
         '
-  note: 'CORRIGE (Lot 15, point 1, phase 2 - decision utilisateur confirmee). L''ancien target: AttrOrParam
-    etait une erreur de copier-coller : referenceAttr() decrit un TYPE (Type=REFERENCE TO ...), pas un
-    attribut - le meme pattern que textType/coordinateType (target.class pointe directement sur leur propre
-    Type, sans bloc semantics.type separe, sans parent ClassAttr). L''ancien target: AttrOrParam aurait
-    construit un second AttrOrParam redondant, en double de celui deja cree par attributeDef/parameterDef
-    (qui consomme ce ReferenceType via l''association AttrOrParamType, comme n''importe quel autre Type).
-    || CORRIGE (Lot 15, point 1, phase 2 - decision utilisateur confirmee, source grammar-metamodel-mapping.yml
-    deja corrigee). L''ancien target: AttrOrParam etait une erreur de copier-coller : referenceAttr()
-    decrit un TYPE (ReferenceType), pas un attribut - meme pattern que textType/coordinateType (target
-    direct, parent: null, pas de bloc semantics.type separe). L''attribut lui-meme est deja construit
-    par attributeDef/parameterDef, qui consomme ce ReferenceType via AttrOrParamType comme n''importe
-    quel autre Type.'
+  note: 'target: AttrOrParam
+    was a copy-paste error: referenceAttr() describes a TYPE (Type=REFERENCE TO ...), not an
+    attribute - the same pattern as textType/coordinateType (target.class points directly to their own
+    Type, with no separate semantics.type block, no parent ClassAttr). target: AttrOrParam would have
+    built a redundant second AttrOrParam, duplicating the one already created by attributeDef/parameterDef
+    (which consumes this ReferenceType via the AttrOrParamType association, like any other Type).'
 restrictedClassOrAssRef:
   grammar:
     rule: restrictedClassOrAssRef
@@ -261,19 +238,19 @@ restrictedClassOrAssRef:
         index: 0
         optional: true
       note: '"(classOrAssociationRef | ANYCLASS) (RESTRICTION LPAR classOrAssociationRef (SEMI classOrAssociationRef)*
-        RPAR)?". Per grammar-metamodel-mapping.yml: no direct IlisMeta16 instance expected (kind: Container);
-        "feeds Role.BaseClass (via ClassRef) or the equivalent association-side reference". The first
+        RPAR)?". No direct IlisMeta16 instance expected (kind: Container);
+        feeds Role.BaseClass (via ClassRef) or the equivalent association-side reference. The first
         classOrAssociationRef (or the ANYCLASS wildcard, meaning "any class") is the unrestricted base
         reference.
 
-        CORRIGE (Lot 52) : `optional: true` ajoute - absent legitimement quand l''alternative ANYCLASS
-        (deja geree separement par le binding `AnyClass` ci-dessous) est choisie au lieu d''un
-        classOrAssociationRef concret - confirme reel sur `Objects: OBJECTS OF ANYCLASS` (functionDecl,
-        Gefahrenkartierung_V1_de.ili) : `BuildError [restrictedClassOrAssRef] ''classOrAssociationRef''
-        absent (non optionnel)`, jamais exerce avant ce lot puisque `functionDecl` (seul consommateur
-        reel de ce chemin ANYCLASS via `argumentType`) etait grammaticalement INATTEIGNABLE au niveau
-        TOPIC (voir binding functionDecl/regle definitions) - gap latent, jamais un changement de
-        comportement pour un `classOrAssociationRef` concret (deja present, jamais optionnel dans ce cas).
+        `optional: true` is required - legitimately absent when the ANYCLASS alternative
+        (handled separately by the `AnyClass` binding below) is chosen instead of a
+        concrete classOrAssociationRef - e.g. `Objects: OBJECTS OF ANYCLASS` (functionDecl,
+        Gefahrenkartierung_V1_de.ili) previously raised `BuildError [restrictedClassOrAssRef] ''classOrAssociationRef''
+        absent (non optionnel)`. `functionDecl` (the only real consumer
+        of this ANYCLASS path via `argumentType`) was grammatically UNREACHABLE at the
+        TOPIC level (see the functionDecl binding) - a latent gap, never a behavior
+        change for a concrete `classOrAssociationRef` (already present, never optional in that case).
 
         '
     AnyClass:
@@ -307,8 +284,8 @@ restrictedClassOrStructureRef:
         field: classOrStructureRef
         index: 0
       note: '"(classOrStructureRef | ANYSTRUCTURE) (RESTRICTION LPAR classOrStructureRef ((COMMA|SEMI)
-        classOrStructureRef)* RPAR)?". Per grammar-metamodel-mapping.yml: "kind: Container, dispatches_to:
-        [restrictedClassOrAssRef, restrictedStructureRef]" - this is a semantic-role note (this rule plays
+        classOrStructureRef)* RPAR)?". `kind: Container, dispatches_to:
+        [restrictedClassOrAssRef, restrictedStructureRef]` is a semantic-role note (this rule plays
         the combined role of either sibling rule depending on the enclosing context), not a literal grammar
         call to those two rules (structurally it calls classOrStructureRef(), not classOrAssociationRef()/structureRef()
         directly).
@@ -342,10 +319,9 @@ restrictedStructureRef:
         field: structureRef|type_
         index: 0
       note: '"(structureRef | type_ | ANYSTRUCTURE) (RESTRICTION LPAR structureRef ((COMMA|SEMI) structureRef)*
-        RPAR)?". Confirmed via grammar-metamodel-mapping.yml: "kind: Reference, discriminator: {attribute:
-        Kind, value: Structure}" - the base alternative resolves to an existing IlisMeta16.ModelData.Class[Kind=Structure]
-        instance. The discriminant was left null in this file before this edit but is explicitly specified
-        in grammar-metamodel-mapping.yml, so it is corrected here to match.
+        RPAR)?". `kind: Reference, discriminator: {attribute:
+        Kind, value: Structure}` - the base alternative resolves to an existing IlisMeta16.ModelData.Class[Kind=Structure]
+        instance.
 
         '
     AnyStructure:
@@ -358,15 +334,15 @@ restrictedStructureRef:
         field: type_
         optional: true
       status: not_applicable
-      note: 'Lot 19 (phase 2) - CONFIRMÉ `not_applicable`, divergence de grammaire (pas un manque du métamodèle).
-        RULE #4, Reference Manual eCH-0031 V2.1.0 (2024-04-24) §3.6.4 "Strukturattribute", EBNF officielle
-        EXACTE : `RestrictedStructureRef = (StructureRef | ''ANYSTRUCTURE'') [''RESTRICTION'' ''('' StructureRef
-        {'';'' StructureRef} '')''].` - AUCUNE alternative `type_()` (type inline anonyme) dans la règle
-        officielle, seulement `StructureRef | ANYSTRUCTURE`. L''alternative `type_()` de la grammaire
-        de ce projet est donc une EXTENSION propre au projet, absente du métamodèle officiel - même famille
-        de divergence que POW (`composedUnit`) et `type.text_range_alt` (voir `grammar-divergences.md`).
-        Décision ModelBuilder : lever une erreur explicite si un `type_()` inline est réellement rencontré
-        à cette position, plutôt que deviner une construction `Class[Kind=Structure]` anonyme.
+      note: '`not_applicable`: a grammar divergence, not a metamodel gap.
+        Reference Manual eCH-0031 V2.1.0 (2024-04-24) §3.6.4 "Strukturattribute", exact official
+        EBNF: `RestrictedStructureRef = (StructureRef | ''ANYSTRUCTURE'') [''RESTRICTION'' ''('' StructureRef
+        {'';'' StructureRef} '')''].` - NO `type_()` alternative (anonymous inline type) in the
+        official rule, only `StructureRef | ANYSTRUCTURE`. This project''s grammar `type_()` alternative
+        is therefore a project-specific extension, absent from the official metamodel - same family
+        of divergence as POW (`composedUnit`) and `type.text_range_alt`.
+        ModelBuilder decision: raise an explicit error if an inline `type_()` is actually encountered
+        at this position, rather than guessing an anonymous `Class[Kind=Structure]` construction.
 
         '
     Restrictions:

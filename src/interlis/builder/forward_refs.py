@@ -1,17 +1,18 @@
-"""Resolution des references en avant (RULE : une seule passe de visite
-ANTLR + resolution differee par table de symboles - voir plan de
-conception du ModelBuilder, section 4).
+"""Forward-reference resolution: single ANTLR visit pass, deferred lookup.
 
-Chaque regle Reference-kind (classRef, structureRef, associationRef,
+Resolution happens via a symbol table, not immediately during the visit.
+
+Each Reference-kind rule (classRef, structureRef, associationRef,
 domainRef, unitRef, viewRef, graphicRef, topicRef, metaDataBasketRef,
-metaObjectRef, viewableRef) produit un ForwardRef pose directement dans le
-champ concerne via AttachmentResolver, au lieu de resoudre immediatement.
-Une passe finale (resolve_all) remplace chaque ForwardRef par l'instance
-reelle trouvee dans la SymbolTable (fichier courant), ou - si un
-ModelRepository est fourni (resolution multi-fichiers, voir repository.py) -
-dans la table du modele importe correspondant, chargee a la demande. Sans
-repository (ou si le modele reste introuvable), le nom devient un
-UnresolvedNamedReference documente plutot qu'une exception."""
+metaObjectRef, viewableRef) produces a ForwardRef placed directly in the
+relevant field via AttachmentResolver, instead of resolving immediately.
+A final pass (resolve_all) replaces each ForwardRef with the real instance
+found in the SymbolTable (current file), or - if a ModelRepository is
+provided (multi-file resolution, see repository.py) - in the matching
+imported model's table, loaded on demand. Without a repository (or if the
+model remains unfindable), the name becomes a documented
+UnresolvedNamedReference instead of an exception.
+"""
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -20,59 +21,58 @@ from interlis.builder.errors import BuildError, UnresolvedNamedReference
 
 @dataclass
 class ForwardRef:
-    """Placeholder pose dans un champ pendant la construction, en attendant
-    la passe de resolution finale."""
+    """Placeholder set on a field, replaced by the final resolution pass."""
+
     name: str
     resolves_to_hint: str | list[str] | None = None
     rule: str = ""
-    # True pour les references dont la NATURE MEME garantit qu'elles visent
-    # toujours un modele importe (ex. modeldef.imports - IMPORTS designe par
-    # definition un AUTRE modele, jamais une declaration locale) - contourne
-    # l'heuristique generique has_prefix (pensee pour des references qui
-    # POURRAIENT etre locales, ex. classRef/associationRef).
+    # True for references whose VERY NATURE guarantees they always target
+    # an imported model (e.g. modeldef.imports - IMPORTS by definition
+    # names ANOTHER model, never a local declaration) - bypasses the
+    # generic has_prefix heuristic (designed for references that COULD be
+    # local, e.g. classRef/associationRef).
     always_external: bool = False
-    # Nom du MODEL englobant la construction qui a produit ce ForwardRef
-    # (Lot 33) - desambiguise un nom court present dans PLUSIEURS modeles
-    # d'un meme fichier multi-MODEL (ex. "PointStructure" declare
-    # separement dans BaseModel_SectoralPlans_LV03_V1_4 ET _LV95_V1_4,
-    # meme fichier, MEME symbol_table depuis le fix multi-modeles du
-    # Lot 28). None si non determinable (ex. modele predefini INTERLIS).
+    # Name of the MODEL enclosing the construction that produced this
+    # ForwardRef - disambiguates a short name present in SEVERAL models of
+    # the same multi-MODEL file (e.g. "PointStructure" declared separately
+    # in BaseModel_SectoralPlans_LV03_V1_4 AND _LV95_V1_4, same file, SAME
+    # symbol_table for both). None if not determinable (e.g. the
+    # predefined INTERLIS model).
     home_model: str | None = None
-    # Texte brut (Lot 38 point 2) du 1er topicRef() du TOPIC englobant cette
-    # reference, UNIQUEMENT si ce TOPIC porte un EXTENDS (ex.
-    # "CatalogueObjects_V1.Catalogues" pour une reference produite dans
-    # `TOPIC AxisCatalogs EXTENDS CatalogueObjects_V1.Catalogues = ...`) -
-    # None si le TOPIC englobant n'a pas d'EXTENDS, ou si aucun TOPIC
-    # n'englobe cette reference. RULE #4, citation directe eCH-0031 V2.1.0
-    # §3.5.4 "Namensraume" : "Erweitert ein Modellierungselement ein
-    # anderes, werden seinen Namensraumen alle Namen des
-    # Basis-Modellierungselementes zugefuegt" (etend un element de
-    # modelisation un autre, tous les noms de l'element de base sont
-    # ajoutes a son espace de noms) - un TOPIC B EXTENDS TOPIC A rend
-    # visibles, SANS IMPORTS UNQUALIFIED, tous les noms courts declares
-    # dans A a l'interieur de B. Utilise en dernier recours par
-    # `ForwardRefResolver._resolve_one` pour un nom NON qualifie introuvable
-    # localement, AVANT le repli IMPORTS UNQUALIFIED existant.
+    # Raw text of the enclosing TOPIC's first topicRef(), ONLY if that
+    # TOPIC has an EXTENDS (e.g. "CatalogueObjects_V1.Catalogues" for a
+    # reference produced inside `TOPIC AxisCatalogs EXTENDS
+    # CatalogueObjects_V1.Catalogues = ...`) - None if the enclosing TOPIC
+    # has no EXTENDS, or if no TOPIC encloses this reference. Direct
+    # citation, eCH-0031 V2.1.0 §3.5.4 "Namensraume": "Erweitert ein
+    # Modellierungselement ein anderes, werden seinen Namensraumen alle
+    # Namen des Basis-Modellierungselementes zugefuegt" (when a modeling
+    # element extends another, all names of the base element are added to
+    # its namespace) - a TOPIC B EXTENDS TOPIC A makes all short names
+    # declared in A visible inside B, WITHOUT an IMPORTS UNQUALIFIED.
+    # Used as a last resort by `ForwardRefResolver._resolve_one` for an
+    # unqualified name not found locally, BEFORE the existing IMPORTS
+    # UNQUALIFIED fallback.
     topic_extends_hint: str | None = None
-    # True pour un ForwardRef porte par le role Super de l'association
-    # Inheritance (classDef/structureDef/topicDef EXTENDS, Lot 38 point 2) -
-    # un EXTENDS non resolu ne doit JAMAIS faire planter tout le build,
-    # symetriquement a la politique deja en place pour domainRef/BaseClass
-    # (Lot 36) : degrade en UnresolvedNamedReference plutot que BuildError,
-    # y compris quand `topic_extends_hint` a ete tente et a echoue (ex.
-    # modele externe absent du `--repo` fourni). Positionne par
-    # InterlisModelBuilder._apply_one_binding, jamais par _resolve_or_defer
-    # (qui ne connait pas encore le role/association cible a ce stade).
+    # True for a ForwardRef carried by the Super role of the Inheritance
+    # association (classDef/structureDef/topicDef EXTENDS) - an unresolved
+    # EXTENDS must NEVER crash the whole build, symmetric to the existing
+    # policy for domainRef/BaseClass: degrades to UnresolvedNamedReference
+    # rather than BuildError, including when `topic_extends_hint` was
+    # tried and failed (e.g. the external model is absent from the given
+    # `--repo`). Set by InterlisModelBuilder._apply_one_binding, never by
+    # _resolve_or_defer (which doesn't yet know the target role/association
+    # at that stage).
     graceful: bool = False
-    # True UNIQUEMENT pour le Super d'un `TOPIC EXTENDS topicRef` (Lot 46
-    # point 2) : `topicRef` resout vers un SubModel (le "Topic" au sens
-    # Package, confirme ilismeta16-classes.yml - n'etend PAS ExtendableME),
-    # alors que l'association Inheritance (Sub/Super) cible ExtendableME -
-    # seule la DataUnit JUMELLE de ce SubModel (meme topicDef, voir
-    # `InterlisModelBuilder._build_multi_target`/`_twin`) en est une
-    # instance reelle. `resolve_all` substitue ce jumeau APRES resolution
-    # du nom, plutot que de stocker directement le SubModel resolu (type
-    # incompatible avec l'attribut cible).
+    # True ONLY for the Super of a `TOPIC EXTENDS topicRef`: `topicRef`
+    # resolves to a SubModel (the "Topic" in the Package sense, confirmed
+    # in ilismeta16-classes.yml - does NOT extend ExtendableME), while the
+    # Inheritance association (Sub/Super) targets ExtendableME - only that
+    # SubModel's TWIN DataUnit (same topicDef, see
+    # `InterlisModelBuilder._build_multi_target`/`_twin`) is a real
+    # instance of it. `resolve_all` substitutes this twin AFTER name
+    # resolution, rather than storing the resolved SubModel directly
+    # (incompatible type for the target attribute).
     resolve_via_twin: bool = False
 
 
@@ -85,22 +85,24 @@ class _Pending:
 
 
 class SymbolTable:
-    """Nom qualifie (ou court, si non ambigu) -> instance construite.
-    Peuplee au fil de l'eau a chaque instance Instance-kind construite dont
-    la classe a un attribut Name (direct ou herite)."""
+    """Maps a qualified (or short, if unambiguous) name to a built instance.
+
+    Populated on the fly for every Instance-kind instance built whose class
+    has a Name attribute (direct or inherited).
+    """
 
     def __init__(self):
         self._qualified: dict[str, Any] = {}
         self._by_short_name: dict[str, list[Any]] = {}
-        # Noms de modeles importes via `IMPORTS UNQUALIFIED X` dans CE
-        # fichier (ex. {"INTERLIS"}) - jamais persiste cote metamodele
-        # (Import n'a pas d'attribut propre pour UNQUALIFIED, confirme
-        # metamodel.txt - voir spec/grammar/mapping/02_packages.yml,
-        # _imports_unqualified), mais necessaire ici : seul un import
-        # explicitement UNQUALIFIED autorise une reference NON qualifiee a
-        # resoudre vers un modele importe plutot que de rester strictement
-        # locale au fichier courant (Reference Manual eCH-0031 V2.1.0
-        # §3.5.1). Peuple par InterlisModelBuilder._register_unqualified_imports.
+        # Names of models imported via `IMPORTS UNQUALIFIED X` in THIS file
+        # (e.g. {"INTERLIS"}) - never persisted on the metamodel side
+        # (Import has no attribute of its own for UNQUALIFIED - see
+        # spec/grammar/mapping/02_packages.yml, _imports_unqualified), but
+        # needed here: only an explicitly UNQUALIFIED import lets an
+        # unqualified reference resolve into an imported model instead of
+        # staying strictly local to the current file (Reference Manual
+        # eCH-0031 V2.1.0 §3.5.1). Populated by
+        # InterlisModelBuilder._register_unqualified_imports.
         self.unqualified_imports: set[str] = set()
 
     def register(self, qualified_name: str, instance: Any) -> None:
@@ -109,10 +111,12 @@ class SymbolTable:
         self._by_short_name.setdefault(short, []).append(instance)
 
     def all_registered(self) -> list[Any]:
-        """Toutes les instances enregistrees (deduplique par identite - un
-        alias, ex. rekey_model_prefix, peut faire pointer 2 cles differentes
-        vers le MEME objet). Utilise par xtf/schema.py pour enumerer les
-        associations connues sans acceder a l'etat prive."""
+        """Return all registered instances, deduplicated by identity.
+
+        An alias (e.g. from rekey_model_prefix) can make two different keys
+        point to the SAME object. Used by xtf/schema.py to enumerate known
+        associations without reaching into private state.
+        """
         seen: set[int] = set()
         result = []
         for instance in self._qualified.values():
@@ -124,53 +128,53 @@ class SymbolTable:
     def resolve(self, name: str, kind_hint: str | list[str] | None = None, home_model: str | None = None) -> Any | None:
         if name in self._qualified:
             return self._qualified[name]
-        # CORRIGE (Lot 49, RULE #1 - bug trouve en verifiant la recursion de
-        # structure sur le corpus reel) : un nom QUALIFIE dont le prefixe ne
-        # designe PAS cette table (`has_prefix` False - modele importe, PAS
-        # le fichier courant) ne doit JAMAIS retomber sur le repli par nom
-        # court ci-dessous - sinon une collision de nom court avec un symbole
-        # LOCAL (ex. `STRUCTURE ModInfo EXTENDS WithLatestModification_V1.
-        # ModInfo` - "ModInfo" existe LOCALEMENT ET dans le modele importe)
-        # resout silencieusement vers le MAUVAIS candidat (confirme reel :
-        # ModInfo.Super pointant vers LUI-MEME, un self-loop, avant ce fix).
-        # `ForwardRefResolver._resolve_one` appelle CE `resolve()` en premier
-        # et ne tente son propre repli cross-fichier (`has_prefix`/
-        # `ModelRepository.resolve_external`) que si `resolve()` renvoie
-        # `None` - sans cette garde, ce repli n'etait donc JAMAIS atteint des
-        # qu'une collision de nom court existait. Les noms NON qualifies
-        # (`"." not in name`) restent inchanges (`has_prefix` renvoie
-        # toujours False pour eux, cas hors de portee de cette garde).
+        # A QUALIFIED name whose prefix does NOT designate this table
+        # (`has_prefix` False - an imported model, NOT the current file)
+        # must NEVER fall back to the short-name fallback below - otherwise
+        # a short-name collision with a LOCAL symbol (e.g. `STRUCTURE
+        # ModInfo EXTENDS WithLatestModification_V1.ModInfo` - "ModInfo"
+        # exists LOCALLY AND in the imported model) silently resolves to
+        # the WRONG candidate (e.g. ModInfo.Super pointing to ITSELF, a
+        # self-loop).
+        # `ForwardRefResolver._resolve_one` calls THIS `resolve()` first
+        # and only tries its own cross-file fallback (`has_prefix`/
+        # `ModelRepository.resolve_external`) if `resolve()` returns
+        # `None` - without this guard, that fallback was therefore NEVER
+        # reached once a short-name collision existed. Unqualified names
+        # (`"." not in name`) are unaffected (`has_prefix` always returns
+        # False for them, out of scope of this guard).
         if "." in name and not self.has_prefix(name):
             return None
         short = name.rsplit(".", 1)[-1]
         candidates = self._by_short_name.get(short, [])
         if kind_hint is not None and len(candidates) > 1:
-            # Le meme nom court peut designer des entites metamodele
-            # DIFFERENTES (ex. une CLASS "MetaElement" et un role anonyme
-            # (nomme d'apres sa classe cible) "MetaElement" dans une autre
-            # association, ou "Localisation" a la fois une CLASS et un role
-            # anonyme d'association - trouve sur DMAV_AdressesDeBatiments_V1_0.ili)
-            # - le kind_hint (target/resolves_to du binding Reference-kind,
-            # ex. "Class", ou plusieurs valeurs possibles ex. viewableRef :
-            # ["Class", "View"]) permet de lever l'ambiguite en ne retenant
-            # que les instances de la/des classe(s) metamodele visee(s).
+            # The same short name can designate DIFFERENT metamodel
+            # entities (e.g. a CLASS "MetaElement" and an anonymous role
+            # (named after its target class) "MetaElement" in another
+            # association, or "Localisation" as both a CLASS and an
+            # anonymous association role - found on
+            # DMAV_AdressesDeBatiments_V1_0.ili) - kind_hint (the
+            # Reference-kind binding's target/resolves_to, e.g. "Class", or
+            # several possible values e.g. viewableRef: ["Class", "View"])
+            # resolves the ambiguity by keeping only instances of the
+            # targeted metamodel class(es).
             hints = kind_hint if isinstance(kind_hint, list) else [kind_hint]
             filtered = [c for c in candidates if getattr(c, "_qualified_class", "").rsplit(".", 1)[-1] in hints]
             if len(filtered) == 1:
                 return filtered[0]
             candidates = filtered if filtered else candidates
         if len(candidates) > 1 and home_model:
-            # CORRIGE (Lot 33) : un meme nom court peut aussi etre declare
-            # dans PLUSIEURS MODELES du MEME fichier .ili (multi-MODEL,
-            # fix Lot 28 - ex. "PointStructure" dans BaseModel_SectoralPlans_
-            # LV03_V1_4 ET _LV95_V1_4, partageant cette MEME symbol_table).
-            # Le kind_hint seul ne peut pas lever cette ambiguite (les 2
-            # candidats sont de la MEME classe metamodele concrete, ex.
-            # Class[Kind=Structure]) - repli sur le MODEL englobant de la
-            # construction qui a demande cette resolution (voir
-            # InterlisModelBuilder._current_model_name), en cherchant
-            # directement dans `_qualified` (les candidats de `_by_short_name`
-            # ne portent pas leur propre nom qualifie).
+            # The same short name can also be declared in SEVERAL MODELS of
+            # the SAME .ili file (multi-MODEL, e.g. "PointStructure" in
+            # both BaseModel_SectoralPlans_LV03_V1_4 AND _LV95_V1_4,
+            # sharing this SAME symbol_table).
+            # kind_hint alone can't resolve this ambiguity (both candidates
+            # are the SAME concrete metamodel class, e.g.
+            # Class[Kind=Structure]) - fall back to the MODEL enclosing the
+            # construction that requested this resolution (see
+            # InterlisModelBuilder._current_model_name), looking directly
+            # in `_qualified` (candidates from `_by_short_name` don't carry
+            # their own qualified name).
             candidate_ids = {id(c) for c in candidates}
             in_model = [
                 v for k, v in self._qualified.items()
@@ -183,32 +187,36 @@ class SymbolTable:
         return None
 
     def rekey_model_prefix(self, old_prefix: str, new_prefix: str) -> None:
-        """Ajoute, pour toute entree qualifiee `old_prefix.X`, un ALIAS
-        `new_prefix.X` -> meme instance (l'entree d'origine reste, jamais
-        retiree) - utilise UNIQUEMENT par ModelRepository pour le modele
-        INTERLIS predefini (voir repository.py, _PREDEFINED_INTERLIS_SOURCE) :
-        son MODEL declare porte un nom interne different du nom reel
-        documente par le manuel (contrainte lexer - "INTERLIS" est un token
-        reserve, pas un Name valide) ; corrige ici une fois le modele
-        construit pour que les references qualifiees ecrites par un
-        utilisateur (`INTERLIS.I32OID`) trouvent une correspondance exacte
-        plutot que de ne compter que sur le repli par nom court de
-        `resolve()`. Ne touche QUE `_qualified`, jamais `_by_short_name` :
-        l'instance y figure deja depuis son enregistrement d'origine
-        (`register()`) - la retoucher dupliquerait l'entree et casserait le
-        cas `len(candidates) == 1` de `resolve()` sur un nom court par
-        ailleurs non ambigu (trouve en ecrivant le test de ce mecanisme)."""
+        """Add an alias `new_prefix.X` -> same instance for every `old_prefix.X` entry.
+
+        The original entry is kept, never removed. Used ONLY by
+        ModelRepository for the predefined INTERLIS model (see
+        repository.py, _PREDEFINED_INTERLIS_SOURCE): its declared MODEL
+        carries an internal name different from the real name documented
+        by the manual (lexer constraint - "INTERLIS" is a reserved token,
+        not a valid Name); this fixes that up once the model is built so
+        that qualified references written by a user (`INTERLIS.I32OID`)
+        find an exact match instead of relying only on `resolve()`'s
+        short-name fallback. Touches ONLY `_qualified`, never
+        `_by_short_name`: the instance is already there from its original
+        `register()` call - touching it again would duplicate the entry
+        and break `resolve()`'s `len(candidates) == 1` case for an
+        otherwise-unambiguous short name.
+        """
         prefix = old_prefix + "."
         for qualified, instance in list(self._qualified.items()):
             if qualified.startswith(prefix):
                 self._qualified[new_prefix + "." + qualified[len(prefix):]] = instance
 
     def has_prefix(self, name: str) -> bool:
-        """True si `name` est QUALIFIE (contient un prefixe de modele) ET que
-        ce prefixe designe le fichier courant lui-meme (par opposition a un
-        prefixe de modele importe, totalement absent de la table). Ne
-        s'applique qu'aux noms qualifies - un nom sans point releve d'une
-        logique separee, voir ForwardRefResolver._resolve_one."""
+        """Check whether `name`'s model prefix refers to the current file.
+
+        True if `name` is qualified (has a model prefix) AND that prefix
+        designates the current file itself, as opposed to an imported
+        model's prefix (entirely absent from this table). Only applies to
+        qualified names - an unqualified name follows separate logic, see
+        ForwardRefResolver._resolve_one.
+        """
         if "." not in name:
             return False
         prefix = name.split(".", 1)[0]
@@ -242,12 +250,12 @@ class ForwardRefResolver:
     def _resolve_one(self, ref: ForwardRef, repository=None) -> Any:
         kind_hint = ref.resolves_to_hint if isinstance(ref.resolves_to_hint, (str, list)) else None
         if ref.always_external:
-            # Le nom lui-meme (ex. modeldef.imports.ImportedP) EST le nom du
-            # modele importe, jamais prefixe - si un ModelRepository est
-            # configure, tenter de le charger et de le resoudre vers
-            # l'instance Model reelle (elle s'enregistre sous son propre nom
-            # nu, meme mecanisme que toute autre instance nommee) plutot que
-            # de toujours retomber sur UnresolvedNamedReference.
+            # The name itself (e.g. modeldef.imports.ImportedP) IS the
+            # imported model's name, never prefixed - if a ModelRepository
+            # is configured, try to load it and resolve it to the real
+            # Model instance (it registers under its own bare name, the
+            # same mechanism as any other named instance) rather than
+            # always falling back to UnresolvedNamedReference.
             if repository is not None:
                 found = repository.resolve_external(ref.name, ref.name, kind_hint)
                 if found is not None:
@@ -258,13 +266,12 @@ class ForwardRefResolver:
             return found
         if "." in ref.name:
             if not self.symbol_table.has_prefix(ref.name):
-                # Prefixe absent de CE fichier : candidat a une resolution
-                # cross-fichier si un ModelRepository est configure (voir
-                # repository.py) - chaque modele charge garde sa PROPRE
-                # table, jamais fusionnee, donc aucune ambiguite de nom court
-                # introduite entre modeles sans rapport (seule une
-                # correspondance de nom QUALIFIE COMPLET dans la table du
-                # modele explicitement vise compte).
+                # Prefix absent from THIS file: a candidate for cross-file
+                # resolution if a ModelRepository is configured (see
+                # repository.py) - each loaded model keeps its OWN table,
+                # never merged, so no short-name ambiguity is introduced
+                # between unrelated models (only a FULL QUALIFIED name
+                # match in the explicitly targeted model's table counts).
                 if repository is not None:
                     prefix = ref.name.split(".", 1)[0]
                     found = repository.resolve_external(prefix, ref.name, kind_hint)
@@ -272,27 +279,26 @@ class ForwardRefResolver:
                         return found
                 return UnresolvedNamedReference(ref.name, reason="external_import")
             if ref.graceful:
-                # EXTENDS non resolu (Lot 38 point 2, RULE #5) : jamais
-                # fatal, symetrique a domainRef/BaseClass (Lot 36).
+                # Unresolved EXTENDS: never fatal, symmetric to
+                # domainRef/BaseClass.
                 return UnresolvedNamedReference(ref.name, reason="unresolved_extends")
-            raise BuildError(f"reference non resolue et non attribuable a un import : {ref.name!r}", rule=ref.rule)
-        # Nom NON qualifie introuvable localement : essayer d'abord le
-        # namespace du TOPIC EXTENDS englobant, le cas echeant (RULE #4,
-        # voir ForwardRef.topic_extends_hint) - AVANT le repli IMPORTS
-        # UNQUALIFIED existant, les deux mecanismes etant independants.
+            raise BuildError(f"unresolved reference, not attributable to an import: {ref.name!r}", rule=ref.rule)
+        # Unqualified name not found locally: try the enclosing TOPIC
+        # EXTENDS namespace first, if any (see ForwardRef.topic_extends_hint)
+        # - BEFORE the existing IMPORTS UNQUALIFIED fallback, the two
+        # mechanisms being independent.
         found = self._resolve_via_topic_extends(ref, kind_hint, repository)
         if found is not None:
             return found
-        # Sinon, seule une reference vers un modele explicitement importe
-        # UNQUALIFIED (voir SymbolTable.unqualified_imports) peut
-        # legitimement la designer - sinon c'est un vrai bug local (nom
-        # jamais declare dans ce fichier), a signaler par une exception
-        # plutot qu'a masquer (RULE #5).
+        # Otherwise, only a reference to a model explicitly imported
+        # UNQUALIFIED (see SymbolTable.unqualified_imports) can legitimately
+        # name it - otherwise it's a real local bug (a name never declared
+        # in this file), to be raised as an exception rather than hidden.
         if not self.symbol_table.unqualified_imports:
             if ref.graceful:
                 return UnresolvedNamedReference(ref.name, reason="unresolved_extends")
             raise BuildError(
-                f"reference non resolue et non attribuable a un import : {ref.name!r}", rule=ref.rule
+                f"unresolved reference, not attributable to an import: {ref.name!r}", rule=ref.rule
             )
         if repository is not None:
             for model_name in self.symbol_table.unqualified_imports:
@@ -302,18 +308,19 @@ class ForwardRefResolver:
         return UnresolvedNamedReference(ref.name, reason="external_import")
 
     def _resolve_via_topic_extends(self, ref: ForwardRef, kind_hint, repository=None) -> Any | None:
-        """Tente de resoudre un nom NON qualifie comme membre du namespace du
-        TOPIC EXTENDS englobant (voir ForwardRef.topic_extends_hint pour la
-        justification RULE #4). Seul le cas d'un EXTENDS QUALIFIE (topic
-        d'un AUTRE modele, ex. "CatalogueObjects_V1.Catalogues") necessite
-        un traitement dedie ici : un EXTENDS sur un topic du MEME fichier
-        (non qualifie, ex. "TOPIC Countries EXTENDS AdministrativeUnits")
-        est deja couvert sans rien de special, la resolution par nom court
-        generique (`SymbolTable.resolve` plus haut dans `_resolve_one`)
-        trouvant deja le nom cible dans la MEME table de symboles, sans
-        notion de portee par topic - retenter ici un candidat "hint.name"
-        ne ferait que redupliquer exactement le meme repli par nom court,
-        pour rien."""
+        """Try to resolve an unqualified name via the TOPIC EXTENDS namespace.
+
+        See ForwardRef.topic_extends_hint for the rationale. Only a
+        QUALIFIED EXTENDS (a topic from ANOTHER model, e.g.
+        "CatalogueObjects_V1.Catalogues") needs dedicated handling here: an
+        EXTENDS on a topic in the SAME file (unqualified, e.g. "TOPIC
+        Countries EXTENDS AdministrativeUnits") is already covered without
+        anything special, since the generic short-name resolution
+        (`SymbolTable.resolve` earlier in `_resolve_one`) already finds the
+        target name in the SAME symbol table, with no notion of per-topic
+        scope - retrying a "hint.name" candidate here would just duplicate
+        that same short-name fallback for nothing.
+        """
         hint = ref.topic_extends_hint
         if not hint or "." not in hint:
             return None

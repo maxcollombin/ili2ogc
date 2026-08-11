@@ -1,15 +1,16 @@
-"""Lecture generique des accesseurs d'un contexte ANTLR4-Python.
+"""Generic reader for an ANTLR4-Python context's accessors.
 
-Par introspection de signature (pas via generated/ast-accessors.yml, verifie
-incomplet pour certaines regles - ex. attributeDef n'a qu'un placeholder
-`'...': null`). Convention ANTLR4-Python confirmee empiriquement sur le code
-genere reel (src/interlis/antlr/InterlisParser.py) : un accesseur pouvant
-matcher plusieurs fois (regle repetee, token repete) prend un parametre
-optionnel `i: int = None` (None -> liste complete via getTypedRuleContexts/
-getTokens, entier -> element a cette position) ; un accesseur garanti
-unique n'a AUCUN parametre. L'introspection de la signature bindee
-(len(parameters) == 0 vs 1) distingue les deux cas de facon fiable, sans
-dependre d'un cache externe."""
+By signature introspection (not via generated/ast-accessors.yml, found
+incomplete for some rules - e.g. attributeDef only has a placeholder
+`'...': null`). ANTLR4-Python convention, confirmed against the real
+generated code (src/interlis/antlr/InterlisParser.py): an accessor that
+can match multiple times (repeated rule, repeated token) takes an
+optional `i: int = None` parameter (None -> full list via
+getTypedRuleContexts/getTokens, an int -> the element at that position);
+an accessor guaranteed unique takes NO parameter. Introspecting the bound
+signature (len(parameters) == 0 vs 1) reliably distinguishes the two
+cases, without depending on an external cache.
+"""
 import inspect
 from typing import Any
 
@@ -19,29 +20,32 @@ def has_accessor(ctx: Any, field: str) -> bool:
 
 
 def call(ctx: Any, field: str, index: int | None = None) -> Any:
-    """Appelle ctx.<field>(...) en respectant sa signature reelle. Leve
-    AttributeError si l'accesseur n'existe pas sur ce ctx, TypeError si un
-    index non nul est demande sur un accesseur "single" (garanti unique) -
-    index=0 est tolere dans ce cas (equivalent a "le seul/premier match")
-    car la spec ne distingue pas toujours explicitement single/multi."""
+    """Call ctx.<field>(...), respecting its real signature.
+
+    Raises AttributeError if the accessor doesn't exist on this ctx,
+    TypeError if a nonzero index is requested on a "single" accessor
+    (guaranteed unique) - index=0 is tolerated in that case (equivalent to
+    "the only/first match"), since the spec doesn't always explicitly
+    distinguish single/multi.
+    """
     method = getattr(ctx, field, None)
     if method is None or not callable(method):
-        raise AttributeError(f"{type(ctx).__name__} n'a pas d'accesseur {field!r}")
+        raise AttributeError(f"{type(ctx).__name__} has no accessor {field!r}")
     accepts_index = len(inspect.signature(method).parameters) > 0
     if index is not None:
         if not accepts_index:
             if index == 0:
                 return method()
-            raise TypeError(f"{field} sur {type(ctx).__name__} n'accepte pas d'index (accesseur single)")
+            raise TypeError(f"{field} on {type(ctx).__name__} does not accept an index (single accessor)")
         if index < 0:
-            # Index Python (-1 = dernier element) : l'accesseur ANTLR genere
-            # (getTypedRuleContext(s)/getToken(s)) ne comprend QUE des index
-            # positifs 0-bases (retourne None sans erreur pour un index
-            # negatif, jamais traduit en "depuis la fin") - passer par la
-            # liste complete pour beneficier du slicing Python normal.
-            # Bug trouve via un vrai .ili (setConstraint.Constraint, corpus
-            # models.geo.admin.ch/DMAV_Bodenbedeckung_V1_0.ili) : index: -1
-            # renvoyait toujours None, jamais la derniere expression() reelle.
+            # Python-style index (-1 = last element): the generated ANTLR
+            # accessor (getTypedRuleContext(s)/getToken(s)) only understands
+            # positive 0-based indices (returns None without error for a
+            # negative index, never translated to "from the end") - go
+            # through the full list to benefit from normal Python slicing.
+            # Without this, index: -1 always returns None instead of the
+            # real last expression() (see setConstraint.Constraint, which
+            # relies on this for `expression(index=-1)`).
             values = method()
             values = list(values) if values is not None else []
             return values[index] if -len(values) <= index < len(values) else None
@@ -50,9 +54,12 @@ def call(ctx: Any, field: str, index: int | None = None) -> Any:
 
 
 def call_list(ctx: Any, field: str) -> list:
-    """Version liste uniforme : un accesseur "multi" sans index retourne
-    deja sa liste complete (0..N elements) ; un accesseur "single" retourne
-    0 ou 1 element - normalise en liste dans les deux cas."""
+    """Return a uniform list regardless of accessor arity.
+
+    A "multi" accessor with no index already returns its full list (0..N
+    elements); a "single" accessor returns 0 or 1 element - both are
+    normalized to a list.
+    """
     method = getattr(ctx, field, None)
     if method is None or not callable(method):
         raise AttributeError(f"{type(ctx).__name__} n'a pas d'accesseur {field!r}")
@@ -65,23 +72,20 @@ def call_list(ctx: Any, field: str) -> list:
 
 
 def is_present(ctx: Any, field: str, index: int | None = None) -> bool:
-    """CORRIGE (Lot 45, grammaire) : `call(ctx, field, None)` sur un
-    accesseur "multi" (i.e. qui accepte un parametre `i=None`) sans index
-    explicite renvoie sa LISTE COMPLETE via `method()` (`getTokens`/
-    `getTypedRuleContexts`) - TOUJOURS une liste, JAMAIS `None`, meme
-    quand elle est VIDE (aucune occurrence). L'ancien test `is not None`
-    la traitait alors a tort comme "presente" inconditionnellement des
-    qu'un accesseur devenait multi - jusqu'ici jamais un souci en pratique
-    (aucun binding `presence: true` ne visait un accesseur DEJA multi sans
-    index), mais devenu un bug reel des que le Lot 45 (Properties<>
-    corrigees en listes separees par virgule dans la grammaire, ex.
-    `CLASS X (ABSTRACT,FINAL)`) a fait passer ABSTRACT/FINAL/TRANSIENT/...
-    de simple a multi (repetable au sein du groupe `(COMMA ...)*`) -
-    `Abstract`/`Final`/`Transient` (`presence: true` sans index,
-    03_classes_and_structures.yml/04_attributes.yml/etc.) valaient alors
-    `True` INCONDITIONNELLEMENT, confirme reel sur models/IlisMeta16.ili
-    (diff massif, aucune classe de ce fichier n'utilise pourtant
-    ABSTRACT/FINAL/TRANSIENT en combinaison)."""
+    """Check whether the accessor matched anything.
+
+    On a "multi" accessor (one that accepts `i: int = None`), calling
+    `call(ctx, field, None)` with no explicit index returns its full list
+    (`getTokens`/`getTypedRuleContexts`) - always a list, never `None`,
+    even when it's empty (no occurrence). A plain `is not None` test would
+    wrongly treat that as "present" unconditionally as soon as an accessor
+    becomes multi: this matters because the grammar encodes `Properties<>`
+    as comma-separated lists (e.g. `CLASS X (ABSTRACT,FINAL)`), which makes
+    ABSTRACT/FINAL/TRANSIENT/... multi (repeatable inside the `(COMMA ...)*`
+    group) - `presence: true` bindings without an index on those tokens
+    (03_classes_and_structures.yml/04_attributes.yml/etc.) would then
+    evaluate to `True` unconditionally.
+    """
     result = call(ctx, field, index)
     if isinstance(result, list):
         return len(result) > 0
@@ -89,10 +93,11 @@ def is_present(ctx: Any, field: str, index: int | None = None) -> bool:
 
 
 def text(ctx: Any, field: str, index: int | None = None) -> str | None:
-    """Texte brut d'un accesseur (token ou regle) - .getText() sur le noeud
-    retourne, ou None si absent. Les litteraux STRING INTERLIS conservent
-    leurs guillemets dans getText() ; le decouillemetage est la
-    responsabilite de l'appelant (source_resolver), pas de cette couche
-    generique."""
+    """Return an accessor's raw text (token or rule), or None if absent.
+
+    Calls .getText() on the returned node. INTERLIS STRING literals keep
+    their quotes in getText() - unquoting is the caller's responsibility
+    (source_resolver), not this generic layer's.
+    """
     node = call(ctx, field, index)
     return None if node is None else node.getText()

@@ -1,35 +1,39 @@
-"""Resolution du/des modele(s) racine requis pour valider un transfert XTF,
-pilotee EXCLUSIVEMENT par le contenu du fichier lui-meme (Lot 34 - decision
-d'architecture documentee dans docs/model-resolution-strategy.md : jamais de
-Model Repository interrogeable en direct façon iliValidator, toujours les
-references explicites du transfert + un corpus `.ili` prealablement
-telecharge en local, RULE de reproductibilite deja etablie pour IMPORTS
-depuis le Lot 22 - "jamais de reseau pendant un build()").
+"""Resolve the root model(s) required to validate an XTF transfer.
 
-Deux sources d'information distinctes, RULE #1 (ne pas deviner - verifier) :
-- `HEADERSECTION/MODELS` (`XtfTransfer.models`, parse.py) : declare quels
-  modeles ET QUELLES VERSIONS ont ete utilises pour produire CE transfert -
-  la source canonique pour savoir QUOI telecharger (nom+version+URI exacts,
-  voir scripts/fetch_ili_models.py qui l'utilise deja pour ca).
-- `DATASECTION` (les paniers reellement presents, `XtfBasket.qualified_topic`)
-  : la source canonique pour savoir quel(s) modele(s) sont REELLEMENT le(s)
-  modele(s) "metier" (racine) de CE transfert precis - le header liste
-  TOUJOURS aussi des modeles "core" (Units/CoordSys/geometrie/etc.) qui ne
-  produisent jamais de panier propre (utilises seulement comme TYPES), donc
-  ne peuvent pas servir de point d'entree a `InterlisModelBuilder.build()`."""
+Driven EXCLUSIVELY by the file's own content (architecture decision
+documented in docs/model-resolution-strategy.md: never a Model Repository
+queried live the way iliValidator does it, always the transfer's explicit
+references plus a `.ili` corpus downloaded locally beforehand - the same
+reproducibility principle already applied to IMPORTS: "never network
+during a build()").
+
+Two distinct sources of information - don't guess, verify:
+- `HEADERSECTION/MODELS` (`XtfTransfer.models`, parse.py): declares which
+  models AND WHICH VERSIONS were used to produce THIS transfer - the
+  canonical source for knowing WHAT to download (exact name+version+URI,
+  see scripts/fetch_ili_models.py, which already uses it for that).
+- `DATASECTION` (the baskets actually present, `XtfBasket.qualified_topic`):
+  the canonical source for knowing which model(s) are ACTUALLY the
+  "business" (root) model(s) of THIS specific transfer - the header ALWAYS
+  also lists "core" models (Units/CoordSys/geometry/etc.) that never
+  produce a basket of their own (used only as TYPES), so they can't serve
+  as an entry point for `InterlisModelBuilder.build()`.
+"""
 from dataclasses import dataclass
 
 from interlis.xtf.parse import XtfTransfer
 
 
 def root_model_names(transfer: XtfTransfer) -> list[str]:
-    """Noms de modele (premier segment qualifie) ayant au moins un panier
-    dans la DATASECTION - ordre de premiere apparition, dedupliques. Un seul
-    de ces modeles suffit comme racine de `InterlisModelBuilder.build()` :
-    les classes des AUTRES modeles requis (racine restants, ou core importe)
-    resolvent deja via `ModelRepository.resolve_external` (voir
-    xtf/schema.py:resolve_class, mecanisme existant depuis le Lot 22/30) des
-    lors que leur fichier est indexe par le meme `--repo`."""
+    """Return model names (first qualified segment) with a DATASECTION basket.
+
+    Ordered by first appearance, deduplicated. Just one of these models is
+    enough as `InterlisModelBuilder.build()`'s root: the OTHER required
+    models' classes (remaining roots, or an imported core model) already
+    resolve via `ModelRepository.resolve_external` (see
+    xtf/schema.py:resolve_class) as long as their file is indexed by the
+    same `--repo`.
+    """
     seen: dict[str, None] = {}
     for basket in transfer.baskets:
         name = basket.qualified_topic.split(".", 1)[0]
@@ -38,12 +42,13 @@ def root_model_names(transfer: XtfTransfer) -> list[str]:
 
 
 def header_model_lookup(transfer: XtfTransfer) -> dict[str, "list[str]"]:
-    """Nom de modele -> [version, uri] tel que declare en HEADERSECTION/
-    MODELS, pour produire un message d'erreur actionnable (RULE #5 : ne
-    jamais degrader silencieusement) quand un modele racine requis par la
-    DATASECTION est absent des repertoires `--repo` fournis - donne a
-    l'utilisateur/session suivante EXACTEMENT quoi aller chercher (et ou),
-    sans avoir a re-parser le fichier a la main."""
+    """Map model name -> [version, uri] as declared in HEADERSECTION/MODELS.
+
+    Used to produce an actionable error message - never degrade silently -
+    when a root model required by the DATASECTION is missing from the
+    given `--repo` directories: tells the user EXACTLY what to fetch (and
+    from where), without having to re-parse the file by hand.
+    """
     return {m.name: [m.version or "?", m.uri or "?"] for m in transfer.models}
 
 
@@ -56,20 +61,19 @@ class HeaderModelStatus:
 
 
 def header_completeness(transfer: XtfTransfer, repository) -> list[HeaderModelStatus]:
-    """Etat de resolvabilite de CHAQUE modele declare en HEADERSECTION/
-    MODELS (Lot 39 - verification PROACTIVE, en reponse a la question
-    "les XTF sont-ils valides contre TOUS leurs modeles ?" laissee ouverte
-    au Lot 36 : jusqu'ici, seuls les modeles REELLEMENT references par un
-    attribut/role effectivement rencontre pendant `validate_transfer`
-    etaient charges - un modele "core" du header jamais exerce par les
-    donnees restait invisible, disponible ou non. Ce controle inspecte
-    TOUS les modeles du header, exerces ou non, independamment de la
-    DATASECTION.
+    """Return the resolvability status of every HEADERSECTION/MODELS entry.
 
-    `repository=None` (aucun `--repo` fourni) : chaque entree devient
-    "no_repo" plutot que de tenter quoi que ce soit - RULE #5, distinct de
-    "missing" (qui affirme positivement qu'un `--repo` A ete cherche et
-    n'a rien trouve)."""
+    A PROACTIVE check answering "are XTFs valid against ALL their models?":
+    previously, only models actually referenced by an attribute/role
+    genuinely encountered during `validate_transfer` were loaded - a
+    "core" model from the header never exercised by the data stayed
+    invisible, whether available or not. This check inspects EVERY model
+    in the header, exercised or not, independent of the DATASECTION.
+
+    `repository=None` (no `--repo` given): every entry becomes "no_repo"
+    rather than attempting anything - distinct from "missing" (which
+    positively asserts that a `--repo` WAS searched and found nothing).
+    """
     if repository is None:
         return [
             HeaderModelStatus(name=m.name, version=m.version, uri=m.uri, status="no_repo")

@@ -1,10 +1,10 @@
-"""Moteur generique du ModelBuilder.
+"""Generic ModelBuilder engine.
 
-InterlisModelBuilder(InterlisParserVisitor) : AUCUNE methode visitXxx
-specifique a une regle. visit(ctx) generique derive le nom de regle depuis
-type(ctx).__name__, charge l'entree spec/grammar/mapping/*.yml
-correspondante, et applique une des 4 strategies d'execution selon `kind`
-(voir le plan de conception du ModelBuilder)."""
+InterlisModelBuilder(InterlisParserVisitor) has NO rule-specific visitXxx
+method. The generic visit(ctx) derives the rule name from
+type(ctx).__name__, loads the matching spec/grammar/mapping/*.yml entry,
+and applies one of 4 execution strategies depending on `kind`.
+"""
 from pathlib import Path
 from typing import Any
 
@@ -35,12 +35,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
     @classmethod
     def _from_shared(cls, schema, registry, spec, attachment, repository) -> "InterlisModelBuilder":
-        """Construit un sous-builder pour un fichier importe (voir
-        ModelRepository) en REUTILISANT les composants partages de la
-        session plutot que de les recharger depuis mappings_dir/spec_dir -
-        critique pour que les classes Pydantic dynamiques (MetamodelRegistry)
-        soient des objets Python identiques entre fichiers, pas une classe
-        distincte par fichier malgre le meme qualified_name."""
+        """Build a sub-builder for an imported file (see ModelRepository).
+
+        Reuses the session's shared components instead of reloading them
+        from mappings_dir/spec_dir - critical for the dynamic Pydantic
+        classes (MetamodelRegistry) to be the same Python objects across
+        files, not a distinct class per file despite the same
+        qualified_name.
+        """
         self = cls.__new__(cls)
         self._init_shared(schema, registry, spec, attachment, repository)
         return self
@@ -50,13 +52,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
         self.registry = registry
         self.spec = spec
         self.attachment = attachment
-        # Un ModelRepository "nu" (aucun repertoire de recherche) sert
-        # toujours de support au modele INTERLIS predefini (voir
-        # repository.py, _BUILTIN_SOURCES) - ce n'est pas de la resolution
-        # cross-fichier a proprement parler (aucun disque consulte au-dela
-        # du texte integre), donc reste actif meme sans --repo/repository=...
-        # explicite. La resolution cross-fichier REELLE (repertoires fournis
-        # par l'appelant) demeure opt-in comme avant.
+        # A "bare" ModelRepository (no search directory) always backs the
+        # predefined INTERLIS model (see repository.py, _BUILTIN_SOURCES) -
+        # not really cross-file resolution (no disk consulted beyond the
+        # embedded text), so it stays active even without an explicit
+        # --repo/repository=... REAL cross-file resolution (search
+        # directories supplied by the caller) stays opt-in as before.
         self.repository = repository if repository is not None else ModelRepository([])
         self.symbol_table = SymbolTable()
         self.forward_refs = ForwardRefResolver(self.symbol_table)
@@ -77,7 +78,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return result
 
     # ------------------------------------------------------------------
-    # Dispatch generique (remplace le patron visitXxx d'ANTLR)
+    # Generic dispatch (replaces ANTLR's visitXxx pattern)
     # ------------------------------------------------------------------
     def visit(self, ctx: ParserRuleContext) -> Any:
         if ctx is None:
@@ -125,12 +126,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
             if value is not None:
                 setattr(instance, entry.discriminant.attribute, value)
 
-        # Pousse AVANT de capturer le contexte utilise par les
-        # attribute_bindings de CETTE regle : sinon une reference a
-        # `context_key: <rule_name>` (l'instance en cours de construction
-        # elle-meme, ex. modeldef.imports.ImportingP) ne trouverait que le
-        # contexte de la regle ENGLOBANTE, jamais celui-ci - voir mecanisme
-        # field: null.
+        # Push BEFORE capturing the context used by THIS rule's
+        # attribute_bindings: otherwise a reference to `context_key:
+        # <rule_name>` (the instance currently being built itself, e.g.
+        # modeldef.imports.ImportingP) would only find the ENCLOSING rule's
+        # context, never this one - see the field: null mechanism.
         self._push_construction_context(rule_name, instance)
         construction_ctx = self._construction_stack[-1]
         self._parent_stack.append(instance)
@@ -154,23 +154,23 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return instance
 
     def _register_unqualified_imports(self, ctx: ParserRuleContext) -> None:
-        """Detecte, sur le ModeldefContext brut, quels noms de la boucle
-        `IMPORTS` sont precedes du modificateur `UNQUALIFIED` (ex. `IMPORTS
-        UNQUALIFIED INTERLIS;`) - alimente symbol_table.unqualified_imports,
-        consulte par ForwardRefResolver._resolve_one pour autoriser une
-        reference NON qualifiee a resoudre vers un modele importe. Pas
-        exprimable via le mecanisme generique for_each/attribute_bindings
-        (voir modeldef.imports, spec/grammar/mapping/02_packages.yml) : le
-        metamodele Import n'a lui-meme aucun attribut pour UNQUALIFIED
-        (confirme metamodel.txt) - ceci reste un detail interne au moteur de
-        resolution, jamais persiste sur une instance MetaInstance.
+        """Detect which `IMPORTS` names are prefixed with `UNQUALIFIED`.
 
-        UNQUALIFIED precede toujours immediatement le nom qu'il modifie dans
-        la grammaire ('IMPORTS UNQUALIFIED? (Name|INTERLIS) (COMMA
-        UNQUALIFIED? (Name|INTERLIS))* SEMI' - confirme
-        spec/grammar/mapping/02_packages.yml, note modeldef.imports) : un
-        simple parcours positionnel de ctx.children suffit, pas besoin d'une
-        correlation plus complexe."""
+        Reads the raw ModeldefContext (e.g. `IMPORTS UNQUALIFIED
+        INTERLIS;`). Feeds symbol_table.unqualified_imports, used by
+        ForwardRefResolver._resolve_one to let an unqualified reference
+        resolve into an imported model. Not expressible via the generic
+        for_each/attribute_bindings mechanism (see modeldef.imports,
+        spec/grammar/mapping/02_packages.yml): the Import metamodel class
+        has no attribute of its own for UNQUALIFIED, so this stays an
+        internal detail of the resolution engine, never persisted on a
+        MetaInstance.
+
+        UNQUALIFIED always immediately precedes the name it modifies in the
+        grammar ('IMPORTS UNQUALIFIED? (Name|INTERLIS) (COMMA UNQUALIFIED?
+        (Name|INTERLIS))* SEMI'), so a simple positional walk over
+        ctx.children is enough - no need for more complex correlation.
+        """
         if not ca.has_accessor(ctx, "UNQUALIFIED"):
             return
         children = list(ctx.children or [])
@@ -182,9 +182,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     self.symbol_table.unqualified_imports.add(nxt.getText())
 
     def _build_multi_target(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry):
-        """Cas topicDef uniquement (deux targets lies : SubModel + DataUnit).
-        Pas de generalisation a N targets - un seul cas existe dans les 121
-        regles (voir plan de conception)."""
+        """Build the two linked targets of a topicDef: SubModel + DataUnit.
+
+        Not generalized to N targets - topicDef is the only one of the 121
+        rules that needs this.
+        """
         instances: dict[str, MetaInstance] = {}
         for target in entry.target:
             short = target.rsplit(".", 1)[-1]
@@ -202,7 +204,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 if prefix in prefixed_bindings:
                     prefixed_bindings[prefix][sub_key] = binding
                     continue
-            # cle non prefixee : appliquee a la premiere instance (rare, defensif)
+            # unprefixed key: applied to the first instance (rare, defensive)
             prefixed_bindings[next(iter(instances))][key] = binding
 
         submodel = instances.get("SubModel")
@@ -248,32 +250,33 @@ class InterlisModelBuilder(InterlisParserVisitor):
     # Cas special : multi_declaration (domainDef uniquement - voir _relay)
     # ------------------------------------------------------------------
     def _build_multi_declaration(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry):
-        """domainDef() est le SEUL des 121 regles a boucler grammaticalement
-        sur N declarations independantes partageant un seul mot-cle DOMAIN
-        (ex. "DOMAIN Code = 0..255; MultRange = 0..2147483647; LengthRange
-        EXTENDS MultRange = 1..2147483647;" - confirme sur le code genere
-        reel, InterlisParser.py, domainDef() : boucle "while _alt != 2",
-        chaque iteration Name (...)? EQ MANDATORY? (type_()|numeric()|
-        enumeration()|STRING DOTDOT STRING|CLASS RESTRICTION(...)) SEMI).
-        Chaque occurrence de SEMI delimite une declaration - decoupe
-        ctx.children en segments par position plutot que par nom d'accesseur
-        (aucun mecanisme generique existant, ex. for_each, ne correle
-        plusieurs accesseurs DIFFERENTS - Name/type_/numeric/enumeration - a
-        la MEME position parmi N occurrences).
+        """Split a domainDef() into its N independent declarations.
 
-        CORRIGE (Lot 41, RoadTrafficCensus_V1_1.ili reel : "CHCantonCode_Extended
-        = CLASS RESTRICTION(sAbroadCode; sCHCantonCode);") : `RESTRICTION
-        LPAR classOrAssociationRef (SEMI classOrAssociationRef)* RPAR`
-        contient elle-meme des SEMI INTERNES (separateurs entre candidats,
-        pas des terminateurs de declaration) - une decoupe naive sur TOUT
-        SEMI coupait le segment en plein milieu de la liste de candidats
-        (ex. le SEMI entre "sAbroadCode" et "sCHCantonCode"), tronquant
-        silencieusement `_build_domain_class_restriction` a son 1er
-        candidat SEULEMENT (le reste finissant dans un segment RESIDUEL
-        sans Name en tete, rejete par `name_node is None: continue`
-        ci-dessous - jamais un crash, juste une perte silencieuse de
-        donnees). Suit desormais la profondeur LPAR/RPAR : un SEMI ne
-        delimite une declaration QUE hors de toute parenthese ouverte."""
+        domainDef() is the only one of the 121 rules that grammatically
+        loops over N independent declarations sharing a single DOMAIN
+        keyword (e.g. "DOMAIN Code = 0..255; MultRange = 0..2147483647;
+        LengthRange EXTENDS MultRange = 1..2147483647;" - confirmed on the
+        real generated code, InterlisParser.py, domainDef(): a "while _alt
+        != 2" loop, each iteration Name (...)? EQ MANDATORY?
+        (type_()|numeric()|enumeration()|STRING DOTDOT STRING|CLASS
+        RESTRICTION(...)) SEMI). Each SEMI delimits a declaration - splits
+        ctx.children into segments by position rather than accessor name
+        (no existing generic mechanism, e.g. for_each, correlates several
+        DIFFERENT accessors - Name/type_/numeric/enumeration - at the SAME
+        position across N occurrences).
+
+        `RESTRICTION LPAR classOrAssociationRef (SEMI classOrAssociationRef)*
+        RPAR` contains its own INTERNAL SEMIs (separators between
+        candidates, not declaration terminators, e.g.
+        "CHCantonCode_Extended = CLASS RESTRICTION(sAbroadCode;
+        sCHCantonCode);") - a naive split on every SEMI would cut a segment
+        in the middle of the candidate list, silently truncating
+        `_build_domain_class_restriction` to its 1st candidate only (the
+        rest landing in a residual segment with no leading Name, rejected
+        by `name_node is None: continue` below - never a crash, just silent
+        data loss). This now tracks LPAR/RPAR depth: a SEMI only delimits a
+        declaration outside any open parenthesis.
+        """
         children = list(ctx.children or [])
         segments: list[list[Any]] = []
         current: list[Any] = []
@@ -297,7 +300,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 (c for c in segment if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.Name), None
             )
             if name_node is None:
-                continue  # segment sans Name (ex. residu avant le 1er token) - rien a construire
+                continue  # segment with no Name (e.g. leftover before the 1st token) - nothing to build
             mandatory = any(
                 isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.MANDATORY for c in segment
             )
@@ -329,13 +332,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 continue
             content_rule = self._rule_name(content_node)
             if content_rule == "type":
-                # `_rule_name` derive "type" de `TypeContext` (regle grammaticale
-                # `type_()`, methode Python renommee pour eviter le builtin
-                # `type` - `_rule_name` ne connait que le nom de CLASSE ANTLR,
-                # jamais renomme lui). Cas confirme sur BasketOID/MetaElemOID/
-                # LanguageCode (models/IlisMeta16.ili, 1er bloc DOMAIN du
-                # fichier) - sans cette correspondance, aucun des 3 domaines
-                # (tous via type_(), ex. OID TEXT / TEXT*5) n'etait construit.
+                # `_rule_name` derives "type" from `TypeContext` (grammar rule
+                # `type_()`, the Python method renamed to avoid the `type`
+                # builtin - `_rule_name` only knows the ANTLR CLASS name,
+                # which is never renamed). Confirmed on BasketOID/MetaElemOID/
+                # LanguageCode (models/IlisMeta16.ili, the file's 1st DOMAIN
+                # block) - without this match, none of the 3 domains (all via
+                # type_(), e.g. OID TEXT / TEXT*5) was ever built.
                 instance = self.visit(content_node)
             else:
                 target = "IlisMeta16.ModelData.NumType" if content_rule == "numeric" else "IlisMeta16.ModelData.EnumType"
@@ -360,26 +363,24 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return results[0] if len(results) == 1 else results
 
     def _attach_domain_extends(self, instance: MetaInstance, segment: list[Any], rule_name: str) -> None:
-        """`DOMAIN X EXTENDS Y = ...;` (Lot 44) : attache `Super` (association
-        `Inheritance`) quand un segment de `domainDef()` porte sa clause
-        `EXTENDS domainRef` optionnelle (confirme sur le code ANTLR reel,
-        `domainDef()` : `(EXTENDS domainRef)?` juste avant `EQ`, a
-        l'INTERIEUR du meme segment deja decoupe par `_build_multi_declaration` -
-        ex. `LengthRange EXTENDS MultRange = 1..2147483647;`,
-        `models/IlisMeta16.ili`, ou `DirectedLine EXTENDS Line = DIRECTED
-        POLYLINE;`, CHBase). Gap jusqu'ici TOTAL, quel que soit le type de
-        domaine concerne (`NumType`/`EnumType`/`CoordType`/`LineType`/...) -
-        AUCUNE clause `EXTENDS` de `domainDef()` n'etait attachee, la
-        construction du contenu (Min/Max/Axis/Kind/etc.) ne s'occupant que
-        de sa propre alternative de contenu, jamais du prefixe optionnel
-        `EXTENDS domainRef` qui la precede. Necessaire pour que
-        `schema.line_coord_type` (Lot 44) puisse remonter la chaine EXTENDS
-        d'un `LineType` sans `VERTEX` propre. Meme politique que
-        `classDef`/`structureDef.Super` (Lot 38, RULE #5) : `graceful=True`
-        - un domaine de base non resolu (modele externe absent du `--repo`,
-        ou lui-meme en echec de construction) degrade en
-        `UnresolvedNamedReference`, ne fait jamais planter tout le
-        fichier."""
+        """Attach `Super` for a `DOMAIN X EXTENDS Y = ...;` declaration.
+
+        `domainDef()`'s optional `(EXTENDS domainRef)?` clause sits just
+        before `EQ`, inside the same segment already split out by
+        `_build_multi_declaration` (e.g. `LengthRange EXTENDS MultRange =
+        1..2147483647;`, `models/IlisMeta16.ili`, or `DirectedLine EXTENDS
+        Line = DIRECTED POLYLINE;`, CHBase). Previously never attached,
+        regardless of the domain's content type (`NumType`/`EnumType`/
+        `CoordType`/`LineType`/...) - content construction (Min/Max/Axis/
+        Kind/etc.) only handled its own content alternative, never the
+        optional `EXTENDS domainRef` prefix in front of it. Needed for
+        `schema.line_coord_type` to walk the EXTENDS chain of a `LineType`
+        with no `VERTEX` of its own. Same policy as
+        `classDef`/`structureDef.Super`: `graceful=True` - an unresolved
+        base domain (external model missing from `--repo`, or itself
+        failing to build) degrades to `UnresolvedNamedReference`, never
+        crashes the whole file.
+        """
         extends_idx = next(
             (i for i, c in enumerate(segment) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.EXTENDS),
             None,
@@ -400,38 +401,37 @@ class InterlisModelBuilder(InterlisParserVisitor):
         self.forward_refs.register_pending(value, instance, "Super")
 
     def _build_domain_class_restriction(self, segment: list[Any], rule_name: str) -> MetaInstance:
-        """DOMAIN X = CLASS RESTRICTION(A; B; ...); - la 5e alternative de
-        domainDef(), inlinee directement dans son corps ANTLR (CLASS
-        (RESTRICTION LPAR classOrAssociationRef (SEMI classOrAssociationRef)*
-        RPAR)?, PAS un appel a une sous-regle dediee - confirme sur le code
-        genere reel) et jusqu'ici jamais construite (Lot 28, trouve sur
-        RoadTrafficCensus_V1_1.ili : "CHCantonCode_Extended = CLASS
-        RESTRICTION(sAbroadCode; sCHCantonCode);"). RULE #4 : correspond a
-        l'alternative "ClassType" du manuel (eCH-0031 V2.1.0, "ClassType =
-        'CLASS' ['RESTRICTION' '(' ViewableRef {';' ViewableRef} ')'] | ...")
-        - metaclasse cible non "ClassType" (absente d'ilismeta16-*.yml) mais
-        IlisMeta16.ModelData.ReferenceType, MEME target que referenceAttr()
-        (REFERENCE TO ...) : Class EXTENDS Type (confirme), donc utilisable
-        directement comme role Type de AttrOrParamType, mais CETTE
-        alternative grammaticale n'a pas de clause EXTERNAL (confirme sur le
-        code ANTLR - contrairement a referenceAttr), donc External=False
-        inconditionnellement. BaseClass attache via la MEME association que
-        referenceAttr.BaseClass/roleDef.BaseClass (ClassRelatedType) - CRT
-        {0..*} <-> BaseClass {0..*} (ilismeta16-associations.yml, deja
-        multi-valuee cote BaseClass) : ATTACHE DESORMAIS TOUTES les
-        classOrAssociationRef du segment (Lot 41, pas seulement la 1ere -
-        ancienne limite documentee ici et sur referenceAttr.BaseClass/
-        roleDef.BaseClass, mais REELEMENT necessaire ici pour interpreter
-        la 3e forme d'encodage XTF - `CLASS RESTRICTION(A; B; C)` avec
-        PLUSIEURS candidats reels, ex. `Owner = CLASS RESTRICTION
-        (sCHOwnerCode; sCHCantonCode; sCHMunicipalityCode)` -
-        RoadTrafficCensus_V1_1.ili - voir xtf/schema.py:
-        restriction_candidates). Chaque `attach()` avec ce role multi-
-        valuee AJOUTE a la liste (`AttachmentResolver._set_field`, upper=
-        '*'), ne remplace jamais - aucun changement de FORME pour le cas a
-        UN SEUL candidat (REFERENCE TO ordinaire, roleDef) : `.BaseClass`
-        etait deja une liste d'un seul element avant ce lot, cette boucle
-        se contente d'y ajouter les elements suivants s'il y en a."""
+        """Build `DOMAIN X = CLASS RESTRICTION(A; B; ...);`.
+
+        domainDef()'s 5th alternative, inlined directly in its ANTLR body
+        (`CLASS (RESTRICTION LPAR classOrAssociationRef (SEMI
+        classOrAssociationRef)* RPAR)?`, not a call to a dedicated
+        sub-rule) - previously never built (found on
+        RoadTrafficCensus_V1_1.ili: "CHCantonCode_Extended = CLASS
+        RESTRICTION(sAbroadCode; sCHCantonCode);"). Corresponds to the
+        manual's "ClassType" alternative (eCH-0031 V2.1.0, "ClassType =
+        'CLASS' ['RESTRICTION' '(' ViewableRef {';' ViewableRef} ')'] |
+        ...") - target metaclass isn't "ClassType" (absent from
+        ilismeta16-*.yml) but IlisMeta16.ModelData.ReferenceType, the same
+        target as referenceAttr() (REFERENCE TO ...): Class EXTENDS Type,
+        so usable directly as AttrOrParamType's Type role - but this
+        grammar alternative has no EXTERNAL clause (unlike referenceAttr),
+        so External=False unconditionally. BaseClass attaches via the same
+        association as referenceAttr.BaseClass/roleDef.BaseClass
+        (ClassRelatedType) - CRT {0..*} <-> BaseClass {0..*}
+        (ilismeta16-associations.yml, already multi-valued on the
+        BaseClass side): attaches ALL classOrAssociationRef in the segment
+        (not just the first), needed to interpret the 3rd XTF encoding
+        form - `CLASS RESTRICTION(A; B; C)` with several real candidates,
+        e.g. `Owner = CLASS RESTRICTION (sCHOwnerCode; sCHCantonCode;
+        sCHMunicipalityCode)` (RoadTrafficCensus_V1_1.ili, see
+        xtf/schema.py: restriction_candidates). Each `attach()` on this
+        multi-valued role APPENDS to the list
+        (`AttachmentResolver._set_field`, upper='*'), never replaces - no
+        change in shape for the single-candidate case (a plain REFERENCE
+        TO, roleDef): `.BaseClass` was already a one-element list before
+        this, this loop just appends further elements if any.
+        """
         instance = self.registry.new_instance("IlisMeta16.ModelData.ReferenceType")
         instance.External = False
         refs = [c for c in segment if isinstance(c, ParserRuleContext) and self._rule_name(c) == "classOrAssociationRef"]
@@ -447,75 +447,19 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return instance
 
     def _build_type_string_range(self, ctx: ParserRuleContext) -> MetaInstance | None:
-        """`type()` (methode Python `type_`, grammaire `type : baseType |
-        lineType | STRING DOTDOT STRING;`) - construit sa 3e alternative,
-        un domaine "STRING DOTDOT STRING" bare (ex. `Angle_DMS_90 EXTENDS
-        Angle_DMS = "-90:00:00.000" .. "90:00:00.000";`, CoordSys-20151124.ili
-        reel), jusqu'ici documentee `status: not_applicable` (06_types.yml,
-        entree `type`, note `text_range_alt`, Phase 2/Lot 18) : "aucune
-        classe DomainType concrete ne porte de construction range de chaine
-        ... decision ModelBuilder : lever une erreur explicite si cette 3e
-        alternative est reellement rencontree, plutot que deviner un
-        encodage" - cette conclusion datait d'AVANT tout exemple reel
-        (recherche negative sur les 12 sous-classes de DomainType a
-        l'epoque). RULE #1 : desormais rencontree (Lot 37, trouvee en
-        repondant a une question directe utilisateur sur la robustesse de
-        CoordSys) - reexaminee avec cet exemple reel en main plutot que
-        maintenue par inertie.
+        """Build type()'s 3rd alternative: a bare `STRING DOTDOT STRING` domain.
 
-        **Cible retenue, par analogie structurelle directe** : la MEME
-        forme syntaxique "STRING DOTDOT STRING" est DEJA mappee ailleurs
-        dans ce fichier pour `formattedType()` (alternatives 1/3, `FORMAT
-        ... STRING DOTDOT STRING`) vers `IlisMeta16.ModelData.FormattedType`,
-        `Min`/`Max` herites de `NumType` (meme GUID que `Class.Name`, un
-        TEXT-like primitif - deja documente comme stockant des "exemples de
-        format" plutot que des bornes numeriques). L'exemple reel confirme
-        cette analogie plutot que de l'infirmer : `Angle_DMS_90 EXTENDS
-        Angle_DMS` ou `Angle_DMS = FORMAT BASED ON Angle_DMS_S (...)` - un
-        domaine qui ETEND un FormattedType et fournit SES PROPRES bornes en
-        litteraux, le format lui-meme restant herite via EXTENDS (heritage
-        EXTENDS lui-meme non modelise ici - limite deja connue et documentee
-        ailleurs pour ce mecanisme en general, pas specifique a ce cas).
-        L'objection d'origine ("NumType.Min/Max jamais alimente par STRING")
-        visait uniquement la reutilisation du binding PROPRE a `numeric()`,
-        pas une impossibilite categorique - `formattedType()` alimente deja
-        ces memes champs depuis un STRING, precedent direct reutilise ici.
-
-        **NE PASSE PAS par `resolve_source`/`alt:`** (contrairement au
-        binding `formattedType.Min`/`.Max` lui-meme) : construction
-        manuelle directe des enfants de `ctx`, meme style que
-        `_build_domain_class_restriction`. Necessaire, pas un choix de
-        style - trouve en tentant l'approche declarative standard d'abord
-        (RULE #1/#2, avant d'ecrire cette methode) : `ctx.getAltNumber()`
-        renvoie INCONDITIONNELLEMENT 0 pour toute regle sans alternatives
-        labellisees dans `InterlisParser.g4` (confirme empiriquement sur
-        `formattedType()` ET `numeric()` - la grammaire vendee n'utilise
-        nulle part la syntaxe `# Label` d'ANTLR4, donc aucun contexte ne
-        stocke jamais son numero d'alternative reellement matchee).
-        Consequence VERIFIEE : le binding `formattedType.Min`/`.Max`/
-        `.Format` (`alt: 1`/`alt: 1|3`) est LUI-MEME actuellement inerte en
-        pratique (verifie : un domaine synthetique `FORMAT INTERLIS.X
-        "a".."z"` construit un FormattedType dont Format/Min/Max restent
-        TOUS `None`) - et plus largement, TOUT binding `alt: <entier>` du
-        mapping (15 occurrences, 4 fichiers) est potentiellement inerte des
-        que 2 alternatives partagent un nom d'accesseur. **Bug moteur reel,
-        prexistant, PAS introduit ni corrige ce lot** - portee bien plus
-        large que ce cas precis (necessiterait de labelliser les
-        alternatives dans la grammaire vendee et regenerer le parser, ou un
-        mecanisme de repli base sur la presence d'accesseurs plutot que sur
-        `getAltNumber()`) - documente dans PROGRESS.md pour arbitrage/
-        priorisation future, hors perimetre de ce lot.
-
-        Egalement note (06_types.yml, domainDef) : `domainDef()` a sa
-        PROPRE 4e alternative directe pour "STRING DOTDOT STRING" (distincte
-        de celle-ci, imbriquee dans `type()`), mais elle est GRAMMATICALEMENT
-        INATTEIGNABLE en pratique - confirme empiriquement (introspection de
-        l'arbre ANTLR reel sur `Angle_DMS_90`) : ANTLR resout systematiquement
-        l'ambiguite entre les 2 productions identiques ("STRING DOTDOT
-        STRING") en faveur de `type()` (listee AVANT dans l'alternation de
-        domainDef), jamais via la branche propre de domainDef - cette
-        methode est donc le SEUL point d'entree reel pour ce motif, quel
-        que soit son point de grammaire d'origine apparent."""
+        E.g. `Angle_DMS_90 EXTENDS Angle_DMS = "-90:00:00.000" ..
+        "90:00:00.000";` (CoordSys-20151124.ili). Maps to
+        `IlisMeta16.ModelData.FormattedType` (`Min`/`Max`), by analogy with
+        `formattedType()`'s own STRING DOTDOT STRING alternative - the same
+        target class, same field semantics. Built by hand (not via
+        `resolve_source`/`alt:`) because `ctx.getAltNumber()` is
+        unconditionally 0 for unlabeled-alternative rules in the vendored
+        grammar - a known, wider engine limitation affecting every `alt:
+        <int>` binding, not fixed here. Full design rationale and the
+        related grammar findings: docs/dev-notes/type-string-range-investigation.md.
+        """
         strings = [c for c in (ctx.children or []) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.STRING]
         if len(strings) != 2:
             return None
@@ -525,25 +469,26 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return instance
 
     def _build_control_points_ref(self, ctx: ParserRuleContext, rule_name: str) -> ForwardRef | None:
-        """`controlPoints()` (`VERTEX Name(DOT Name)*`, ex. "VERTEX Coord2")
-        - 5e cas special (Lot 42, geometrie XTF). Jusqu'ici sa binding
-        declarative (`_resolution: {field: Name, multi: true}`) ne produisait
-        qu'une LISTE de textes de tokens Name, jamais attachee nulle part
-        (confirme reel : `LineType.CoordType` restait `None` pour TOUTE
-        instance construite, meme `Line = POLYLINE ... VERTEX Coord2;` sur
-        `CHBase_Part1_GEOMETRY_V1.ili`) - `_resolve_or_defer` (kind:
-        Reference generique) ne convient pas non plus tel quel : son
-        `ctx.getText()` capturerait le token VERTEX EN PLUS du nom qualifie
-        (`controlPoints()` porte son propre mot-cle, contrairement a
-        `domainRef()` qui ne contient QUE le nom). Reconstruit ici
-        manuellement le nom qualifie a partir des seuls tokens `Name`
-        (ignore VERTEX), meme convention de jointure par point que
-        `domainRef` (DOT == '.', confirme empiriquement). Retourne un
-        `ForwardRef` (jamais resolu ici) - attache generiquement par
-        `_apply_one_binding` via le binding `lineType.CoordType`
-        (`association: LineCoord, role: CoordType`, voir 06_types.yml), qui
-        gere deja tout seul le cas `isinstance(value, ForwardRef)` (attach +
-        `register_pending`, aucun code supplementaire necessaire ici)."""
+        """Build a ForwardRef from `controlPoints()` (`VERTEX Name(DOT Name)*`).
+
+        E.g. "VERTEX Coord2" - geometry XTF's 5th special case. Its
+        declarative binding (`_resolution: {field: Name, multi: true}`)
+        used to produce only a LIST of Name token texts, never attached
+        anywhere (`LineType.CoordType` stayed `None` for every built
+        instance, even `Line = POLYLINE ... VERTEX Coord2;` on
+        `CHBase_Part1_GEOMETRY_V1.ili`) - the generic `_resolve_or_defer`
+        (kind: Reference) doesn't fit either: its `ctx.getText()` would
+        capture the VERTEX token along with the qualified name
+        (`controlPoints()` carries its own keyword, unlike `domainRef()`
+        which contains only the name). This rebuilds the qualified name by
+        hand from the `Name` tokens only (ignoring VERTEX), same dot-join
+        convention as `domainRef`. Returns a `ForwardRef` (never resolved
+        here) - attached generically by `_apply_one_binding` via the
+        `lineType.CoordType` binding (`association: LineCoord, role:
+        CoordType`, see 06_types.yml), which already handles the
+        `isinstance(value, ForwardRef)` case on its own (attach +
+        `register_pending`, no extra code needed here).
+        """
         names = [n.getText() for n in ca.call_list(ctx, "Name")]
         if not names:
             return None
@@ -554,34 +499,34 @@ class InterlisModelBuilder(InterlisParserVisitor):
         )
 
     def _build_enumeration_tree(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry) -> None:
-        """Construit correctement l'arbre EnumNode d'un `enumeration()`
-        (Lot 33 - bug reel trouve en elargissant le corpus XTF a
-        ID65.1_KGS_PBC_V2_2 : "KGS_Kategorie : MANDATORY (A (A,
-        verstaerkter_Schutz), B);" produisait TopNode=A/A.Sub=[B], perdant
-        totalement les vrais enfants de A et confondant B - un FRERE de A
-        au niveau racine - avec un enfant. Root cause documentee sur
-        `enumElement` (spec/grammar/mapping/06_types.yml) : l'ancien
-        mecanisme (chaque enumElement s'auto-attachant via
-        `parent: {association: TopNode, role: TopNode}`) ne pouvait
-        represent qu'UNE CHAINE LINEAIRE, jamais un arbre a embranchements,
-        et ignorait la convention documentee dans `models/IlisMeta16.ili`
-        (commentaire sur EnumNode) : "MetaElement.Name := 'TOP' for
-        topnode" - un noeud racine SYNTHETIQUE, jamais un element reel.
+        """Build the EnumNode tree of an `enumeration()` correctly.
 
-        Distingue le niveau par la classe du PARENT courant
-        (`_parent_stack[-1]`, deja pousse par `visit_wrapped` pour l'appel
-        SOMMET, ou par `_build_instance` de l'enumElement englobant pour un
-        appel IMBRIQUE - Sub-Enumeration) :
-        - Appel SOMMET (parent = EnumType) : cree le noeud TOP synthetique,
-          l'attache comme EnumType.TopNode, y attache CHAQUE enumElement de
-          la liste plate comme enfant direct (role Node, association
-          SubNode) - Order/Final s'appliquent a l'EnumType lui-meme.
-        - Appel IMBRIQUE (parent = EnumNode, l'enumElement englobant) :
-          attache directement les enumElement de cette Sub-Enumeration comme
-          enfants de CE noeud (pas de TOP synthetique supplementaire -
-          l'enumElement englobant sert deja de racine locale) - Final
-          s'applique a ce noeud lui-meme (marque non extensible), Order est
-          `not_applicable` a ce niveau (deja documente ainsi)."""
+        Each enumElement self-attaching via `parent: {association: TopNode,
+        role: TopNode}` (the naive per-element approach) can only represent
+        a linear chain, never a branching tree - for a nested definition
+        like "KGS_Kategorie : MANDATORY (A (A, verstaerkter_Schutz), B);"
+        it would produce TopNode=A/A.Sub=[B], losing A's real children
+        entirely and conflating B - a sibling of A at the root level - with
+        a child. See `enumElement` (spec/grammar/mapping/06_types.yml) for
+        the binding this method replaces. `models/IlisMeta16.ili` documents
+        the convention on EnumNode: "MetaElement.Name := 'TOP' for topnode"
+        - a synthetic root node, never a real element.
+
+        Distinguishes the level by the current PARENT's class
+        (`_parent_stack[-1]`, already pushed by `visit_wrapped` for the TOP
+        call, or by `_build_instance` of the enclosing enumElement for a
+        NESTED call - Sub-Enumeration):
+        - TOP call (parent = EnumType): creates the synthetic TOP node,
+          attaches it as EnumType.TopNode, attaches EACH enumElement of the
+          flat list to it as a direct child (role Node, association
+          SubNode) - Order/Final apply to the EnumType itself.
+        - NESTED call (parent = EnumNode, the enclosing enumElement):
+          attaches this Sub-Enumeration's enumElements directly as children
+          of THAT node (no extra synthetic TOP - the enclosing enumElement
+          already serves as local root) - Final applies to that node itself
+          (marks it non-extensible), Order is `not_applicable` at this
+          level (already documented as such).
+        """
         parent_context = self._parent_stack[-1] if self._parent_stack else None
         is_top_level = isinstance(parent_context, MetaInstance) and parent_context._qualified_class == "IlisMeta16.ModelData.EnumType"
 
@@ -640,13 +585,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
             self._parent_stack.append(instance)
             try:
                 if isinstance(node, ParserRuleContext):
-                    # `token_or_rule` designe une VRAIE regle grammaticale
-                    # (pas un simple token), avec son propre contenu structure
-                    # decrit par SA PROPRE entree spec (ex. oIDType.numeric ->
-                    # numeric(), Min/Max/Circular/Clockwise/Unit) - la visiter
-                    # et fusionner son bag sur `instance`, meme mecanisme que
-                    # visit_wrapped (wrap: explicite). CORRIGE (Lot 25) :
-                    # avant, ce contenu n'etait jamais recupere du tout.
+                    # `token_or_rule` designates a REAL grammar rule (not a
+                    # plain token), with its own structured content described
+                    # by ITS OWN spec entry (e.g. oIDType.numeric -> numeric(),
+                    # Min/Max/Circular/Clockwise/Unit) - visit it and merge
+                    # its bag into `instance`, same mechanism as visit_wrapped
+                    # (explicit wrap:). This content used to never be picked
+                    # up at all.
                     self._merge_bag_into_instance(instance, self.visit(node), rule_name)
                 if entry.attribute_bindings:
                     self._apply_bindings(instance, ctx, rule_name, entry.attribute_bindings, construction_ctx, consumed)
@@ -655,19 +600,19 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 self._pop_construction_context()
             return instance
 
-        # aucune branche when_present prise : pass-through pur (ex. term ->
-        # term0 sans EQ GT, predicate -> factor sans NOT/DEFINED). Ne PAS
-        # reutiliser _relay/son mecanisme de bag generique ici : les
-        # attribute_bindings d'une regle Conditional (ex. term2.SubExpressions
-        # = [predicate(0), predicate(1)] "multi: true") decrivent le contenu
-        # de la branche MATCHED (deja traitee ci-dessus), pas une recette
-        # generique de pass-through - les appliquer quand meme construisait
-        # un bag residuel {'SubExpressions': [predicate(0)], '_relation_child':
-        # None} au lieu de relayer purement vers l'unique enfant reel (trouve
-        # sur models/IlisMeta16.ili, chaine term/term0/term1/term2 sans
-        # operateur). Balayage pur des enfants non reclames, comme le fait
-        # deja predicate -> factor avec succes (le seul enfant reel restant
-        # non consomme est celui a relayer).
+        # No when_present branch matched: pure pass-through (e.g. term ->
+        # term0 without EQ GT, predicate -> factor without NOT/DEFINED). Do
+        # NOT reuse _relay/its generic bag mechanism here: a Conditional
+        # rule's attribute_bindings (e.g. term2.SubExpressions =
+        # [predicate(0), predicate(1)] "multi: true") describe the content of
+        # the MATCHED branch (already handled above), not a generic
+        # pass-through recipe - applying them anyway built a residual bag
+        # {'SubExpressions': [predicate(0)], '_relation_child': None} instead
+        # of purely relaying to the single real child (found on
+        # models/IlisMeta16.ili, a term/term0/term1/term2 chain with no
+        # operator). Plain sweep of unclaimed children instead, the same way
+        # predicate -> factor already does successfully (the only remaining
+        # real unconsumed child is the one to relay to).
         consumed: set[int] = set()
         sweep_results = self._sweep_unclaimed_children(ctx, consumed)
         real_results = [v for _rule, v in sweep_results if v is not None]
@@ -679,43 +624,42 @@ class InterlisModelBuilder(InterlisParserVisitor):
     # Strategie 3 : Relay (Container / Dispatcher)
     # ------------------------------------------------------------------
     def _relay(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry):
-        # multi_declaration : cas particulier confirme UNIQUE parmi les 121
-        # regles (comme topicDef/_build_multi_target, l'autre cas particulier
-        # deja cable) - domainDef() boucle grammaticalement sur N
-        # declarations de domaine partageant un seul mot-cle DOMAIN (confirme
-        # sur le code genere reel, InterlisParser.py) ; aucun mecanisme
-        # generique existant (bag/for_each) ne correle plusieurs accesseurs
-        # differents (Name/type_/numeric/enumeration) a la MEME position -
-        # voir _build_multi_declaration.
+        # multi_declaration: a special case confirmed unique among the 121
+        # rules (like topicDef/_build_multi_target, the other already-wired
+        # special case) - domainDef() grammatically loops over N domain
+        # declarations sharing a single DOMAIN keyword; no existing generic
+        # mechanism (bag/for_each) correlates several different accessors
+        # (Name/type_/numeric/enumeration) at the SAME position - see
+        # _build_multi_declaration.
         if entry.multi_declaration:
             return self._build_multi_declaration(ctx, rule_name, entry)
 
-        # enumeration() : 3e cas special parmi les 121 regles (Lot 33, meme
-        # famille que multi_declaration/_build_multi_target) - voir
-        # _build_enumeration_tree pour le detail du bug corrige.
+        # enumeration(): 3rd special case among the 121 rules (same family
+        # as multi_declaration/_build_multi_target) - see
+        # _build_enumeration_tree for the fixed bug's detail.
         if rule_name == "enumeration":
             return self._build_enumeration_tree(ctx, rule_name, entry)
 
-        # type() : 4e et dernier cas special (Lot 37) - sa 3e alternative
-        # grammaticale bare "STRING DOTDOT STRING" (ni baseType() ni
-        # lineType() present) n'a ni sous-regle a dispatcher ni binding
-        # declaratif exploitable (voir _build_type_string_range pour le
-        # detail complet, y compris un bug moteur plus large decouvert a
-        # cette occasion : alt: est inerte dans tout le mapping).
+        # type(): 4th and last special case - its 3rd bare grammar
+        # alternative "STRING DOTDOT STRING" (neither baseType() nor
+        # lineType() present) has neither a sub-rule to dispatch to nor a
+        # usable declarative binding (see _build_type_string_range for the
+        # full detail, including a note on `alt:` being inert throughout
+        # the whole mapping).
         if rule_name == "type" and not ca.is_present(ctx, "baseType") and not ca.is_present(ctx, "lineType"):
             instance = self._build_type_string_range(ctx)
             if instance is not None:
                 return instance
 
-        # controlPoints() : 5e cas special (Lot 42, geometrie XTF) - voir
-        # _build_control_points_ref pour le detail complet (jointure des
-        # tokens Name en ignorant VERTEX, ForwardRef ensuite attache
-        # generiquement par lineType.CoordType).
+        # controlPoints(): 5th special case (XTF geometry) - see
+        # _build_control_points_ref for the full detail (joining Name tokens
+        # while ignoring VERTEX, a ForwardRef then attached generically by
+        # lineType.CoordType).
         if rule_name == "controlPoints":
             return self._build_control_points_ref(ctx, rule_name)
 
-        # children: dispatch multi-visite (ex. definitions -> classDef*,
-        # topicDef*, ...) - toutes les occurrences comptent, pas une seule
+        # children: multi-visit dispatch (e.g. definitions -> classDef*,
+        # topicDef*, ...) - all occurrences count, not a single
         # alternative.
         if entry.children:
             for child_rule in entry.children:
@@ -725,13 +669,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     self.visit(node)
             return None
 
-        # dispatches_to: une seule alternative grammaticale reellement
-        # prise parmi les regles nommees (ex. classOrStructureDef). Si
-        # AUCUNE ne matche, ne pas s'arreter la : certaines regles (ex.
-        # attrTypeDef, dispatches_to=[attrType, lineType]) ont AUSSI leurs
-        # propres alternatives directes decrites dans attribute_bindings
-        # (numeric/enumeration/NUMERIC bare) - tomber dans le traitement
-        # bag ci-dessous plutot que de renvoyer None prematurement.
+        # dispatches_to: only one grammar alternative is actually taken
+        # among the named rules (e.g. classOrStructureDef). If NONE
+        # matches, don't stop there: some rules (e.g. attrTypeDef,
+        # dispatches_to=[attrType, lineType]) ALSO have their own direct
+        # alternatives described in attribute_bindings (numeric/enumeration/
+        # bare NUMERIC) - fall through to the bag processing below instead
+        # of returning None prematurely.
         if entry.dispatches_to:
             for name in entry.dispatches_to:
                 if ca.has_accessor(ctx, name):
@@ -739,12 +683,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     if node is not None:
                         return self.visit(node) if isinstance(node, ParserRuleContext) else node.getText()
 
-        # Ni children ni dispatches_to matche : calcule les attribute_bindings
-        # propres (le cas echeant - notes seules type _dispatch ne
-        # produisent rien), les rend disponibles au contexte de
-        # construction (mecanisme field: null, ex. interlis2def.iliVersion
-        # -> modeldef.iliVersion), PUIS balaie les enfants non reclames
-        # (ex. interlis2def -> modeldef, jamais dans ses propres bindings).
+        # Neither children nor dispatches_to matched: compute this rule's
+        # own attribute_bindings (if any - notes-only entries like
+        # _dispatch produce nothing), make them available to the
+        # construction context (the field: null mechanism, e.g.
+        # interlis2def.iliVersion -> modeldef.iliVersion), THEN sweep the
+        # unclaimed children (e.g. interlis2def -> modeldef, never in its
+        # own bindings).
         bag: dict[str, Any] = {}
         consumed: set[int] = set()
         construction_ctx = self._construction_stack[-1] if self._construction_stack else {}
@@ -756,31 +701,30 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     bag[key] = self._build_nested(ctx, rule_name, key, binding, construction_ctx, consumed)
                     continue
                 if not isinstance(binding.get("source"), dict):
-                    continue  # note seule (ex. _dispatch) : rien a calculer
+                    continue  # notes-only entry (e.g. _dispatch): nothing to compute
                 bag[key] = self._resolve_binding_value(ctx, rule_name, key, binding, construction_ctx, consumed)
 
         real_values = {k: v for k, v in bag.items() if v is not None}
 
-        # Une cle du bag peut elle-meme DEJA porter une instance concrete
-        # (ex. binding `wrap:` sur une alternative numeric()/enumeration()
-        # nue, voir domainDef._domain_content) plutot qu'une simple valeur
-        # scalaire - dans ce cas c'est CETTE instance qui est le contenu reel
-        # de la regle (les autres cles du bag, ex. Name/Mandatory, ne font
-        # que la decrire) : memes regles d'application que pour un resultat
-        # trouve par balayage (voir _apply_sibling_bag_values ci-dessous),
-        # mais sans attendre le balayage puisque le noeud a deja ete consomme
-        # par le calcul du binding lui-meme.
-        # CORRIGE (audit NumType.Min/Max, Lot 25) : exclut les instances
-        # "hollow" (ex. numeric()._refsys_clause -> NumsRefSys construite
-        # inconditionnellement par _build_nested meme quand la clause de
-        # reference n'est PAS presente dans le source, tous ses champs
-        # restant None) - sans ce filtre, une telle instance creuse gagnait
-        # a tort ce fast-path et etait renvoyee TELLE QUELLE au lieu du bag
-        # dict, empechant visit_wrapped (qui a deja sa PROPRE logique de
-        # filtrage des valeurs hollow, voir plus bas) de jamais l'atteindre -
-        # perdant silencieusement Min/Max/Circular/Clockwise/Unit de TOUT
-        # domaine/type numerique, y compris sur models/IlisMeta16.ili
-        # lui-meme (ex. "Code = 0..255;").
+        # A bag key can itself ALREADY carry a concrete instance (e.g. a
+        # `wrap:` binding on a bare numeric()/enumeration() alternative, see
+        # domainDef._domain_content) rather than a plain scalar value - in
+        # that case THIS instance is the rule's real content (the bag's
+        # other keys, e.g. Name/Mandatory, only describe it): same
+        # application rules as a result found by sweeping (see
+        # _apply_sibling_bag_values below), but without waiting for the
+        # sweep since the node was already consumed by the binding's own
+        # computation.
+        # Excludes "hollow" instances (e.g. numeric()._refsys_clause ->
+        # NumsRefSys built unconditionally by _build_nested even when the
+        # reference clause is NOT present in the source, all its fields
+        # staying None) - without this filter, such a hollow instance
+        # wrongly won this fast-path and was returned AS-IS instead of the
+        # bag dict, preventing visit_wrapped (which already has its OWN
+        # hollow-value filtering logic, see below) from ever reaching it -
+        # silently losing Min/Max/Circular/Clockwise/Unit for EVERY numeric
+        # domain/type, including on models/IlisMeta16.ili itself (e.g.
+        # "Code = 0..255;").
         wrapped = [v for v in real_values.values() if isinstance(v, MetaInstance) and not self._is_hollow(v)]
         if len(wrapped) == 1:
             self._apply_sibling_bag_values(wrapped[0], real_values)
@@ -794,10 +738,10 @@ class InterlisModelBuilder(InterlisParserVisitor):
             if real_values:
                 self._construction_stack.pop()
 
-        # Un enfant non reclame visite (ex. interlis2def -> modeldef) porte
-        # generalement LE contenu reel de cette regle - prioritaire sur le
-        # bag de valeurs propres (qui ne sert alors souvent qu'a alimenter
-        # le contexte de construction, ex. iliVersion).
+        # A visited unclaimed child (e.g. interlis2def -> modeldef) usually
+        # carries THE rule's real content - takes priority over the bag of
+        # own values (which then often only feeds the construction context,
+        # e.g. iliVersion).
         real_results = [v for _rule, v in sweep_results if v is not None]
         if real_results:
             result = real_results[0] if len(real_results) == 1 else real_results
@@ -813,30 +757,31 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return None
 
     # ------------------------------------------------------------------
-    # Strategie 4 : Reference (produit un ForwardRef, jamais resolu immediatement)
+    # Strategy 4: Reference (produces a ForwardRef, never resolved immediately)
     # ------------------------------------------------------------------
     def _resolve_or_defer(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry):
-        # Extension propre au projet, deja documentee (voir 04_attributes.yml,
-        # restrictedStructureRef._inline_type, status: not_applicable) :
-        # restrictedStructureRef() a une alternative grammaticale type_()
-        # ABSENTE du manuel officiel (type inline anonyme, ex. "TEXT*50")
-        # en plus de structureRef()/ANYSTRUCTURE - ce n'est PAS un nom a
-        # resoudre (ForwardRef sur ctx.getText() echouait toujours avec
-        # BuildError "non resolue et non attribuable a un import" pour toute
-        # occurrence reelle, ex. Holznutzungsbewilligung_V1_0.ili "TEXT*50").
-        # Relais direct vers la construction du type inline plutot que la
-        # resolution par nom.
+        # A project-specific extension, already documented (see
+        # 04_attributes.yml, restrictedStructureRef._inline_type,
+        # status: not_applicable): restrictedStructureRef() has a type_()
+        # grammar alternative ABSENT from the official manual (an anonymous
+        # inline type, e.g. "TEXT*50") in addition to structureRef()/
+        # ANYSTRUCTURE - this is NOT a name to resolve (a ForwardRef on
+        # ctx.getText() always failed with a BuildError "unresolved and not
+        # attributable to an import" for every real occurrence, e.g.
+        # Holznutzungsbewilligung_V1_0.ili "TEXT*50"). Relay directly to
+        # building the inline type instead of name resolution.
         has_structure_ref = ca.has_accessor(ctx, "structureRef") and bool(ca.call_list(ctx, "structureRef"))
         if ca.has_accessor(ctx, "type_") and not has_structure_ref:
             node = ca.call(ctx, "type_")
             if node is not None:
                 return self.visit(node)
         name = ctx.getText()
-        # `resolves_to` est deja un nom court (ex. "Class") ; `target` (repli)
-        # est un nom qualifie complet (ex. "IlisMeta16.ModelData.Class") - la
-        # SymbolTable compare toujours contre le nom court de la classe
-        # metamodele reelle de l'instance (_qualified_class), donc normaliser
-        # ici plutot que de propager un format incoherent selon la source.
+        # `resolves_to` is already a short name (e.g. "Class"); `target`
+        # (fallback) is a full qualified name (e.g.
+        # "IlisMeta16.ModelData.Class") - SymbolTable always compares
+        # against the instance's real metamodel class short name
+        # (_qualified_class), so normalize here rather than propagating an
+        # inconsistent format depending on the source.
         hint = entry.resolves_to or entry.target
         if isinstance(hint, list):
             hint = [h.rsplit(".", 1)[-1] for h in hint]
@@ -853,21 +798,22 @@ class InterlisModelBuilder(InterlisParserVisitor):
         )
 
     def _current_topic_extends_hint(self, ctx: ParserRuleContext) -> str | None:
-        """Texte brut du 1er topicRef() du TOPIC englobant `ctx`, UNIQUEMENT
-        si ce TOPIC porte un EXTENDS (Lot 38 point 2 - voir
-        ForwardRef.topic_extends_hint pour la justification RULE #4 complete,
-        forward_refs.py). Remonte `ctx.parentCtx` jusqu'au premier
-        `TopicDefContext` rencontre (l'arbre ANTLR reflete exactement
-        l'imbrication de la grammaire - classDef/structureDef/etc. sont
-        TOUJOURS des descendants directs du topicDef qui les contient, donc
-        cette remontee trouve systematiquement LE bon topic englobant, pas
-        besoin de correler autrement). Lecture de texte brut plutot que
-        consultation de l'etat deja construit (DataUnit.Super) : evite toute
-        dependance sur l'ordre de resolution des ForwardRef en attente
-        (`definitions` - donc les classDef/structureDef d'un topic - est
-        toujours traite AVANT `extends_topicRef` dans `_build_multi_target`,
-        DataUnit.Super ne serait donc pas encore resolu au moment ou ce texte
-        est necessaire)."""
+        """Return the raw text of ctx's enclosing TOPIC's 1st topicRef(), if any.
+
+        Only if that TOPIC carries an EXTENDS (see
+        ForwardRef.topic_extends_hint for the full rationale,
+        forward_refs.py). Walks `ctx.parentCtx` up to the first
+        `TopicDefContext` found (the ANTLR tree exactly mirrors the
+        grammar's nesting - classDef/structureDef/etc. are always direct
+        descendants of the topicDef containing them, so this walk always
+        finds the right enclosing topic, no other correlation needed).
+        Reads raw text rather than consulting already-built state
+        (DataUnit.Super): avoids any dependency on the order pending
+        ForwardRefs get resolved in (`definitions` - i.e. a topic's
+        classDef/structureDef - is always processed BEFORE
+        `extends_topicRef` in `_build_multi_target`, so DataUnit.Super
+        wouldn't be resolved yet when this text is needed).
+        """
         node = ctx.parentCtx
         while node is not None and type(node).__name__ != "TopicDefContext":
             node = node.parentCtx
@@ -879,32 +825,34 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return refs[0].getText()
 
     def _current_model_name(self) -> str | None:
-        """Nom du MODEL englobant la construction en cours (parcourt
-        `_parent_stack` depuis la fin) - utilise pour desambiguiser un nom
-        court QUAND MEME cible present dans plusieurs modeles d'un fichier
-        multi-MODEL (Lot 33 : "PointStructure" declare separement dans
-        BaseModel_SectoralPlans_LV03_V1_4 ET _LV95_V1_4, meme fichier,
-        MEME symbol_table depuis le fix multi-modeles du Lot 28 -
-        auparavant invisible car un seul modele par fichier n'etait jamais
-        construit)."""
+        """Return the name of the MODEL enclosing the current construction.
+
+        Walks `_parent_stack` from the end. Used to disambiguate a short
+        name that's still present in several models of a multi-MODEL file
+        ("PointStructure" declared separately in
+        BaseModel_SectoralPlans_LV03_V1_4 AND _LV95_V1_4, same file, SAME
+        symbol_table - previously invisible since only one model per file
+        was ever built).
+        """
         for inst in reversed(self._parent_stack):
             if inst._qualified_class == "IlisMeta16.ModelData.Model":
                 return getattr(inst, "Name", None)
         return None
 
     def _expand_kind_hint(self, short_name: str) -> list[str]:
-        """Un hint (`resolves_to`/`target`) peut nommer une classe metamodele
-        ABSTRAITE (ex. "DomainType", isAbstract=true dans le XMI - AUCUNE
-        instance n'est jamais litteralement de cette classe, toujours une
-        sous-classe concrete comme EnumType/NumType/TextType) - la
-        comparaison stricte `_qualified_class == hint` dans
-        `SymbolTable.resolve` ne matchait donc JAMAIS pour `domainRef`
-        (hint="DomainType"), rendant sa levee d'ambiguite totalement inerte
-        (trouve sur models.geo.admin.ch : "Bodenbedeckungsart:
-        Bodenbedeckungsart;", l'attribut ET son domaine EnumType partagent
-        le meme nom court, jamais desambiguise). Expanse un hint abstrait en
-        la liste de ses sous-classes concretes reelles ; un hint deja
-        concret (ex. "Class") est retourne inchange."""
+        """Expand an abstract metamodel class hint into its concrete subclasses.
+
+        A hint (`resolves_to`/`target`) can name an ABSTRACT metamodel
+        class (e.g. "DomainType", isAbstract=true in the XMI - no instance
+        is ever literally of that class, always a concrete subclass like
+        EnumType/NumType/TextType) - the strict `_qualified_class == hint`
+        comparison in `SymbolTable.resolve` therefore never matched for
+        `domainRef` (hint="DomainType"), making its disambiguation
+        completely inert (found on models.geo.admin.ch:
+        "Bodenbedeckungsart: Bodenbedeckungsart;", the attribute and its
+        EnumType domain share the same short name, never disambiguated). A
+        hint that's already concrete (e.g. "Class") is returned unchanged.
+        """
         qualified = next((qn for qn in self.schema.uml.qualified if qn.rsplit(".", 1)[-1] == short_name), None)
         if qualified is None:
             return [short_name]
@@ -918,7 +866,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return descendants or [short_name]
 
     # ------------------------------------------------------------------
-    # Application des attribute_bindings
+    # Applying attribute_bindings
     # ------------------------------------------------------------------
     def _apply_bindings(
         self,
@@ -940,11 +888,10 @@ class InterlisModelBuilder(InterlisParserVisitor):
             except BuildError:
                 source = binding.get("source") if isinstance(binding.get("source"), dict) else {}
                 if source.get("optional") or binding.get("optional"):
-                    # Binding marque optionnel dont la resolution/attachement
-                    # a echoue (ex. modeldef.imports : construction Import
-                    # par nom, hors perimetre du moteur generique actuel -
-                    # voir plan de conception, "pas ferme pour toujours").
-                    # Ne bloque pas le reste de la construction.
+                    # A binding marked optional whose resolution/attachment
+                    # failed (e.g. modeldef.imports: Import construction by
+                    # name, outside the current generic engine's scope).
+                    # Doesn't block the rest of the construction.
                     continue
                 raise
 
@@ -974,45 +921,45 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         value = self._resolve_binding_value(ctx, rule_name, key, binding, construction_ctx, consumed)
         if key.startswith("_"):
-            # Cle interne/documentaire (convention du projet, ex. _dispatch :
-            # decrit les alternatives grammaticales pour la lisibilite du
-            # mapping mais chaque alternative reelle s'auto-construit via sa
-            # propre regle/binding - jamais un vrai nom d'attribut/role.
-            # Le calcul ci-dessus est conserve (effets de bord eventuels,
-            # ex. propagation par contexte de construction), seul l'attach
-            # litteral est evite - meme convention que _attach_unclaimed_results
-            # (trouve en corrigeant `factor.dispatch` sur models/IlisMeta16.ili :
-            # tentait d'attacher sous la cle 'dispatch', absente du metamodele).
+            # Internal/documentation-only key (project convention, e.g.
+            # _dispatch: describes the grammar alternatives for the
+            # mapping's readability, but each real alternative
+            # self-constructs via its own rule/binding - never a real
+            # attribute/role name. The computation above is still kept
+            # (possible side effects, e.g. construction-context
+            # propagation), only the literal attach is skipped - same
+            # convention as _attach_unclaimed_results (needed for e.g.
+            # `factor.dispatch`, which has no 'dispatch' attribute/role on
+            # the metamodel to attach under).
             return
         if value is None:
-            # Rien a attacher - soit un binding sans source (note seule),
-            # soit une valeur absente (optional), soit une regle visitee
-            # pour ses seuls effets de bord (ex. topicDef.definitions :
-            # chaque classDef/etc. s'auto-attache via SON PROPRE parent:,
-            # cette cle-ci n'a rien a recevoir en retour - voir sa note).
+            # Nothing to attach - either a binding with no source
+            # (notes-only), or an absent value (optional), or a rule
+            # visited only for its side effects (e.g. topicDef.definitions:
+            # each classDef/etc. self-attaches via ITS OWN parent:, this key
+            # has nothing to receive back - see its note).
             return
         if isinstance(value, list) and not value:
-            # Liste multi vide (rien present dans le .ili) : rien a attacher.
+            # Empty multi-value list (nothing present in the .ili): nothing to attach.
             return
         if isinstance(value, ForwardRef):
             if binding.get("association") == "Inheritance" and binding.get("role") == "Super":
-                # EXTENDS (Lot 38 point 2) : jamais fatal si non resolu, voir
-                # ForwardRef.graceful (RULE #5, symetrique a domainRef/BaseClass
-                # depuis le Lot 36).
+                # EXTENDS: never fatal if unresolved, see
+                # ForwardRef.graceful (symmetric to domainRef/BaseClass).
                 value.graceful = True
                 hint = value.resolves_to_hint
                 hints = hint if isinstance(hint, list) else ([hint] if hint else [])
                 if "SubModel" in hints:
-                    # TOPIC EXTENDS (Lot 46 point 2) : seul ce cas resout vers
-                    # un SubModel plutot que directement vers la bonne
-                    # sous-classe d'ExtendableME (classDef/structureDef/
-                    # domainDef resolvent deja vers Class/DomainType) - voir
+                    # TOPIC EXTENDS: only this case resolves to a SubModel
+                    # rather than directly to the right ExtendableME
+                    # subclass (classDef/structureDef/domainDef already
+                    # resolve to Class/DomainType) - see
                     # ForwardRef.resolve_via_twin.
                     value.resolve_via_twin = True
             if binding.get("association") == "LineCoord" and binding.get("role") == "CoordType":
-                # VERTEX (Lot 42, geometrie XTF) : un CoordType nomme peut
-                # vivre dans un modele importe non charge via --repo (meme
-                # categorie de limite que BaseClass/EXTENDS) - jamais fatal.
+                # VERTEX (XTF geometry): a named CoordType can live in an
+                # imported model not loaded via --repo (same category of
+                # limitation as BaseClass/EXTENDS) - never fatal.
                 value.graceful = True
             self.attachment.attach(
                 instance, key, value,
@@ -1044,13 +991,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
             if k not in ("target", "note", "association", "role") and isinstance(v, dict) and "source" in v
         }
         if not sub_bindings:
-            # target: sans aucun sous-binding source: reel (ex.
-            # modeldef/topicDef.default_class_oid) : la note associee
-            # documente explicitement une logique procedurale non couverte
-            # par le moteur generique (ex. "appliquer apres coup a chaque
-            # Class du topic qui ne definit pas son propre OID") - pas une
-            # construction imbriquee standard, on ne fabrique pas
-            # d'instance creuse pour ne pas l'attacher a tort.
+            # target: with no real source: sub-binding (e.g.
+            # modeldef/topicDef.default_class_oid): the associated note
+            # explicitly documents procedural logic not covered by the
+            # generic engine (e.g. "apply afterwards to each Class in the
+            # topic that doesn't define its own OID") - not a standard
+            # nested construction, so no hollow instance is built to avoid
+            # wrongly attaching it.
             return None
         instance = self.registry.new_instance(target)
         instance._source_ctx = ctx
@@ -1058,15 +1005,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
         try:
             self._apply_bindings(instance, ctx, rule_name, sub_bindings, construction_ctx, consumed)
         except BuildError:
-            # Une construction imbriquee (ex. attrTypeDef._collection ->
-            # MultiValue) represente UNE alternative grammaticale parmi
-            # d'autres, pas une structure toujours presente - si un de ses
-            # sous-bindings requis (marqueur discriminant, ex. BAG|LIST)
-            # echoue, c'est le signe que cette alternative n'a simplement
-            # pas ete prise ici, pas une vraie erreur. Abandonne toute la
-            # construction imbriquee plutot que de la laisser remonter
-            # (meme logique que Conditional : branche non applicable ->
-            # rien construit).
+            # A nested construction (e.g. attrTypeDef._collection ->
+            # MultiValue) represents ONE grammar alternative among others,
+            # not an always-present structure - if one of its required
+            # sub-bindings (a discriminant marker, e.g. BAG|LIST) fails,
+            # that's a sign this alternative simply wasn't taken here, not a
+            # real error. Discards the whole nested construction rather than
+            # letting it propagate (same logic as Conditional: inapplicable
+            # branch -> nothing built).
             return None
         finally:
             self._parent_stack.pop()
@@ -1082,19 +1028,20 @@ class InterlisModelBuilder(InterlisParserVisitor):
         construction_ctx: dict,
         consumed: set[int],
     ) -> None:
-        """Construit UNE instance de `target` par element d'une liste
-        resolue (`for_each:`), au lieu d'une seule instance - necessaire
-        pour les regles ou une boucle grammaticale (ex. modeldef.imports :
-        une clause IMPORTS repetee) doit produire N instances liees
-        distinctes (ex. N associations Import), pas une seule construction
-        imbriquee standard (voir _build_nested, qui suppose une seule
-        instance par binding).
+        """Build one `target` instance per element of a resolved list.
 
-        Chaque sous-binding peut lire l'element courant de la boucle via
-        `source: {field: null, context_key: '__item__'}` (mecanisme
-        field: null generique, juste sous une cle synthetique dediee a
-        cette boucle - meme principe que le contexte de construction
-        propage ailleurs, ex. interlis2def.iliVersion)."""
+        For `for_each:` bindings, instead of a single instance - needed for
+        rules where a grammatical loop (e.g. modeldef.imports: a repeated
+        IMPORTS clause) must produce N distinct linked instances (e.g. N
+        Import associations), not a single standard nested construction
+        (see _build_nested, which assumes one instance per binding).
+
+        Each sub-binding can read the loop's current element via
+        `source: {field: null, context_key: '__item__'}` (the generic
+        field: null mechanism, just under a synthetic key dedicated to this
+        loop - same principle as the construction context propagated
+        elsewhere, e.g. interlis2def.iliVersion).
+        """
         items = self._resolve_binding_value(ctx, rule_name, key, {"source": binding["for_each"]}, construction_ctx, consumed)
         if items is None:
             return
@@ -1119,13 +1066,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     association=binding.get("association"), role=binding.get("role"), rule=rule_name,
                 )
             else:
-                # Pas de role de collection cote metamodele (ex. Import :
-                # association pure ImportingP<->ImportedP, aucune association
-                # inverse "Model.Imports" declaree dans ilismeta16-associations.yml -
-                # confirme par recherche exhaustive) : conserve quand meme les
-                # instances construites, sous la cle brute du binding, pour
-                # qu'elles restent atteignables (sinon perdues au garbage
-                # collector, aucune autre reference ne les retient).
+                # No collection role on the metamodel side (e.g. Import: a
+                # pure ImportingP<->ImportedP association, no inverse
+                # "Model.Imports" association declared in
+                # ilismeta16-associations.yml) - still keeps the built
+                # instances, under the binding's raw key, so they stay
+                # reachable (otherwise lost to the garbage collector, no
+                # other reference holds them).
                 current = getattr(instance, key, None)
                 if current is None:
                     current = []
@@ -1138,19 +1085,19 @@ class InterlisModelBuilder(InterlisParserVisitor):
         source = binding.get("source")
         if not isinstance(source, dict):
             return None
-        # CORRIGE (Lot 38) : ce garde marquait "consomme" seulement si
-        # `_alt_matches(ctx, source["alt"])` - mecanisme retire du mapping
-        # entier (voir source_resolver.py, RULE #1 : `ctx.getAltNumber()`
-        # toujours 0 pour cette grammaire, `alt: <entier>` etait donc TOUJOURS
-        # faux et ce garde ne marquait JAMAIS consomme un noeud partage entre
-        # alternatives - inoffensif seulement parce que resolve_source lui-meme
-        # retournait aussi toujours None pour ces memes bindings). Les 15
-        # bindings concernes (ex. predicate : alt1 = factor nu, alt3 = DEFINED
-        # LPAR factor RPAR - meme accesseur "factor") reposent desormais sur
-        # la presence NATURELLE de leur accesseur (deja exclusive a
-        # l'alternative visee par construction grammaticale, verifie cas par
-        # cas - voir PROGRESS.md Lot 37/38) : consommer inconditionnellement
-        # est donc correct, plus besoin de ce garde.
+        # This guard used to mark "consumed" only if
+        # `_alt_matches(ctx, source["alt"])` - a mechanism removed from the
+        # whole mapping (see source_resolver.py: `ctx.getAltNumber()` always
+        # returns 0 for this grammar, so `alt: <int>` was ALWAYS false and
+        # this guard NEVER marked a node shared between alternatives as
+        # consumed - harmless only because resolve_source itself also
+        # always returned None for these same bindings). The 15 affected
+        # bindings (e.g. predicate: alt1 = bare factor, alt3 = DEFINED LPAR
+        # factor RPAR - same "factor" accessor) now rely on their
+        # accessor's NATURAL presence (already exclusive to the grammar
+        # alternative actually taken, verified case by case): consuming
+        # unconditionally is therefore correct, this guard is no longer
+        # needed.
         for name in self._accessor_names_in_source(source):
             if ca.has_accessor(ctx, name):
                 for node in ca.call_list(ctx, name):
@@ -1163,19 +1110,21 @@ class InterlisModelBuilder(InterlisParserVisitor):
         )
 
     def visit_wrapped(self, node: ParserRuleContext, target: str, rule_name: str) -> MetaInstance:
-        """Visite une regle-bag (Container/ValueObject, ex. numeric()/
-        enumeration()) en l'enveloppant dans une instance typee du
-        metamodele (ex. NumType/EnumType) - utilise quand une regle
-        englobante precise (ex. attrTypeDef.Type) sait quelle classe cible
-        ce bag represente vraiment.
+        """Visit a bag rule, wrapped into a typed metamodel instance.
 
-        L'instance est creee et poussee sur la pile de construction AVANT
-        la visite, pas apres : certains enfants de la regle-bag s'auto-
-        attachent via leur PROPRE `parent:` PENDANT la visite (ex.
-        enumElement -> association TopNode/SubNode). Envelopper apres coup
-        les aurait attaches au mauvais parent (celui deja au sommet de la
-        pile a ce moment, ex. l'AttrOrParam englobant) plutot qu'a cette
-        nouvelle instance."""
+        For a Container/ValueObject rule (e.g. numeric()/enumeration()),
+        wraps it into a typed metamodel instance (e.g. NumType/EnumType) -
+        used when an enclosing rule (e.g. attrTypeDef.Type) knows which
+        class this bag actually represents.
+
+        The instance is created and pushed onto the construction stack
+        BEFORE the visit, not after: some children of the bag rule
+        self-attach via their OWN `parent:` DURING the visit (e.g.
+        enumElement -> TopNode/SubNode association). Wrapping afterward
+        would attach them to the wrong parent (whatever is already on top
+        of the stack at that point, e.g. the enclosing AttrOrParam) instead
+        of this new instance.
+        """
         instance = self.registry.new_instance(target)
         self._parent_stack.append(instance)
         try:
@@ -1187,27 +1136,29 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return instance
 
     def _merge_bag_into_instance(self, instance: MetaInstance, bag: Any, rule_name: str) -> None:
-        """Fusionne un bag dict (resultat de `_relay` sur une regle Container,
-        ex. numeric()/enumeration()) sur `instance` - attache chaque champ non
-        vide/non hollow, resout les ForwardRef en attente. Facteur commun
-        entre `visit_wrapped` (wrap: explicite) et `_build_conditional`
-        (branche `when_present` dont le token/regle EST elle-meme une regle
-        avec son propre contenu structure, ex. oIDType.numeric -> numeric()) -
-        CORRIGE (audit NumType.Min/Max, Lot 25) : avant, seul `visit_wrapped`
-        appliquait ce filtre hollow ; `_build_conditional` ne visitait jamais
-        le noeud de la branche matched du tout, perdant tout le contenu
-        propre de numeric()/textType() (Min/Max/Circular/Clockwise/Unit) pour
-        toute regle OID numerique/textuelle (ex. `I32OID = OID
-        0..2147483647;`, namespace INTERLIS predefini)."""
+        """Merge a bag dict onto `instance`.
+
+        The bag is the result of `_relay` on a Container rule (e.g.
+        numeric()/enumeration()) - attaches every non-empty/non-hollow
+        field, resolves pending ForwardRefs. Shared by `visit_wrapped`
+        (explicit wrap:) and `_build_conditional` (`when_present` branch
+        whose token/rule IS itself a rule with its own structured content,
+        e.g. oIDType.numeric -> numeric()) - previously, only
+        `visit_wrapped` applied this hollow filter; `_build_conditional`
+        never visited the matched branch's node at all, losing all of
+        numeric()/textType()'s own content (Min/Max/Circular/Clockwise/Unit)
+        for any numeric/text OID rule (e.g. `I32OID = OID
+        0..2147483647;`, predefined INTERLIS namespace).
+        """
         if not isinstance(bag, dict):
             return
         for field, value in bag.items():
             if field == "Elements":
-                continue  # deja attache via enumElement.parent: pendant la visite ci-dessus
+                continue  # already attached via enumElement.parent: during the visit above
             if value is None or (isinstance(value, list) and not value) or self._is_hollow(value):
-                # None/liste vide/"hollow" (instance imbriquee dont tous les
-                # champs sont None/vides, ex. numeric._refsys_clause quand
-                # aucune clause de reference n'est presente) : rien a attacher.
+                # None/empty list/"hollow" (a nested instance whose fields
+                # are all None/empty, e.g. numeric._refsys_clause when no
+                # reference clause is present): nothing to attach.
                 continue
             if isinstance(value, ForwardRef):
                 self.attachment.attach(instance, field, value, rule=rule_name)
@@ -1293,25 +1244,27 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return ".".join(parts)
 
     def _apply_sibling_bag_values(self, result: MetaInstance, real_values: dict) -> None:
-        """CORRIGE (audit corpus reel models.geo.admin.ch, 2026-08-03) : une
-        regle Container avec ses PROPRES attribute_bindings (ex.
-        domainDef.Name/Mandatory) dont le contenu reel est une AUTRE valeur
-        du meme bag (ex. domainDef._domain_content, wrap: sur numeric()/
-        enumeration() nus) ou vient d'un enfant non reclame (ex.
-        enumerationType -> EnumType, via le dispatcher type_()) perdait ces
-        valeurs - poussees seulement dans le contexte de construction
-        (mecanisme field: null), jamais appliquees sur l'instance retournee
-        elle-meme, meme quand cette instance HERITE reellement le champ
-        concerne (ex. EnumType.Name via MetaElement - confirme
+        """Apply sibling bag values that `result` actually inherits/owns.
+
+        A Container rule with its OWN attribute_bindings (e.g.
+        domainDef.Name/Mandatory) whose real content is ANOTHER value from
+        the same bag (e.g. domainDef._domain_content, wrap: on bare
+        numeric()/enumeration()) or comes from an unclaimed child (e.g.
+        enumerationType -> EnumType, via the type_() dispatcher) used to
+        lose these values - pushed only into the construction context
+        (field: null mechanism), never applied onto the returned instance
+        itself, even when that instance genuinely INHERITS the field
+        concerned (e.g. EnumType.Name via MetaElement - confirmed in
         ilismeta16-classes.yml, DomainType.attributes.inherited.Name).
-        Consequence concrete trouvee : un DOMAIN nomme via une enumeration
-        nue (ex. "DOMAIN CodeWeekDayType = (MON, TUE, ...);", sans le
-        mot-cle ENUM) produisait un EnumType SANS Name -> jamais enregistre
-        dans la SymbolTable -> toute reference ulterieure par nom
-        (domainRef/restrictedStructureRef) echouait avec BuildError "non
-        resolue et non attribuable a un import". N'applique que les cles
-        reellement own/inherited de la classe metamodele de `result`,
-        jamais deja renseignees."""
+        Concrete consequence found: a DOMAIN named via a bare enumeration
+        (e.g. "DOMAIN CodeWeekDayType = (MON, TUE, ...);", no ENUM keyword)
+        produced an EnumType with no Name -> never registered in the
+        SymbolTable -> any later reference by name
+        (domainRef/restrictedStructureRef) failed with a BuildError "not
+        resolved and not attributable to an import". Only applies keys
+        that are genuinely own/inherited on `result`'s metamodel class, and
+        not already set.
+        """
         element = self.schema.uml.qualified.get(result._qualified_class, {})
         registered_name = False
         for key, value in real_values.items():
@@ -1328,11 +1281,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
             self._maybe_register_symbol(result)
 
     # ------------------------------------------------------------------
-    # Balayage des enfants non reclames par attribute_bindings (ex.
-    # modeldef -> definitions, jamais mentionne dans les bindings de
-    # modeldef - voir plan de conception, mecanisme necessaire car la
-    # relation structurelle passe par `parent:` sur la regle enfant, pas
-    # par un binding explicite sur la regle englobante).
+    # Sweep of children not claimed by attribute_bindings (e.g.
+    # modeldef -> definitions, never mentioned in modeldef's bindings -
+    # needed because the structural relationship goes through `parent:` on
+    # the child rule, not through an explicit binding on the enclosing
+    # rule).
     # ------------------------------------------------------------------
     def _sweep_unclaimed_children(self, ctx: ParserRuleContext, consumed: set[int]) -> list[tuple[str, Any]]:
         results = []
@@ -1342,46 +1295,50 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return results
 
     def _attach_unclaimed_results(self, instance: MetaInstance, sweep_results: list[tuple[str, Any]], rule_name: str) -> None:
-        """Un enfant non reclame par attribute_bindings dont la regle n'a
-        PAS de `parent:` propre (donc ne s'est pas deja auto-attache) mais
-        produit un resultat concret : tenter de le rattacher via
-        l'association qui relie les deux classes connues (ex. attrTypeDef
-        -> AttrOrParamType.Type, voir AttachmentResolver.find_association_connecting).
-        Best-effort : silencieux si aucune association ne relie les deux
-        classes (le resultat reste alors seulement un effet de bord deja
-        produit, ex. enregistrement dans la table de symboles)."""
+        """Try to attach unclaimed children that produced a concrete result.
+
+        For a child not claimed by attribute_bindings whose rule has NO
+        `parent:` of its own (so it hasn't already self-attached) but
+        produces a concrete result: try to attach it via the association
+        connecting the two known classes (e.g. attrTypeDef ->
+        AttrOrParamType.Type, see
+        AttachmentResolver.find_association_connecting). Best-effort:
+        silent if no association connects the two classes (the result then
+        stays only whatever side effect it already produced, e.g.
+        registration in the symbol table).
+        """
         for child_rule, value in sweep_results:
             if value is None:
                 continue
             child_entry = self.spec.get(child_rule)
             if child_entry is not None and child_entry.parent:
-                continue  # deja auto-attache via son propre parent:
+                continue  # already self-attached via its own parent:
             if isinstance(value, dict):
-                # La regle non reclamee est un bag (Container/Dispatcher a
-                # plusieurs cles, ex. attrTypeDef -> {Mandatory, Type,
-                # _collection}) : chaque cle non vide est attachee
-                # individuellement sur `instance` par son propre nom (meme
-                # mecanisme que wrap_bag_as_instance, mais sur l'instance
-                # ENGLOBANTE existante plutot que sur une instance neuve).
-                # Si une cle ne s'attache pas sur `instance` (ex. Mandatory,
-                # documente comme ne concernant PAS AttrOrParam mais le Type
-                # concret produit a cote dans le meme bag - attrTypeDef.
-                # Mandatory), retenter sur une valeur MetaInstance soeur du
-                # meme bag avant d'abandonner.
+                # The unclaimed rule is a bag (Container/Dispatcher with
+                # several keys, e.g. attrTypeDef -> {Mandatory, Type,
+                # _collection}): each non-empty key is attached
+                # individually onto `instance` under its own name (same
+                # mechanism as wrap_bag_as_instance, but onto the existing
+                # ENCLOSING instance rather than a new one). If a key
+                # doesn't attach onto `instance` (e.g. Mandatory, documented
+                # as NOT concerning AttrOrParam but the concrete Type
+                # produced alongside it in the same bag - attrTypeDef.
+                # Mandatory), retry on a sibling MetaInstance value from the
+                # same bag before giving up.
                 siblings = [v for v in value.values() if isinstance(v, MetaInstance)]
                 has_unresolved_sibling = any(isinstance(v, ForwardRef) for v in value.values())
                 for key, sub_value in value.items():
                     if sub_value is None or (isinstance(sub_value, list) and not sub_value) or self._is_hollow(sub_value):
                         continue
                     if key.startswith("_"):
-                        # Cle interne (convention du projet, ex. _collection,
-                        # _refsys_clause) : jamais un vrai nom d'attribut/role,
-                        # ne PAS tenter attach(instance, "_collection", ...)
-                        # (echouerait toujours par construction) - chercher
-                        # directement l'association reliant les deux classes
-                        # CONNUES (meme mecanisme que pour une MetaInstance
-                        # non reclamee au niveau superieur). Best-effort,
-                        # silencieux si aucune association ne convient.
+                        # Internal key (project convention, e.g. _collection,
+                        # _refsys_clause): never a real attribute/role name,
+                        # do NOT try attach(instance, "_collection", ...)
+                        # (would always fail by construction) - look
+                        # directly for the association connecting the two
+                        # KNOWN classes (same mechanism as for an unclaimed
+                        # MetaInstance at the top level). Best-effort,
+                        # silent if no association fits.
                         if isinstance(sub_value, MetaInstance):
                             found = self.attachment.find_association_connecting(
                                 instance._qualified_class, sub_value._qualified_class
@@ -1408,22 +1365,20 @@ class InterlisModelBuilder(InterlisParserVisitor):
                             except BuildError:
                                 continue
                         if attached_on is None:
-                            # CORRIGE (Lot 29, regression trouvee sur models/
-                            # IlisMeta16.ili apres le fix attrTypeDef.dispatches_to
-                            # ci-dessus - "[roleDef] impossible d'attacher 'Type'
-                            # sur Role") : `attach()` (ci-dessus) exige un role
-                            # litteralement nomme `key` (ici "Type") sur une
-                            # association connectant les deux classes - or
-                            # roleDef() appelle aussi attrTypeDef() (role type
-                            # inline), et AUCUNE association Role<->(Class ou
-                            # DomainType) ne s'appelle "Type" (role nomme
-                            # differemment, ex. BaseClass). Repli generique par
-                            # CLASSE CONNUE (meme mecanisme que le bloc
-                            # `isinstance(value, MetaInstance)`/`ForwardRef` plus
-                            # bas dans cette methode, pour un enfant non reclame
-                            # BRUT) - applique ici pour une valeur nichee dans un
-                            # bag, pour un `sub_value` MetaInstance OU ForwardRef
-                            # (hint de classe cible via resolves_to_hint).
+                            # `attach()` (above) requires a role literally
+                            # named `key` (here "Type") on an association
+                            # connecting the two classes - but roleDef() also
+                            # calls attrTypeDef() (inline type role), and NO
+                            # Role<->(Class or DomainType) association is
+                            # named "Type" (the role is named differently,
+                            # e.g. BaseClass). Generic fallback by KNOWN
+                            # CLASS (same mechanism as the
+                            # `isinstance(value, MetaInstance)`/`ForwardRef`
+                            # block further below in this method, for a RAW
+                            # unclaimed child) - applied here for a value
+                            # nested in a bag, for a `sub_value` that is a
+                            # MetaInstance OR a ForwardRef (target class hint
+                            # via resolves_to_hint).
                             candidate_classes: list[str] = []
                             if isinstance(sub_value, MetaInstance):
                                 candidate_classes = [sub_value._qualified_class]
@@ -1445,83 +1400,85 @@ class InterlisModelBuilder(InterlisParserVisitor):
                                     break
                         if attached_on is None:
                             if not isinstance(sub_value, ForwardRef) and (has_unresolved_sibling or not siblings):
-                                # Best-effort (docstring de cette methode) :
-                                # une cle soeur du bag (ex. attrTypeDef.Mandatory,
-                                # destinee au Type produit a cote) n'a nulle part
-                                # ou s'attacher. Deux cas distincts, tous deux
-                                # non-critiques (RULE #5, jamais un `sub_value`
-                                # qui EST LUI-MEME la reference cassee - voir
-                                # `raise` ci-dessous, qui reste inchange pour ce
-                                # cas) :
-                                # 1. has_unresolved_sibling : ce Type est encore
-                                #    un ForwardRef non resolu (ex. reference a un
-                                #    DOMAIN nomme existant, potentiellement
-                                #    PARTAGE entre plusieurs usages de l'attribut -
-                                #    ex. "Owner: MANDATORY Owner;" - domaine et
-                                #    attribut homonymes, Lot 29). Appliquer
-                                #    Mandatory sur l'instance PARTAGEE une fois
-                                #    resolue serait incertain (quel usage aurait
-                                #    raison si plusieurs different ?).
-                                # 2. not siblings (AJOUTE, Lot 52) : AUCUNE
-                                #    MetaInstance/ForwardRef soeur n'existe DU
-                                #    TOUT dans ce bag pour meme tenter un attach -
-                                #    confirme reel sur `HAli: MANDATORY
-                                #    HALIGNMENT;` (CHBase_Part6_GRAPHICANNOTATIONS_V1/V2.ili) :
-                                #    `alignmentType()` (grammar, "HALIGNMENT"/
-                                #    "VALIGNMENT" sont des tokens RESERVES,
-                                #    grammaticalement impossibles a declarer via
-                                #    domainDef - confirme, `DOMAIN HALIGNMENT = ...`
-                                #    est un rejet de syntaxe, pas une omission de
-                                #    binding) ne construit deliberement AUCUNE
-                                #    instance (target: null, meme categorie que
-                                #    booleanType/oIDType pour BOOLEAN/ANYOID/
-                                #    UUIDOID, Lot 23/47 point 3) - son bag ne
-                                #    contient donc qu'une valeur TEXTE opaque
-                                #    ("resolved_type"), jamais une instance sur
-                                #    laquelle Mandatory pourrait atterrir. Avant
-                                #    ce lot, `has_unresolved_sibling` restait
-                                #    FAUX (aucun ForwardRef, juste un dict inerte)
-                                #    et le code tombait dans le `raise` -
-                                #    `interlis build`/`validate` plantait
-                                #    integralement des qu'un attribut typait
-                                #    HALIGNMENT/VALIGNMENT MANDATORY, alors que
-                                #    ce type reste par ailleurs deliberement non
-                                #    interprete (meme limite documentee que
-                                #    BOOLEAN) - abandon silencieux de Mandatory
-                                #    (info secondaire) plutot qu'un crash total
-                                #    pour un attribut par ailleurs valide.
+                                # Best-effort (see this method's docstring): a
+                                # sibling bag key (e.g. attrTypeDef.Mandatory,
+                                # meant for the Type built alongside it) has
+                                # nowhere to attach to. Two distinct cases,
+                                # both non-critical (never a `sub_value` that
+                                # IS ITSELF the broken reference - see the
+                                # `raise` below, unchanged for that case):
+                                # 1. has_unresolved_sibling: this Type is
+                                #    still an unresolved ForwardRef (e.g. a
+                                #    reference to an existing named DOMAIN,
+                                #    potentially SHARED across several uses of
+                                #    the attribute - e.g. "Owner: MANDATORY
+                                #    Owner;", domain and attribute sharing a
+                                #    name). Applying Mandatory on the SHARED
+                                #    instance once resolved would be
+                                #    uncertain (which use would be right if
+                                #    several differ?).
+                                # 2. not siblings: NO sibling
+                                #    MetaInstance/ForwardRef exists in this
+                                #    bag AT ALL to even attempt an attach -
+                                #    confirmed real on `HAli: MANDATORY
+                                #    HALIGNMENT;`
+                                #    (CHBase_Part6_GRAPHICANNOTATIONS_V1/V2.ili):
+                                #    `alignmentType()` (grammar - "HALIGNMENT"/
+                                #    "VALIGNMENT" are RESERVED tokens,
+                                #    grammatically impossible to declare via
+                                #    domainDef - confirmed, `DOMAIN HALIGNMENT
+                                #    = ...` is a syntax rejection, not a
+                                #    missing binding) deliberately builds NO
+                                #    instance at all (target: null, same
+                                #    category as booleanType/oIDType for
+                                #    BOOLEAN/ANYOID/UUIDOID) - so its bag only
+                                #    contains an opaque TEXT value
+                                #    ("resolved_type"), never an instance for
+                                #    Mandatory to land on. Before this fix,
+                                #    `has_unresolved_sibling` stayed FALSE (no
+                                #    ForwardRef, just an inert dict) and the
+                                #    code fell into the `raise` -
+                                #    `interlis build`/`validate` crashed
+                                #    entirely as soon as an attribute typed
+                                #    HALIGNMENT/VALIGNMENT MANDATORY, even
+                                #    though this type otherwise stays
+                                #    deliberately uninterpreted (same
+                                #    documented limitation as BOOLEAN) -
+                                #    silently dropping Mandatory (secondary
+                                #    info) rather than a total crash for an
+                                #    otherwise valid attribute.
                                 continue
                             raise
                     if attached_on is not None and isinstance(sub_value, ForwardRef):
-                        # CORRIGE (Lot 29) : un ForwardRef niche DANS le bag
-                        # (ex. attrTypeDef.Type quand attrType() dispatche vers
-                        # domainRef(), reference a un domaine nomme existant)
-                        # n'etait jamais enregistre pour resolution differee -
-                        # contrairement au cas ForwardRef "nu" (non imbrique
-                        # dans un dict, deja gere plus bas dans cette methode) -
-                        # il restait un ForwardRef littéral, jamais remplace par
-                        # l'instance reelle ni par UnresolvedNamedReference,
-                        # silencieusement, `resolve_all()` ne le voyant jamais.
+                        # A ForwardRef nested INSIDE the bag (e.g.
+                        # attrTypeDef.Type when attrType() dispatches to
+                        # domainRef(), a reference to an existing named
+                        # domain) used to never be registered for deferred
+                        # resolution - unlike the "bare" ForwardRef case (not
+                        # nested in a dict, already handled further below in
+                        # this method) - it stayed a literal ForwardRef,
+                        # never replaced by the real instance or by
+                        # UnresolvedNamedReference, silently, `resolve_all()`
+                        # never seeing it.
                         self.forward_refs.register_pending(sub_value, attached_on, attached_field)
                 continue
             if isinstance(value, list):
                 continue
             if isinstance(value, ForwardRef):
-                # CORRIGE (audit multi-fichiers, 2026-08-03) : une regle
-                # Reference-kind (ex. domainRef/classRef) visitee comme enfant
-                # non reclame (ex. attrTypeDef -> attrType -> domainRef,
-                # jamais capture par un binding explicite sur attributeDef -
-                # confirme, attributeDef.attribute_bindings n'a pas de cle
-                # Type) produit un ForwardRef, pas encore une MetaInstance -
-                # le controle `isinstance(value, MetaInstance)` ci-dessous
-                # l'ignorait silencieusement, perdant l'attribut Type de
-                # TOUTE reference de domaine/classe utilisee comme type
-                # d'attribut (ex. "Kind: MANDATORY Base.PersonKind;"), locale
-                # ou cross-fichier. Meme mecanisme d'association-par-classe
-                # que pour une MetaInstance ci-dessous, mais via le hint de
-                # classe cible du ForwardRef (resolves_to_hint, nom court -
-                # retrouve son nom qualifie complet dans le schema) puisque
-                # la vraie classe n'est pas encore connue avant resolution.
+                # A Reference-kind rule (e.g. domainRef/classRef) visited as
+                # an unclaimed child (e.g. attrTypeDef -> attrType ->
+                # domainRef, never captured by an explicit binding on
+                # attributeDef - attributeDef.attribute_bindings has no Type
+                # key) produces a ForwardRef, not yet a MetaInstance - the
+                # `isinstance(value, MetaInstance)` check below silently
+                # ignored it, losing the Type attribute for EVERY domain/
+                # class reference used as an attribute type (e.g. "Kind:
+                # MANDATORY Base.PersonKind;"), local or cross-file. Same
+                # association-by-class mechanism as for a MetaInstance
+                # below, but via the ForwardRef's target class hint
+                # (resolves_to_hint, a short name - its full qualified name
+                # is looked up in the schema) since the real class isn't
+                # known yet before resolution.
                 hints = value.resolves_to_hint if isinstance(value.resolves_to_hint, list) else (
                     [value.resolves_to_hint] if value.resolves_to_hint else []
                 )

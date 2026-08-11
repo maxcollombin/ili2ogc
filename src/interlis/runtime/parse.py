@@ -1,5 +1,7 @@
-"""Facade : chemin d'un fichier .ili (ou texte source brut) -> arbre ANTLR
-(Lexer+Parser)."""
+"""Facade: an .ili file path (or raw source text) -> an ANTLR tree.
+
+Runs the Lexer+Parser.
+"""
 from pathlib import Path
 
 from antlr4 import CommonTokenStream, InputStream
@@ -15,7 +17,7 @@ class SyntaxErrorCollector(ErrorListener):
         self.errors: list[str] = []
 
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
-        self.errors.append(f"ligne {line}:{column} {msg}")
+        self.errors.append(f"line {line}:{column} {msg}")
 
 
 def _parse_stream(stream):
@@ -32,20 +34,19 @@ def _parse_stream(stream):
 
 
 def parse_file(path: Path):
-    """Parse un fichier .ili, retourne (arbre interlis2def, liste d'erreurs
-    de syntaxe). N'appelle PAS le ModelBuilder - separation lecture/construction.
+    """Parse an .ili file, return (interlis2def tree, syntax error list).
 
-    Lot 52 : repli ISO-8859-1 si le fichier n'est pas de l'UTF-8 valide -
-    confirme reel (RULE #1, inspection directe des octets) sur des fichiers
-    plus anciens du corpus large models.geo.admin.ch (ex. variantes
-    "obsolete/*_o0.ili") : `file` les identifie "ISO-8859 text", et l'octet
-    fautif (0xDC en position du mot allemand "FÜR") decode correctement en
-    latin-1 mais pas en UTF-8. Le manuel de reference (eCH-0031 V2.1.0
-    §3.5.1, clause CHARSET) ne fixe QUE le jeu de caracteres autorise dans
-    les VALEURS transferees, jamais l'encodage sur DISQUE du fichier .ili
-    source lui-meme - aucune regle a violer en repliant sur latin-1, qui ne
-    peut JAMAIS lever UnicodeDecodeError (mapping 1 octet <-> 1 caractere
-    sur les 256 valeurs) - pas de 3e repli necessaire."""
+    Does NOT call the ModelBuilder - keeps reading and building separate.
+
+    Falls back to ISO-8859-1 if the file isn't valid UTF-8 - some older
+    files in the wild (e.g. "obsolete/*_o0.ili" variants) are ISO-8859
+    text, not UTF-8. The reference manual (eCH-0031 V2.1.0 §3.5.1, CHARSET
+    clause) only fixes the character set allowed in transferred VALUES,
+    never the on-disk encoding of the .ili source file itself, so falling
+    back to latin-1 breaks no rule. latin-1 can never raise
+    UnicodeDecodeError (a 1 byte <-> 1 character mapping over all 256
+    values), so no further fallback is needed.
+    """
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
@@ -54,7 +55,9 @@ def parse_file(path: Path):
 
 
 def parse_text(text: str):
-    """Meme chose que `parse_file`, mais depuis du texte source en memoire -
-    utilise pour le modele INTERLIS predefini (voir ModelRepository), qui
-    n'existe sous forme de fichier .ili nulle part sur disque."""
+    """Do the same as `parse_file`, but from in-memory source text.
+
+    Used for the predefined INTERLIS model (see ModelRepository), which
+    exists as an .ili file nowhere on disk.
+    """
     return _parse_stream(InputStream(text))

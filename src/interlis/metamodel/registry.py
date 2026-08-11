@@ -1,31 +1,10 @@
-"""Genere dynamiquement les classes Pydantic representant les classes/
-datatypes du metamodele IlisMeta16, a partir de mappings/ilismeta16-*.yml.
-Jamais ecrit sur disque, jamais commite separement - reconstruit a chaque
-demarrage depuis le YAML, qui reste l'unique source de verite.
+"""Dynamically generate the Pydantic classes for the IlisMeta16 metamodel.
 
-Simplification assumee (decision de conception) : les champs generes sont
-types `Any` (scalaire) / `list[Any]` (multiplicite `*`), pas des types
-Python precis derives du metamodele - sauf pour les attributs
-d'enumeration anonyme (voir GENERIC_ENUM_TYPE_UUID), types en Literal[...]
-car la source (ilismeta16-kind-values.yml) est fermee et sans ambiguite.
-Raison : la distinction "valeur scalaire native (bool/str/float) vs
-instance imbriquee d'une autre classe du metamodele" n'est PAS marquee
-explicitement dans ilismeta16-*.yml - des classes comme INTERLIS.BOOLEAN/
-INTERLIS.NAME sont des marqueurs vides (own/inherited = {}) utilises tantot
-comme "type primitif" (valeur True/False/str attendue), tantot comme
-supertype abstrait dans une hierarchie de generalisation (ex.
-INTERLIS.ANYUNIT) - une inference statique fiable demanderait une etude
-dediee non couverte par cette conception. La bonne valeur (scalaire ou
-MetaInstance imbriquee) est produite au moment voulu par
-interlis.builder.source_resolver, qui lit attribute_bindings.source - pas
-par le schema Pydantic statique. Consequence positive : aucun probleme de
-reference croisee/forward-ref entre les ~84 classes generees (Any n'a pas
-besoin d'etre resolu), donc generation en une seule passe.
-
-Les champs alimentes par association (pas dans own/inherited, ex.
-AttrOrParam.Type via l'association AttrOrParamType) ne sont pas
-pre-declares : ils passent par `extra="allow"` de MetaInstance, poses
-dynamiquement par interlis.builder.attach.AttachmentResolver."""
+Built from mappings/ilismeta16-*.yml at every startup (never written to
+disk or committed separately) - the YAML stays the single source of
+truth. Design rationale (why fields are typed `Any`, why generation
+needs no forward-ref resolution): docs/dev-notes/metamodel-registry-any-typing.md.
+"""
 from typing import Any
 
 from pydantic import Field, create_model
@@ -37,17 +16,17 @@ from interlis.metamodel.uml_schema import GENERIC_ENUM_TYPE_UUID, MetamodelSchem
 class MetamodelRegistry:
     def __init__(self, schema: MetamodelSchema, classes: dict[str, type[MetaInstance]]):
         self.schema = schema
-        self.classes = classes  # qualified_name -> classe Pydantic generee
+        self.classes = classes  # qualified_name -> generated Pydantic class
 
     @classmethod
     def build(cls, schema: MetamodelSchema) -> "MetamodelRegistry":
         classes: dict[str, type[MetaInstance]] = {}
         for qn, element in schema.instantiable_classes().items():
             classes[qn] = cls._build_class(qn, element, schema)
-        # Certaines associations sont elles-memes construites comme des
-        # "objets-lien" par la spec (ex. ObjectOID : Class<->Oid, cf.
-        # topicDef) - un champ par role de bout, pas d'attributs own/inherited
-        # (les associations n'en ont pas dans ilismeta16-associations.yml).
+        # Some associations are themselves constructed as "link objects" by
+        # the spec (e.g. ObjectOID: Class<->Oid, see topicDef) - one field
+        # per end role, no own/inherited attributes (associations have none
+        # in ilismeta16-associations.yml).
         for qn, element in schema.associations().items():
             classes[qn] = cls._build_association_class(qn, element)
         return cls(schema, classes)
@@ -56,7 +35,7 @@ class MetamodelRegistry:
         try:
             return self.classes[qualified_name]
         except KeyError:
-            raise LookupError(f"aucune classe generee pour {qualified_name!r} (pas Class/DataType ?)") from None
+            raise LookupError(f"no generated class for {qualified_name!r} (not a Class/DataType?)") from None
 
     def new_instance(self, qualified_name: str, **initial) -> MetaInstance:
         model_cls = self.get(qualified_name)

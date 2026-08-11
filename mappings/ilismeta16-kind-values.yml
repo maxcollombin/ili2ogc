@@ -1,6 +1,6 @@
-_source: INTERLIS 2 - Metamodel, edition 2022-06-17 (English), chapitre 4 (https://www.interlis.ch/download/interlis2/ili24-metamodel_2022-06-17_e.pdf)
-_note: Valeurs saisies manuellement depuis le texte ILI de la spec, car non presentes dans l'export XMI
-  ili2c (voir docstring du script generateur).
+_source: INTERLIS 2 - Metamodel, edition 2022-06-17 (English), chapter 4 (https://www.interlis.ch/download/interlis2/ili24-metamodel_2022-06-17_e.pdf)
+_note: Values entered manually from the spec's ILI text, since they are absent from the ili2c XMI export
+  (see the generator script's docstring).
 kind_values:
   IlisMeta16.ModelData.Ili1Format.tidKind:
     mandatory: true

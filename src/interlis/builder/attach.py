@@ -1,17 +1,18 @@
-"""AttachmentResolver : decide comment une valeur resolue par
-source_resolver doit etre posee sur l'instance en cours de construction -
-attribut propre (own/inherited) ou lien d'association (role de l'autre
-bout). Utilise a la fois pour attribute_bindings et pour `parent`.
+"""AttachmentResolver: decide how a resolved value attaches to an instance.
 
-Ordre de resolution strict (le premier qui matche gagne) :
-1. association+role explicites fournis par l'appelant (binding ou `parent`).
-2. la cle == un attribut own/inherited de la classe de l'instance -> assignation directe.
-3. recherche dans ilismeta16-associations.yml d'une association dont un
-   bout cible la classe (ou une superclasse via all_superclasses) et dont
-   l'AUTRE bout a pour role la cle -> lien d'association.
-4. aucun match -> BuildError explicite (defensif ; ne devrait plus arriver
-   apres phase 2, mais le moteur doit rester robuste face a un futur
-   binding mal forme)."""
+Decides how a value resolved by source_resolver attaches to the instance
+being built: as an own/inherited attribute, or as an association link.
+Used for both attribute_bindings and `parent`.
+
+Resolution order (first match wins):
+1. Explicit association+role given by the caller (binding or `parent`).
+2. Key matches an own/inherited attribute of the instance's class -> direct assignment.
+3. An association in ilismeta16-associations.yml has one end targeting the
+   class (or a superclass via all_superclasses) and the other end's role
+   matches the key -> association link.
+4. No match -> explicit BuildError (defensive: should not happen for a
+   well-formed binding, but keeps the engine robust against a future one).
+"""
 from interlis.builder.errors import BuildError
 from interlis.metamodel.instance import MetaInstance
 from interlis.spec.uml_index import UmlIndex
@@ -62,38 +63,41 @@ class AttachmentResolver:
                 upper = end.get("upper")
 
         if assoc_el.get("qualified_name") == instance._qualified_class:
-            # `instance` EST une instance de CETTE association elle-meme
-            # (ex. Import, construite comme un objet-lien via
-            # InterlisModelBuilder.wrap_bag_as_instance/for_each - voir
-            # registry.MetamodelRegistry._build_association_class) : chaque
-            # bout d'une instance de lien vaut EXACTEMENT une valeur, meme
-            # si la multiplicite '*' de l'autre cote de l'association decrit
-            # combien de LIENS DIFFERENTS peuvent partager le meme Package,
-            # pas combien de valeurs CETTE instance-ci porte pour ce role.
+            # `instance` IS an instance of THIS association itself
+            # (e.g. Import, built as a link object via
+            # InterlisModelBuilder.wrap_bag_as_instance/for_each - see
+            # registry.MetamodelRegistry._build_association_class): each
+            # end of a link instance holds EXACTLY one value, even if the
+            # other side's '*' multiplicity describes how many DIFFERENT
+            # links can share the same Package, not how many values THIS
+            # instance carries for this role.
             setattr(instance, role, value)
             return
 
         current = getattr(instance, role, None)
         if upper != "*" and current is not None and isinstance(current, MetaInstance):
-            # Role singulier deja occupe (ex. EnumType.TopNode, upper=1) :
-            # plusieurs elements successifs (ex. enumElement x N, chacun
-            # s'auto-attachant via son propre parent: TopNode) doivent former
-            # une CHAINE, pas ecraser le precedent - chercher une association
-            # auto-referente sur la classe de `value` (meme pattern que
-            # SubNode : ParentNode<->Node) et y accrocher `value` a la SUITE
-            # de la chaine plutot que de le perdre.
+            # Singular role already occupied (e.g. EnumType.TopNode, upper=1):
+            # several successive elements (e.g. enumElement x N, each
+            # self-attaching via its own parent: TopNode) must form a CHAIN,
+            # not overwrite the previous one - look for a self-referencing
+            # association on `value`'s class (same pattern as
+            # SubNode: ParentNode<->Node) and attach `value` at the END of
+            # the chain rather than losing it.
             chained = self._chain_onto_self_referencing_association(current, value, rule)
             if chained:
                 return
         self._set_field(instance, role, value, upper)
 
     def _chain_onto_self_referencing_association(self, head: MetaInstance, value: MetaInstance, rule: str) -> bool:
-        """Cherche, sur la classe de `head` (une instance deja attachee a un
-        role singulier), une association ou les DEUX bouts ciblent cette
-        meme classe (ex. SubNode : ParentNode<->Node sur EnumNode) - avance
-        jusqu'a la fin de la chaine existante (via le bout multiple) puis y
-        attache `value`. Retourne False si aucune telle association n'existe
-        (l'appelant retombe alors sur un simple remplacement)."""
+        """Chain `value` onto an existing self-referencing association, if any.
+
+        Looks, on `head`'s class (an instance already attached to a singular
+        role), for an association where BOTH ends target that same class
+        (e.g. SubNode: ParentNode<->Node on EnumNode) - walks to the end of
+        the existing chain (via the multi end) then attaches `value` there.
+        Returns False if no such association exists (the caller then falls
+        back to a plain replacement).
+        """
         own_classes = {head._qualified_class, *(self.uml.qualified.get(head._qualified_class, {}).get("all_superclasses") or [])}
         for assoc_el in self.uml.qualified.values():
             if assoc_el.get("kind") != "Association":
@@ -129,27 +133,29 @@ class AttachmentResolver:
                     return assoc_el.get("name"), other.get("role"), other.get("upper")
         return None
 
-    # Associations structurelles generiques (deja gerees separement - extends/
-    # all_superclasses pour Inheritance, arbre de composition pour
-    # PackageElements/MetaAttributes) : trop promiscuces pour ce fallback
-    # (elles relient quasi n'importe quelle paire de classes via
-    # all_superclasses) - exclues de la recherche par connexion de classes.
+    # Generic structural associations (already handled separately - extends/
+    # all_superclasses for Inheritance, composition tree for
+    # PackageElements/MetaAttributes): too promiscuous for this fallback
+    # (they connect almost any pair of classes via all_superclasses) -
+    # excluded from the class-connection search.
     _GENERIC_ASSOCIATIONS = {"Inheritance", "PackageElements", "MetaAttributes"}
 
     def find_association_connecting(self, from_class: str, to_class: str) -> tuple[str, str, str] | None:
-        """Cherche une association qui relie deux classes CONNUES (pas une
-        recherche par nom de role) - utilise quand un enfant non reclame par
-        attribute_bindings (sweep, voir InterlisModelBuilder) produit un
-        resultat dont la regle propre n'a pas de `parent:` (ex. attrTypeDef,
-        dont la note dit explicitement "feeds the enclosing
-        AttrOrParamType.Type association end (handled by the parent
-        construct)" - la regle englobante doit deviner l'association a
-        partir des DEUX classes concretes, pas d'un nom de cle). Prefere une
-        correspondance EXACTE (classes reelles, pas superclasses) ; ne
-        retombe sur all_superclasses que si aucune correspondance exacte
-        n'existe, pour eviter de matcher une association trop generale.
-        Retourne (nom, role_cote_to_class, upper_cote_to_class), ou None si
-        aucune association ne relie ces deux classes."""
+        """Find an association connecting two known classes.
+
+        Unlike `_find_association_for_role`, this isn't a role-name lookup -
+        it's used when a child not claimed by attribute_bindings (sweep, see
+        InterlisModelBuilder) produces a result whose own rule has no
+        `parent:` (e.g. attrTypeDef, whose note explicitly says "feeds the
+        enclosing AttrOrParamType.Type association end (handled by the
+        parent construct)"): the enclosing rule must guess the association
+        from the two concrete classes, not from a key name. Prefers an
+        EXACT match (real classes, not superclasses); only falls back to
+        all_superclasses if no exact match exists, to avoid matching an
+        overly general association. Returns (name, role_on_to_class_side,
+        upper_on_to_class_side), or None if no association connects these
+        two classes.
+        """
         exact = self._search_connecting(from_class, {from_class}, to_class, {to_class})
         if exact is not None:
             return exact
@@ -160,12 +166,12 @@ class AttachmentResolver:
         return self._search_connecting(from_class, from_classes, to_class, to_classes)
 
     def _search_connecting(self, from_class, from_classes, to_class, to_classes) -> tuple[str, str, str] | None:
-        # Plusieurs associations peuvent relier les deux memes classes (ex.
-        # AttrOrParamType vs LocalType, toutes deux AttrOrParam<->Type) :
-        # preferer une reference simple (aggregation: none) a une
-        # composition (aggregation: composite, semantique de type imbrique
-        # localement, cas plus specifique/rare) - a defaut, ordre stable
-        # par nom d'association pour un resultat deterministe.
+        # Several associations can link the same two classes (e.g.
+        # AttrOrParamType vs LocalType, both AttrOrParam<->Type): prefer a
+        # plain reference (aggregation: none) over a composition
+        # (aggregation: composite, locally-nested-type semantics, a more
+        # specific/rarer case) - otherwise, stable order by association
+        # name for a deterministic result.
         candidates: list[tuple[str, str, str, str]] = []  # (aggregation, name, role, upper)
         for assoc_el in self.uml.qualified.values():
             if assoc_el.get("kind") != "Association" or assoc_el.get("name") in self._GENERIC_ASSOCIATIONS:

@@ -1,20 +1,22 @@
-"""Parseur STRUCTUREL (pas encore semantique) de fichiers de transfert
-INTERLIS (.xtf) - premiere couche du futur validateur (Lot 26/27).
+"""STRUCTURAL (not yet semantic) parser for INTERLIS transfer files (.xtf).
 
-Delibérément generique : capture chaque attribut comme un sous-arbre XML
-brut (`RawNode`), sans interpreter s'il s'agit d'une reference, d'une
-coordonnee ou d'une valeur simple - cette interpretation depend du TYPE
-DECLARE de l'attribut cote schema (.ili), pas de sa seule forme XML (voir
-docs/xtf-transfer-encoding-notes.md, RULE #4 : verifie contre le
-Reference Manual eCH-0031 V2.1.0 §4.3.9/4.3.11 ET contre de vrais fichiers
-reels - les deux divergent, voir ce document). Une couche ulterieure,
-croisant ce resultat avec IlisMeta16 (Class/AttrOrParam/DomainType deja
-construits par InterlisModelBuilder), fera l'interpretation.
+The XTF validator's first layer.
 
-Streaming (`ET.iterparse` + `elem.clear()` a chaque objet/attribut) : le
-corpus reel telecharge (`scripts/fetch_xtf_corpus.py`) contient des
-fichiers de plusieurs centaines de Mo - ne jamais garder l'arbre XML
-complet en memoire."""
+Deliberately generic: captures each attribute as a raw XML subtree
+(`RawNode`), without interpreting whether it's a reference, a coordinate,
+or a plain value - that interpretation depends on the attribute's
+DECLARED TYPE on the schema (.ili) side, not on its XML shape alone (see
+docs/xtf-transfer-encoding-notes.md: checked against both the Reference
+Manual eCH-0031 V2.1.0 §4.3.9/4.3.11 and real files - the two diverge, see
+that document). A later layer, cross-referencing this result with
+IlisMeta16 (Class/AttrOrParam/DomainType already built by
+InterlisModelBuilder), does the interpretation.
+
+Streaming (`ET.iterparse` + `elem.clear()` per object/attribute): the
+downloaded real corpus (`scripts/fetch_xtf_corpus.py`) contains
+files several hundred MB in size - the full XML tree must never be kept
+in memory.
+"""
 from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -26,8 +28,12 @@ def _strip_ns(tag: str) -> str:
 
 @dataclass
 class RawNode:
-    """Sous-arbre XML brut d'UN attribut (ou d'un de ses descendants),
-    namespace INTERLIS retire du tag, texte trim (None si vide/absent)."""
+    """Raw XML subtree for ONE attribute (or one of its descendants).
+
+    The INTERLIS namespace is stripped from the tag, text is trimmed
+    (None if empty/absent).
+    """
+
     tag: str
     text: str | None
     attrib: dict[str, str]
@@ -36,11 +42,14 @@ class RawNode:
 
 @dataclass
 class XtfObject:
-    """Une instance (classe OU relation non embarquee - encodees de
-    facon identique cote transfert, §4.3.9.2) - `qualified_class` est le
-    nom de balise complet tel qu'ecrit dans le fichier (ex.
-    'RoadTrafficCensus_V1_1.RoadTrafficCensus.MeasurementLocation'), PAS
-    encore resolu contre un schema."""
+    """An instance: a class OR a non-embedded relation.
+
+    Both are encoded identically on the transfer side (§4.3.9.2).
+    `qualified_class` is the full tag name as written in the file (e.g.
+    'RoadTrafficCensus_V1_1.RoadTrafficCensus.MeasurementLocation'), not
+    yet resolved against a schema.
+    """
+
     tid: str | None
     qualified_class: str
     attributes: dict[str, list[RawNode]]  # nom d'attribut -> occurrences (LIST/BAG : plusieurs)
@@ -81,19 +90,20 @@ def _to_raw_node(elem: ET.Element) -> RawNode:
 
 
 def parse_xtf(path: Path) -> XtfTransfer:
-    """Parse un .xtf en (sender, version, models, baskets) - voir
-    XtfTransfer. Ne resout AUCUNE reference, n'interprete AUCUN type -
-    couche purement structurelle (RULE #1 : ne pas deviner ce qui
-    necessite le schema pour etre tranche)."""
+    """Parse an .xtf into (sender, version, models, baskets), see XtfTransfer.
+
+    Resolves NO reference, interprets NO type - a purely structural layer
+    (don't guess what needs the schema to be decided).
+    """
     sender: str | None = None
     ili_version: str | None = None
     models: list[XtfModelRef] = []
     baskets: list[XtfBasket] = []
 
-    # Pile de (role, tag_sans_namespace) - le role est determine par la
-    # POSITION structurelle (profondeur relative a DATASECTION), jamais
-    # par le nom de balise lui-meme (les balises basket/objet/attribut
-    # sont nommees d'apres le modele transfere, pas des mots-cles fixes).
+    # Stack of (role, tag_without_namespace) - the role is determined by
+    # STRUCTURAL POSITION (depth relative to DATASECTION), never by the
+    # tag name itself (basket/object/attribute tags are named after the
+    # transferred model, not fixed keywords).
     stack: list[tuple[str, str]] = []
     current_basket: XtfBasket | None = None
     current_object: XtfObject | None = None
@@ -122,7 +132,7 @@ def parse_xtf(path: Path) -> XtfTransfer:
             elif parent_role == "object":
                 role = "attribute"
             else:
-                role = "raw"  # descendant d'un attribut deja en cours de capture
+                role = "raw"  # descendant of an attribute already being captured
             stack.append((role, tag))
             continue
 

@@ -17,7 +17,7 @@ alignmentType:
 
         '
   note: No direct IlisMeta16 instance expected. Selects between the built-in INTERLIS.HALIGNMENT or INTERLIS.VALIGNMENT
-    enumeration domains. Boolean types
+    enumeration domains.
 attributeType:
   grammar:
     rule: attributeType
@@ -40,21 +40,18 @@ attributeType:
         field: classType
         attributePath: null
         optional: true
-      note: 'Lot 19 (phase 2) - CONFIRMÉ par citation IDL directe. RULE #4, Reference Manual eCH-0031
-        V2.1.0 (2024-04-24) §3.8.11 "Wertebereiche von Klassen und Attributpfaden", EBNF exacte : `AttributePathType
-        = ''ATTRIBUTE'' [''OF'' (ClassType-AttributePath | ''@'' Argument-Name)] [''RESTRICTION'' ''(''
-        AttrTypeDef {'';'' AttrTypeDef} '')''].` - texte explicatif : "Es kann verlangt werden, dass es
-        zu EINER Klasse (KEINE Subklasse!) gemäss einer anderen Definition gehört (OF)" (il peut être
-        exigé que [le chemin] appartienne à UNE SEULE classe - PAS une sous-classe - selon une autre définition).
-        Ceci confirme que cette forme resoud TOUJOURS vers UNE SEULE classe (jamais une liste de restriction),
-        cohérent avec `ARefOf.Of` (0..1 Class, confirmé ilismeta16-associations.yml) : alimenté par la
-        classe de BASE résolue par `classType()` (son `resolved_ref`, pas sa liste `Restrictions` optionnelle).
-        `attributePath` lui-même ne feed AUCUN attribut supplémentaire - `AttributeRefType.own = {}` (confirmé
-        exhaustivement) : le type ne fixe QUE la classe cible, jamais le nom d''attribut précis (celui-ci
-        est fourni plus tard, côté DONNÉE, via `AttributePathConst = ''>>'' [ViewableRef ''->''] Attribute-Name`
-        - même distinction type/constante que `ClassType`/`ClassConst` déjà confirmée ailleurs). Décision
-        ModelBuilder : ignorer le `DOT attributePath` traînant (aucune cible), alimenter `ARefOf.Of` avec
-        la classe de base de `classType()`.
+      note: 'Reference Manual eCH-0031 V2.1.0 (2024-04-24) §3.8.11 "Wertebereiche von Klassen und
+        Attributpfaden", exact EBNF: `AttributePathType = ''ATTRIBUTE'' [''OF'' (ClassType-AttributePath
+        | ''@'' Argument-Name)] [''RESTRICTION'' ''('' AttrTypeDef {'';'' AttrTypeDef} '')''].` - the
+        manual notes it can be required that [the path] belong to ONE class (not a subclass) per another
+        definition (OF). This form always resolves to a single class (never a restriction list),
+        consistent with `ARefOf.Of` (0..1 Class, confirmed in ilismeta16-associations.yml): fed by the
+        BASE class resolved by `classType()` (its `resolved_ref`, not its optional `Restrictions` list).
+        `attributePath` itself feeds no additional attribute - `AttributeRefType.own = {}`: the type only
+        fixes the target class, never the precise attribute name (that comes later, on the DATA side, via
+        `AttributePathConst = ''>>'' [ViewableRef ''->''] Attribute-Name` - the same type/constant
+        distinction already established for `ClassType`/`ClassConst`). ModelBuilder ignores the trailing
+        `DOT attributePath` (no target), feeding `ARefOf.Of` with `classType()`''s base class.
 
         '
     _at_symbol_name:
@@ -63,15 +60,13 @@ attributeType:
         Name: null
         optional: true
       status: not_applicable
-      note: 'Lot 19 (phase 2) - CONFIRMÉ `not_applicable`. Même citation IDL que `Of` ci-dessus : `''@''
-        Argument-Name` - texte explicatif : "im Falle einer Definition einer Funktion... auf ein anderes
-        Argument verwiesen werden" (dans le cas d''une définition de fonction, on renvoie vers un AUTRE
-        ARGUMENT [formel]). Ceci confirme la nature du mécanisme (référence à un autre paramètre formel
-        de la fonction englobante, pas une classe), mais preuve d''ABSENCE exhaustive côté métamodèle
-        extrait : `AttributeRefType.own = {}` (aucun attribut du tout, pas seulement pour ce cas) et aucune
-        association ne cible un `FormalArgument`/paramètre depuis `AttributeRefType`/`ARefOf` (seule cible
-        : `Class`, via `ARefOf`). Absence confirmée, pas une incertitude persistante. Décision ModelBuilder
-        : lever un avertissement si `@Name` est rencontré (aucune cible à alimenter).
+      note: 'not_applicable confirmed. Same manual citation as `Of` above: `''@'' Argument-Name` - per
+        the manual, in the case of a function definition this refers to another (formal) argument. This
+        confirms the mechanism''s nature (a reference to another formal parameter of the enclosing
+        function, not a class), but the metamodel has no target for it: `AttributeRefType.own = {}` (no
+        attribute at all) and no association targets a `FormalArgument`/parameter from
+        `AttributeRefType`/`ARefOf` (its only target is `Class`, via `ARefOf`). ModelBuilder raises a
+        warning if `@Name` is encountered (nothing to feed).
 
         '
 baseType:
@@ -124,7 +119,6 @@ classConst:
         qualified name feeds this attribute.
 
         '
-  note: Polyline types
 classType:
   grammar:
     rule: classType
@@ -156,20 +150,19 @@ classType:
         '
     _unrestricted_base:
       status: not_applicable
-      note: 'CONFIRME not_applicable (Lot 13, point 5, phase 2). RULE #4 : INTERLIS 2 Reference Manual
-        edition 2006-04-13, section 2.8.11 "Domains of classes and attribute paths" (p.45), texte exact
-        : "By indicating structure any structure or class, by indicating class (also permissible as extension
-        of STRUCTURE) any class (but no structures) are admitted. If only certain structures, resp. classes
-        and their extensions are to be admitted, these have to be listed (RESTRICTION)." Ceci confirme
-        sans ambiguite que l''absence de RESTRICTION(...) signifie simplement "aucune restriction" (implicitement
-        "n''importe quelle Class"/"n''importe quelle Structure ou Class") - AUCUNE reference explicite
-        n''est censee etre posee nulle part, ni via ClassRestriction (qui reste a 0 entree, sa multiplicite
-        {0..*} le permet explicitement) ni via BaseClass (qui est un mecanisme totalement distinct, sans
-        lien avec ce cas de figure - non confirme comme pertinent ici, aucune preuve ne l''y rattache).
-        Meme conclusion applicable par analogie au cas equivalent sur attributeType (RESTRICTION(...)
-        absent -> Restrictions reste une liste vide, deja traite ainsi sans marqueur unresolved separe).
-        Decision ModelBuilder : ne rien construire de plus que l''absence d''entrees dans ClassRestriction/Restrictions
-        quand RESTRICTION(...) est absent - c''est la representation correcte et complete de "non restreint".
+      note: 'not_applicable confirmed. INTERLIS 2 Reference Manual edition 2006-04-13, section 2.8.11
+        "Domains of classes and attribute paths" (p.45): "By indicating structure any structure or
+        class, by indicating class (also permissible as extension of STRUCTURE) any class (but no
+        structures) are admitted. If only certain structures, resp. classes and their extensions are to
+        be admitted, these have to be listed (RESTRICTION)." This confirms that the absence of
+        RESTRICTION(...) simply means "no restriction" (implicitly "any Class"/"any Structure or Class")
+        - no explicit reference is expected to be built anywhere, neither via ClassRestriction (which
+        stays at 0 entries, its {0..*} multiplicity explicitly allows that) nor via BaseClass (a
+        completely separate mechanism, unrelated to this case). Same conclusion applies by analogy to
+        the equivalent case on attributeType (RESTRICTION(...) absent -> Restrictions stays an empty
+        list). ModelBuilder builds nothing more than the absence of entries in ClassRestriction/
+        Restrictions when RESTRICTION(...) is absent - the correct and complete representation of
+        "unrestricted".
 
         '
 constant:
@@ -204,7 +197,7 @@ constant:
         yet cross-checked against kind-values.yml).
   note: 'Type resolved dynamically: UNDEFINED -> Undefined, numericConst -> Numeric, textConst/formattedConst
     -> Text, enumerationConst -> Enumeration. classConst/attributePathConst need separate confirmation
-    (may not map to Constant.Type at all). Text types'
+    (may not map to Constant.Type at all).'
 contextDef:
   grammar:
     rule: contextDef
@@ -218,24 +211,20 @@ contextDef:
       note: 'inherited Name (MetaElement); IlisMeta16.ModelData.Context has no own attributes (attributes.own:
         {}, confirmed ilismeta16-classes.yml).'
     generic_concrete_pairs:
-      note: 'Lot 18 (phase 2, résidus Phase 1) - CONFIRMÉ par nécessité structurelle. Lecture du corps
-        compilé (RULE #2bis) confirme la structure exacte : `(domainRef EQ domainRef (OR domainRef)* SEMI)+`
-        - une boucle EXTERNE répétée de "pair-groups", chacun avec EXACTEMENT UN domainRef générique (gauche)
-        et 1+ domainRefs concrets OR-joints (droite). Résolution de l''ambiguïté précédente ("un seul
-        GenericDef pour tout le contextDef, ou un par pair-group ?") : ConcreteForGeneric.GenericDef a
-        `target_kind: Unknown` (confirmé ilismeta16-associations.yml) - preuve que `GenericDef` est traité
-        comme une CLASSE D''ASSOCIATION réifiée (chaque lien est individuellement référençable, pas juste
-        une paire de rôles). Un seul GenericDef partagé par tout le contextDef PERDRAIT l''appariement
-        générique/concret (tous les ConcreteForGeneric pointeraient vers le même lien, rendant impossible
-        de savoir quels domaines concrets vont avec quel domaine générique) - seule la lecture "un GenericDef
-        PAR pair-group" (Context=ce Context, partagé entre tous les pair-groups ; GenericDomain=[le domainRef
-        gauche de CE pair-group seulement]) préserve fidèlement l''information source. Chaque domainRef
-        droit du même pair-group crée alors un ConcreteForGeneric(GenericDef=ce lien précis, ConcreteDomain=
-        domainRef résolu). Hypothèse structurante, pas une citation IDL directe - mais la seule lecture
-        qui ne perd pas d''information.
+      note: 'The compiled body confirms the exact structure: `(domainRef EQ domainRef (OR domainRef)*
+        SEMI)+` - a repeated outer loop of "pair-groups", each with EXACTLY ONE generic domainRef (left)
+        and 1+ OR-joined concrete domainRefs (right). ConcreteForGeneric.GenericDef has `target_kind:
+        Unknown` (confirmed in ilismeta16-associations.yml) - evidence that `GenericDef` is treated as a
+        reified association class (each link is individually referenceable, not just a role pair). A
+        single GenericDef shared across the whole contextDef would lose the generic/concrete pairing (all
+        ConcreteForGeneric instances would point to the same link, making it impossible to know which
+        concrete domains go with which generic domain) - only "one GenericDef PER pair-group" (Context=
+        this Context, shared across all pair-groups; GenericDomain=[this pair-group''s left domainRef
+        only]) preserves the source information faithfully. Each right-hand domainRef of the same
+        pair-group then creates a ConcreteForGeneric(GenericDef=this specific link, ConcreteDomain=
+        resolved domainRef).
 
         '
-  note: Object identification types
 controlPoints:
   grammar:
     rule: controlPoints
@@ -246,14 +235,13 @@ controlPoints:
         field: Name
         multi: true
       note: 'No own class; ''VERTEX Name(DOT Name)*'' is a qualified name reference, resolving to a
-        CoordType instance. CORRIGE (Lot 42) : ce binding declaratif (`field: Name, multi: true`) ne
-        produisait qu''une LISTE de textes de tokens, JAMAIS reellement attachee nulle part malgre la
-        note historique ci-dessous - confirme reel (LineType.CoordType toujours None). `controlPoints`
-        est desormais un cas special dedie (`InterlisModelBuilder._build_control_points_ref`, appele
-        directement depuis `_relay` avant le calcul de ce bag declaratif - cette entree `_resolution`
-        n''est donc plus jamais atteinte en pratique, gardee seulement comme trace de l''ancien etat) qui
-        construit un ForwardRef (nom qualifie joint par "." depuis les tokens Name, VERTEX ignore) attache
-        par le binding `lineType.CoordType` (association LineCoord, voir lineType ci-dessus).'
+        CoordType instance. This declarative binding (`field: Name, multi: true`) only ever produced a
+        LIST of token texts, never actually attached anywhere (LineType.CoordType stayed None).
+        `controlPoints` is now a dedicated special case (`InterlisModelBuilder._build_control_points_ref`,
+        called directly from `_relay` before this declarative bag is computed - this `_resolution` entry
+        is therefore never reached in practice, kept only as a record of the former state) that builds a
+        ForwardRef (qualified name joined by "." from the Name tokens, VERTEX ignored), attached via the
+        `lineType.CoordType` binding (LineCoord association, see lineType above).'
 coordinateType:
   grammar:
     rule: coordinateType
@@ -286,13 +274,12 @@ coordinateType:
         instance linked via AxisSpec.Axis; a bare NUMERIC keyword (no range/circular/unit) still produces
         a NumType instance (with Min/Max/Circular/Unit left unset).
 
-        CORRIGE (Lot 42, geometrie XTF) : `wrap:` ajoute - jusqu''ici ABSENT de la branche `multi: true`
-        du moteur (source_resolver.py, `_resolve_multi_node` nouveau), contrairement a la branche `alt`
-        (deja utilisee par attributeDef.Type). Consequence reelle, confirmee CoordType.Axis contenait
-        UNIQUEMENT des dicts bags bruts (`{Min:..., Max:..., ...}`), JAMAIS de veritables instances
-        `NumType` - silencieusement inexploitable par tout code aval attendant des `MetaInstance` (ex.
-        `xtf/schema.coord_axes`, Lot 42). Chaque `numeric()`/`NUMERIC` de la liste devient desormais sa
-        PROPRE instance `NumType` (vide pour le token nu, RULE #4 - note ci-dessus).
+        `wrap:` was missing from the engine''s `multi: true` branch (source_resolver.py,
+        `_resolve_multi_node`), unlike the `alt` branch (already used by attributeDef.Type). Real
+        consequence: CoordType.Axis contained only raw bag dicts (`{Min:..., Max:..., ...}`), never real
+        `NumType` instances - silently unusable by any downstream code expecting `MetaInstance` (e.g.
+        `xtf/schema.coord_axes`). Each `numeric()`/`NUMERIC` in the list now becomes its own `NumType`
+        instance (empty for the bare token - see note above).
 
         '
     NullAxis:
@@ -300,16 +287,15 @@ coordinateType:
         field: rotationDef
         path: NullAxis
         optional: true
-      note: 'CONFIRME (Lot 13, point 2, phase 2). Correction : la piste precedente (clauses internes a
-        numeric()) est abandonnee - la vraie source est le rotationDef() de coordinateType lui-meme (voir
-        binding rotationDef ci-dessous). Le premier PosNumber de "ROTATION PosNumber -> PosNumber" alimente
-        NullAxis (type AxisInd = domaine 1..3, ilismeta16-classes.yml/metamodel PDF section 2.3.1). Les
-        clauses "{ Name [PosNumber] }"/"< Name >" de numeric() restent une question separee (point 3,
-        Lot 14 - NumsRefSys-like, non concernees par ce point).
-        CORRIGE (audit corpus reel models.geo.admin.ch, 2026-08-03) : `field: rotationDef, index: 0`
-        indexait a tort l''accesseur rotationDef() lui-meme (single, 0 ou 1 occurrence) au lieu de son
-        PosNumber interne -> `path: NullAxis` delegue desormais a la regle rotationDef (voir ci-dessous,
-        qui expose elle-meme NullAxis/PiHalfAxis via son propre PosNumber indexe).
+      note: 'The real source is coordinateType''s own rotationDef() (see the rotationDef binding below),
+        not clauses internal to numeric(). The first PosNumber of "ROTATION PosNumber -> PosNumber" feeds
+        NullAxis (type AxisInd = domain 1..3, ilismeta16-classes.yml/metamodel PDF section 2.3.1). The
+        "{ Name [PosNumber] }"/"< Name >" clauses of numeric() are a separate matter (NumsRefSys-like, not
+        concerned by this point).
+        `field: rotationDef, index: 0` used to wrongly index the rotationDef() accessor itself (single, 0
+        or 1 occurrence) instead of its internal PosNumber -> `path: NullAxis` now delegates to the
+        rotationDef rule (see below, which exposes NullAxis/PiHalfAxis itself via its own indexed
+        PosNumber).
 
         '
     PiHalfAxis:
@@ -317,15 +303,14 @@ coordinateType:
         field: rotationDef
         path: PiHalfAxis
         optional: true
-      note: 'CONFIRME (Lot 13, point 2) - meme rotationDef() que NullAxis ci-dessus ; le second PosNumber
-        (apres MINUS GT) alimente PiHalfAxis (AxisInd). CORRIGE (audit corpus reel, 2026-08-03) - meme
-        correctif que NullAxis (path au lieu d''index direct sur rotationDef).
+      note: 'Same rotationDef() as NullAxis above; the second PosNumber (after MINUS GT) feeds PiHalfAxis
+        (AxisInd). Same fix as NullAxis (path instead of a direct index on rotationDef).
 
         '
     _rotation_via_rotationDef:
-      note: 'Precision : il n''existe PAS d''attribut/association "Rotation" separe sur CoordType (confirme,
-        ilismeta16-classes.yml : seuls NullAxis/PiHalfAxis/Multi en own) - rotationDef() alimente DIRECTEMENT
-        NullAxis+PiHalfAxis ci-dessus, il n''y a rien de plus a chercher sous le nom "Rotation".
+      note: 'There is no separate "Rotation" attribute/association on CoordType (ilismeta16-classes.yml:
+        only NullAxis/PiHalfAxis/Multi are own) - rotationDef() feeds NullAxis+PiHalfAxis above directly,
+        there is nothing more to look for under the name "Rotation".
 
         '
 dateTimeType:
@@ -344,13 +329,12 @@ dateTimeType:
       note: 'dateTimeType() has 3 mutually exclusive single-token alternatives; none builds a new IlisMeta16
         instance. Each resolves to a reference to a predefined built-in INTERLIS datatype, confirmed in
         ilismeta16-datatypes.yml under the INTERLIS.* namespace (not IlisMeta16.ModelData.*). Consistent
-        with target: null in grammar-metamodel-mapping.yml. The resolved qualified_name feeds whichever
+        with target: null. The resolved qualified_name feeds whichever
         parent construct consumes baseType (attrType/attrTypeDef Type association end).
 
         '
   note: No direct IlisMeta16 instance expected. Selects one of the built-in INTERLIS date/time primitives
     (INTERLIS.GregorianDate / INTERLIS.TimeOfDay / INTERLIS.GregorianDateTime), not a ModelData class.
-    Coordinate and geometry types
 decConst:
   grammar:
     rule: decConst
@@ -378,51 +362,17 @@ domainDef:
     association: PackageElements
     role: Element
   note: 'No fixed target: IlisMeta16.ModelData.DomainType is abstract (isAbstract=true in the XMI). The
-    concrete instantiated subclass is resolved by the type_ dispatcher (-> textType/numericType/ booleanType/enumerationType/coordinateType/lineType/classType/
-    attributeType/oIDType/blackboxType), each already individually mapped with its own qualified_name.
-    CORRIGE (audit corpus reel models.geo.admin.ch, 2026-08-03) : domainDef() n''est PAS "une seule
-    declaration de domaine" mais boucle grammaticalement (confirme sur le code genere reel,
-    InterlisParser.py, boucle while _alt!=2) sur N declarations partageant un seul mot-cle DOMAIN (ex.
-    "DOMAIN\n  Code = 0..255;\n  MultRange = 0..2147483647;\n  LengthRange EXTENDS MultRange =
-    1..2147483647;", models/IlisMeta16.ili), chacune avec son PROPRE Name + exactement une alternative de
-    contenu parmi 3 SOEURS DIRECTES - `type_()`, `numeric()` nu, `enumeration()` nu (confirme : la_==1
-    type_(), la_==2 numeric(), la_==3 enumeration() - PAS des alternatives imbriquees dans type_()).
-    Aucun mecanisme generique existant (bag/for_each) ne correle plusieurs accesseurs DIFFERENTS a la
-    MEME position parmi N occurrences - `multi_declaration: true` delegue entierement a
-    InterlisModelBuilder._build_multi_declaration (model_builder.py), qui decoupe ctx.children par
-    position (delimiteur SEMI, un token par declaration) plutot que par nom d''accesseur : pour chaque
-    segment, retrouve son propre Name/MANDATORY et sa propre alternative de contenu (type_() deja visite
-    normalement, numeric()/enumeration() nus enveloppes en NumType/EnumType via le meme mecanisme
-    `wrap:`/visit_wrapped que attrTypeDef.Type, Lot 19) - meme cas particulier reconnu que topicDef
-    (_build_multi_target, seul autre cas special parmi les 121 regles). N''utilise PAS
-    attribute_bindings (ignore par cette strategie).
-    CORRIGE (Lot 37, RULE #1) : "STRING DOTDOT STRING" EST rencontree dans un fichier reel
-    (CoordSys-20151124.ili : Angle_DMS_90 EXTENDS Angle_DMS = "-90:00:00.000" .. "90:00:00.000";) -
-    la note precedente ("jamais rencontree en reel") etait fausse, corrigee ici. Desormais construite
-    via InterlisModelBuilder._build_domain_string_range (meme famille que _build_domain_class_restriction,
-    contournement manuel deliberement choisi - PAS le mecanisme declaratif standard alt:, voir
-    docstring de la methode pour le detail d''un bug moteur reel et plus large decouvert a cette
-    occasion : ctx.getAltNumber() renvoie toujours 0, rendant potentiellement inertes les 15 bindings
-    alt: <entier> du mapping des que 2 alternatives partagent un accesseur - non corrige ce lot, hors
-    perimetre, documente dans PROGRESS.md). Cible : IlisMeta16.ModelData.FormattedType (meme classe deja
-    visee par formattedType() alternatives 1/3 pour la MEME forme syntaxique STRING DOTDOT STRING),
-    Min/Max = les 2 litteraux STRING tels quels (guillemets inclus, meme convention que le reste du
-    projet - le dequillemetage n''est fait nulle part ailleurs non plus, voir context_access.text).
-    CORRIGE (Lot 28, RoadTrafficCensus_V1_1.ili reel : "CHCantonCode_Extended = CLASS RESTRICTION
-    (sAbroadCode; sCHCantonCode);") : la 5e alternative "CLASS RESTRICTION(...)" (EBNF "ClassType",
-    inlinee sans sous-regle dediee) est desormais construite via
-    InterlisModelBuilder._build_domain_class_restriction - meme target ReferenceType que referenceAttr()
-    (Class EXTENDS Type), External toujours False (pas de clause EXTERNAL dans cette alternative),
-    BaseClass = 1ere classOrAssociationRef seulement (meme limite que referenceAttr.BaseClass/
-    roleDef.BaseClass, deja documentee).
-    AJOUTE (Lot 44, LineType.CoordType via EXTENDS) : la clause optionnelle "EXTENDS domainRef" de chaque
-    segment (ex. "DirectedLine EXTENDS Line = DIRECTED POLYLINE;", "LengthRange EXTENDS MultRange =
-    1..2147483647;") n''etait JUSQU''ICI PAS DU TOUT attachee, quel que soit le type de domaine concerne -
-    InterlisModelBuilder._attach_domain_extends (appelee depuis _build_multi_declaration, les 2 branches
-    contenu direct ET CLASS RESTRICTION) attache desormais Super (association Inheritance), meme
-    politique graceful=True que classDef/structureDef.Super (Lot 38).
-    || No fixed target: DomainType is abstract. Concrete class resolved by type_ dispatcher (see grammar-metamodel-mapping.yml
-    comment).'
+    concrete instantiated subclass is resolved by the type_ dispatcher (-> textType/numericType/
+    booleanType/enumerationType/coordinateType/lineType/classType/attributeType/oIDType/blackboxType),
+    each already individually mapped with its own qualified_name.
+
+    `domainDef()` grammatically loops over N declarations sharing one `DOMAIN` keyword, each with its
+    own Name and exactly one content alternative (`type_()`, bare `numeric()`, or bare `enumeration()`) -
+    handled by the special-cased `InterlisModelBuilder._build_multi_declaration` rather than
+    `attribute_bindings` (`multi_declaration: true`). It also builds two alternatives that are easy to
+    miss: `STRING DOTDOT STRING` (real occurrences exist) and inline `CLASS RESTRICTION(...)` - and
+    attaches the `EXTENDS domainRef` clause (`Super`, Inheritance association) on every declaration.
+    Full history of the 4 fixes involved: docs/dev-notes/domaindef-multi-declaration-investigation.md.'
 domainRef:
   grammar:
     rule: domainRef
@@ -437,14 +387,13 @@ domainRef:
         for predefined domains - resolves to an existing IlisMeta16.ModelData.DomainType subclass instance
         by qualified_name; no own attributes constructed (DomainType itself is abstract, own: {Mandatory}
         inherited by all concrete subclasses already bound in earlier lots).'
-  note: 'Type dispatching. resolves_to: [DomainType, Class] ajoute (audit corpus reel, 2026-08-03) :
-    domainRef() est syntaxiquement indistinguable d''un structureRef/classRef pour un simple nom qualifie
-    (l''ambiguite grammaticale INTERLIS classique domaine/structure/classe) - confirme sur
-    models/IlisMeta16.ili ("Multiplicity: Multiplicity;", l''attribut ET le TYPE partagent le nom
-    "Multiplicity", qui est en realite une STRUCTURE/Class, pas un DomainType). Sans le hint "Class" en
-    repli, l''ambiguite avec d''autres entites homonymes (ex. un attribut nomme pareil ailleurs) restait
-    non resolue meme quand la vraie cible (la Class) etait un candidat unique parmi les candidats
-    filtres.
+  note: 'Type dispatching. `resolves_to: [DomainType, Class]`: domainRef() is syntactically
+    indistinguishable from a structureRef/classRef for a simple qualified name (the classic INTERLIS
+    domain/structure/class grammar ambiguity) - confirmed on `models/IlisMeta16.ili`
+    ("Multiplicity: Multiplicity;", the attribute AND the type share the name "Multiplicity", which is
+    actually a STRUCTURE/Class, not a DomainType). Without the "Class" fallback hint, the ambiguity with
+    other same-named entities (e.g. an attribute named the same way elsewhere) stayed unresolved even
+    when the real target (the Class) was the only candidate left after filtering.
 
     '
 enumElement:
@@ -452,30 +401,13 @@ enumElement:
     rule: enumElement
   kind: Instance
   target: IlisMeta16.ModelData.EnumNode
-  note: 'CORRIGE (Lot 33, bug reel majeur trouve en elargissant le corpus XTF a
-    ID65.1_KGS_PBC_V2_2 - "A (A, verstaerkter_Schutz), B" produisait un arbre
-    totalement faux : TopNode=A, A.Sub=[B] - les enfants REELS de A (A/
-    verstaerkter_Schutz) disparaissaient et B, un FRERE de A au niveau
-    racine, se retrouvait chaine comme enfant de A). Root cause : cet ancien
-    `parent: {association: TopNode, role: TopNode}` faisait que CHAQUE
-    enumElement (racine OU imbrique) tentait de s''auto-attacher via la
-    MEME association TopNode (EnumType {0..1} <-> TopNode {1} EnumNode,
-    upper=1 - UN SEUL noeud racine par EnumType) - le premier element
-    occupait ce slot unique, tout element suivant (frere OU authentique
-    enfant imbrique, le mecanisme ne distinguait pas les deux) declenchait
-    le repli generique "chainage sur association auto-referente"
-    (AttachmentResolver._chain_onto_self_referencing_association), qui
-    aplati TOUT en une chaine lineaire au lieu d''un arbre. Par ailleurs
-    `models/IlisMeta16.ili` documente explicitement (commentaire sur
-    EnumNode) : "MetaElement.Name := ''TOP'' for topnode" - un noeud TOP
-    SYNTHETIQUE, jamais un element reel - que ce mecanisme ne construisait
-    jamais. Corrige : `parent:` retire d''ici, la construction reelle de
-    l''arbre (noeud TOP synthetique + enfants via SubNode/role Node,
-    correctement scopes par niveau d''imbrication) est desormais geree
-    explicitement par `InterlisModelBuilder._build_enumeration_tree`, cas
-    special declenche sur `rule_name == "enumeration"` (meme famille que
-    `multi_declaration`/`_build_multi_target`, les 2 seuls autres cas
-    speciaux parmi les 121 regles).'
+  note: 'Tree construction is handled explicitly by `InterlisModelBuilder._build_enumeration_tree`
+    (a special case triggered on `rule_name == "enumeration"`, same family as
+    `multi_declaration`/`_build_multi_target`, the only other 2 special cases among the 121 rules) - a
+    synthetic TOP node plus children via SubNode/role Node, correctly scoped by nesting level. There is
+    no `parent:` binding here: an earlier `{association: TopNode, role: TopNode}` version made every
+    enumElement fight over EnumType''s single TopNode slot regardless of nesting, flattening the tree
+    into a chain. Full history: docs/dev-notes/enumelement-tree-construction-investigation.md.'
   attribute_bindings:
     Name:
       source:
@@ -494,23 +426,18 @@ enumElement:
         Name: null
         multi: true
         optional: true
-      note: 'Lot 19 (phase 2) - CONFIRMÉ par citation IDL directe. RULE #4, Reference Manual eCH-0031
-        V2.1.0 (2024-04-24) §3.8.2 "Aufzählungen", EBNF exacte : `EnumElement = EnumElement-Name {''.''
-        EnumElement-Name} [Sub-Enumeration].` - texte explicatif determinant : "Im Rahmen von Neudefinitionen
-        von Aufzählungen (Primärdefinition, zusätzliche Elemente einer Erweiterung) darf das EnumElement
-        nur aus EINEM Namen bestehen. Mehrere Namen sind nur zulässig, um für eine Erweiterung ein BISHERIGES
-        Aufzählungselement zu IDENTIFIZIEREN." (dans le cadre de (re)définitions d''énumérations - définition
-        primaire, éléments additionnels d''une extension - l''EnumElement ne peut consister QUE d''UN
-        SEUL nom. Plusieurs noms ne sont autorisés QUE pour IDENTIFIER, dans une extension, un élément
-        d''énumération DÉJÀ EXISTANT). Ceci tranche définitivement l''hypothèse précédente : le chemin
-        pointé NE crée PAS de chaîne de nouveaux `EnumNode` - il NAVIGUE à travers des `EnumNode` déjà
-        existants (via l''association `SubNode`, même mécanisme que `Children`) pour identifier le nœud-feuille
-        à étendre ; seul le DERNIER segment (units) peut porter une `enumeration()` imbriquée ajoutant
-        de VRAIS nouveaux enfants à ce nœud résolu. ModelBuilder : résoudre chaque segment successif via
-        `SubNode` (Name du premier segment = EnumNode top-level à trouver dans l''EnumType existant ;
-        chaque segment suivant = un `SubNode` de plus en descendant), sans construire de nouvelle instance
-        pour les segments intermédiaires - seule la construction finale (`Children`) crée de nouveaux
-        `EnumNode`.
+      note: 'Reference Manual eCH-0031 V2.1.0 (2024-04-24) §3.8.2 "Aufzählungen", exact EBNF: `EnumElement
+        = EnumElement-Name {''.'' EnumElement-Name} [Sub-Enumeration].` - per the manual, within
+        (re)definitions of enumerations (primary definition, additional elements of an extension), the
+        EnumElement may consist of only ONE name; multiple names are only allowed to IDENTIFY, in an
+        extension, an ALREADY EXISTING enumeration element. So the dotted path does not create a chain of
+        new `EnumNode`s - it NAVIGATES through already-existing `EnumNode`s (via the `SubNode`
+        association, same mechanism as `Children`) to identify the leaf node to extend; only the LAST
+        segment can carry a nested `enumeration()` that adds real new children to that resolved node.
+        ModelBuilder resolves each successive segment via `SubNode` (the first segment''s Name = the
+        top-level EnumNode to find in the existing EnumType; each following segment = one more `SubNode`
+        step down), without constructing a new instance for intermediate segments - only the final
+        construction (`Children`) creates new `EnumNode`s.
 
         '
     Children:
@@ -526,14 +453,13 @@ enumElement:
 
         '
     _parent_association_dispatch:
-      note: 'RESOLU (Lot 12, phase 2) : le parent: {association: TopNode, role: TopNode} declare au niveau
-        de la regle n''est correct QUE pour les instances enumElement directement sous enumerationType()/enumeration()
-        au sommet d''un EnumType neuf (TopNode: EnumType {0..1} -- TopNode {1} EnumNode, confirme dans
-        ilismeta16-associations.yml). Pour les instances enumElement apparaissant DANS le enumeration()
-        imbrique d''un autre enumElement (cf. Children ci-dessus), l''association correcte est SubNode
-        (ParentNode=le EnumNode englobant), pas TopNode. Directive d''implementation ModelBuilder : dispatcher
-        sur la profondeur d''imbrication au moment de la construction ; une seule regle grammaticale sert
-        les deux cas selon le contexte d''appel.
+      note: 'The rule-level `parent: {association: TopNode, role: TopNode}` is only correct for
+        enumElement instances directly under enumerationType()/enumeration() at the top of a new EnumType
+        (TopNode: EnumType {0..1} -- TopNode {1} EnumNode, confirmed in ilismeta16-associations.yml). For
+        enumElement instances appearing INSIDE another enumElement''s nested enumeration() (see Children
+        above), the correct association is SubNode (ParentNode=the enclosing EnumNode), not TopNode.
+        ModelBuilder dispatches on nesting depth at construction time; a single grammar rule serves both
+        cases depending on the calling context.
 
         '
 enumTreeValueType:
@@ -544,7 +470,7 @@ enumTreeValueType:
     ET:
       source:
         field: domainRef
-      note: '"ALL OF domainRef". Per grammar-metamodel-mapping.yml, no direct IlisMeta16 instance is created
+      note: '"ALL OF domainRef". No direct IlisMeta16 instance is created
         here; the resolved domainRef (an EnumType) feeds the TreeValueTypeOf association''s ET end (confirmed
         in ilismeta16-associations.yml: "TreeValueTypeOf = ETVT {0..*} EnumTreeValueType -- ET {1} EnumType").
         The EnumTreeValueType instance itself (own: {} - no own attributes, confirmed in ilismeta16-classes.yml)
@@ -564,8 +490,8 @@ enumeration:
         field: enumElement
         multi: true
       note: 'Each enumElement -> EnumNode instance (same TopNode/SubNode construction as in enumerationType).
-        Per grammar-metamodel-mapping.yml, enumeration() is "a restriction/extension list of an existing
-        enumeration domain, not a new EnumType declaration", so these EnumNode instances restrict/extend
+        enumeration() is a restriction/extension list of an existing
+        enumeration domain, not a new EnumType declaration, so these EnumNode instances restrict/extend
         the referenced base EnumType''s node tree rather than populating a freshly-created EnumType.
 
         '
@@ -573,25 +499,25 @@ enumeration:
       source:
         field: FINAL
         presence: true
-      note: "CONFIRME (Lot 16, sous-groupe enumeration/enumElement). RULE #4, Reference Manual eCH-0031\
-        \ V2.1.0 (2024-04-24) §3.8.2, EBNF exact : \"EnumerationType = Enumeration ['ORDERED'|'CIRCULAR'].\
-        \ Enumeration = '(' EnumElement {',' EnumElement} [':' 'FINAL'] ')'. EnumElement = EnumElement-Name\
-        \ {...} [Sub-Enumeration].\" -> notre regle .g4 enumeration() fusionne Enumeration ET le suffixe\
-        \ [ORDERED|CIRCULAR] de EnumerationType en UNE seule regle (constat structurel, pas un bug - le\
-        \ suffixe reste optionnel et bien place). La cible depend du POINT D'APPEL, deja pressenti par\
-        \ la note \"anonymous EnumType\" de attrType (Lot 5, dispatch attrType/enumeration/numeric/NUMERIC)\
-        \ : - Appel SOMMET (depuis attrType - lui-meme depuis domainDef ou\n  roleDef alt2 - \"Name COLON\
-        \ MANDATORY? (attrTypeDef|\n  enumeration|numeric|constraintDef) SEMI\") : enumeration()\n  EST\
-        \ l'equivalent du EnumerationType officiel pour ce type\n  anonyme -> construit une IlisMeta16.ModelData.EnumType\
-        \ neuve\n  (meme target que enumerationType(), Lot 13), Final =\n  EnumType.Final (herite d'ExtendableME,\
-        \ confirme\n  ilismeta16-classes.yml).\n- Appel IMBRIQUE (comme Sub-Enumeration optionnelle de\n\
-        \  enumElement : '(enumeration)?') : NE cree PAS de nouvel\n  EnumType (confirme par l'exemple\
-        \ officiel du manuel :\n  'JoursSemaine = (JoursOuvrables (lundi,mardi,...), dimanche)\n  CIRCULAR;'\
-        \ - le CIRCULAR final s'applique au SEUL EnumType de\n  JoursSemaine, la sous-liste '(lundi,mardi,...)'\
-        \ de\n  JoursOuvrables n'en cree pas un second) ; Final ici marque a\n  la place l'EnumNode ENGLOBANT\
-        \ (celui dont ce Sub-Enumeration\n  liste les enfants) comme non extensible plus loin -\n  EnumNode.Final\
-        \ (egalement herite d'ExtendableME, confirme\n  ilismeta16-classes.yml) - meme attribut Final,\
-        \ cible\n  different selon le niveau d'imbrication.\n"
+      note: 'Reference Manual eCH-0031 V2.1.0 (2024-04-24) §3.8.2, exact EBNF: "EnumerationType =
+        Enumeration [''ORDERED''|''CIRCULAR'']. Enumeration = ''('' EnumElement {'','' EnumElement}
+        ['':'' ''FINAL''] '')''. EnumElement = EnumElement-Name {...} [Sub-Enumeration]." - the project''s
+        .g4 rule enumeration() merges Enumeration AND EnumerationType''s [ORDERED|CIRCULAR] suffix into a
+        single rule (a structural fact, not a bug - the suffix stays optional and correctly placed). The
+        target depends on the call site, as already hinted by attrType''s "anonymous EnumType" note
+        (attrType/enumeration/numeric/NUMERIC dispatch):
+        - Top-level call (from attrType - itself from domainDef or roleDef alt2 - "Name COLON MANDATORY?
+        (attrTypeDef|enumeration|numeric|constraintDef) SEMI"): enumeration() is the equivalent of the
+        official EnumerationType for this anonymous type -> builds a new IlisMeta16.ModelData.EnumType
+        (same target as enumerationType()), Final = EnumType.Final (inherited from ExtendableME, confirmed
+        in ilismeta16-classes.yml).
+        - Nested call (as enumElement''s optional Sub-Enumeration: ''(enumeration)?''): does NOT create a
+        new EnumType (confirmed by the manual''s official example: ''JoursSemaine = (JoursOuvrables
+        (lundi,mardi,...), dimanche) CIRCULAR;'' - the trailing CIRCULAR applies to JoursSemaine''s single
+        EnumType only, the ''(lundi,mardi,...)'' sub-list of JoursOuvrables does not create a second one);
+        here Final instead marks the ENCLOSING EnumNode (the one whose children this Sub-Enumeration
+        lists) as not further extensible - EnumNode.Final (also inherited from ExtendableME, confirmed in
+        ilismeta16-classes.yml) - same Final attribute, different target depending on nesting level.'
     Order:
       source:
         field: CIRCULAR|ORDERED
@@ -600,19 +526,19 @@ enumeration:
         neither: Unordered
         ORDERED: Ordered
         CIRCULAR: Circular
-      note: 'CONFIRME pour l''appel SOMMET (Lot 16) : meme mecanisme que enumerationType.Order (Lot 13,
-        valeurs Unordered/Ordered/ Circular, ilismeta16-kind-values.yml) - cible EnumType.Order (own,
-        mandatory). Pour l''appel IMBRIQUE (Sub-Enumeration d''un enumElement) : status not_applicable
-        de fait - EnumNode n''a AUCUN attribut Order (verifie ilismeta16-classes.yml, own: {} + herite
-        d''ExtendableME seulement) et le Reference Manual confirme que le suffixe [ORDERED|CIRCULAR] appartient
-        exclusivement a EnumerationType, jamais a Sub-Enumeration (''Sub-Enumeration'' = ''Enumeration'',
-        sans suffixe, dans l''EBNF officiel) - si ce token est neanmoins rencontre a un niveau imbrique
-        dans ce projet (grammaire legerement permissive par rapport au spec, cf. grammar-divergences.md),
-        ModelBuilder doit l''ignorer (pas de cible metamodele a ce niveau).
+      note: 'For the top-level call: same mechanism as enumerationType.Order (values Unordered/Ordered/
+        Circular, ilismeta16-kind-values.yml) - targets EnumType.Order (own, mandatory). For the nested
+        call (a enumElement''s Sub-Enumeration): effectively not_applicable - EnumNode has no Order
+        attribute at all (ilismeta16-classes.yml, own: {} plus only what it inherits from ExtendableME)
+        and the Reference Manual confirms the [ORDERED|CIRCULAR] suffix belongs exclusively to
+        EnumerationType, never to Sub-Enumeration (''Sub-Enumeration'' = ''Enumeration'', with no suffix,
+        in the official EBNF) - if this token is nonetheless encountered at a nested level in this
+        project (grammar slightly more permissive than the spec), ModelBuilder ignores it (no metamodel
+        target at that level).
 
         '
   note: No direct IlisMeta16 instance expected. "(el1, el2, ...)" restriction/extension list of an existing
-    enumeration domain, not a new EnumType declaration (see enumerationType for that). || 4, Reference
+    enumeration domain, not a new EnumType declaration (see enumerationType for that). || Reference
     Manual eCH-0031 V2.1.0 (2024-04-24) §3.8.2, EBNF
 enumerationConst:
   grammar:
@@ -624,8 +550,8 @@ enumerationConst:
         field: Name
         multi: true
         optional: true
-      note: '"#Name(.Name)*(.OTHERS)?" or "#OTHERS". Per grammar-metamodel-mapping.yml: "''#Name'' or
-        ''#OTHERS'' symbolic enum literal; feeds Constant.Value (Type=Enumeration) on the enclosing Constant."
+      note: '"#Name(.Name)*(.OTHERS)?" or "#OTHERS" - symbolic enum literal;
+        feeds Constant.Value (Type=Enumeration) on the enclosing Constant.
         The dotted Name segments form the qualified path to the referenced EnumNode (resolved against
         the applicable EnumType''s node tree via TopNode/SubNode).
 
@@ -679,15 +605,14 @@ formatDef:
         STRING: null
         baseAttrRef: null
       target: IlisMeta16.ModelData.FormattedType.Format
-      note: 'Lot 18 (phase 2, résidus Phase 1) - CONFIRMÉ par élimination (voir formattedType._formatDef_template
-        pour la preuve complète). formatDef() = LPAR INHERITANCE? STRING? (baseAttrRef STRING)* baseAttrRef
-        STRING? RPAR - une séquence alternée de séparateurs STRING littéraux et de références d''attribut
-        de structure (baseAttrRef), avec un flag INHERITANCE optionnel en tête. Pas d''instance IlisMeta16
-        propre créée ici (target: null, confirmé grammar-metamodel-mapping.yml) : cette règle alimente
-        directement le `Format` (TEXT, seul attribut own de `FormattedType`) de la règle englobante `formattedType`
-        via sérialisation côté ModelBuilder. Le flag `INHERITANCE` et l''ordre exact de la liste `baseAttrRef`
-        restent des détails de l''algorithme de sérialisation (comment reconstituer le texte du gabarit),
-        pas une ambiguïté de cible métamodèle.
+      note: 'Confirmed by elimination (see formattedType._formatDef_template for the full argument).
+        formatDef() = LPAR INHERITANCE? STRING? (baseAttrRef STRING)* baseAttrRef STRING? RPAR - an
+        alternating sequence of literal STRING separators and structure attribute references
+        (baseAttrRef), with an optional leading INHERITANCE flag. No own IlisMeta16 instance is created
+        here (target: null): this rule feeds directly into `Format` (TEXT, the only own attribute of
+        `FormattedType`) on the enclosing `formattedType` rule, via serialization on the ModelBuilder
+        side. The `INHERITANCE` flag and the exact order of the `baseAttrRef` list remain serialization-
+        algorithm details (how to reconstitute the template text), not a metamodel-target ambiguity.
 
         '
   note: No direct IlisMeta16 instance expected. Format pattern (STRING literals + baseAttrRef placeholders);
@@ -706,7 +631,7 @@ formattedConst:
 
         '
   note: No direct IlisMeta16 instance expected. Single STRING literal; feeds Constant.Value (Type=Text)
-    on the enclosing Constant (created by constant). Date and time types
+    on the enclosing Constant (created by constant).
 formattedType:
   grammar:
     rule: formattedType
@@ -717,16 +642,15 @@ formattedType:
       source:
         field: Name
         optional: true
-      note: 'CORRIGE (Lot 38) : `alt: 1` retire (`ctx.getAltNumber()` toujours 0, voir PROGRESS.md Lot
-        37/38 - ce binding etait TOUJOURS None jusqu''ici malgre "confirme", verifie empiriquement sur
-        un domaine synthetique). Sans consequence a le retirer : `Name` n''est un accesseur direct de
+      note: 'No `alt:` selector here - `ctx.getAltNumber()` always returns 0 for this rule, so an
+        alt-based selector would leave this binding permanently None. `Name` is a direct accessor of
         `formattedType` (FORMAT INTERLIS DOT Name STRING DOTDOT STRING | FORMAT BASED_ON structureRef
-        formatDef | FORMAT domainRef STRING DOTDOT STRING) que sur l''alternative 1 - les 2 autres
-        n''exposent aucun Name directement (structureRef()/domainRef() sont des sous-regles, leur eventuel
-        Name interne n''est pas expose sur le ctx de formattedType). Alternative 1 only: "FORMAT
-        INTERLIS.Name STRING..STRING". The qualified predefined format name ("INTERLIS." + Name) feeds
-        FormattedType.Format (own attribute, mandatory TEXT, confirmed in ilismeta16-classes.yml).
-        Alternatives 2 and 3 do not directly supply Format this way - see Struct/BaseFormat below.
+        formatDef | FORMAT domainRef STRING DOTDOT STRING) only on alternative 1 - the other 2 expose no
+        Name directly (structureRef()/domainRef() are sub-rules, any internal Name of theirs isn''t
+        exposed on formattedType''s ctx). Alternative 1 only: "FORMAT INTERLIS.Name STRING..STRING". The
+        qualified predefined format name ("INTERLIS." + Name) feeds FormattedType.Format (own attribute,
+        mandatory TEXT, ilismeta16-classes.yml). Alternatives 2 and 3 do not directly supply Format this
+        way - see Struct/BaseFormat below.
 
         '
     Min:
@@ -734,12 +658,11 @@ formattedType:
         field: STRING
         index: 0
         optional: true
-      note: 'CORRIGE (Lot 38) : `alt: 1|3` retire, meme raison que Format ci-dessus. Sans consequence :
-        `STRING` en accesseur DIRECT de formattedType n''existe que sur les alternatives 1 et 3 (toutes
-        deux "... STRING DOTDOT STRING") - alternative 2 n''en a aucun (ses seuls STRING vivent a
-        l''interieur de formatDef(), une sous-regle, jamais exposes directement sur ce ctx). Alt1 et alt3
-        alimentent de toute facon la MEME cible de la MEME facon (Min = 1er STRING) - aucune ambiguite
-        residuelle entre les deux a lever. Feeds the inherited NumType.Min (FormattedType extends NumType
+      note: '`alt: 1|3` removed, same reason as Format above. Harmless: `STRING` as a direct accessor of
+        formattedType exists only on alternatives 1 and 3 (both "... STRING DOTDOT STRING") - alternative
+        2 has none (its only STRINGs live inside formatDef(), a sub-rule, never exposed directly on this
+        ctx). Alt1 and alt3 feed the same target the same way anyway (Min = 1st STRING) - no remaining
+        ambiguity between the two. Feeds the inherited NumType.Min (FormattedType extends NumType
         per ilismeta16-classes.yml). NumType.Min/Max share the same raw type GUID
         (C16095C6-1D80-49ab-9A0B-5847A355489B) as Class.Name (a TEXT-like primitive), consistent with
         storing format example strings rather than numeric bounds here.
@@ -750,14 +673,14 @@ formattedType:
         field: STRING
         index: 1
         optional: true
-      note: 'CORRIGE (Lot 38) : `alt: 1|3` retire, meme raison/verification que Min ci-dessus. Second
+      note: '`alt: 1|3` removed, same reason/verification as Min above. Second
         STRING of the STRING..STRING range in alternatives 1 and 3; feeds NumType.Max (see Min note).'
     Struct:
       source:
         field: structureRef
         optional: true
-      note: 'CORRIGE (Lot 38) : `alt: 2` retire, meme raison que Format ci-dessus - `structureRef` n''est
-        un accesseur direct de formattedType que sur l''alternative 2. Alternative 2 only: "FORMAT
+      note: '`alt: 2` removed, same reason as Format above - `structureRef` is a direct accessor of
+        formattedType only on alternative 2. Alternative 2 only: "FORMAT
         BASED_ON structureRef formatDef". Confirmed via ilismeta16-associations.yml StructOfFormat
         association: "FormattedType {0..*} -- Struct {1} Class". structureRef resolves the Struct end
         (a Class[Kind=Structure]).
@@ -768,17 +691,15 @@ formattedType:
         field: formatDef
         optional: true
       target: IlisMeta16.ModelData.FormattedType.Format
-      note: 'CORRIGE (Lot 38) : `alt: 2` retire (`ctx.getAltNumber()` toujours 0, voir PROGRESS.md Lot
-        37/38) - `formatDef` n''est un accesseur direct de formattedType que sur l''alternative 2, sans
-        consequence a le retirer.
-        Lot 18 (phase 2, résidus Phase 1) - CONFIRMÉ par élimination. Alternative 2''s formatDef()
-        (see separate formatDef binding) describes the template composing the struct''s attributes into
-        the Format string. `FormattedType.own` ne contient QU''UN SEUL attribut (`Format`, TEXT, mandatory
-        - confirmé exhaustivement ilismeta16-classes.yml) ; aucune autre cible n''existe pour recevoir
-        ce contenu. Cible donc confirmée par élimination : `Format` reçoit la sérialisation de la séquence
-        alternée STRING/baseAttrRef de `formatDef()`. L''ALGORITHME exact de sérialisation (comment concaténer
-        STRING/baseAttrRef en un texte) reste un détail d''implémentation ModelBuilder, pas une ambiguïté
-        de mapping métamodèle (la cible, elle, est désormais certaine).
+      note: '`alt: 2` removed (`ctx.getAltNumber()` always returns 0) - `formatDef` is a direct accessor
+        of formattedType only on alternative 2, harmless to remove.
+        Confirmed by elimination: alternative 2''s formatDef() (see the separate formatDef binding)
+        describes the template composing the struct''s attributes into the Format string.
+        `FormattedType.own` contains only ONE attribute (`Format`, TEXT, mandatory - confirmed
+        exhaustively in ilismeta16-classes.yml); no other target exists to receive this content, so
+        `Format` receives the serialization of formatDef()''s alternating STRING/baseAttrRef sequence.
+        The exact serialization algorithm (how to concatenate STRING/baseAttrRef into text) remains a
+        ModelBuilder implementation detail, not a metamodel-mapping ambiguity.
 
         '
     _domainRef_base:
@@ -786,22 +707,18 @@ formattedType:
         field: domainRef
         optional: true
       status: not_applicable
-      note: 'CORRIGE (Lot 38) : `alt: 3` retire (`ctx.getAltNumber()` toujours 0, voir PROGRESS.md Lot
-        37/38) - toujours sans consequence pratique ici (prefixe `_`, jamais attache litteralement, voir
-        model_builder.py `_apply_one_binding`/convention projet) : au pire ce champ resout desormais un
-        ForwardRef pour de vrai au lieu de rester silencieusement None, mais reste ignore comme documente
-        ci-dessous ("pas de cible a alimenter").
-        Lot 18 (phase 2, résidus Phase 1). Alternative 3''s domainRef ("FORMAT domainRef STRING..STRING")
-        présumait une base analogue à `extends`/`TypeRestriction` sur d''autres sous-classes de DomainType.
-        Preuve d''absence désormais exhaustive : grep de TOUTES les associations de `ilismeta16-associations.yml`
-        ciblant `FormattedType` -> une seule, `StructOfFormat` (le `Struct` de l''alternative 2, sans
-        rapport avec ce point) ; `TypeRestriction` s''attache à `TypeRelatedType` et `BaseClass`/`ClassRestriction`
-        à `ClassRelatedType`/`Class` - `FormattedType.all_superclasses` (NumType, DomainType, Type, ExtendableME,
-        MetaElement) n''inclut NI `TypeRelatedType` NI `ClassRelatedType`, donc aucun de ces mécanismes
-        ne s''applique. Aucune construction du métamodèle ne permet de baser un `FormattedType` sur un
-        autre domaine. Décision ModelBuilder : si cette 3e alternative est rencontrée, construire le `FormattedType`
-        sans base (Min/Max seuls, comme l''alternative 1), en ignorant le `domainRef` résolu (avertissement
-        optionnel) - pas de cible à alimenter.
+      note: 'No `alt:` selector here either (same reason as Format above) - harmless with the `_` prefix
+        (never attached literally, per `model_builder.py`''s `_apply_one_binding`/project convention): at
+        worst this field resolves a real ForwardRef instead of staying None, but it stays ignored
+        regardless (no target to feed, see below).
+        No metamodel association lets a `FormattedType` be based on another domain: the only association
+        targeting `FormattedType` in `ilismeta16-associations.yml` is `StructOfFormat` (alternative 2''s
+        `Struct`, unrelated); `TypeRestriction` attaches to `TypeRelatedType` and
+        `BaseClass`/`ClassRestriction` to `ClassRelatedType`/`Class`, and `FormattedType.all_superclasses`
+        (NumType, DomainType, Type, ExtendableME, MetaElement) includes neither. ModelBuilder decision: if
+        this 3rd alternative (`FORMAT domainRef STRING..STRING`) is encountered, build the `FormattedType`
+        without a base (Min/Max only, like alternative 1), ignoring the resolved `domainRef` (optional
+        warning) - nothing to feed.
 
         '
 intersectionDef:
@@ -818,20 +735,20 @@ intersectionDef:
         (TEXT, 0..1) with the matched token''s raw value - see lineType binding above.
 
 
-        CORRIGE (Lot 52, bug moteur reel confirme sur 4 fichiers reels du corpus large models.geo.admin.ch
-        - ISOS_V1.ili/rebbaukataster_20120601.ili/Bewirtschaftungseinheit_V1_3.ili) : la grammaire vendee
-        exigeait auparavant EXCLUSIVEMENT le token ''Dec'' apres GT, mais le LEXER ANTLR ne peut JAMAIS
-        emettre ce type de token pour un entier NU sans point decimal (ex. ''> 5'') - ''PosNumber''/''Number''
-        (regles lexer definies AVANT ''Dec'', meme longueur de match) gagnent systematiquement la desambiguation
-        ANTLR pour ce cas precis, rendant ''WITHOUT OVERLAPS > 5;'' (forme tres frequente, confirmee reelle -
-        eCH-0031 V2.1.0 section citee ci-dessous exige explicitement la MEME precision numerique que le
-        domaine de coordonnees, donc un entier nu est legitime pour un domaine a 0 decimale) grammaticalement
-        IMPOSSIBLE a parser malgre la citation manuel ''IntersectionDef = WITHOUT OVERLAPS [ > Dec ].'' - RULE
-        #4, meme categorie de divergence lexer/parser deja rencontree et contournee ailleurs dans CETTE MEME
-        grammaire (regle numeric(), qui liste deja explicitement ''Number DOTDOT Number | Number DOTDOT
-        PosNumber | PosNumber DOTDOT PosNumber | Dec DOTDOT Dec'' pour la meme raison - precedent direct,
-        pas une improvisation). Grammaire vendee (vendor/interlis-antlr4/InterlisParser.g4) corrigee :
-        ''intersectionDef : WITHOUT OVERLAPS GT (Dec | Number | PosNumber);'' - parser regenere.'
+        Real engine bug, confirmed on 4 real files from the wider models.geo.admin.ch corpus -
+        ISOS_V1.ili/rebbaukataster_20120601.ili/Bewirtschaftungseinheit_V1_3.ili): the vendored grammar
+        used to require exclusively the ''Dec'' token after GT, but the ANTLR lexer can never emit that
+        token type for a bare integer with no decimal point (e.g. ''> 5'') - ''PosNumber''/''Number''
+        (lexer rules defined before ''Dec'', same match length) systematically win ANTLR''s
+        disambiguation for this case, making ''WITHOUT OVERLAPS > 5;'' (a common, real form - eCH-0031
+        V2.1.0 explicitly requires the same numeric precision as the coordinate domain, so a bare integer
+        is legitimate for a 0-decimal domain) grammatically impossible to parse despite the manual''s
+        citation ''IntersectionDef = WITHOUT OVERLAPS [ > Dec ].'' - the same category of lexer/parser
+        divergence already encountered and worked around elsewhere in this same grammar (the numeric()
+        rule already explicitly lists ''Number DOTDOT Number | Number DOTDOT PosNumber | PosNumber
+        DOTDOT PosNumber | Dec DOTDOT Dec'' for the same reason - a direct precedent, not improvised).
+        Fixed in the vendored grammar (vendor/interlis-antlr4/InterlisParser.g4): ''intersectionDef :
+        WITHOUT OVERLAPS GT (Dec | Number | PosNumber);'' - parser regenerated.'
   note: 'No direct IlisMeta16 instance expected. WITHOUT OVERLAPS > <dec|number|posnumber>: single value
     feeding LineType.MaxOverlap.'
 lineForm:
@@ -890,7 +807,6 @@ lineFormTypeDef:
       note: 'confirmed IlisMeta16.ModelData.LineFormStructure: LineForm <-> Structure:Class (1..1) - the
         ''LINE FORM { Name : Name ; }'' body''s second Name (after COLON) resolves the backing Structure
         class that defines this custom line form''s coordinate attributes.'
-  note: 07_constraints Constraint definitions
 lineType:
   grammar:
     rule: lineType
@@ -925,18 +841,17 @@ lineType:
         otherwise; structural match confirmed (4 Kind values x optional Multi flag = 6 grammar alternatives
         feasible + DIRECTED sub-flag).
 
-        CORRIGE (Lot 42, geometrie XTF) : `presence: true` remplace par `kind: alt_token` + `rule:` explicite
-        - bug reel trouve en testant `MULTIPOLYLINE` sur un fixture synthetique (tests/fixtures/xtf/
-        geometry_model.ili) : un `field` COMPOSE (contenant "|") declenche TOUJOURS la branche alt du
-        moteur (`resolve_source`, "|" in field) AVANT que `presence: true` ne soit jamais consulte (verifie
-        par lecture directe de source_resolver.py - le test `if kind in ALT_KINDS or "|" in field:` precede
-        la verification `if source.get("presence")` bien plus bas) - `Multi` recevait donc le TEXTE LITTERAL
-        du token matche ("MULTIPOLYLINE"/"MULTISURFACE"/"MULTIAREA", une chaine non vide - toujours `bool()`-
-        truthy par accident, donc jamais remarque via `validate.py` qui ne fait que `bool(getattr(...))`) au
-        lieu de `True`, ET emettait un `warnings.warn` a chaque LineType SINGULIER (POLYLINE/SURFACE/AREA
-        nu, aucune alternative du groupe presente, pas de `rule_map`/"absent" pour absorber silencieusement
-        ce cas avant ce lot). Meme mecanisme explicite (`alt_token`+`rule`) que `Kind` ci-dessus, avec
-        `absent: false` desormais fourni (Multi FAUX plutot qu''un `warnings.warn` a chaque construction).
+        `presence: true` replaced by `kind: alt_token` + an explicit `rule:`: a composite `field`
+        (containing "|") always triggers the engine''s alt branch (`resolve_source`, "|" in field) before
+        `presence: true` is ever consulted (per source_resolver.py: the `if kind in ALT_KINDS or "|" in
+        field:` check comes before the `if source.get("presence")` check much lower down) - `Multi` would
+        otherwise receive the matched token''s literal text ("MULTIPOLYLINE"/"MULTISURFACE"/"MULTIAREA", a
+        non-empty string - always accidentally `bool()`-truthy, so never
+        noticed via `validate.py`, which only does `bool(getattr(...))`) instead of `True`, and raised a
+        `warnings.warn` on every SINGULAR LineType (bare POLYLINE/SURFACE/AREA, none of the group''s
+        alternatives present, no `rule_map`/"absent" to silently absorb that case). Same explicit
+        mechanism (`alt_token`+`rule`) as `Kind` above, now with `absent: false` provided (Multi is False
+        rather than a `warnings.warn` on every construction).
 
         '
     _directed_flag:
@@ -951,10 +866,9 @@ lineType:
         index: 0
         optional: true
       note: 'confirmed LineType.own.MaxOverlap (TEXT, 0..1) - fed by the optional intersectionDef() clause
-        (WITHOUT OVERLAPS > Dec), see intersectionDef binding below. optional: true ajoute (audit corpus
-        reel models.geo.admin.ch, 2026-08-03) : la note documentait deja "optional" mais le flag manquait
-        (ex. "Line = POLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2;" sans clause WITHOUT OVERLAPS,
-        CHBase_Part1_GEOMETRY_V2.ili).
+        (WITHOUT OVERLAPS > Dec), see intersectionDef binding below. `optional: true` added: this note
+        already documented it as optional, but the flag itself was missing (e.g. "Line = POLYLINE WITH
+        (STRAIGHTS, ARCS) VERTEX Coord2;" with no WITHOUT OVERLAPS clause, CHBase_Part1_GEOMETRY_V2.ili).
 
         '
     CoordType:
@@ -963,14 +877,14 @@ lineType:
         optional: true
       association: LineCoord
       role: CoordType
-      note: 'AJOUTE (Lot 42, geometrie XTF) : LineCoord (LineType <-> CoordType, 0..1) restait NON attachee
-        depuis l''origine du binding controlPoints (note historique le documentait deja comme la cible,
-        mais aucun code ne le faisait reellement - confirme reel, LineType.CoordType toujours None y
-        compris sur "Line = POLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2;", CHBase_Part1_GEOMETRY_V1.ili).
-        `controlPoints()` est desormais un 5e cas special (voir InterlisModelBuilder._build_control_points_ref)
-        qui produit un ForwardRef resolu via le mecanisme generique deja en place pour tout ForwardRef
-        attache via association+role (`_apply_one_binding`) - aucune construction imbriquee (`target:`)
-        necessaire ici, `controlPoints` lui-meme n''a pas de classe metamodele propre.
+      note: 'LineCoord (LineType <-> CoordType, 0..1) stayed unattached since the controlPoints binding
+        was first written (an earlier note already documented it as the target, but no code actually did
+        it - LineType.CoordType stayed None, including on "Line = POLYLINE WITH (STRAIGHTS, ARCS) VERTEX
+        Coord2;", CHBase_Part1_GEOMETRY_V1.ili). `controlPoints()` is now a 5th special case (see
+        InterlisModelBuilder._build_control_points_ref) that produces a ForwardRef resolved via the
+        generic mechanism already in place for any ForwardRef attached via association+role
+        (`_apply_one_binding`) - no nested construction (`target:`) is needed here, `controlPoints` itself
+        has no own metamodel class.
 
         '
 numeric:
@@ -985,32 +899,30 @@ numeric:
         | (PosNumber DOTDOT PosNumber) | (Dec DOTDOT Dec). The first operand of whichever alternative
         matched feeds NumType.Min.
 
-        CORRIGE (Lot 42, geometrie XTF) : `field: Number|PosNumber|Dec, index: 0, kind: alt_rule` remplace
-        par `child_index: 0` - bug reel trouve sur `ili_corpus/CHBase_Part1_GEOMETRY_V1.ili` (`Coord2 =
-        COORD 460000.000 .. 870000.000 [m] {CHLV03[1]}, ...`) : le mecanisme alt_rule (`ca.has_accessor` +
-        index) se laissait tromper par le `PosNumber` de la clause REFSYS optionnelle (`{CHLV03[1]}`, SANS
-        RAPPORT avec le range) des que l''alternative reellement prise etait ''Dec DOTDOT Dec'' -
-        `ctx.PosNumber(0)` retournait ce PosNumber-la (has_accessor teste la presence de la METHODE, pas
-        de CETTE occurrence precise) au lieu de None, Min resolvait donc a tort vers ''1'' (l''index du
-        refsys) au lieu de ''460000.000''. Confirme par introspection directe de l''arbre ANTLR reel (RULE
-        #1/#2) : les 4 alternatives de numeric() sont TOUJOURS de la forme ''operande DOTDOT operande'' aux
-        POSITIONS enfant 0/1/2 (DOTDOT toujours en 1), quelle que soit l''alternative - `child_index`
-        (source_resolver.py, nouveau) lit directement cette position, immune a toute ambiguite de nom
-        d''accesseur partage avec un motif sans rapport plus loin dans le meme ctx. Voir schema.coord_axes/
-        validate.py (Lot 42) qui consomment desormais reellement NumType.Min/Max pour la validation
-        geometrie XTF - c''est en batissant cette verification, sur donnees reelles, que le bug a ete
-        decouvert (jamais visible auparavant : Max, calcule en second, retombait correctement sur Dec
-        faute d''un 2e PosNumber, masquant que Min etait deja faux).
+        `field: Number|PosNumber|Dec, index: 0, kind: alt_rule` replaced by `child_index: 0` - a real bug
+        found on `ili_corpus/CHBase_Part1_GEOMETRY_V1.ili` (`Coord2 = COORD 460000.000 .. 870000.000 [m]
+        {CHLV03[1]}, ...`): the alt_rule mechanism (`ca.has_accessor` + index) was fooled by the
+        `PosNumber` of the optional REFSYS clause (`{CHLV03[1]}`, unrelated to the range) whenever the
+        actual alternative taken was ''Dec DOTDOT Dec'' - `ctx.PosNumber(0)` returned that PosNumber
+        (has_accessor only tests whether the METHOD exists, not this specific occurrence) instead of
+        None, so Min wrongly resolved to ''1'' (the refsys index) instead of ''460000.000''. Confirmed by
+        direct introspection of the real ANTLR tree: all 4 numeric() alternatives are always of the form
+        ''operand DOTDOT operand'' at child positions 0/1/2 (DOTDOT always at 1), regardless of the
+        alternative - `child_index` reads that position directly, immune to any accessor-name ambiguity
+        with an unrelated pattern elsewhere in the same ctx. Found while building the geometry validation
+        in schema.coord_axes/validate.py that actually consumes NumType.Min/Max on real data (previously
+        invisible: Max, computed second, happened to fall back correctly to Dec for lack of a 2nd
+        refsys PosNumber, masking that Min was already wrong).
 
         '
     Max:
       source:
         child_index: 2
-      note: 'Second operand of the matched range alternative, feeds NumType.Max. CORRIGE (Lot 42) - meme
-        raison que Min ci-dessus (child_index=2, DOTDOT etant toujours l''enfant 1 entre les deux
-        operandes) ; Max lui-meme etait DEJA correct en pratique (retombait sur Dec par accident, faute
-        d''un 2e PosNumber de refsys), mais bascule aussi vers `child_index` pour la coherence/robustesse
-        du binding (le mecanisme alt_rule reste tout aussi fragile pour Max face a un autre motif futur).'
+      note: 'Second operand of the matched range alternative, feeds NumType.Max. Same reason as Min above
+        (child_index=2, DOTDOT always being child 1 between the two operands); Max itself was already
+        correct in practice (fell back to Dec by accident, for lack of a 2nd refsys PosNumber), but also
+        switches to `child_index` for consistency/robustness (the alt_rule mechanism remains just as
+        fragile for Max against a future unrelated pattern).'
     Circular:
       source:
         field: CIRCULAR
@@ -1025,8 +937,8 @@ numeric:
         COUNTERCLOCKWISE: false
       note: 'Optional, mutually exclusive with each other; absent when neither is present (NumType.Clockwise
         is itself optional per multiplicity {0..1} confirmed in ilismeta16-classes.yml/check_mapping.py
-        output). CORRIGE (audit smoke test ModelBuilder, 2026-08-02) : le flag structure `optional: true`
-        manquait alors que cette meme note le decrit deja - ajoute pour correspondre.
+        output). The `optional: true` structural flag was missing even though this same note already
+        described that behavior - added to match.
 
         '
     Unit:
@@ -1040,52 +952,35 @@ numeric:
         '
     _refsys_clause:
       target: IlisMeta16.ModelData.NumsRefSys
-      note: 'CONFIRME (Lot 14, point 3, phase 2). Tranche par test EMPIRIQUE de parsing (RULE #4, meme
-        technique que le point 11) : la question etait de savoir si "{ Name [PosNumber] }"/"< Name >"
-        (bare token, dans numeric() lui-meme) est bien equivalent a refSys() (LCBR metaObjectRef.../domainRef...
-        RCBR/GT, deja confirme -> NumsRefSys.RefSys+Axis). Confirme par lecture du code compile (RULE
-        #2/#3) : numericType() (PAS numeric()) a son PROPRE accesseur refSys() distinct - sa 5e alternative
-        est exactement "NUMERIC numeric() (CLOCKWISE|COUNTERCLOCKWISE| refSys())?", ce qui correspond
-        mot pour mot a l''EBNF officiel du Reference Manual 2006-04-13 §2.8.5 : "NumericType = (Min-Dec
-        ''..'' Max-Dec | ''NUMERIC'') [''CIRCULAR''] [''['' UnitRef '']''] [''CLOCKWISE''|''COUNTERCLOCKWISE''|RefSys]."
-        - refSys() (deja confirme, metaObjectRef()/domainRef()) EST la vraie implementation de cette clause
-        finale ; le "{Name[PosNumber]}"/ "<Name>" DANS numeric() lui-meme est un DOUBLON/artefact de grammaire
-        (probablement introduit lors de la redefinition post 2.4 en recopiant la forme de refSys() a l''interieur
-        de numeric() sans remarquer que numericType() appelle deja refSys() separement). Test empirique
-        (5 cas, extraits .ili minimaux parses via antlr4-python3-runtime) : la REPARTITION entre les deux
-        chemins est asymetrique et dépend de la presence de l''index d''axe ET du type de crochet - "{Name}"
-        (sans axe) et "<Name[N]>" (avec axe) passent par refSys() separement (arbre : (numericType NUMERIC
-        (numeric ...) (refSys {...}/<...>))) ; "<Name>" (sans axe) et "{Name[N]}" (avec axe) sont a l''inverse
-        absorbes par la clause interne de numeric() lui-meme (arbre : (numeric ... {...}/<...>) sans noeud
-        refSys separe). Cette asymetrie n''a AUCUNE justification semantique claire - c''est un artefact
-        deterministe de resolution d''ambiguite par adaptivePredict d''ANTLR4, pas une distinction voulue
-        par le langage. CONCLUSION : peu importe lequel des deux chemins absorbe le texte source, la SEMANTIQUE
-        est identique dans les 4 cas - NumsRefSys.RefSys (resolu comme un MetaObjectDef si "{}", comme
-        un CoordType si "<>", par simple recherche du Name, EXACTEMENT comme metaObjectRef()/domainRef()
-        le feraient dans leur forme la plus simple - non qualifiee) et NumsRefSys.Axis (le PosNumber optionnel).
-        Decision ModelBuilder : quand numeric() lui-meme contient un LCBR/LT+Name+RSBR/GT (sans passer
-        par refSys()), traiter cette clause EXACTEMENT comme un refSys() dont le Name est deja resolu
-        (pas de qualification possible dans ce chemin - seul un Name simple, jamais Name.Name ni INTERLIS.Name,
-        voir test D/E qui confirment qu''un Name QUALIFIE force TOUJOURS le passage par refSys()/metaObjectRef()/domainRef()
-        - coherent avec le fait que la clause interne de numeric() n''a qu''un seul champ Name sans DOT).
+      note: '"{ Name [PosNumber] }"/"< Name >" (a bare token, inside numeric() itself) is equivalent to
+        refSys() (LCBR metaObjectRef.../domainRef... RCBR/GT -> NumsRefSys.RefSys+Axis) - a grammar
+        duplication/artifact (ANTLR4 adaptivePredict, no semantic justification), but semantically
+        identical either way: NumsRefSys.RefSys (resolved as a
+        MetaObjectDef if "{}", as a CoordType if "<>", by simple Name lookup, exactly as
+        metaObjectRef()/domainRef() would in their simplest unqualified form) and NumsRefSys.Axis (the
+        optional PosNumber). ModelBuilder treats an inline LCBR/LT+Name+RSBR/GT inside numeric() itself
+        exactly like a refSys() whose Name is already resolved (no qualification possible on this path -
+        only a simple Name, never Name.Name or INTERLIS.Name, consistent with numeric()''s inline clause
+        having only a single Name field with no DOT). Full investigation history (5 test cases, ANTLR
+        trees): docs/dev-notes/numeric-refsys-clause-investigation.md.
 
         '
       RefSys:
         source:
           field: Name
-        note: resolu comme metaObjectRef() (si LCBR) ou domainRef() (si LT) le ferait pour un Name simple
-          non qualifie - meme cible NumsRefSys.RefSys que refSys().
+        note: resolved as metaObjectRef() (if LCBR) or domainRef() (if LT) would for a simple unqualified
+          Name - same NumsRefSys.RefSys target as refSys().
       Axis:
         source:
           field: PosNumber
           optional: true
-        note: feeds NumsRefSys.Axis (AxisInd), identique a refSys().Axis - present uniquement dans la
-          branche LCBR de numeric() (le cas LT+axis passe systematiquement par refSys(), voir test F).
+        note: feeds NumsRefSys.Axis (AxisInd), identical to refSys().Axis - only present in numeric()''s
+          LCBR branch (the LT+axis case always goes through refSys(), see test F).
     _trailing_lt_name_gt:
-      note: 'FUSIONNE avec _refsys_clause ci-dessus (Lot 14, point 3) : "< Name >" est le meme cas que
-        documente dans _refsys_clause (branche LT sans axe, absorbee par la clause interne de numeric()
-        - voir test C). Conserve comme cle distincte uniquement pour ne pas perdre la reference historique
-        du point transversal ; voir _refsys_clause pour le binding complet.
+      note: 'Merged with _refsys_clause above: "< Name >" is the same case documented in _refsys_clause
+        (the LT branch without an axis, absorbed by numeric()''s inline clause). Kept as a distinct key so
+        as not to lose the reference; see _refsys_clause for the full binding, and
+        docs/dev-notes/numeric-refsys-clause-investigation.md for the investigation.
 
         '
   note: No direct IlisMeta16 instance expected. Min..Max numeric range with optional [unitRef] and CIRCULAR
@@ -1098,8 +993,8 @@ numericConst:
     Value:
       source:
         field: decConst
-      note: 'decConst() result feeds the parent Constant.Value (per grammar-metamodel-mapping.yml: "decConst
-        with an optional [unitRef]; feeds Constant.Value").
+      note: 'decConst() result feeds the parent Constant.Value (decConst
+        with an optional [unitRef]; feeds Constant.Value).
 
         '
     Unit:
@@ -1185,31 +1080,27 @@ oIDType:
     target: IlisMeta16.ModelData.AnyOIDType
   attribute_bindings:
     _dispatch:
-      note: '"OID (ANY | numeric | textType)" ou "UUIDOID" (4 formes). "OID numeric" délègue à numeric()
-        (déjà confirmé, construit un NumType avec Min/Max/Circular/Clockwise/Unit) ; "OID textType" délègue
-        à textType() (déjà confirmé ailleurs, construit un TextType avec Kind/MaxLength) - ces deux formes
-        CONFIRMÉES désormais, aucune restriction perdue : la restriction numérique/texte est portée par
-        le NumType/TextType construit, pas par un hypothétique attribut d''AnyOIDType. "OID ANY" et "UUIDOID"
-        construisent un AnyOIDType nu (own={} - marqueur pur, confirmé exhaustivement dans le XMI source
-        ET ilismeta16-classes.yml) ; aucune distinction ANY/UUIDOID n''est portée (AnyOIDType n''a structurellement
-        aucune place pour un tel flag) - CONFIRMÉ `not_applicable` pour cette distinction spécifique (pas
-        juste "dropped by design" hypothétique : preuve exhaustive obtenue). Décision ModelBuilder : dispatcher
-        sur l''alternative grammaticale matched (numeric()/textType() présent -> NumType/TextType ; sinon
-        -> AnyOIDType), sans chercher à distinguer ANY de UUIDOID au-delà de cette construction commune.
+      note: '"OID (ANY | numeric | textType)" or "UUIDOID" (4 forms). "OID numeric" delegates to numeric()
+        (builds a NumType with Min/Max/Circular/Clockwise/Unit); "OID textType" delegates to textType()
+        (builds a TextType with Kind/MaxLength) - no restriction is lost: the numeric/text restriction is
+        carried by the built NumType/TextType, not by a hypothetical AnyOIDType attribute. "OID ANY" and
+        "UUIDOID" build a bare AnyOIDType (own={} - a pure marker, confirmed exhaustively in both the
+        source XMI and ilismeta16-classes.yml); no ANY/UUIDOID distinction is carried (AnyOIDType has
+        structurally no room for such a flag) - not_applicable confirmed for this specific distinction.
+        ModelBuilder dispatches on the matched grammar alternative (numeric()/textType() present ->
+        NumType/TextType; otherwise -> AnyOIDType), without trying to distinguish ANY from UUIDOID beyond
+        this shared construction.
 
         '
-  note: 'Lot 18 (phase 2, résidus Phase 1) - correction : oIDType() n''est PAS un constructeur unique
-    (AnyOIDType), c''est un DISPATCHER (meme famille que type()/factor()). Preuve (RULE #1) : AnyOIDType.own
-    = {} (aucun attribut, confirme via le XMI source docs/uml/IlisMeta16-formatted.xmi ET ilismeta16-classes.yml)
-    - pas de place pour une restriction numeric/textType. Et ObjectOID.Oid (l''association qui rattache
-    un OID a une Class, ilismeta16-associations.yml) cible le type GENERIQUE `DomainType`, PAS specifiquement
-    AnyOIDType - preuve que les 4 alternatives d''oIDType() peuvent legitimement produire des DomainType
-    DIFFERENTS. "OID ANY" et "UUIDOID" construisent AnyOIDType (le marqueur "any", nom coherent) ; "OID
-    numeric"/ "OID textType" delegent a numeric()/textType(), qui construisent deja NumType/TextType (deja
-    confirmes ailleurs, mecanisme reutilise tel quel, pas de nouvelle construction). Blackbox types ||
-    Lot 18 (phase 2, résidus Phase 1) - CORRECTION : oIDType() est un DISPATCHER (comme type()/factor()),
-    pas un constructeur unique. Voir grammar-metamodel-mapping.yml pour la preuve complète (AnyOIDType.own={}
-    exhaustivement vide, ObjectOID.Oid cible DomainType générique et non AnyOIDType spécifiquement).'
+  note: 'oIDType() is not a single constructor (AnyOIDType), it is a DISPATCHER (same family as
+    type()/factor()). AnyOIDType.own = {} (no attribute, confirmed via the source XMI
+    docs/uml/IlisMeta16-formatted.xmi and ilismeta16-classes.yml) - no room for a numeric/textType
+    restriction. And ObjectOID.Oid (the association attaching an OID to a Class,
+    ilismeta16-associations.yml) targets the generic `DomainType` type, not specifically AnyOIDType -
+    evidence that oIDType()''s 4 alternatives can legitimately produce different DomainType subclasses.
+    "OID ANY" and "UUIDOID" build AnyOIDType (the "any" marker, a fitting name); "OID numeric"/"OID
+    textType" delegate to numeric()/textType(), which already build NumType/TextType (an existing
+    mechanism, reused as-is, no new construction).'
 refSys:
   grammar:
     rule: refSys
@@ -1249,26 +1140,24 @@ rotationDef:
         field: PosNumber
         index: 0
       note: 'Feeds directly into the enclosing coordinateType''s CoordType instance (via path:, see
-        coordinateType.NullAxis/PiHalfAxis). CORRIGE (audit corpus reel models.geo.admin.ch, 2026-08-03) :
-        coordinateType tentait auparavant d''indexer directement `field: rotationDef` avec index 0/1,
-        alors que rotationDef() est lui-meme un accesseur SINGLE (0 ou 1 occurrence, confirme
-        generated/ast-accessors.yml : RotationDefContext n''a pas de kind rule_multi pour rotationDef sur
-        CoordinateTypeContext) - seul son PosNumber INTERNE (rule_multi, confirme) est indexable 0/1.
-        TypeError sur tout coordinateType() avec une clause ROTATION reelle (ex. CHBase_Part1_GEOMETRY_V2.ili).
+        coordinateType.NullAxis/PiHalfAxis). coordinateType used to index `field: rotationDef` directly
+        with index 0/1, while rotationDef() is itself a SINGLE accessor (0 or 1 occurrence - confirmed
+        RotationDefContext has no rule_multi kind for rotationDef on CoordinateTypeContext) - only its
+        internal PosNumber (rule_multi, confirmed) is indexable 0/1. That raised a TypeError on any
+        coordinateType() with a real ROTATION clause (e.g. CHBase_Part1_GEOMETRY_V2.ili).
 
         '
     PiHalfAxis:
       source:
         field: PosNumber
         index: 1
-      note: Second PosNumber (apres MINUS GT) - voir NullAxis ci-dessus pour le contexte complet de la
-        correction.
+      note: Second PosNumber (after MINUS GT) - see NullAxis above for the full context of the fix.
   note: 'No direct IlisMeta16 instance expected. ROTATION <n1> -> <n2>: two numeric values feeding a rotation-related
-    attribute of the enclosing element (coordinate system definition context). || CONFIRME (Lot 13, point
-    2, phase 2): rotationDef() = ROTATION PosNumber(0) MINUS GT PosNumber(1), i.e. "ROTATION axisA ->
+    attribute of the enclosing element (coordinate system definition context). ||
+    rotationDef() = ROTATION PosNumber(0) MINUS GT PosNumber(1), i.e. "ROTATION axisA ->
     axisB" (two 1-based axis indices). No own class (target: null is correct - this rule has no own class/datatype
     instance, it feeds directly two attributes on the ENCLOSING coordinateType''s CoordType instance).
-    RULE #1/#4: confirmed via ilismeta16-classes.yml (CoordType.NullAxis/ PiHalfAxis, both type AxisInd)
+    Confirmed via ilismeta16-classes.yml (CoordType.NullAxis/ PiHalfAxis, both type AxisInd)
     and the INTERLIS 2 Metamodel PDF edition 2022-06-17, section 2.3.1 (p.10) and IDL text: "DOMAIN AxisInd
     = 1..3; CLASS CoordType EXTENDS DomainType = NullAxis: AxisInd; PiHalfAxis: AxisInd; Multi: BOOLEAN;
     END CoordType;" - AxisInd is a 1..3-valued index into CoordType''s ordered Axis list (association
@@ -1283,13 +1172,13 @@ textConst:
       source:
         field: STRING
       note: 'textConst() has a single alternative matching the STRING token verbatim. No dedicated IlisMeta16
-        instance is created (grammar-metamodel-mapping.yml: "No direct IlisMeta16 instance expected");
+        instance is created ("No direct IlisMeta16 instance expected");
         this raw string value feeds the parent construct''s own Value/Constant handling (e.g. Constant.Value
         via the `constant` rule dispatch).
 
         '
   note: No direct IlisMeta16 instance expected. Single STRING literal; feeds Constant.Value (Type=Text)
-    on the enclosing Constant (created by constant). Enumeration types
+    on the enclosing Constant (created by constant).
 textType:
   grammar:
     rule: textType
@@ -1339,25 +1228,17 @@ type:
         (delegates further), or bare ''STRING DOTDOT STRING'' (a text-range domain). The 3rd alternative
         has no confirmed dedicated DomainType subclass distinct from TextType/LengthRange - status unresolved.'
     text_range_alt:
-      note: 'CORRIGE (Lot 37, RULE #1 - reexamine avec un exemple reel en main, ce qui n''existait pas
-        au Lot 18). "''STRING DOTDOT STRING''" (e.g. "a".."z") EST rencontree dans un fichier reel
-        (CoordSys-20151124.ili : "Angle_DMS_90 EXTENDS Angle_DMS = ''-90:00:00.000'' .. ''90:00:00.000'';",
-        ou Angle_DMS est lui-meme un FORMAT BASED ON ... - un FormattedType). L''ancienne conclusion
-        "aucune sous-classe DomainType ne convient" reposait sur une recherche EXHAUSTIVE mais SANS
-        exemple reel a confronter - elle manquait l''analogie directe deja presente ailleurs dans ce
-        meme fichier de spec : `formattedType()` (alternatives 1/3, meme forme syntaxique EXACTE "STRING
-        DOTDOT STRING") vise deja `IlisMeta16.ModelData.FormattedType`, `Min`/`Max` herites de NumType
-        (meme GUID que Class.Name, stockage TEXT d''exemples de format). L''objection d''origine
-        ("NumType.Min/Max jamais alimente par STRING") ne visait que la reutilisation du binding PROPRE
-        a `numeric()` - pas une impossibilite categorique, `formattedType()` alimente deja ces memes
-        champs depuis un STRING. Desormais construite via `InterlisModelBuilder._build_type_string_range`
-        (meme famille de cas special que multi_declaration/enumeration - PAS le mecanisme declaratif
-        standard, voir docstring de la methode pour le detail complet, y compris un bug moteur plus
-        large decouvert a cette occasion : `ctx.getAltNumber()` toujours 0, rendant `formattedType.Min/
-        Max/Format` elles-memes actuellement inertes en pratique malgre leur binding `alt:` "confirme" -
-        non corrige ce lot, documente dans PROGRESS.md). `domainDef()` a sa PROPRE alternative directe
-        pour ce meme motif, mais grammaticalement inatteignable (ANTLR resout l''ambiguite en faveur de
-        `type()`, confirme empiriquement) - `_build_type_string_range` est le SEUL point d''entree reel.
+      note: '"''STRING DOTDOT STRING''" (e.g. "a".."z") does occur in real data (CoordSys-20151124.ili:
+        "Angle_DMS_90 EXTENDS Angle_DMS = ''-90:00:00.000'' .. ''90:00:00.000'';", where Angle_DMS is
+        itself a FORMAT BASED ON ... - a FormattedType). Built via
+        `InterlisModelBuilder._build_type_string_range` (same special-case family as
+        multi_declaration/enumeration, not the standard declarative mechanism), targeting the same
+        `IlisMeta16.ModelData.FormattedType` that `formattedType()` (alternatives 1/3, the exact same
+        "STRING DOTDOT STRING" syntax) already targets. `domainDef()` has its own direct alternative for
+        this same pattern, but it is grammatically unreachable (ANTLR resolves the ambiguity in favor of
+        `type()`) - `_build_type_string_range` is the only real entry point. Background, including a
+        broader engine issue this uncovered (`ctx.getAltNumber()` always 0):
+        docs/dev-notes/type-string-range-investigation.md.
 
         '
   note: Primitive and base types

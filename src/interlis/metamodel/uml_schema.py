@@ -1,18 +1,20 @@
-"""Vue combinee du metamodele IlisMeta16 : UmlIndex (classes/datatypes/
-associations/enumerations) + ilismeta16-kind-values.yml (valeurs des
-enumerations anonymes referencees par UUID generique - voir GENERIC_ENUM_TYPE_UUID
-ci-dessous).
+"""Combined view of the IlisMeta16 metamodel.
 
-Quatre types primitifs UML anonymes (xmi:id brut, pas de qualified_name)
-sont utilises comme `type:` d'attribut dans ilismeta16-classes.yml/
-datatypes.yml (verifie empiriquement par grep sur le YAML + le XMI source,
-docs/uml/IlisMeta16-formatted.xmi) : EnumerationType (279A049B...),
-NumericType (39FDCDA0...), TextType (C16095C6...), PolylineType
-(F466480C..., un seul usage : INTERLIS.SurfaceEdge.Geometry - type
-geometrique hors perimetre de cette conception, voir registry.py). Seul
-EnumerationType a un traitement special (resolution via kind-values.yml en
-Literal[...]) - les 3 autres sont directement resolus par le typage
-permissif `Any` du registry (voir sa docstring pour la justification)."""
+Combines UmlIndex (classes/datatypes/associations/enumerations) with
+ilismeta16-kind-values.yml (values of the anonymous enumerations
+referenced by generic UUID - see GENERIC_ENUM_TYPE_UUID below).
+
+Four anonymous UML primitive types (raw xmi:id, no qualified_name) are used
+as an attribute's `type:` in ilismeta16-classes.yml/datatypes.yml (verified
+against the YAML + the source XMI, docs/uml/IlisMeta16-formatted.xmi):
+EnumerationType (279A049B...), NumericType (39FDCDA0...), TextType
+(C16095C6...), PolylineType (F466480C..., single use:
+INTERLIS.SurfaceEdge.Geometry - a geometry type out of scope for this
+design, see registry.py). Only EnumerationType gets special handling
+(resolved via kind-values.yml into `Literal[...]`) - the other 3 are
+resolved directly by the registry's permissive `Any` typing (see its
+docstring for the rationale).
+"""
 from pathlib import Path
 
 import yaml
@@ -35,9 +37,11 @@ class MetamodelSchema:
         return cls(uml, kv_data.get("kind_values", {}))
 
     def instantiable_classes(self) -> dict[str, dict]:
-        """Classes et datatypes (kind Class ou DataType) - ce que le registry
-        doit generer comme classes Pydantic. Exclut Association et
-        Enumeration (structures distinctes, non generees comme instances)."""
+        """Return classes and datatypes - what the registry must generate.
+
+        Selects kind Class or DataType. Excludes Association and
+        Enumeration (separate structures, not generated as instances).
+        """
         return {
             qn: el for qn, el in self.uml.qualified.items()
             if el.get("kind") in ("Class", "DataType")

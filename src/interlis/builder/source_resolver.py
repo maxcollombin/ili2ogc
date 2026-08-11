@@ -1,20 +1,20 @@
-"""Interprete une entree `source:` (+ eventuel `rule:`/`mapping:` frere)
-d'un binding de spec/grammar/mapping/*.yml contre un ctx ANTLR reel.
+"""Interpret a `source:` (plus sibling `rule:`/`mapping:`) binding entry.
 
-Principe central, qui fait que le moteur reste generique meme pour les
-constructions imbriquees (ex. attrTypeDef._collection) ou le mecanisme
-`path:` : chaque fois qu'un accesseur retourne un noeud, on distingue token
-(TerminalNode -> texte brut) de regle (ParserRuleContext -> VISITE
-recursivement par le builder, qui applique la logique propre - kind,
-attribute_bindings - de CETTE regle). Voir _resolve_node().
+Reads a spec/grammar/mapping/*.yml binding's `source:` against a real
+ANTLR ctx. Core principle, which keeps the engine generic even for nested
+constructions (e.g. attrTypeDef._collection) or the `path:` mechanism:
+whenever an accessor returns a node, distinguish a token (TerminalNode ->
+raw text) from a rule (ParserRuleContext -> recursively VISITED by the
+builder, which applies that rule's own logic - kind, attribute_bindings).
+See _resolve_node().
 
-Catalogue des formes `source` couvertes, cf. plan de conception du
-ModelBuilder (verifie contre les 9 fichiers reels le 2026-08-02, pas ferme
-pour toujours) : field+index, field+presence, field+kind:alt_token(+optional),
-field+multi(+optional), field+optional, field+alt+index+optional,
-field+anchor+optional, field+path+optional, kind:constant+value,
-segments composes+join(+index negatif), sequence_pattern, field:null seul
-(valeur propagee par le contexte de construction)."""
+`source` forms covered: field+index, field+presence,
+field+kind:alt_token(+optional), field+multi(+optional), field+optional,
+field+alt+index+optional, field+anchor+optional, field+path+optional,
+kind:constant+value, composed segments+join(+negative index),
+sequence_pattern, field:null alone (value propagated by the build
+context).
+"""
 import warnings
 from typing import Any
 
@@ -36,11 +36,11 @@ def _resolve_node(node: Any, builder: Any, rule: str) -> Any:
     if isinstance(node, ParserRuleContext):
         return builder.visit(node)
     if isinstance(node, list):
-        # Certains accesseurs "multi" retournent leur liste complete meme
-        # quand le binding ne demandait pas explicitement une liste (ex.
-        # `index: null` appelle l'accesseur sans argument, qui pour un
-        # accesseur multi renvoie TOUJOURS la liste, pas un element unique) -
-        # resoudre chaque element plutot que de renvoyer la liste brute.
+        # Some "multi" accessors return their full list even when the
+        # binding didn't explicitly ask for a list (e.g. `index: null`
+        # calls the accessor with no argument, which for a multi accessor
+        # ALWAYS returns the list, never a single element) - resolve each
+        # element rather than returning the raw list.
         resolved = [r for r in (_resolve_node(n, builder, rule) for n in node) if r is not None]
         if len(resolved) == 1:
             return resolved[0]
@@ -49,19 +49,20 @@ def _resolve_node(node: Any, builder: Any, rule: str) -> Any:
 
 
 def _resolve_multi_node(node: Any, builder: Any, rule: str, wrap_map: dict) -> Any:
-    """Comme `_resolve_node`, mais promeut un noeud (regle-bag OU token nu)
-    en instance typee du metamodele quand `wrap_map` couvre son nom de
-    regle/token (Lot 42 - meme principe que le repli `wrap:` deja existant
-    pour la branche alt de `resolve_source`, ici etendu a la branche `multi:
-    true` : necessaire pour `coordinateType.Axis`, `AssociationAxisSpec.Axis
-    {1..3} NumType ORDERED` - CHAQUE `numeric()`/`NUMERIC` nu de la liste
-    doit devenir son PROPRE `NumType`, jamais un bag brut partage - confirme
-    reel, `CoordType.Axis` ne contenait jusqu'ici QUE des dicts bruts, jamais
-    de vraies instances `NumType`, silencieusement inexploitables par tout
-    code aval attendant des `MetaInstance` - ex. schema.coord_axes). Un
-    token nu couvert par `wrap_map` (ex. `NUMERIC` sans plage/unite) produit
-    une instance VIDE du type cible (RULE #4, note coordinateType.Axis :
-    "a bare NUMERIC keyword ... still produces a NumType instance")."""
+    """Like `_resolve_node`, but promotes a node to a typed metamodel instance.
+
+    Promotes a node (rule-bag OR bare token) when `wrap_map` covers its
+    rule/token name. Same principle as the `wrap:` fallback already used by `resolve_source`'s
+    alt branch, extended here to the `multi: true` branch - needed for
+    `coordinateType.Axis`, `AssociationAxisSpec.Axis {1..3} NumType
+    ORDERED`: each bare `numeric()`/`NUMERIC` in the list must become its
+    own `NumType`, never a shared raw bag (otherwise `CoordType.Axis` holds
+    only raw dicts, never real `NumType` instances, silently unusable by
+    downstream code expecting `MetaInstance` - e.g. schema.coord_axes). A
+    bare token covered by `wrap_map` (e.g. `NUMERIC` with no range/unit)
+    produces an empty instance of the target type (see coordinateType.Axis's
+    note: "a bare NUMERIC keyword ... still produces a NumType instance").
+    """
     if isinstance(node, ParserRuleContext):
         rule_name = builder._rule_name(node)
         if rule_name in wrap_map:
@@ -101,31 +102,30 @@ def resolve_source(
     if source.get("kind") == "constant":
         return source.get("value")
 
-    # --- child_index : position BRUTE dans ctx.children (pas un accesseur
-    # nomme) - necessaire quand plusieurs alternatives grammaticales
-    # partagent le MEME jeu de noms de token a des positions DIFFERENTES, et
-    # qu'un AUTRE occurrence du meme token type existe AILLEURS dans le MEME
-    # ctx pour un motif SANS RAPPORT (Lot 42, bug reel trouve en construisant
-    # la validation geometrie XTF - voir numeric.Min/Max, 06_types.yml).
-    # `numeric()` a 4 alternatives ('(Number|PosNumber|Dec) DOTDOT
-    # (Number|PosNumber|Dec)', confirme sur le code ANTLR reel) TOUJOURS aux
-    # positions enfant 0/1/2 (operande, DOTDOT, operande) quelle que soit
-    # l'alternative prise - mais le mecanisme `alt_rule` generique (field
-    # compose + has_accessor + index) se laissait tromper par un `PosNumber`
-    # NON LIE existant plus loin dans le MEME ctx (la clause REFSYS optionnelle
-    # `{ Name PosNumber }`, ex. `{CHLV03[1]}`) : `ca.has_accessor(ctx,
-    # "PosNumber")` est TOUJOURS vrai (methode toujours presente sur
-    # NumericContext), et `ctx.PosNumber(0)` retournait ce PosNumber de
-    # refsys au lieu de None des que l'alternative REELLEMENT prise etait
-    # 'Dec DOTDOT Dec' (has_accessor teste la presence de la METHODE, pas de
-    # CETTE occurrence precise) - confirme reel sur `ili_corpus/
-    # CHBase_Part1_GEOMETRY_V1.ili` (`Coord2 = COORD 460000.000 ..
-    # 870000.000 [m] {CHLV03[1]}, ...` : Min resolvait a tort vers '1' - le
-    # PosNumber du refsys - au lieu de '460000.000', alors que Max (index 1,
-    # qui retombait correctement sur Dec faute d'un 2e PosNumber) restait
-    # juste). Une simple position BRUTE (enfant 0 = 1er operande, enfant 2 =
-    # 2e operande - DOTDOT est toujours l'enfant 1) est fiable pour ce motif
-    # precis, contrairement au nom d'accesseur.
+    # --- child_index: RAW position in ctx.children (not a named accessor) -
+    # needed when several grammar alternatives share the SAME set of token
+    # names at DIFFERENT positions, and another occurrence of the same
+    # token type exists ELSEWHERE in the SAME ctx for an UNRELATED pattern
+    # (see numeric.Min/Max, 06_types.yml, for a real case).
+    # `numeric()` has 4 alternatives ('(Number|PosNumber|Dec) DOTDOT
+    # (Number|PosNumber|Dec)', confirmed against the real ANTLR code)
+    # ALWAYS at child positions 0/1/2 (operand, DOTDOT, operand) regardless
+    # of which alternative matched - but the generic `alt_rule` mechanism
+    # (composed field + has_accessor + index) was fooled by an UNRELATED
+    # `PosNumber` existing further in the SAME ctx (the optional REFSYS
+    # clause `{ Name PosNumber }`, e.g. `{CHLV03[1]}`): `ca.has_accessor(ctx,
+    # "PosNumber")` is ALWAYS true (the method is always present on
+    # NumericContext), and `ctx.PosNumber(0)` returned that refsys
+    # PosNumber instead of None whenever the alternative ACTUALLY taken was
+    # 'Dec DOTDOT Dec' (has_accessor tests whether the METHOD exists, not
+    # whether THIS specific occurrence does). Confirmed real on
+    # `ili_corpus/CHBase_Part1_GEOMETRY_V1.ili` (`Coord2 = COORD 460000.000
+    # .. 870000.000 [m] {CHLV03[1]}, ...`: Min wrongly resolved to '1' - the
+    # refsys PosNumber - instead of '460000.000', while Max (index 1, which
+    # correctly fell back to Dec for lack of a 2nd PosNumber) stayed
+    # correct). A simple RAW position (child 0 = 1st operand, child 2 = 2nd
+    # operand - DOTDOT is always child 1) is reliable for this exact
+    # pattern, unlike the accessor name.
     if "child_index" in source:
         idx = source["child_index"]
         children = list(ctx.children or [])
@@ -133,37 +133,37 @@ def resolve_source(
         if node is None:
             if optional:
                 return None
-            raise BuildError(f"child_index={idx!r} absent sur {type(ctx).__name__}", rule=rule, ctx=ctx)
+            raise BuildError(f"child_index={idx!r} missing on {type(ctx).__name__}", rule=rule, ctx=ctx)
         return _resolve_node(node, builder, rule)
 
     field = source.get("field")
     optional = bool(source.get("optional"))
 
-    # field: null seul -> valeur propagee par la regle englobante, sous la
-    # MEME cle d'attribut (ex. interlis2def.iliVersion -> modeldef.iliVersion,
-    # meme nom des deux cotes - mecanisme minoritaire mais impossible a
-    # eviter sans changer la spec, cable explicitement plutot qu'une
-    # solution generique cachee, voir plan de conception).
+    # field: null alone -> value propagated by the enclosing rule, under the
+    # SAME attribute key (e.g. interlis2def.iliVersion -> modeldef.iliVersion,
+    # same name on both sides - a minority mechanism, unavoidable without
+    # changing the spec, wired explicitly rather than a hidden generic
+    # solution).
     if field is None:
         key = source.get("context_key") or binding_key or rule
         value = construction_context.get(key)
         if source.get("as_forward_ref") and isinstance(value, str):
-            # Enveloppe une valeur brute (ex. nom importe via
-            # modeldef.imports, boucle for_each - voir InterlisModelBuilder)
-            # en reference nommee, resolue plus tard comme n'importe quelle
-            # autre (SymbolTable, ou UnresolvedNamedReference si hors du
-            # fichier courant - decision de perimetre V1 IMPORTS).
+            # Wraps a raw value (e.g. a name imported via modeldef.imports,
+            # for_each loop - see InterlisModelBuilder) into a named
+            # reference, resolved later like any other (SymbolTable, or
+            # UnresolvedNamedReference if outside the current file - V1
+            # IMPORTS scope decision).
             return ForwardRef(name=value, rule=rule, always_external=bool(source.get("always_external_ref")))
         return value
 
     kind = source.get("kind")
 
-    # --- multi : liste, chaque element resolu (token -> texte, regle ->
-    # visite). Verifie AVANT le cas alt/'|' ci-dessous : un champ compose
-    # (ex. 'Name|INTERLIS') combine a multi:true doit lister TOUTES les
-    # occurrences de chaque alternative, pas s'arreter a la premiere
-    # (sinon ca.call(ctx, name) sur un accesseur "multi" appele sans index
-    # renverrait sa LISTE complete, pas un noeud unique - bug latent). -----
+    # --- multi: list, each element resolved (token -> text, rule ->
+    # visited). Checked BEFORE the alt/'|' case below: a composed field
+    # (e.g. 'Name|INTERLIS') combined with multi:true must list ALL
+    # occurrences of each alternative, not stop at the first (otherwise
+    # ca.call(ctx, name) on a "multi" accessor called without an index
+    # would return its FULL list, not a single node - a latent bug). -----
     if source.get("multi"):
         names = [n.strip() for n in field.split("|")] if "|" in field else [field]
         nodes: list[Any] = []
@@ -172,13 +172,13 @@ def resolve_source(
                 nodes.extend(ca.call_list(ctx, name))
         between = source.get("between")
         if between and nodes:
-            # Meme accesseur (ex. Name) reutilise a plusieurs positions
-            # grammaticales distinctes dans la MEME regle (ex. modeldef :
-            # son propre nom, un nom de langue optionnel, les noms importes,
-            # le nom de fermeture apres END - tous des 'Name') : ne garder
-            # que les occurrences situees ENTRE deux tokens-ancres (ex.
-            # ['IMPORTS', 'END'] pour modeldef.imports), par position dans
-            # ctx.children plutot que par index plat fixe.
+            # The same accessor (e.g. Name) reused at several distinct
+            # grammar positions within the SAME rule (e.g. modeldef: its
+            # own name, an optional language name, imported names, the
+            # closing name after END - all 'Name') : keep only the
+            # occurrences BETWEEN two anchor tokens (e.g. ['IMPORTS', 'END']
+            # for modeldef.imports), by position in ctx.children rather
+            # than a fixed flat index.
             start_name, end_name = between
             children = list(ctx.children or [])
             start_positions = [children.index(n) for n in ca.call_list(ctx, start_name) if n in children]
@@ -193,57 +193,58 @@ def resolve_source(
         return [_resolve_node(n, builder, rule) for n in nodes]
 
     # --- alternatives (alt_token / alt_rule / alt_token_or_rule /
-    # alt_token_presence) : plusieurs noms de champ separes par '|', on
-    # retient le premier present. La cle de mapping (rule_map) est le NOM
-    # de champ qui a matche (pas son texte), ou "absent" si aucun. ----------
+    # alt_token_presence): several field names separated by '|', keep the
+    # first present one. The mapping key (rule_map) is the field NAME that
+    # matched (not its text), or "absent" if none did. ----------
     if kind in ALT_KINDS or "|" in field:
         names = [n.strip() for n in field.split("|")]
         alt_index = source.get("index")
         for name in names:
             if not ca.has_accessor(ctx, name):
                 continue
-            # index (ex. Min: index 0, Max: index 1 sur le MEME groupe
-            # d'alternatives 'Number|PosNumber|Dec') selectionne QUELLE
-            # occurrence du nom matche, pas seulement sa presence - ignore
-            # ca aurait donne la liste complete (ou le seul/premier element)
-            # au lieu de l'operande voulu. Mais un index peut ne pas
-            # s'appliquer a TOUTES les alternatives du groupe (ex.
-            # cardinality.Max: 'MUL|PosNumber', index:1 - MUL/'*' est un
-            # accesseur single, l'index ne concerne que la branche PosNumber) -
-            # retomber sur l'accesseur sans index plutot que TypeError.
+            # An index (e.g. Min: index 0, Max: index 1 on the SAME
+            # 'Number|PosNumber|Dec' alternative group) selects WHICH
+            # occurrence of the matched name to use, not just its presence -
+            # ignoring it would give the full list (or the single/first
+            # element) instead of the intended operand. But an index may
+            # not apply to ALL alternatives in the group (e.g.
+            # cardinality.Max: 'MUL|PosNumber', index:1 - MUL/'*' is a
+            # single accessor, the index only concerns the PosNumber
+            # branch) - fall back to the accessor without an index rather
+            # than a TypeError.
             try:
                 node = ca.call(ctx, name, alt_index)
             except TypeError:
                 node = ca.call(ctx, name)
             if isinstance(node, list):
-                # `name` est un accesseur "multi" sur CE ctx (peut apparaitre
-                # plusieurs fois - ex. numeric()/enumeration() sur
-                # DomainDefContext, qui boucle sur N declarations de domaine,
-                # meme quand une seule alternative n'est en jeu par
-                # declaration) et aucun index explicite n'a matche (alt_index
-                # est None ou ne s'applique pas ici) : `ca.call` sans index
-                # renvoie alors la LISTE COMPLETE, jamais None, meme quand
-                # elle est VIDE - sans ce garde, une liste vide etait
-                # faussement traitee comme "alternative presente" (trouve sur
-                # domainDef._domain_content : "numeric" matchait toujours en
-                # premier avec une liste vide avant que "enumeration", la
-                # vraie alternative presente, ne soit jamais essayee).
+                # `name` is a "multi" accessor on THIS ctx (can appear
+                # several times - e.g. numeric()/enumeration() on
+                # DomainDefContext, which loops over N domain declarations,
+                # even though only one alternative is in play per
+                # declaration) and no explicit index matched (alt_index is
+                # None or doesn't apply here): `ca.call` without an index
+                # then returns the FULL list, never None, even when it's
+                # EMPTY - without this guard, an empty list was wrongly
+                # treated as "alternative present" (found on
+                # domainDef._domain_content: "numeric" always matched first
+                # with an empty list before "enumeration", the actually
+                # present alternative, was ever tried).
                 node = node[0] if node else None
             if node is not None:
                 if kind == "alt_token_presence":
                     value = name
                 elif wrap_map is not None and name in wrap_map and isinstance(node, ParserRuleContext):
-                    # L'alternative matchee est une regle-bag (Container/
-                    # ValueObject, ex. numeric()/enumeration()) a promouvoir
-                    # en instance typee du metamodele (ex. NumType/EnumType).
-                    # L'instance doit exister et etre au sommet de la pile
-                    # de construction AVANT la visite (pas apres) : certains
-                    # enfants de la regle-bag s'auto-attachent via leur
-                    # propre `parent:` PENDANT la visite (ex. enumElement ->
-                    # TopNode/SubNode) - visiter d'abord puis envelopper
-                    # ensuite les attacherait au mauvais parent (celui
-                    # deja au sommet de la pile a ce moment, pas la nouvelle
-                    # instance). Voir InterlisModelBuilder.visit_wrapped.
+                    # The matched alternative is a rule-bag (Container/
+                    # ValueObject, e.g. numeric()/enumeration()) to promote
+                    # into a typed metamodel instance (e.g. NumType/EnumType).
+                    # The instance must exist and be on top of the
+                    # construction stack BEFORE the visit (not after): some
+                    # children of the rule-bag self-attach via their own
+                    # `parent:` DURING the visit (e.g. enumElement ->
+                    # TopNode/SubNode) - visiting first and wrapping
+                    # afterwards would attach them to the wrong parent (the
+                    # one already on top of the stack at that point, not the
+                    # new instance). See InterlisModelBuilder.visit_wrapped.
                     return builder.visit_wrapped(node, wrap_map[name], rule)
                 else:
                     value = _resolve_node(node, builder, rule)
@@ -252,53 +253,52 @@ def resolve_source(
                 return value
         if rule_map is not None and "absent" in rule_map:
             return rule_map["absent"]
-        # Aucune alternative presente et pas de cle "absent" pour un defaut
-        # explicite : traite comme optionnel par defaut, `optional: true`
-        # ou pas. Justification (audit smoke test ModelBuilder, 2026-08-02) :
-        # tous les alt_token/alt_rule reels examines sont soit dotes d'un
-        # "absent" dans rule_map (cas ou une valeur par defaut existe), soit
-        # documentes comme optionnels dans leur note sans que le flag
-        # structure `optional: true` suive systematiquement (plusieurs
-        # occurrences trouvees et corrigees au cas par cas, ex.
-        # numeric.Clockwise - mais le motif se repete plus qu'il n'est
-        # commode de corriger un par un) - aucun cas reel trouve ou une
-        # alternative manquante doit etre une erreur bloquante.
-        warnings.warn(f"[{rule}] aucune alternative presente parmi {names!r} - traite comme absent/None")
+        # No alternative present and no "absent" key for an explicit
+        # default: treated as optional by default, whether `optional: true`
+        # is set or not. Rationale: every real alt_token/alt_rule case
+        # examined either has an "absent" entry in rule_map (a default
+        # value exists), or is documented as optional in its note without
+        # the structural `optional: true` flag consistently following
+        # (several occurrences found and fixed case by case, e.g.
+        # numeric.Clockwise - but the pattern recurs more often than it's
+        # convenient to fix one by one) - no real case found where a
+        # missing alternative should be a blocking error.
+        warnings.warn(f"[{rule}] no alternative present among {names!r} - treated as absent/None")
         return None
 
-    # --- sequence_pattern : reconnaissance d'une sequence exacte de tokens
-    # consecutifs a partir de `field` (ex. roleDef.Strongness : '--' vs
-    # '-<>' vs '-<#>' -> Assoc/Aggr/Comp). La cle de mapping est la
-    # sequence de NOMS de token (ex. "MINUS LT GT"), pas le texte. ----------
+    # --- sequence_pattern: recognizes an exact sequence of consecutive
+    # tokens starting at `field` (e.g. roleDef.Strongness: '--' vs '-<>' vs
+    # '-<#>' -> Assoc/Aggr/Comp). The mapping key is the sequence of token
+    # NAMES (e.g. "MINUS LT GT"), not the text. ----------
     if source.get("sequence_pattern"):
         if rule_map is None:
-            raise BuildError("sequence_pattern sans rule:/mapping: associe", rule=rule, ctx=ctx)
+            raise BuildError("sequence_pattern with no associated rule:/mapping:", rule=rule, ctx=ctx)
         return _match_sequence_pattern(ctx, field, rule_map, builder, rule, optional)
 
-    # --- anchor : position relative a un token ancre (pas un index plat -
-    # necessaire quand plusieurs occurrences du meme type de champ existent
-    # et que seule celle suivant un token precis nous interesse). ----------
+    # --- anchor: position relative to an anchor token (not a flat index -
+    # needed when several occurrences of the same field type exist and only
+    # the one following a specific token matters). ----------
     if "anchor" in source:
         return _resolve_anchor(ctx, field, source["anchor"], optional=optional, builder=builder, rule=rule)
 
-    # --- path : delegue a une sous-regle (Container/ValueObject, visitee
-    # via _resolve_node -> retourne un bag dict), extrait une cle. ----------
+    # --- path: delegates to a sub-rule (Container/ValueObject, visited via
+    # _resolve_node -> returns a bag dict), extracts one key. ----------
     if "path" in source:
         if not ca.has_accessor(ctx, field):
-            raise BuildError(f"accesseur {field!r} introuvable sur {type(ctx).__name__}", rule=rule, ctx=ctx)
+            raise BuildError(f"accessor {field!r} not found on {type(ctx).__name__}", rule=rule, ctx=ctx)
         node = ca.call(ctx, field)
         if node is None:
             if optional:
                 return None
-            raise BuildError(f"{field!r} absent (path={source['path']!r})", rule=rule, ctx=ctx)
+            raise BuildError(f"{field!r} missing (path={source['path']!r})", rule=rule, ctx=ctx)
         bag = _resolve_node(node, builder, rule)
         if not isinstance(bag, dict):
             raise BuildError(
-                f"path={source['path']!r} attendu sur un bag (dict), obtenu {type(bag).__name__}", rule=rule, ctx=ctx
+                f"path={source['path']!r} expected on a bag (dict), got {type(bag).__name__}", rule=rule, ctx=ctx
             )
         return bag.get(source["path"])
 
-    # --- presence : booleen (le champ apparait-il ou non). ------------------
+    # --- presence: boolean (does the field appear or not). ------------------
     if source.get("presence"):
         present = ca.is_present(ctx, field, source.get("index"))
         if rule_map is not None:
@@ -307,40 +307,34 @@ def resolve_source(
                 return rule_map[key]
         return present
 
-    # --- segments composes + join : concatenation de plusieurs sous-valeurs
-    # nommees comme cles freres de `field` (valeur null = "presence de ce
-    # segment tel quel"), avec index Python (-1 = dernier) supporte. --------
+    # --- composed segments + join: concatenation of several sub-values
+    # named as sibling keys of `field` (value null = "presence of this
+    # segment as-is"), with Python indexing (-1 = last) supported. --------
     if "join" in source:
         return _resolve_join(ctx, source, builder, rule)
 
-    # --- cas standard : field (+ index) (+ optional). -------------------
-    # CORRIGE (Lot 38) : ce chemin acceptait aussi un filtre `alt: <entier>`
-    # (+ forme "N|M"), cense ne s'appliquer qu'a UNE alternative grammaticale
-    # numerotee via `ctx.getAltNumber()`. Retire entierement - RULE #1,
-    # verifie empiriquement que `getAltNumber()` renvoie INCONDITIONNELLEMENT
-    # 0 pour toute regle de `InterlisParser.g4` (aucune alternative
-    # labellisee nulle part dans la grammaire vendee), rendant ce filtre
-    # TOUJOURS faux et les 15 bindings qui l'utilisaient TOUJOURS None (bug
-    # confirme sur formattedType.Format/Min/Max, entre autres). Chacun des
-    # 15 cas reels a ete reverifie contre la grammaire (RULE #1/#2) : le nom
-    # d'accesseur (`field:`) qu'ils filtraient etait deja NATURELLEMENT
-    # exclusif a l'alternative visee par construction grammaticale (ex.
-    # `formattedType` alt1 a un accesseur `Name` direct qu'aucune autre
-    # alternative n'expose ; `pathEl` n'expose `Name` directement que dans
-    # ses alternatives 5/6/9, jamais 1-4/7/8) - le filtre `alt:` etait donc
-    # une securite redondante plutot qu'une necessite, jamais indispensable
-    # a la bonne resolution une fois retire. Voir PROGRESS.md (Lot 37/38)
-    # pour le detail complet de l'investigation.
+    # --- standard case: field (+ index) (+ optional). -------------------
+    # No `alt: <int>` filter here on purpose: `ctx.getAltNumber()`
+    # unconditionally returns 0 for every rule in `InterlisParser.g4` (no
+    # alternative is labelled anywhere in the vendored grammar), so any
+    # such filter would always evaluate false and silently leave the
+    # binding None (see formattedType.Format/Min/Max for a case this broke
+    # in practice). The accessor name (`field:`) is already naturally
+    # exclusive to the targeted alternative by grammar construction (e.g.
+    # `formattedType` alt1 has a direct `Name` accessor that no other
+    # alternative exposes; `pathEl` only exposes `Name` directly in its
+    # alternatives 5/6/9, never 1-4/7/8), so no alternative-number filter
+    # is needed for correct resolution.
     if not ca.has_accessor(ctx, field):
         if optional:
             return None
-        raise BuildError(f"accesseur {field!r} introuvable sur {type(ctx).__name__}", rule=rule, ctx=ctx)
+        raise BuildError(f"accessor {field!r} not found on {type(ctx).__name__}", rule=rule, ctx=ctx)
 
     node = ca.call(ctx, field, source.get("index"))
     if node is None:
         if optional:
             return None
-        raise BuildError(f"{field!r} absent (non optionnel) sur {type(ctx).__name__}", rule=rule, ctx=ctx)
+        raise BuildError(f"{field!r} missing (not optional) on {type(ctx).__name__}", rule=rule, ctx=ctx)
     value = _resolve_node(node, builder, rule)
     if rule_map is not None:
         return rule_map.get(value, value)
@@ -351,17 +345,17 @@ def _resolve_anchor(ctx: Any, field: str, anchor: str, *, optional: bool, builde
     if not ca.has_accessor(ctx, anchor):
         if optional:
             return None
-        raise BuildError(f"ancre {anchor!r} introuvable sur {type(ctx).__name__}", rule=rule, ctx=ctx)
+        raise BuildError(f"anchor {anchor!r} not found on {type(ctx).__name__}", rule=rule, ctx=ctx)
     anchor_node = ca.call(ctx, anchor)
     if anchor_node is None:
         if optional:
             return None
-        raise BuildError(f"ancre {anchor!r} absente", rule=rule, ctx=ctx)
+        raise BuildError(f"anchor {anchor!r} missing", rule=rule, ctx=ctx)
     children = list(ctx.children or [])
     try:
         anchor_index = children.index(anchor_node)
     except ValueError:
-        raise BuildError(f"ancre {anchor!r} introuvable dans ctx.children", rule=rule, ctx=ctx)
+        raise BuildError(f"anchor {anchor!r} not found in ctx.children", rule=rule, ctx=ctx)
     for node in ca.call_list(ctx, field):
         try:
             idx = children.index(node)
@@ -371,7 +365,7 @@ def _resolve_anchor(ctx: Any, field: str, anchor: str, *, optional: bool, builde
             return _resolve_node(node, builder, rule)
     if optional:
         return None
-    raise BuildError(f"{field!r} absent apres l'ancre {anchor!r}", rule=rule, ctx=ctx)
+    raise BuildError(f"{field!r} missing after anchor {anchor!r}", rule=rule, ctx=ctx)
 
 
 def _resolve_join(ctx: Any, source: dict, builder: Any, rule: str) -> str:
@@ -383,7 +377,7 @@ def _resolve_join(ctx: Any, source: dict, builder: Any, rule: str) -> str:
         if index is not None:
             nodes = ca.call_list(ctx, field)
             if not nodes:
-                raise BuildError(f"{field!r} vide (join, index={index})", rule=rule, ctx=ctx)
+                raise BuildError(f"{field!r} empty (join, index={index})", rule=rule, ctx=ctx)
             segments.append(_resolve_node(nodes[index], builder, rule))
         else:
             segments.append(_resolve_node(ca.call(ctx, field), builder, rule))
@@ -400,24 +394,24 @@ def _resolve_join(ctx: Any, source: dict, builder: Any, rule: str) -> str:
 
 def _match_sequence_pattern(ctx: Any, field: str, rule_map: dict, builder: Any, rule: str, optional: bool = False) -> Any:
     if not ca.has_accessor(ctx, field):
-        raise BuildError(f"accesseur {field!r} introuvable sur {type(ctx).__name__}", rule=rule, ctx=ctx)
-    # `field` peut lui-meme etre un accesseur "multi" (ex. '--' = deux
-    # tokens MINUS) : l'ancre est TOUJOURS la 1ere occurrence, la sequence
-    # se lit a partir de sa position dans ctx.children. Absent est possible
-    # de facon legitime (ex. roleDef a une 2e forme grammaticale - restriction
-    # de type sur un role EXISTANT par son nom - qui n'utilise aucun symbole
-    # de force de relation du tout).
+        raise BuildError(f"accessor {field!r} not found on {type(ctx).__name__}", rule=rule, ctx=ctx)
+    # `field` can itself be a "multi" accessor (e.g. '--' = two MINUS
+    # tokens): the anchor is ALWAYS the 1st occurrence, the sequence is
+    # read from its position in ctx.children. Being absent is legitimate
+    # (e.g. roleDef has a 2nd grammar form - a type restriction on an
+    # EXISTING role by name - that uses no relationship-strength symbol at
+    # all).
     candidates = ca.call_list(ctx, field)
     if not candidates:
         if optional:
             return None
-        raise BuildError(f"{field!r} absent (sequence_pattern)", rule=rule, ctx=ctx)
+        raise BuildError(f"{field!r} missing (sequence_pattern)", rule=rule, ctx=ctx)
     anchor_node = candidates[0]
     children = list(ctx.children or [])
     try:
         start = children.index(anchor_node)
     except ValueError:
-        raise BuildError(f"{field!r} introuvable dans ctx.children", rule=rule, ctx=ctx)
+        raise BuildError(f"{field!r} not found in ctx.children", rule=rule, ctx=ctx)
 
     max_len = max(len(pattern.split()) for pattern in rule_map)
     window = children[start:start + max_len]
@@ -427,6 +421,6 @@ def _match_sequence_pattern(ctx: Any, field: str, rule_map: dict, builder: Any, 
         if candidate in rule_map:
             return rule_map[candidate]
     raise BuildError(
-        f"aucune sequence de tokens ne correspond a {sorted(rule_map)} a partir de {field!r} (obtenu {names!r})",
+        f"no token sequence matches {sorted(rule_map)} starting at {field!r} (got {names!r})",
         rule=rule, ctx=ctx,
     )

@@ -1,11 +1,11 @@
-"""Index du metamodele IlisMeta16 (mappings/ilismeta16-*.yml).
+"""Index of the IlisMeta16 metamodel (mappings/ilismeta16-*.yml).
 
-Reutilise par scripts/validate_spec.py (validation statique, erreurs
-collectees et rapportees en fin de passe) et par interlis.builder
-(construction a l'execution, erreurs propagees immediatement comme
-exceptions). D'ou une API sans effet de bord : resolve()/find_association()
-LEVENT une exception au lieu d'ecrire dans une liste globale - c'est a
-l'appelant de decider s'il collecte ou laisse remonter.
+Reused by scripts/validate_spec.py (static validation, errors collected
+and reported at the end of the pass) and by interlis.builder
+(construction at runtime, errors propagated immediately as exceptions).
+Hence a side-effect-free API: resolve()/find_association() raise an
+exception instead of writing to a global list - it's up to the caller to
+decide whether to collect or let it propagate.
 """
 import warnings
 from pathlib import Path
@@ -30,9 +30,12 @@ def _load_yaml(path: Path):
 
 
 class UmlIndex:
-    """Index qualified_name -> element UML, plus un index par nom court
-    (name -> [qualified_name, ...]) pour resoudre les references non
-    qualifiees (ex. resolves_to: Class, resolves_to: SubModel)."""
+    """Index of qualified_name -> UML element, plus a short-name index.
+
+    The short-name index (name -> [qualified_name, ...]) resolves
+    unqualified references (e.g. resolves_to: Class, resolves_to:
+    SubModel).
+    """
 
     def __init__(self, qualified: dict[str, dict], by_name: dict[str, list[str]]):
         self.qualified = qualified
@@ -60,11 +63,13 @@ class UmlIndex:
         return cls(qualified, by_name)
 
     def resolve(self, name: str) -> dict:
-        """Resolve a target/resolves_to value (qualified or bare) to its UML
-        element. Raises UnknownClassError if not found. Warns (via the
-        stdlib `warnings` module) and returns the first candidate if the
-        bare name is ambiguous - never fails silently, but does not force
-        callers to handle ambiguity as a hard error."""
+        """Resolve a target/resolves_to value (qualified or bare) to its UML element.
+
+        Raises UnknownClassError if not found. Warns (via the stdlib
+        `warnings` module) and returns the first candidate if the bare name
+        is ambiguous - never fails silently, but does not force callers to
+        handle ambiguity as a hard error.
+        """
         if "." in name:
             el = self.qualified.get(name)
             if el is None:
@@ -79,8 +84,11 @@ class UmlIndex:
         return self.qualified[candidates[0]]
 
     def find_association_by_name(self, name: str) -> dict | None:
-        """Find an Association element by its short `name` (not qualified_name -
-        parent.association in spec entries always uses the short form)."""
+        """Find an Association element by its short `name`.
+
+        Not qualified_name - parent.association in spec entries always
+        uses the short form.
+        """
         for el in self.qualified.values():
             if el.get("kind") == "Association" and el.get("name") == name:
                 return el

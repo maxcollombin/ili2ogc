@@ -128,7 +128,7 @@ def test_unknown_class_flagged(builder):
     issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
     assert len(issues) == 1
     assert issues[0].severity == "error"
-    assert "absente du schema" in issues[0].message
+    assert "absent from the resolved schema" in issues[0].message
 
 
 # --- Lot 31 : resolution TID/REF cross-panier (tests/fixtures/xtf/reference_model.ili :
@@ -195,7 +195,7 @@ def test_reference_target_not_found_is_warning_not_error(ref_builder):
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="RefLocation", severity="warning")
-    assert any("introuvable dans ce transfert" in m for m in msgs)
+    assert any("not found in this transfer" in m for m in msgs)
     assert _messages(issues, attribute="RefLocation", severity="error") == []
 
 
@@ -294,7 +294,7 @@ def test_embedded_role_unresolved_ref_is_warning(ref_builder):
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="rLocation", severity="warning")
-    assert any("introuvable dans ce transfert" in m for m in msgs)
+    assert any("not found in this transfer" in m for m in msgs)
 
 
 # --- Lot 47 : embedded_roles_of doit suivre la chaine EXTENDS (tests/fixtures/
@@ -351,7 +351,7 @@ def test_embedded_role_external_unresolved_ref_reports_catalogue_expected(ref_bu
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="rExtLocation", severity="warning")
-    assert any("declaree (EXTERNAL)" in m and "situation normale" in m for m in msgs)
+    assert any("declared reference (EXTERNAL)" in m and "normal" in m for m in msgs)
 
 
 def test_embedded_role_non_external_unresolved_ref_flags_data_issue(ref_builder):
@@ -368,7 +368,7 @@ def test_embedded_role_non_external_unresolved_ref_flags_data_issue(ref_builder)
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="rLocation", severity="warning")
-    assert any("NON declaree (EXTERNAL)" in m for m in msgs)
+    assert any("NOT declared as EXTERNAL" in m for m in msgs)
 
 
 # --- Lot 35 : catalogue objects (REFERENCE TO (EXTERNAL), --catalog) ---
@@ -386,7 +386,7 @@ def test_non_external_unresolved_ref_flags_data_issue(ref_builder):
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="RefLocation", severity="warning")
-    assert any("NON declaree (EXTERNAL)" in m for m in msgs)
+    assert any("NOT declared as EXTERNAL" in m for m in msgs)
 
 
 def test_external_unresolved_ref_reports_catalogue_expected(ref_builder):
@@ -402,7 +402,7 @@ def test_external_unresolved_ref_reports_catalogue_expected(ref_builder):
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="RefCatalogItem", severity="warning")
-    assert any("declaree (EXTERNAL)" in m and "situation normale" in m for m in msgs)
+    assert any("declared reference (EXTERNAL)" in m and "normal" in m for m in msgs)
 
 
 def test_external_ref_resolved_via_catalog_argument_has_no_issue(ref_builder):
@@ -484,7 +484,7 @@ def test_restriction_text_matching_no_candidate_is_warning(restriction_builder):
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=restriction_builder.symbol_table)
     msgs = _messages(issues, attribute="Sel", severity="warning")
-    assert any("CLASS RESTRICTION" in m and "ne correspond a aucun des 2 candidat" in m for m in msgs)
+    assert any("CLASS RESTRICTION" in m and "matches none of the 2 declared candidate" in m for m in msgs)
     assert _messages(issues, attribute="Sel", severity="error") == []
 
 
@@ -500,7 +500,7 @@ def test_restriction_text_with_unverifiable_candidate_is_info_not_warning(restri
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=restriction_builder.symbol_table)
     msgs = _messages(issues, attribute="Sel", severity="info")
-    assert any("1/2 candidat" in m for m in msgs)
+    assert any("1/2 verifiable candidate" in m for m in msgs)
     assert _messages(issues, attribute="Sel", severity="warning") == []
 
 
@@ -669,7 +669,7 @@ def test_polyline_wrong_structure_flagged(geometry_builder):
     obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     msgs = _messages(issues, attribute="Geom", severity="error")
-    assert any("POLYLINE attendue" in m for m in msgs)
+    assert any("expected POLYLINE geometry" in m for m in msgs)
 
 
 def test_surface_valid_has_no_issue(geometry_builder):

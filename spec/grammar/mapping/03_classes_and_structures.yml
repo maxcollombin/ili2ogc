@@ -32,17 +32,16 @@ classDef:
       source:
         field: classOrStructureRef
         optional: true
-      note: 'AJOUTE (Lot 38, demande explicite utilisateur - "attributs herites via EXTENDS"). `(EXTENDS
-        classOrStructureRef)?` sur classDef() n''avait AUCUN binding jusqu''ici (grep negatif confirme,
-        03_classes_and_structures.yml) - la clause EXTENDS etait entierement ignoree, aucune instance
-        `Inheritance` jamais construite pour une classe/structure. `classOrStructureRef` resout deja
-        directement vers un `Class` (Dispatcher classRef|structureRef, tous deux `kind: Reference,
-        resolves_to: Class`) - pas de bag a deballer (`path:`), contrairement a `referenceAttr.BaseClass`/
-        `roleDef.BaseClass` (source restrictedClassOrAssRef, elle bien un bag). Association `Inheritance`
-        confirmee (ilismeta16-associations.yml : `Sub {0..*} <-> Super {0..1}`, `ExtendableME`) - Class
-        EXTENDS ExtendableME (confirme ilismeta16-classes.yml). RULE #5, perimetre delibere : alimente
-        UNIQUEMENT le lien Super lui-meme, ne remonte PAS automatiquement les attributs herites - voir
-        `xtf/schema.py:attributes_of` pour la resolution transitive cote validateur XTF (Lot 38).'
+      note: '`(EXTENDS classOrStructureRef)?` on classDef() had NO binding at all until now - the EXTENDS
+        clause was entirely ignored, no `Inheritance` instance ever built for a class/structure.
+        `classOrStructureRef` already resolves
+        directly to a `Class` (Dispatcher classRef|structureRef, both `kind: Reference,
+        resolves_to: Class`) - no bag to unwrap (`path:`), unlike `referenceAttr.BaseClass`/
+        `roleDef.BaseClass` (source restrictedClassOrAssRef, which is a bag). Association `Inheritance`
+        (ilismeta16-associations.yml: `Sub {0..*} <-> Super {0..1}`, `ExtendableME`) - Class
+        EXTENDS ExtendableME (ilismeta16-classes.yml). Deliberate scope: feeds ONLY
+        the Super link itself, does not automatically roll up inherited attributes - see
+        `xtf/schema.py:attributes_of` for the transitive resolution on the XTF validator side.'
 classOrStructureDef:
   grammar:
     rule: classOrStructureDef
@@ -51,23 +50,22 @@ classOrStructureDef:
   - attributeDef
   - constraintDef
   - parameterDef
-  note: 'CORRIGE (audit pendant le smoke test ModelBuilder, 2026-08-02) : `kind:
-    Dispatcher, dispatches_to: [classDef, structureDef]` etait faux - jamais
-    verifie contre le code ANTLR reel (RULE #2), vraisemblablement confondu
-    avec la regle voisine `classOrStructureRef` (elle, un vrai dispatcher
-    classRef/structureRef). Verifie maintenant
-    (InterlisParser.py:2597-2676, ClassDefContext.classOrStructureDef()) :
-    `classOrStructureDef` est le CORPS partage de classDef/structureDef
-    (accesseurs reels confirmes dans generated/ast-accessors.yml : ATTRIBUTE,
-    PARAMETER, attributeDef, constraintDef - aucun accesseur classDef/
-    structureDef). Pure dispatcher/aggregateur, pas de classe propre - une
-    boucle repetee de 3 alternatives : "(ATTRIBUTE)? attributeDef+",
-    "constraintDef+", "(PARAMETER)? parameterDef+". Chaque attributeDef/
-    constraintDef/parameterDef alimente sa propre association confirmee
-    (ClassAttr/ClassConstraint/ClassParam) sur le classDef/structureDef
-    englobant via SON PROPRE `parent:`, pas via classOrStructureDef
-    lui-meme - d''ou kind: Container + children (visite multiple, comme
-    definitions), pas Dispatcher (alternative unique).'
+  note: '`kind: Dispatcher, dispatches_to: [classDef, structureDef]` was wrong -
+    never checked against the real ANTLR code, likely confused
+    with the neighboring rule `classOrStructureRef` (which is a real dispatcher
+    over classRef/structureRef). Per the real parser code
+    (InterlisParser.py, ClassDefContext.classOrStructureDef()):
+    `classOrStructureDef` is the SHARED BODY of classDef/structureDef
+    (real accessors: ATTRIBUTE,
+    PARAMETER, attributeDef, constraintDef - no classDef/
+    structureDef accessor). A pure dispatcher/aggregator, no own class - a
+    repeated loop of 3 alternatives: "(ATTRIBUTE)? attributeDef+",
+    "constraintDef+", "(PARAMETER)? parameterDef+". Each attributeDef/
+    constraintDef/parameterDef feeds its own association
+    (ClassAttr/ClassConstraint/ClassParam) on the enclosing classDef/structureDef
+    via ITS OWN `parent:`, not via classOrStructureDef
+    itself - hence kind: Container + children (visited multiple times, like
+    definitions), not Dispatcher (single alternative).'
 classOrStructureRef:
   grammar:
     rule: classOrStructureRef
@@ -80,8 +78,8 @@ classOrStructureRef:
       source:
         field: classRef|structureRef
         kind: alt_rule
-      note: 'Pure dispatcher (2 alternatives): classRef() or structureRef(). Confirmed via grammar-metamodel-mapping.yml:
-        "kind: Dispatcher, dispatches_to: [classRef, structureRef]". No own construction; result is whichever
+      note: 'Pure dispatcher (2 alternatives): classRef() or structureRef().
+        `kind: Dispatcher, dispatches_to: [classRef, structureRef]`. No own construction; result is whichever
         of the two sub-rules'' resolved reference matched.
 
         '
@@ -131,7 +129,7 @@ structureDef:
         field: ABSTRACT
         presence: true
       note: 'resolved from the optional (ABSTRACT|GENERIC|FINAL) token group inside LPAR...RPAR - same
-        shared modifier-token-set pattern as classDef (Lot: reused).'
+        shared modifier-token-set pattern as classDef.'
     Final:
       source:
         field: FINAL
@@ -142,9 +140,9 @@ structureDef:
       source:
         field: structureRef
         optional: true
-      note: 'AJOUTE (Lot 38) - meme raisonnement/verification que classDef.Super ci-dessus. `(EXTENDS
-        structureRef)?` sur structureDef() n''avait aucun binding jusqu''ici ; `structureRef` resout deja
-        directement vers un `Class[Kind=Structure]` (kind: Reference), pas de bag a deballer.'
+      note: 'Same reasoning/check as classDef.Super above. `(EXTENDS
+        structureRef)?` on structureDef() had no binding at all until now; `structureRef` already resolves
+        directly to a `Class[Kind=Structure]` (kind: Reference), no bag to unwrap.'
 structureRef:
   grammar:
     rule: structureRef
@@ -161,8 +159,8 @@ structureRef:
         join: .
       note: 'structureRef() has 2 alternatives: "INTERLIS." + (BOOLEAN|URI|UUIDOID|Name)(.Name)* (a predefined
         INTERLIS-namespace structure path, where BOOLEAN/URI/UUIDOID are accepted as literal first-segment
-        identifiers alongside Name), or a bare Name(.Name)* path. Per grammar-metamodel-mapping.yml, structureRef''s
-        semantics are "kind: Reference, reference.target.class: Class, constraint: Kind=Structure" - unlike
+        identifiers alongside Name), or a bare Name(.Name)* path. structureRef''s
+        semantics are `kind: Reference, reference.target.class: Class, constraint: Kind=Structure` - unlike
         classRef, it does NOT construct an IlisMeta16.ModelData.ClassRef DataType wrapper (no metamodel.target
         block for this rule); the joined qualified name resolves directly to an existing IlisMeta16.ModelData.Class
         instance with Kind=Structure, looked up by name rather than newly constructed.
