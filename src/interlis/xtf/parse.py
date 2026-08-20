@@ -16,6 +16,14 @@ Streaming (`ET.iterparse` + `elem.clear()` per object/attribute): the
 downloaded real corpus (`scripts/fetch_xtf_corpus.py`) contains
 files several hundred MB in size - the full XML tree must never be kept
 in memory.
+
+Accepts both real wire conventions for the envelope (section tags,
+BID/TID, model name/version/uri, sender) - XTF 2.3 (bare, UPPERCASE
+attributes; every file in xtf_corpus/, the only convention seen in real
+Swiss open data so far) and XTF 2.4 (`ili:`-namespaced, lowercase, model
+name as element text - see `_get_attr_ci` and the "sender"/"model" role
+handling below; confirmed only via non-production reference/test fixtures,
+see tests/fixtures/xtf/xtf24allerrors/NOTICE and xtf24envelope/NOTICE).
 """
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,6 +32,25 @@ from xml.etree import ElementTree as ET
 
 def _strip_ns(tag: str) -> str:
     return tag.rsplit("}", 1)[-1] if tag.startswith("{") else tag
+
+
+def _get_attr_ci(elem: ET.Element, name: str) -> str | None:
+    """Case/namespace-insensitive attribute lookup - `name` is UPPERCASE.
+
+    Two real wire conventions exist for the same envelope fields: XTF 2.3
+    attributes are bare and UPPERCASE (BID/TID/KIND/ENDSTATE/NAME/VERSION/
+    URI/SENDER); XTF 2.4 equivalents are `ili:`-namespaced and lowercase
+    (confirmed via iox-ili's Xtf24Reader.java, e.g. QNAME_ILI_BID/QNAME_ILI_TID)
+    - ElementTree exposes a namespaced attribute's key in Clark notation
+    (`{uri}localname`), so the bare-name fast path is tried first, then
+    every attribute's namespace-stripped, uppercased local name.
+    """
+    if name in elem.attrib:
+        return elem.attrib[name]
+    for key, value in elem.attrib.items():
+        if _strip_ns(key).upper() == name:
+            return value
+    return None
 
 
 @dataclass
@@ -112,23 +139,37 @@ def parse_xtf(path: Path) -> XtfTransfer:
         tag = _strip_ns(elem.tag)
         if event == "start":
             parent_role = stack[-1][0] if stack else None
+            # Section-name keywords (HEADERSECTION/DATASECTION/MODELS/SENDER)
+            # are compared case-insensitively - XTF 2.3 uses bare UPPERCASE,
+            # XTF 2.4 uses `ili:`-namespaced lowercase (already stripped by
+            # `_strip_ns` above; see `_get_attr_ci` for the same treatment
+            # of attributes).
+            upper_tag = tag.upper()
             if parent_role is None:
                 role = "transfer"
             elif parent_role == "transfer":
-                role = "headersection" if tag == "HEADERSECTION" else ("datasection" if tag == "DATASECTION" else "other")
+                role = "headersection" if upper_tag == "HEADERSECTION" else ("datasection" if upper_tag == "DATASECTION" else "other")
             elif parent_role == "headersection":
-                role = "models" if tag == "MODELS" else "other"
+                # SENDER is a child element only in XTF 2.4 (an attribute of
+                # HEADERSECTION itself in XTF 2.3 - handled below, on the
+                # "headersection" end event).
+                if upper_tag == "MODELS":
+                    role = "models"
+                elif upper_tag == "SENDER":
+                    role = "sender"
+                else:
+                    role = "other"
             elif parent_role == "models":
                 role = "model"
             elif parent_role == "datasection":
                 role = "basket"
                 current_basket = XtfBasket(
-                    bid=elem.get("BID", ""), qualified_topic=tag,
-                    kind=elem.get("KIND"), endstate=elem.get("ENDSTATE"),
+                    bid=_get_attr_ci(elem, "BID") or "", qualified_topic=tag,
+                    kind=_get_attr_ci(elem, "KIND"), endstate=_get_attr_ci(elem, "ENDSTATE"),
                 )
             elif parent_role == "basket":
                 role = "object"
-                current_object = XtfObject(tid=elem.get("TID"), qualified_class=tag, attributes={})
+                current_object = XtfObject(tid=_get_attr_ci(elem, "TID"), qualified_class=tag, attributes={})
             elif parent_role == "object":
                 role = "attribute"
             else:
@@ -150,10 +191,20 @@ def parse_xtf(path: Path) -> XtfTransfer:
             current_basket = None
             elem.clear()
         elif role == "model":
-            models.append(XtfModelRef(name=elem.get("NAME", ""), version=elem.get("VERSION"), uri=elem.get("URI")))
+            # XTF 2.3: NAME is an attribute (VERSION/URI alongside it). XTF
+            # 2.4: the model name is the element's TEXT content instead - no
+            # per-model version/uri in the header at all (confirmed via
+            # iox-ili's Xtf24Reader.readModel, a bare `List<String>`).
+            name = _get_attr_ci(elem, "NAME")
+            if name is None:
+                name = elem.text.strip() if elem.text else ""
+            models.append(XtfModelRef(name=name, version=_get_attr_ci(elem, "VERSION"), uri=_get_attr_ci(elem, "URI")))
             elem.clear()
+        elif role == "sender":
+            sender = elem.text.strip() if elem.text else None
         elif role == "headersection":
-            sender = elem.get("SENDER")
-            ili_version = elem.get("VERSION")
+            if sender is None:  # not already set via the XTF 2.4 "sender" child role above
+                sender = _get_attr_ci(elem, "SENDER")
+            ili_version = _get_attr_ci(elem, "VERSION")
 
     return XtfTransfer(sender=sender, ili_version=ili_version, models=models, baskets=baskets)

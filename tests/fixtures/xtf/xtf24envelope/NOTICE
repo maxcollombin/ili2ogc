@@ -1,0 +1,17 @@
+# NOTICE
+
+`MultiCoord.xtf` is copied unmodified from `iox-ili`
+(https://github.com/claeis/iox-ili), path
+`src/test/data/Xtf24Writer/dataSection/MultiCoord.xtf`.
+
+iox-ili is licensed under the MIT/X License:
+https://github.com/claeis/iox-ili/blob/master/README.md#license
+
+Used here as a real-world example of XTF 2.4 envelope structure
+(`<ili:sender>` as a child element rather than a HEADERSECTION attribute,
+the model's own elements under a PREFIXED namespace rather than the
+default one, `ili:bid`/`ili:tid` namespaced attributes) - complements
+`tests/fixtures/xtf/xtf24allerrors/` (default namespace, no `<ili:sender>`)
+for `interlis.xtf.parse` unit coverage. No matching `.ili` model is
+distributed with this fragment upstream, so it's used for structural
+(parse-layer) tests only, not schema-aware validation.

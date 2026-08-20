@@ -1,0 +1,25 @@
+# NOTICE
+
+`AllErrors24-ok.xtf` is copied unmodified from `geopilot`
+(https://github.com/GeoWerkstatt/geopilot), path
+`TestData/XtfErrorVisualization/AllErrors24-ok.xtf`.
+
+`AllErrors24.ili` is adapted from the same repository, path
+`TestData/XtfErrorVisualization/ili-repository/AllErrors24.ili` - one
+attribute (`interlisName : INTERLIS.NAME;`, `ValueTypeClass`) is removed:
+`INTERLIS.NAME` is not yet accepted by this runtime's grammar (an
+unrelated, pre-existing gap - not investigated or fixed as part of this
+change). `AllErrors24-ok.xtf` still declares an `interlisName` value for
+that class; the validator correctly reports it as an unknown attribute
+(see `tests/test_xtf_xtf24_fixtures.py`), which is expected given the trim.
+
+geopilot is licensed under the GNU Affero General Public License v3.0:
+https://github.com/GeoWerkstatt/geopilot/blob/main/LICENSE
+
+Used here as the only found real-world (non-production) example of the
+XTF 2.4 wire encoding (`geom:`-namespaced, lowercase geometry tags,
+`ili:bid`/`ili:tid` namespaced attributes) exercising every geometry kind
+(COORD, POLYLINE straight/arc, SURFACE, AREA, MULTICOORD, MULTIPOLYLINE,
+MULTISURFACE) in one real transfer - not part of `xtf_corpus/`, which is
+scratch/untracked and, as of this writing, 100% XTF 2.3 (see the comment
+preceding `interlis.xtf.validate._validate_line_attribute`).

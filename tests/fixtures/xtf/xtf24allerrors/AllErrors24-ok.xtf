@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS" xmlns="http://www.interlis.ch/xtf/2.4/AllErrors24" xmlns:geom="http://www.interlis.ch/geometry/1.0">
+	<ili:headersection>
+		<ili:models>
+			<ili:model>AllErrors24</ili:model>
+		</ili:models>
+	</ili:headersection>
+	<ili:datasection>
+		<MainTopic ili:bid="mainBasket">
+
+			<ConditionClass ili:tid="conditionObject">
+				<lookupText>lookup</lookupText>
+			</ConditionClass>
+
+			<ValueTypeClass ili:tid="validValues">
+				<numberValue>50.00</numberValue>
+				<limitedText>abc</limitedText>
+				<booleanFlag>true</booleanFlag>
+				<colourValue>red</colourValue>
+				<dateValue>2005-06-15</dateValue>
+				<timeValue>12:30:00.000</timeValue>
+				<dateTimeValue>2005-06-15T12:30:00.000</dateTimeValue>
+				<interlisName>ValidName</interlisName>
+				<interlisUri>http://example.com/x</interlisUri>
+				<uuidValue>550e8400-e29b-41d4-a716-446655440000</uuidValue>
+			</ValueTypeClass>
+
+			<NormalizedTextClass ili:tid="validNormalizedText">
+				<normalizedText>normal text</normalizedText>
+			</NormalizedTextClass>
+
+			<MultiplicityClass ili:tid="validMultiplicity">
+				<mandatoryText>present</mandatoryText>
+				<itemBag>
+					<ItemStructure><itemText>x</itemText></ItemStructure>
+				</itemBag>
+			</MultiplicityClass>
+
+			<GeometryClass ili:tid="validGeometry">
+				<pointCoord>
+					<geom:coord><geom:c1>2645100.000</geom:c1><geom:c2>1245100.000</geom:c2></geom:coord>
+				</pointCoord>
+				<straightPolyline>
+					<geom:polyline>
+						<geom:coord><geom:c1>2645000.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+						<geom:coord><geom:c1>2645100.000</geom:c1><geom:c2>1245100.000</geom:c2></geom:coord>
+					</geom:polyline>
+				</straightPolyline>
+				<arcPolyline>
+					<geom:polyline>
+						<geom:coord><geom:c1>2645010.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+						<geom:arc>
+							<geom:c1>2645000.000</geom:c1><geom:c2>1245010.000</geom:c2>
+							<geom:a1>2645007.071</geom:a1><geom:a2>1245007.071</geom:a2>
+						</geom:arc>
+					</geom:polyline>
+				</arcPolyline>
+				<surface>
+					<geom:surface>
+						<geom:exterior>
+							<geom:polyline>
+								<geom:coord><geom:c1>2645000.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+								<geom:coord><geom:c1>2645000.000</geom:c1><geom:c2>1245010.000</geom:c2></geom:coord>
+								<geom:coord><geom:c1>2645010.000</geom:c1><geom:c2>1245010.000</geom:c2></geom:coord>
+								<geom:coord><geom:c1>2645010.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+								<geom:coord><geom:c1>2645000.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+							</geom:polyline>
+						</geom:exterior>
+					</geom:surface>
+				</surface>
+				<multiCoord>
+					<geom:multicoord>
+						<geom:coord><geom:c1>2645200.000</geom:c1><geom:c2>1245200.000</geom:c2></geom:coord>
+						<geom:coord><geom:c1>2645300.000</geom:c1><geom:c2>1245300.000</geom:c2></geom:coord>
+					</geom:multicoord>
+				</multiCoord>
+				<multiPolyline>
+					<geom:multipolyline>
+						<geom:polyline>
+							<geom:coord><geom:c1>2645000.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+							<geom:coord><geom:c1>2645050.000</geom:c1><geom:c2>1245050.000</geom:c2></geom:coord>
+						</geom:polyline>
+					</geom:multipolyline>
+				</multiPolyline>
+				<multiSurface>
+					<geom:multisurface>
+						<geom:surface>
+							<geom:exterior>
+								<geom:polyline>
+									<geom:coord><geom:c1>2645020.000</geom:c1><geom:c2>1245020.000</geom:c2></geom:coord>
+									<geom:coord><geom:c1>2645020.000</geom:c1><geom:c2>1245030.000</geom:c2></geom:coord>
+									<geom:coord><geom:c1>2645030.000</geom:c1><geom:c2>1245030.000</geom:c2></geom:coord>
+									<geom:coord><geom:c1>2645030.000</geom:c1><geom:c2>1245020.000</geom:c2></geom:coord>
+									<geom:coord><geom:c1>2645020.000</geom:c1><geom:c2>1245020.000</geom:c2></geom:coord>
+								</geom:polyline>
+							</geom:exterior>
+						</geom:surface>
+					</geom:multisurface>
+				</multiSurface>
+			</GeometryClass>
+
+			<AreaTopologyClass ili:tid="validArea">
+				<categoryValue>a</categoryValue>
+				<areaGeometry>
+					<geom:surface>
+						<geom:exterior>
+							<geom:polyline>
+								<geom:coord><geom:c1>2645000.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+								<geom:coord><geom:c1>2645000.000</geom:c1><geom:c2>1245010.000</geom:c2></geom:coord>
+								<geom:coord><geom:c1>2645010.000</geom:c1><geom:c2>1245010.000</geom:c2></geom:coord>
+								<geom:coord><geom:c1>2645010.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+								<geom:coord><geom:c1>2645000.000</geom:c1><geom:c2>1245000.000</geom:c2></geom:coord>
+							</geom:polyline>
+						</geom:exterior>
+					</geom:surface>
+				</areaGeometry>
+			</AreaTopologyClass>
+
+			<MandatoryConstraintClass ili:tid="satisfiedMandatory"><firstFlag>true</firstFlag><secondFlag>true</secondFlag></MandatoryConstraintClass>
+			<PlausibilityConstraintClass ili:tid="satisfiedPlausibility"><firstNumber>5</firstNumber><secondNumber>3</secondNumber></PlausibilityConstraintClass>
+			<SetConstraintClass ili:tid="nonMatchingCategory"><categoryValue>b</categoryValue></SetConstraintClass>
+			<!-- the set constraint requires exactly 5 objects with categoryValue a -->
+			<SetConstraintClass ili:tid="setMember1"><categoryValue>a</categoryValue></SetConstraintClass>
+			<SetConstraintClass ili:tid="setMember2"><categoryValue>a</categoryValue></SetConstraintClass>
+			<SetConstraintClass ili:tid="setMember3"><categoryValue>a</categoryValue></SetConstraintClass>
+			<SetConstraintClass ili:tid="setMember4"><categoryValue>a</categoryValue></SetConstraintClass>
+			<SetConstraintClass ili:tid="setMember5"><categoryValue>a</categoryValue></SetConstraintClass>
+			<UniqueConstraintClass ili:tid="uniqueRow"><keyText>key</keyText><keyNumber>1</keyNumber></UniqueConstraintClass>
+			<ExistenceConstraintClass ili:tid="existingReference"><referencedText>lookup</referencedText></ExistenceConstraintClass>
+
+			<!-- the target role has max cardinality 1, so the link is embedded in LinkSourceClass -->
+			<LinkSourceClass ili:tid="validSource"><label>source</label><target ili:ref="validTarget"/></LinkSourceClass>
+			<LinkTargetClass ili:tid="validTarget"><label>target</label></LinkTargetClass>
+
+		</MainTopic>
+
+		<UuidTopic ili:bid="uuidBasket">
+			<UuidObjectClass ili:tid="550e8400-e29b-41d4-a716-446655440010"><label>ok</label></UuidObjectClass>
+		</UuidTopic>
+
+	</ili:datasection>
+</ili:transfer>

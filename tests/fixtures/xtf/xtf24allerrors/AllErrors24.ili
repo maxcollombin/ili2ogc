@@ -1,0 +1,119 @@
+INTERLIS 2.4;
+
+!! Minimal self-contained model that can provoke every practical category of
+!! iox-ili data-validation error. See README.md for the object -> message catalog.
+!! Identifiers are deliberately self-describing: class names end in "...Class",
+!! attribute names carry their INTERLIS type, object TIDs name the error they cause.
+MODEL AllErrors24
+  AT "mailto:joel.waelti@geowerkstatt.ch" VERSION "2026-06-10" =
+
+  DOMAIN
+    ColourEnumeration = (red, green, blue);
+    !! Swiss LV95 value ranges (EPSG:2056), same as GeometryCHLV95_V1.
+    CoordDomain = COORD 2460000.000 .. 2870000.000 [INTERLIS.m],
+                        1045000.000 .. 1310000.000 [INTERLIS.m],
+                  ROTATION 2 -> 1;
+    DateDomain = FORMAT INTERLIS.XMLDate "2000-01-01" .. "2009-12-31";
+    TimeDomain = FORMAT INTERLIS.XMLTime "00:00:00.000" .. "23:59:59.999";
+    DateTimeDomain = FORMAT INTERLIS.XMLDateTime "2000-01-01T00:00:00.000" .. "2009-12-31T23:59:59.999";
+
+  TOPIC MainTopic =
+
+    STRUCTURE ItemStructure =
+      itemText : TEXT*5;
+    END ItemStructure;
+
+    CLASS ConditionClass =
+      lookupText : TEXT*10;
+    END ConditionClass;
+
+    CLASS ValueTypeClass =
+      numberValue   : 0.00 .. 100.00;
+      limitedText   : TEXT*5;
+      booleanFlag   : BOOLEAN;
+      colourValue   : ColourEnumeration;
+      dateValue     : DateDomain;
+      timeValue     : TimeDomain;
+      dateTimeValue : DateTimeDomain;
+      interlisUri   : INTERLIS.URI;
+      uuidValue     : INTERLIS.UUIDOID;
+    END ValueTypeClass;
+
+    CLASS NormalizedTextClass =
+      normalizedText : TEXT*20;
+    END NormalizedTextClass;
+
+    CLASS MultiplicityClass =
+      mandatoryText : MANDATORY TEXT*10;
+      itemBag       : BAG {1..2} OF ItemStructure;
+    END MultiplicityClass;
+
+    CLASS GeometryClass =
+      pointCoord       : COORD 2460000.000 .. 2870000.000 [INTERLIS.m],
+                               1045000.000 .. 1310000.000 [INTERLIS.m];
+      straightPolyline : POLYLINE WITH (STRAIGHTS) VERTEX CoordDomain;
+      arcPolyline      : POLYLINE WITH (ARCS) VERTEX CoordDomain;
+      surface          : SURFACE WITH (STRAIGHTS) VERTEX CoordDomain WITHOUT OVERLAPS > 0.001;
+      multiCoord       : MULTICOORD 2460000.000 .. 2870000.000 [INTERLIS.m],
+                                    1045000.000 .. 1310000.000 [INTERLIS.m];
+      multiPolyline    : MULTIPOLYLINE WITH (STRAIGHTS) VERTEX CoordDomain;
+      multiSurface     : MULTISURFACE WITH (STRAIGHTS) VERTEX CoordDomain WITHOUT OVERLAPS > 0.001;
+    END GeometryClass;
+
+    CLASS AreaTopologyClass =
+      categoryValue : (a, b, c);
+      areaGeometry  : AREA WITH (STRAIGHTS) VERTEX CoordDomain WITHOUT OVERLAPS > 0.001;
+    END AreaTopologyClass;
+
+    CLASS MandatoryConstraintClass =
+      firstFlag  : BOOLEAN;
+      secondFlag : BOOLEAN;
+      MANDATORY CONSTRAINT firstFlag == secondFlag;
+    END MandatoryConstraintClass;
+
+    CLASS PlausibilityConstraintClass =
+      firstNumber  : 0 .. 10;
+      secondNumber : 0 .. 10;
+      CONSTRAINT >= 50% firstNumber >= secondNumber;
+    END PlausibilityConstraintClass;
+
+    CLASS SetConstraintClass =
+      categoryValue : (a, b, c);
+      SET CONSTRAINT WHERE categoryValue == #a : INTERLIS.objectCount(ALL) == 5;
+    END SetConstraintClass;
+
+    CLASS UniqueConstraintClass =
+      keyText   : TEXT*10;
+      keyNumber : 0 .. 100;
+      UNIQUE keyText, keyNumber;
+    END UniqueConstraintClass;
+
+    CLASS ExistenceConstraintClass =
+      referencedText : TEXT*10;
+      EXISTENCE CONSTRAINT referencedText REQUIRED IN AllErrors24.MainTopic.ConditionClass : lookupText;
+    END ExistenceConstraintClass;
+
+    CLASS LinkSourceClass =
+      label : TEXT*10;
+    END LinkSourceClass;
+
+    CLASS LinkTargetClass =
+      label : TEXT*10;
+    END LinkTargetClass;
+
+    ASSOCIATION LinkAssociation =
+      source -- {1..*} LinkSourceClass;
+      target -- {1..1} LinkTargetClass;
+    END LinkAssociation;
+
+  END MainTopic;
+
+  TOPIC UuidTopic =
+    OID AS INTERLIS.UUIDOID;
+
+    CLASS UuidObjectClass =
+      label : TEXT*5;
+    END UuidObjectClass;
+  END UuidTopic;
+
+END AllErrors24.

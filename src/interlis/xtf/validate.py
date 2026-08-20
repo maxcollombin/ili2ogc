@@ -10,15 +10,15 @@ the legitimate-external-reference vs broken-reference distinction),
 embedded association roles as pseudo-attributes, class compatibility of a
 resolved reference, the 3rd XTF encoding form
 (`CLASS RESTRICTION(A; B; C)`), geometry/coordinates
-(COORD/POLYLINE/SURFACE/AREA/MULTI*), association roles defined in an
-imported model, numeric Min/Max rounding tolerance, and recursive
-validation of STRUCTURE/BAG/LIST content. Not yet covered: attributes
-inherited via EXTENDS from an unloaded imported model, the internal
-structure of a custom LINE FORM segment (its presence is surfaced as an
-`info` issue rather than silently dropped - no confirmed real-world tag
-encoding exists to validate its content against), and a few geometry
-variants absent from the current XTF inventory. Full detail, severity
-rationale, and real-corpus evidence for each item:
+(COORD/POLYLINE/SURFACE/AREA/MULTI*, both the XTF 2.3 and XTF 2.4 wire
+conventions - see the comment preceding `_validate_line_attribute`),
+association roles defined in an imported model, numeric Min/Max rounding
+tolerance, and recursive validation of STRUCTURE/BAG/LIST content. Not yet
+covered: attributes inherited via EXTENDS from an unloaded imported model,
+and the internal structure of a custom LINE FORM segment (its presence is
+surfaced as an `info` issue rather than silently dropped - no confirmed
+real-world tag encoding exists to validate its content against). Full
+detail, severity rationale, and real-corpus evidence for each item:
 docs/dev-notes/xtf-validator-scope.md.
 """
 from dataclasses import dataclass
@@ -191,33 +191,73 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
 #   wire form. Confirmed against a real file (see below) - `_LINE_KIND_TAGS`
 #   maps Kind=Area to "SURFACE" accordingly.
 #
-# Real corpus evidence: no "geom:" namespace (like ili:ref/REF, already
-# documented for references in docs/xtf-transfer-encoding-notes.md), and
-# UPPERCASE, an exact mirror of the grammar keyword (COORD/POLYLINE/SURFACE,
-# same convention already confirmed for REFERENCE/REF): `<AttrName><COORD>
-# <C1>x</C1><C2>y</C2>[<C3>z</C3>]</COORD></AttrName>`
-# (RoadTrafficAccidentLocations.xtf, xtf_corpus/, 3D); `<AttrName><SURFACE>
-# <BOUNDARY><POLYLINE><COORD>...</COORD>...</POLYLINE></BOUNDARY>[<BOUNDARY>
-# ...]</SURFACE></AttrName>` (alpenkonvention_2056.xtf, xtf_corpus/, outer
-# boundary THEN inner boundary/ies, with no tag distinguishing them -
-# "OuterBoundary"/"InnerBoundary" from the abstract grammar share the SAME
-# concrete tag BOUNDARY, only the ORDER - first = outer - carries the
-# information, per the manual: "Der erste Rand einer Flaeche (OuterBoundary)
-# ist der aeussere Rand"). AREA (single and multi-boundary, plus ARC
-# segments) confirmed against `tests/fixtures/xtf/xtf23overlap/` (external,
-# not part of xtf_corpus/ - see its NOTICE file) - this is what caught the
-# Kind=Area tag bug above. MULTICOORD/MULTIPOLYLINE/MULTISURFACE/MULTIAREA
-# and a custom LINE FORM segment remain implemented by direct extrapolation
-# from the manual plus the UPPERCASE=keyword convention (no real example in
-# either corpus uses them) - a custom LINE FORM segment is not structurally
-# interpreted, but unlike before, its presence is no longer silently
-# dropped: `_validate_line_attribute` surfaces it as an `info` issue (see
-# `_custom_line_form_tags`), so a transfer using one is never reported as
-# "0 problems" while part of its geometry went unchecked.
+# Two real wire conventions exist for the SAME abstract geometry - both
+# accepted (see `_geom_tag`/`_find_child`, case-insensitive comparison):
+#
+# XTF 2.3 (every file in xtf_corpus/ and tests/fixtures/xtf/xtf23overlap/,
+# ili2pg/ili2gpkg-generated - the ONLY convention seen in real, currently-
+# published Swiss open data, federal or cantonal): no "geom:" namespace
+# (like ili:ref/REF, already documented for references in
+# docs/xtf-transfer-encoding-notes.md), UPPERCASE, an exact mirror of the
+# grammar keyword: `<AttrName><COORD><C1>x</C1><C2>y</C2>[<C3>z</C3>]
+# </COORD></AttrName>` (RoadTrafficAccidentLocations.xtf, xtf_corpus/, 3D);
+# `<AttrName><SURFACE><BOUNDARY><POLYLINE><COORD>...</COORD>...</POLYLINE>
+# </BOUNDARY>[<BOUNDARY>...]</SURFACE></AttrName>` (alpenkonvention_2056.xtf,
+# xtf_corpus/, outer boundary THEN inner boundary/ies, with no tag
+# distinguishing them - "OuterBoundary"/"InnerBoundary" from the abstract
+# grammar share the SAME concrete tag BOUNDARY, only the ORDER - first =
+# outer - carries the information, per the manual: "Der erste Rand einer
+# Flaeche (OuterBoundary) ist der aeussere Rand"). AREA (single and
+# multi-boundary, plus ARC segments) confirmed against
+# `tests/fixtures/xtf/xtf23overlap/` (external, not part of xtf_corpus/ -
+# see its NOTICE file) - this is what caught the Kind=Area tag bug above.
+#
+# XTF 2.4 (eCH-0031's own canonical spec examples, quoted above - confirmed
+# via iox-ili's Xtf24Reader/Writer test data and geopilot's XtfErrorVisualization
+# fixtures, both MIT/AGPL-licensed reference/test tooling, NOT real
+# production data - an exhaustive sweep of every geodienste.ch collection
+# plus the existing 92-file federal+cantonal corpus found zero XTF 2.4
+# files as of this writing): `geom:`-namespaced (already stripped generically
+# by `xtf/parse.py`'s `_strip_ns`) and lowercase - `<AttrName><geom:coord>
+# <geom:c1>x</geom:c1>...</geom:coord></AttrName>`; boundaries are tagged
+# directly as `<geom:exterior>`/`<geom:interior>` (no BOUNDARY wrapper -
+# `_BOUNDARY_TAGS`), and Xtf24Reader accepts `<geom:area>`/`<geom:multiarea>`
+# as synonyms for `<geom:surface>`/`<geom:multisurface>` too (`_SURFACE_TAGS`).
+#
+# MULTICOORD/MULTIPOLYLINE/MULTISURFACE/MULTIAREA are structurally identical
+# between the two conventions (only the tag case/namespace differs) and are
+# confirmed real via iox-ili's Xtf24Reader/Writer test data (XTF 2.4 form
+# only - still unconfirmed in the XTF 2.3 convention, real Swiss open data
+# apparently never needs disjoint-part geometry for the themes currently
+# published). A custom LINE FORM segment is not structurally interpreted
+# (no real candidate in either corpus), but unlike before, its presence is
+# no longer silently dropped: `_validate_line_attribute` surfaces it as an
+# `info` issue (see `_custom_line_form_tags`), so a transfer using one is
+# never reported as "0 problems" while part of its geometry went unchecked.
+
+
+def _geom_tag(node: RawNode) -> str:
+    """Normalize a geometry wire tag for comparison against a fixed keyword.
+
+    Two real wire conventions exist for the SAME abstract geometry: XTF 2.3
+    (all of xtf_corpus/ and tests/fixtures/xtf/xtf23overlap/, ili2pg/
+    ili2gpkg-generated) uses UPPERCASE, no namespace (COORD/POLYLINE/
+    SURFACE/BOUNDARY...); XTF 2.4 (eCH-0031's own canonical spec examples,
+    confirmed via iox-ili's Xtf24Reader/Writer and geopilot's XTF24 test
+    fixtures - never seen in real, currently-published Swiss open data as
+    of this writing) uses a `geom:`-namespaced lowercase form (already
+    namespace-stripped by `xtf/parse.py`'s `_strip_ns` by the time this
+    function sees the tag) with `exterior`/`interior` replacing BOUNDARY.
+    Both are accepted by uppercasing here - a custom LINE FORM segment's
+    tag (a model-defined name, not a fixed keyword) is always compared
+    as-is elsewhere, never through this helper.
+    """
+    return node.tag.upper()
 
 
 def _find_child(node: RawNode, tag: str) -> RawNode | None:
-    return next((c for c in node.children if c.tag == tag), None)
+    """Case-insensitive lookup by a fixed geometry keyword - `tag` is UPPERCASE (see `_geom_tag`)."""
+    return next((c for c in node.children if c.tag.upper() == tag), None)
 
 
 def _numeric_problems(text: str | None, min_raw, max_raw, ctx: str) -> list[str]:
@@ -286,7 +326,7 @@ def _validate_axis_values(components: list[RawNode], axes: list[MetaInstance], c
 
 
 def _validate_coord_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
-    if node.tag != "COORD":
+    if _geom_tag(node) != "COORD":
         return [f"{ctx}: expected COORD geometry, found tag {node.tag!r}"]
     return _validate_axis_values(_axis_components(node, "C"), axes, ctx, label="C")
 
@@ -300,7 +340,7 @@ def _validate_arc_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> lis
     (radius, optional): numeric PARSEABILITY only, never a range - no axis
     covers it (it's a derived length, not a coordinate).
     """
-    if node.tag != "ARC":
+    if _geom_tag(node) != "ARC":
         return [f"{ctx}: expected ARC geometry, found tag {node.tag!r}"]
     problems = _validate_axis_values(_axis_components(node, "C"), axes, ctx, label="C")
     mid = _axis_components(node, "A")
@@ -315,16 +355,17 @@ def _validate_arc_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> lis
 
 
 def _validate_polyline_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
-    if node.tag != "POLYLINE":
+    if _geom_tag(node) != "POLYLINE":
         return [f"{ctx}: expected POLYLINE geometry, found tag {node.tag!r}"]
     if not node.children:
         return [f"{ctx}: empty POLYLINE (no segment)"]
     problems: list[str] = []
     for i, seg in enumerate(node.children):
         seg_ctx = f"{ctx}[{i}]"
-        if seg.tag == "COORD":
+        seg_tag = _geom_tag(seg)
+        if seg_tag == "COORD":
             problems.extend(_validate_coord_node(seg, axes, seg_ctx))
-        elif seg.tag == "ARC":
+        elif seg_tag == "ARC":
             problems.extend(_validate_arc_node(seg, axes, seg_ctx))
         # else: a custom LINE FORM segment (arbitrary structure, other than
         # STRAIGHTS/ARCS) - not structurally interpreted (no real candidate
@@ -335,8 +376,16 @@ def _validate_polyline_node(node: RawNode, axes: list[MetaInstance], ctx: str) -
     return problems
 
 
+# XTF 2.3 wraps every ring in a <BOUNDARY><POLYLINE>...</POLYLINE></BOUNDARY>,
+# order-only outer/inner distinction; XTF 2.4 tags the ring directly as
+# <exterior>/<interior> (Xtf24Reader.QNAME_GEOM_EXTERIOR/INTERIOR), no
+# separate wrapper - both directly contain exactly one POLYLINE, so the
+# same validation applies once the tag is accepted here.
+_BOUNDARY_TAGS = frozenset({"BOUNDARY", "EXTERIOR", "INTERIOR"})
+
+
 def _validate_boundary_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
-    if node.tag != "BOUNDARY":
+    if _geom_tag(node) not in _BOUNDARY_TAGS:
         return [f"{ctx}: expected BOUNDARY geometry, found tag {node.tag!r}"]
     polyline = _find_child(node, "POLYLINE")
     if polyline is None:
@@ -344,11 +393,18 @@ def _validate_boundary_node(node: RawNode, axes: list[MetaInstance], ctx: str) -
     return _validate_polyline_node(polyline, axes, f"{ctx}/POLYLINE")
 
 
+# SURFACE and AREA share one wire encoding (see _LINE_KIND_TAGS) - both
+# tags are accepted here regardless of which Kind the attribute declares,
+# matching Xtf24Reader's own leniency (readSurface/readMultiSurface accept
+# either QNAME_GEOM_SURFACE/QNAME_GEOM_AREA).
+_SURFACE_TAGS = frozenset({"SURFACE", "AREA"})
+
+
 def _validate_surface_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
-    """Validate a SURFACE node (also used for LineType Kind=Area - see `_LINE_KIND_TAGS`)."""
-    if node.tag != "SURFACE":
+    """Validate a SURFACE/AREA node (also used for LineType Kind=Area - see `_LINE_KIND_TAGS`)."""
+    if _geom_tag(node) not in _SURFACE_TAGS:
         return [f"{ctx}: expected SURFACE geometry, found tag {node.tag!r}"]
-    boundaries = [c for c in node.children if c.tag == "BOUNDARY"]
+    boundaries = [c for c in node.children if _geom_tag(c) in _BOUNDARY_TAGS]
     if not boundaries:
         return [f"{ctx}: SURFACE without any BOUNDARY"]
     problems: list[str] = []
@@ -369,12 +425,12 @@ def _validate_coord_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: s
     axes = coord_axes(coord_type)
     expected_tag = "MULTICOORD" if multi else "COORD"
     child = node.children[0] if node.children else None
-    if child is None or child.tag != expected_tag:
+    if child is None or _geom_tag(child) != expected_tag:
         found = child.tag if child is not None else "(empty)"
         return [f"{ctx}: expected {expected_tag} geometry (Type=CoordType, Multi={multi}), found {found!r}"]
     if not multi:
         return _validate_coord_node(child, axes, ctx)
-    coords = [c for c in child.children if c.tag == "COORD"]
+    coords = [c for c in child.children if _geom_tag(c) == "COORD"]
     if not coords:
         return [f"{ctx}: MULTICOORD without any inner COORD"]
     problems: list[str] = []
@@ -388,9 +444,16 @@ def _validate_coord_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: s
 # und AREA werden wie folgt codiert" (one shared encoding rule for both
 # Kinds). Confirmed against a real file (iox-ili's Xtf23Overlap/AreaSimple.xtf,
 # `Kind=Area` attribute encoded as `<SURFACE><BOUNDARY>...`, never `<AREA>`).
-_LINE_KIND_TAGS = {"Polyline": "POLYLINE", "DirectedPolyline": "POLYLINE", "Surface": "SURFACE", "Area": "SURFACE"}
+# Each value is the SET of tags accepted for that Kind (see `_SURFACE_TAGS`
+# above for why Surface/Area share both spellings) - `_geom_tag` handles the
+# XTF 2.3/2.4 case difference, this only needs to handle the AREA synonym.
+_LINE_KIND_TAGS = {
+    "Polyline": frozenset({"POLYLINE"}), "DirectedPolyline": frozenset({"POLYLINE"}),
+    "Surface": _SURFACE_TAGS, "Area": _SURFACE_TAGS,
+}
 _LINE_KIND_MULTI_TAGS = {
-    "Polyline": "MULTIPOLYLINE", "DirectedPolyline": "MULTIPOLYLINE", "Surface": "MULTISURFACE", "Area": "MULTISURFACE",
+    "Polyline": frozenset({"MULTIPOLYLINE"}), "DirectedPolyline": frozenset({"MULTIPOLYLINE"}),
+    "Surface": frozenset({"MULTISURFACE", "MULTIAREA"}), "Area": frozenset({"MULTISURFACE", "MULTIAREA"}),
 }
 
 
@@ -404,8 +467,8 @@ def _custom_line_form_tags(node: RawNode) -> set[str]:
     tags of its non-COORD/ARC segments, regardless of depth.
     """
     tags: set[str] = set()
-    if node.tag == "POLYLINE":
-        tags.update(seg.tag for seg in node.children if seg.tag not in ("COORD", "ARC"))
+    if _geom_tag(node) == "POLYLINE":
+        tags.update(seg.tag for seg in node.children if _geom_tag(seg) not in ("COORD", "ARC"))
     for child in node.children:
         tags |= _custom_line_form_tags(child)
     return tags
@@ -441,21 +504,23 @@ def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: st
     kind = getattr(line_type, "Kind", None)
     multi = bool(getattr(line_type, "Multi", False))
     axes = coord_axes(line_coord_type(line_type))
-    single_tag = _LINE_KIND_TAGS.get(kind)
-    if single_tag is None:
+    single_tags = _LINE_KIND_TAGS.get(kind)
+    if single_tags is None:
         return [], []  # Unresolved/unexpected Kind - nothing reliable to check
-    expected_tag = _LINE_KIND_MULTI_TAGS[kind] if multi else single_tag
+    expected_tags = _LINE_KIND_MULTI_TAGS[kind] if multi else single_tags
     child = node.children[0] if node.children else None
-    if child is None or child.tag != expected_tag:
+    if child is None or _geom_tag(child) not in expected_tags:
         found = child.tag if child is not None else "(empty)"
-        return [f"{ctx}: expected {expected_tag} geometry (LineType Kind={kind!r}, Multi={multi}), found {found!r}"], []
+        label = "/".join(sorted(expected_tags))
+        return [f"{ctx}: expected {label} geometry (LineType Kind={kind!r}, Multi={multi}), found {found!r}"], []
     infos = _line_form_infos(child, ctx)
-    validator = _validate_polyline_node if single_tag == "POLYLINE" else _validate_surface_node
+    validator = _validate_polyline_node if single_tags == frozenset({"POLYLINE"}) else _validate_surface_node
     if not multi:
         return validator(child, axes, ctx), infos
-    parts = [c for c in child.children if c.tag == single_tag]
+    parts = [c for c in child.children if _geom_tag(c) in single_tags]
     if not parts:
-        return [f"{ctx}: {expected_tag} without any inner {single_tag}"], infos
+        label = "/".join(sorted(single_tags))
+        return [f"{ctx}: {child.tag} without any inner {label}"], infos
     errors: list[str] = []
     for i, part in enumerate(parts):
         errors.extend(validator(part, axes, f"{ctx}[{i}]"))
