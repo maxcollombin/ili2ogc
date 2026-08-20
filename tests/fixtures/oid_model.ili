@@ -1,0 +1,44 @@
+INTERLIS 2.4;
+
+MODEL OidTest AT "https://example.org/oidtest" VERSION "2026-08-20" =
+
+  DOMAIN
+    MyOid = OID TEXT*12;
+
+  TOPIC NoClause =
+    CLASS Plain =
+      Val: TEXT;
+    END Plain;
+  END NoClause;
+
+  TOPIC BasketOnly =
+    BASKET OID AS MyOid;
+    CLASS NoOwnOid =
+      Val: TEXT;
+    END NoOwnOid;
+  END BasketOnly;
+
+  TOPIC ClassDefault =
+    OID AS MyOid;
+    CLASS Inherits =
+      Val: TEXT;
+    END Inherits;
+    CLASS OwnDomain =
+      OID AS INTERLIS.UUIDOID;
+      Val: TEXT;
+    END OwnDomain;
+    CLASS Opted =
+      NO OID;
+      Val: TEXT;
+    END Opted;
+  END ClassDefault;
+
+  TOPIC Both =
+    BASKET OID AS MyOid;
+    OID AS INTERLIS.UUIDOID;
+    CLASS Combined =
+      Val: TEXT;
+    END Combined;
+  END Both;
+
+END OidTest.

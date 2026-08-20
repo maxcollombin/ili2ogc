@@ -42,6 +42,26 @@ classDef:
         EXTENDS ExtendableME (ilismeta16-classes.yml). Deliberate scope: feeds ONLY
         the Super link itself, does not automatically roll up inherited attributes - see
         `xtf/schema.py:attributes_of` for the transitive resolution on the XTF validator side.'
+    own_oid_clause:
+      target: IlisMeta16.ModelData.ObjectOID
+      note: 'classDef''s own `(OID AS (Name | Name DOT Name | [INTERLIS DOT] UUIDOID) | NO OID) SEMI`
+        clause, right after EQ - inlined directly in ClassDefContext (confirmed via
+        mappings/antlr-rule-index.yml, RULE #2bis: no `domainRef()`/`oIDType()` accessor exists on this
+        rule, only bare `OID`/`AS`/`Name`/`DOT`/`UUIDOID`/`INTERLIS`/`NO` tokens), so there''s no accessor
+        to bind declaratively - no `source:` (documentation marker only, same convention as
+        topicDef.default_class_oid, spec/grammar/mapping/02_packages.yml). Feeds the same `ObjectOID`
+        association (Class <-> Oid:DomainType, ilismeta16-associations.yml) as the topic-level default,
+        which this clause always takes precedence over when present (eCH-0031 V2.1.0 §3.5.2: "sofern
+        bei der jeweiligen Klasse keine spezifische Definition dafuer gemacht wird") - `NO OID`
+        explicitly opts the class out of that default too, rather than leaving it undecided. Resolved
+        procedurally by InterlisModelBuilder._attach_class_oid (positional scan via
+        _scan_oid_clauses) - `UUIDOID`/`INTERLIS.UUIDOID` builds a bare `AnyOIDType` marker (reserved
+        lexer token, never resolvable via a name lookup - see
+        docs/dev-notes/predefined-interlis-namespace.md, "ANYOID/UUIDOID deliberately absent"), same
+        construction as oIDType''s own "OID ANY"/"UUIDOID" alternative; a bare/qualified `Name`
+        resolves as an ordinary `ForwardRef` domain reference.
+
+        '
 classOrStructureDef:
   grammar:
     rule: classOrStructureDef

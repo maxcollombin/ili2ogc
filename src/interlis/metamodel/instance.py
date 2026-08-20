@@ -28,6 +28,11 @@ class MetaInstance(BaseModel):
     # TOPIC (not a formal IlisMeta16 association - see
     # interlis.builder.model_builder).
     _twin: "MetaInstance | None" = PrivateAttr(default=None)
+    # classDef case only: True once its own `OID AS .../NO OID` clause has
+    # been scanned (even if unresolved) - tells the enclosing topicDef's
+    # class-default OID propagation not to override this class's own
+    # decision (see InterlisModelBuilder._attach_class_oid).
+    _own_oid_clause: bool = PrivateAttr(default=False)
 
     def __repr__(self) -> str:
         name = getattr(self, "Name", None)

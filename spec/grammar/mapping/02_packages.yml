@@ -304,18 +304,19 @@ topicDef:
         SubModel, but Super needs the DataUnit twin - see `ForwardRef.resolve_via_twin`). Full history:
         docs/dev-notes/topicdef-super-binding-investigation.md.'
     DataUnit.BasketOID:
-      source:
-        field: BASKET
-        OID: null
-        Name: null
-        index: 0
-        optional: true
-      note: 'Confirmed for the first OID clause only. Reference Manual 2006-04-13 §2.5.2, exact EBNF:
-        "[''BASKET'' ''OID'' ''AS'' OID-DomainRef '';'']" (first clause, with BASKET) vs
-        "[''OID'' ''AS'' OID-DomainRef '';'']" (second clause, without BASKET, different semantics -
-        see default_class_oid below). The first clause maps exactly to
+      target: IlisMeta16.ModelData.BasketOID
+      note: 'Reference Manual 2006-04-13 §2.5.2, exact EBNF: "[''BASKET'' ''OID'' ''AS'' OID-DomainRef
+        '';'']" (first clause, with BASKET) vs "[''OID'' ''AS'' OID-DomainRef '';'']" (second clause,
+        without BASKET, different semantics - see default_class_oid below). The first clause maps to
         IlisMeta16.ModelData.BasketOID (ForDataUnit {0..*} DataUnit <-> Oid {0..1} DomainType,
         ilismeta16-associations.yml): feeds BasketOID(ForDataUnit=this DataUnit, Oid=resolved domain).
+        No `source:` (documentation marker only, same convention as default_class_oid below): neither
+        classDef nor topicDef exposes a `domainRef()` accessor for this clause (both inline the tokens
+        directly, confirmed via mappings/antlr-rule-index.yml, RULE #2bis) - no declarative binding fits.
+        Resolved procedurally by InterlisModelBuilder._apply_topic_oid_clauses (positional scan via
+        _scan_oid_clauses - also tells this clause apart from default_class_oid''s bare `OID AS` when
+        only one, unprefixed by BASKET, is present, see that method''s docstring for the real-corpus
+        evidence behind the disambiguation rule).
 
         '
     default_class_oid:
@@ -328,10 +329,13 @@ topicDef:
         (`models/IlisMeta16.ili`, association `ObjectOID`): "!! No OID, if no assoc" - a Class with no
         associated `ObjectOID` instance simply has no OID. This confirms the target: this second clause
         feeds the SAME `ObjectOID` association (Class <-> Oid:DomainType, ilismeta16-associations.yml)
-        used for explicit per-class OIDs, not a separate attribute. ModelBuilder decision: when
-        building each `Class` of this topic that does not define its own OID clause, create an
-        `ObjectOID(Class=this Class, Oid=domain resolved here)` instance - a default-value propagation
-        applied after the fact to each relevant Class, not a separate attribute on `DataUnit`.
+        used for explicit per-class OIDs (classDef.own_oid_clause, spec/grammar/mapping/03_classes_and_structures.yml),
+        not a separate attribute. No `source:` (documentation marker only - see DataUnit.BasketOID
+        above): resolved procedurally by InterlisModelBuilder._apply_topic_oid_clauses, which builds
+        `ObjectOID(Class=X, Oid=domain resolved here)` for every Class of this topic that carries no
+        `_own_oid_clause` of its own (classDef''s explicit `OID AS`/`NO OID`, if present, always wins -
+        never overridden by this default, matching the citation''s "sofern... keine spezifische
+        Definition" wording).
 
         '
     DataUnit.Dependency:
