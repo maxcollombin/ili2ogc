@@ -672,6 +672,50 @@ def test_polyline_wrong_structure_flagged(geometry_builder):
     assert any("expected POLYLINE geometry" in m for m in msgs)
 
 
+def test_polyline_custom_line_form_segment_reported_as_info(geometry_builder):
+    """A segment tag that's neither COORD nor ARC (eCH-0031 V2.1.0
+    §4.3.11.14's LineFormSegment alternative, e.g. a custom LINE FORM
+    declared via lineFormTypeDef) is not structurally validated (no
+    confirmed real-world tag encoding to check it against), but must no
+    longer be silently dropped from the report - it's surfaced as `info`."""
+    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), RawNode(tag="ZIGZAG", text=None, attrib={}, children=[]),
+    ])
+    obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Geom", severity="error") == []
+    infos = _messages(issues, attribute="Geom", severity="info")
+    assert any("ZIGZAG" in m and "not validated" in m for m in infos)
+
+
+def test_polyline_only_coord_and_arc_has_no_info_issue(geometry_builder):
+    """Contrast case: a POLYLINE made only of COORD/ARC segments must not
+    trigger the custom LINE FORM `info` notice."""
+    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), _coord_node("50.0", "50.0"),
+    ])
+    obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Geom", severity="info") == []
+
+
+def test_surface_boundary_custom_line_form_segment_reported_as_info(geometry_builder):
+    """Same custom LINE FORM surfacing, nested inside a SURFACE/BOUNDARY
+    (eCH-0031's SegmentSequence applies uniformly to both POLYLINE-typed
+    attributes and SURFACE/AREA boundaries)."""
+    polyline = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
+        _coord_node("0.0", "0.0"), RawNode(tag="ZIGZAG", text=None, attrib={}, children=[]),
+        _coord_node("50.0", "50.0"), _coord_node("0.0", "0.0"),
+    ])
+    boundary = RawNode(tag="BOUNDARY", text=None, attrib={}, children=[polyline])
+    inner = RawNode(tag="SURFACE", text=None, attrib={}, children=[boundary])
+    obj = _obj(ZONE_CLASS, "z1", _geom_attr("Geom", inner))
+    issues = _validate_one(obj, geometry_builder.symbol_table)
+    assert _messages(issues, attribute="Geom", severity="error") == []
+    infos = _messages(issues, attribute="Geom", severity="info")
+    assert any("ZIGZAG" in m for m in infos)
+
+
 def test_surface_valid_has_no_issue(geometry_builder):
     polyline = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
         _coord_node("0.0", "0.0"), _coord_node("50.0", "0.0"), _coord_node("50.0", "50.0"), _coord_node("0.0", "0.0"),

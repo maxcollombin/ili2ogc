@@ -13,10 +13,13 @@ resolved reference, the 3rd XTF encoding form
 (COORD/POLYLINE/SURFACE/AREA/MULTI*), association roles defined in an
 imported model, numeric Min/Max rounding tolerance, and recursive
 validation of STRUCTURE/BAG/LIST content. Not yet covered: attributes
-inherited via EXTENDS from an unloaded imported model, custom LINE FORM
-segments, and a few geometry variants absent from the current XTF
-inventory. Full detail, severity rationale, and real-corpus evidence for
-each item: docs/dev-notes/xtf-validator-scope.md.
+inherited via EXTENDS from an unloaded imported model, the internal
+structure of a custom LINE FORM segment (its presence is surfaced as an
+`info` issue rather than silently dropped - no confirmed real-world tag
+encoding exists to validate its content against), and a few geometry
+variants absent from the current XTF inventory. Full detail, severity
+rationale, and real-corpus evidence for each item:
+docs/dev-notes/xtf-validator-scope.md.
 """
 from dataclasses import dataclass
 
@@ -201,8 +204,11 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
 # the UPPERCASE=keyword convention already confirmed twice (COORD/POLYLINE),
 # documented as extrapolated rather than corpus-confirmed. A custom LINE
 # FORM segment (an arbitrary structure, neither COORD nor ARC) is not
-# interpreted (no real candidate in the inventory) - silently ignored (no
-# false alarm), a limitation documented in the module docstring.
+# structurally interpreted (no real candidate in the inventory to confirm
+# its tag encoding against) - but unlike before, its presence is no longer
+# silently dropped: `_validate_line_attribute` surfaces it as an `info`
+# issue (see `_custom_line_form_tags`), so a transfer using one is never
+# reported as "0 problems" while part of its geometry went unchecked.
 
 
 def _find_child(node: RawNode, tag: str) -> RawNode | None:
@@ -316,9 +322,11 @@ def _validate_polyline_node(node: RawNode, axes: list[MetaInstance], ctx: str) -
         elif seg.tag == "ARC":
             problems.extend(_validate_arc_node(seg, axes, seg_ctx))
         # else: a custom LINE FORM segment (arbitrary structure, other than
-        # STRAIGHTS/ARCS) - not interpreted (no real candidate in the XTF
-        # inventory, see module docstring), silently ignored rather than a
-        # false structural alarm.
+        # STRAIGHTS/ARCS) - not structurally interpreted (no real candidate
+        # in the XTF inventory, see module docstring), not flagged as an
+        # error here (would be a false structural alarm); its presence is
+        # surfaced separately as an `info` issue by `_line_form_infos`,
+        # called once from `_validate_line_attribute`.
     return problems
 
 
@@ -379,7 +387,38 @@ _LINE_KIND_MULTI_TAGS = {
 }
 
 
-def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> list[str]:
+def _custom_line_form_tags(node: RawNode) -> set[str]:
+    """Recursively collect tags of POLYLINE segments that are neither COORD nor ARC.
+
+    eCH-0031 V2.1.0 §4.3.11.14's SegmentSequence has a 3rd alternative
+    (LineFormSegment, a custom form declared via `lineFormTypeDef`)
+    besides StraightSegment/ArcSegment - walks through any nesting
+    (BOUNDARY/SURFACE/AREA/MULTI*) to find every POLYLINE and report the
+    tags of its non-COORD/ARC segments, regardless of depth.
+    """
+    tags: set[str] = set()
+    if node.tag == "POLYLINE":
+        tags.update(seg.tag for seg in node.children if seg.tag not in ("COORD", "ARC"))
+    for child in node.children:
+        tags |= _custom_line_form_tags(child)
+    return tags
+
+
+def _line_form_infos(node: RawNode, ctx: str) -> list[str]:
+    """Surface custom LINE FORM segments as `info` rather than silently dropping them.
+
+    Their internal structure isn't validated (see module docstring - no
+    confirmed real-world tag encoding in the corpus to check content
+    against), but their presence must still show up in the report so a
+    transfer using one is never mistaken for fully-validated geometry.
+    """
+    tags = _custom_line_form_tags(node)
+    if not tags:
+        return []
+    return [f"{ctx}: custom LINE FORM segment(s) present ({', '.join(sorted(tags))}) - structure not validated by this tool"]
+
+
+def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> tuple[list[str], list[str]]:
     """Validate an attribute whose Type resolves to LineType.
 
     POLYLINE/SURFACE/AREA/MULTI*, eCH-0031 V2.1.0 §4.3.11.14/.15. `axes`
@@ -387,6 +426,9 @@ def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: st
     numeric check only with no range, if the VERTEX clause is
     absent/unresolved, e.g. `DirectedLine EXTENDS Line = DIRECTED
     POLYLINE;` with no VERTEX of its own - a documented limitation).
+
+    Returns `(errors, infos)` - `infos` flags custom LINE FORM segments
+    (see `_line_form_infos`) found anywhere in the geometry.
     """
     line_type = resolved.type_instance
     kind = getattr(line_type, "Kind", None)
@@ -394,24 +436,25 @@ def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: st
     axes = coord_axes(line_coord_type(line_type))
     single_tag = _LINE_KIND_TAGS.get(kind)
     if single_tag is None:
-        return []  # Unresolved/unexpected Kind - nothing reliable to check
+        return [], []  # Unresolved/unexpected Kind - nothing reliable to check
     expected_tag = _LINE_KIND_MULTI_TAGS[kind] if multi else single_tag
     child = node.children[0] if node.children else None
     if child is None or child.tag != expected_tag:
         found = child.tag if child is not None else "(empty)"
-        return [f"{ctx}: expected {expected_tag} geometry (LineType Kind={kind!r}, Multi={multi}), found {found!r}"]
+        return [f"{ctx}: expected {expected_tag} geometry (LineType Kind={kind!r}, Multi={multi}), found {found!r}"], []
+    infos = _line_form_infos(child, ctx)
     validator = _validate_polyline_node if single_tag == "POLYLINE" else (
         lambda n, ax, c: _validate_surface_node(n, single_tag, ax, c)
     )
     if not multi:
-        return validator(child, axes, ctx)
+        return validator(child, axes, ctx), infos
     parts = [c for c in child.children if c.tag == single_tag]
     if not parts:
-        return [f"{ctx}: {expected_tag} without any inner {single_tag}"]
-    problems: list[str] = []
+        return [f"{ctx}: {expected_tag} without any inner {single_tag}"], infos
+    errors: list[str] = []
     for i, part in enumerate(parts):
-        problems.extend(validator(part, axes, f"{ctx}[{i}]"))
-    return problems
+        errors.extend(validator(part, axes, f"{ctx}[{i}]"))
+    return errors, infos
 
 
 _GENERIC_RESTRICTION_INFO = (
@@ -800,10 +843,15 @@ def _validate_resolved_attr(
         # CoordType above (structure/Kind/Multi always known) - the only
         # possible uncertainty (per-axis Min/Max range if VERTEX is
         # unresolved, schema.line_coord_type) already degrades gracefully
-        # to a parseability-only check, never a full structural skip.
+        # to a parseability-only check, never a full structural skip. A
+        # custom LINE FORM segment is reported separately as `info` (its
+        # content isn't checked, but its presence must not go unreported).
         for node in raw_nodes:
-            for problem in _validate_line_attribute(resolved, node, ctx):
+            errors, infos = _validate_line_attribute(resolved, node, ctx)
+            for problem in errors:
                 issues.append(ValidationIssue("error", basket_bid, tid, qualified_class, path, problem))
+            for note in infos:
+                issues.append(ValidationIssue("info", basket_bid, tid, qualified_class, path, note))
         return issues
 
     if kind not in ("TextType", "NumType", "EnumType"):
