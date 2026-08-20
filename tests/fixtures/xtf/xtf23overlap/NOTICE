@@ -1,0 +1,11 @@
+# NOTICE
+
+The files in this directory are copied unmodified from `iox-ili`
+(https://github.com/claeis/iox-ili), path `src/test/data/Xtf23Overlap/`.
+
+iox-ili is licensed under the MIT/X License:
+https://github.com/claeis/iox-ili/blob/master/README.md#license
+
+Used here as real-world `.xtf`/`.ili` test fixtures for the AREA/SURFACE
+geometry encoding (`ARC` segments, single and multi-boundary), not part of
+`xtf_corpus/` (which is scratch/untracked, unlike this directory).

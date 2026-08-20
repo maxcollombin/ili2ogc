@@ -141,15 +141,15 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
         try:
             numeric_value = float(text)
         except ValueError:
-            return [f"{ctx}: valeur {text!r} non numerique (Type=NumType)"]
+            return [f"{ctx}: value {text!r} is not numeric (Type=NumType)"]
         min_raw = getattr(resolved.type_instance, "Min", None)
         max_raw = getattr(resolved.type_instance, "Max", None)
         try:
             tolerance = _numeric_range_tolerance(min_raw, max_raw)
             if min_raw is not None and numeric_value < float(min_raw) - tolerance:
-                problems.append(f"{ctx}: valeur {text!r} < Min {min_raw!r}")
+                problems.append(f"{ctx}: value {text!r} < Min {min_raw!r}")
             if max_raw is not None and numeric_value > float(max_raw) + tolerance:
-                problems.append(f"{ctx}: valeur {text!r} > Max {max_raw!r}")
+                problems.append(f"{ctx}: value {text!r} > Max {max_raw!r}")
         except ValueError:
             pass  # Non-numeric Min/Max (e.g. a predefined domain) - out of scope here
     elif kind == "EnumType" and resolved.type_instance is not None:
@@ -184,31 +184,36 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
 #   Boundaries </geom:surface>." Boundaries = OuterBoundary {InnerBoundary}.
 #   "MultiSurfaceValue = <geom:multisurface> (* SurfaceValue *) </geom:multisurface>."
 #   Same structure for AREA (the manual states explicitly "SURFACE und AREA
-#   werden wie folgt codiert" - one single rule set for both Kinds).
+#   werden wie folgt codiert" - one single rule set for both Kinds): a
+#   `LineType Kind=Area` attribute is wire-encoded with tag <SURFACE>, never
+#   a distinct <AREA> tag - AREA is a semantic constraint (planar partition,
+#   `WITHOUT OVERLAPS`) layered on the same SURFACE encoding, not its own
+#   wire form. Confirmed against a real file (see below) - `_LINE_KIND_TAGS`
+#   maps Kind=Area to "SURFACE" accordingly.
 #
-# Real corpus evidence (xtf_corpus/*.xtf): no "geom:"
-# namespace (like ili:ref/REF, already documented for references in
-# docs/xtf-transfer-encoding-notes.md), and UPPERCASE, an exact mirror of
-# the grammar keyword (COORD/POLYLINE/SURFACE, same convention already
-# confirmed for REFERENCE/REF): `<AttrName><COORD><C1>x</C1><C2>y</C2>[<C3>z</C3>]</COORD>
-# </AttrName>` (RoadTrafficAccidentLocations.xtf, 3D); `<AttrName><SURFACE>
+# Real corpus evidence: no "geom:" namespace (like ili:ref/REF, already
+# documented for references in docs/xtf-transfer-encoding-notes.md), and
+# UPPERCASE, an exact mirror of the grammar keyword (COORD/POLYLINE/SURFACE,
+# same convention already confirmed for REFERENCE/REF): `<AttrName><COORD>
+# <C1>x</C1><C2>y</C2>[<C3>z</C3>]</COORD></AttrName>`
+# (RoadTrafficAccidentLocations.xtf, xtf_corpus/, 3D); `<AttrName><SURFACE>
 # <BOUNDARY><POLYLINE><COORD>...</COORD>...</POLYLINE></BOUNDARY>[<BOUNDARY>
-# ...]</SURFACE></AttrName>` (alpenkonvention_2056.xtf, outer boundary THEN
-# inner boundary/ies, with no tag distinguishing them - "OuterBoundary"/
-# "InnerBoundary" from the abstract grammar share the SAME concrete tag
-# BOUNDARY, only the ORDER - first = outer - carries the information, per
-# the manual: "Der erste Rand einer Flaeche (OuterBoundary) ist der aeussere
-# Rand"). No real example of MULTICOORD/MULTIPOLYLINE/MULTISURFACE/
-# MULTIAREA/AREA/ARC/a custom LINE FORM exists in the 12-file inventory -
-# these forms are implemented by direct extrapolation from the manual plus
-# the UPPERCASE=keyword convention already confirmed twice (COORD/POLYLINE),
-# documented as extrapolated rather than corpus-confirmed. A custom LINE
-# FORM segment (an arbitrary structure, neither COORD nor ARC) is not
-# structurally interpreted (no real candidate in the inventory to confirm
-# its tag encoding against) - but unlike before, its presence is no longer
-# silently dropped: `_validate_line_attribute` surfaces it as an `info`
-# issue (see `_custom_line_form_tags`), so a transfer using one is never
-# reported as "0 problems" while part of its geometry went unchecked.
+# ...]</SURFACE></AttrName>` (alpenkonvention_2056.xtf, xtf_corpus/, outer
+# boundary THEN inner boundary/ies, with no tag distinguishing them -
+# "OuterBoundary"/"InnerBoundary" from the abstract grammar share the SAME
+# concrete tag BOUNDARY, only the ORDER - first = outer - carries the
+# information, per the manual: "Der erste Rand einer Flaeche (OuterBoundary)
+# ist der aeussere Rand"). AREA (single and multi-boundary, plus ARC
+# segments) confirmed against `tests/fixtures/xtf/xtf23overlap/` (external,
+# not part of xtf_corpus/ - see its NOTICE file) - this is what caught the
+# Kind=Area tag bug above. MULTICOORD/MULTIPOLYLINE/MULTISURFACE/MULTIAREA
+# and a custom LINE FORM segment remain implemented by direct extrapolation
+# from the manual plus the UPPERCASE=keyword convention (no real example in
+# either corpus uses them) - a custom LINE FORM segment is not structurally
+# interpreted, but unlike before, its presence is no longer silently
+# dropped: `_validate_line_attribute` surfaces it as an `info` issue (see
+# `_custom_line_form_tags`), so a transfer using one is never reported as
+# "0 problems" while part of its geometry went unchecked.
 
 
 def _find_child(node: RawNode, tag: str) -> RawNode | None:
@@ -225,18 +230,18 @@ def _numeric_problems(text: str | None, min_raw, max_raw, ctx: str) -> list[str]
     schema.coord_axes.
     """
     if text is None:
-        return [f"{ctx}: composante absente"]
+        return [f"{ctx}: missing component"]
     try:
         value = float(text)
     except ValueError:
-        return [f"{ctx}: valeur {text!r} non numerique"]
+        return [f"{ctx}: value {text!r} is not numeric"]
     problems: list[str] = []
     try:
         tolerance = _numeric_range_tolerance(min_raw, max_raw)
         if min_raw is not None and value < float(min_raw) - tolerance:
-            problems.append(f"{ctx}: valeur {text!r} < Min {min_raw!r}")
+            problems.append(f"{ctx}: value {text!r} < Min {min_raw!r}")
         if max_raw is not None and value > float(max_raw) + tolerance:
-            problems.append(f"{ctx}: valeur {text!r} > Max {max_raw!r}")
+            problems.append(f"{ctx}: value {text!r} > Max {max_raw!r}")
     except ValueError:
         pass
     return problems
@@ -271,7 +276,7 @@ def _validate_axis_values(components: list[RawNode], axes: list[MetaInstance], c
     """
     problems: list[str] = []
     if axes and len(components) != len(axes):
-        problems.append(f"{ctx}: {len(components)} composante(s) {label}, {len(axes)} attendue(s) (CoordType.Axis)")
+        problems.append(f"{ctx}: {len(components)} {label} component(s), {len(axes)} expected (CoordType.Axis)")
     for i, comp in enumerate(components):
         axis = axes[i] if i < len(axes) else None
         problems.extend(_numeric_problems(
@@ -282,7 +287,7 @@ def _validate_axis_values(components: list[RawNode], axes: list[MetaInstance], c
 
 def _validate_coord_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
     if node.tag != "COORD":
-        return [f"{ctx}: geometrie COORD attendue, balise {node.tag!r} trouvee"]
+        return [f"{ctx}: expected COORD geometry, found tag {node.tag!r}"]
     return _validate_axis_values(_axis_components(node, "C"), axes, ctx, label="C")
 
 
@@ -296,11 +301,11 @@ def _validate_arc_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> lis
     covers it (it's a derived length, not a coordinate).
     """
     if node.tag != "ARC":
-        return [f"{ctx}: geometrie ARC attendue, balise {node.tag!r} trouvee"]
+        return [f"{ctx}: expected ARC geometry, found tag {node.tag!r}"]
     problems = _validate_axis_values(_axis_components(node, "C"), axes, ctx, label="C")
     mid = _axis_components(node, "A")
     if len(mid) < 2:
-        problems.append(f"{ctx}: point intermediaire A1/A2 absent (ARC)")
+        problems.append(f"{ctx}: missing intermediate point A1/A2 (ARC)")
     else:
         problems.extend(_validate_axis_values(mid, axes[:2], ctx, label="A"))
     r_node = _find_child(node, "R")
@@ -339,16 +344,13 @@ def _validate_boundary_node(node: RawNode, axes: list[MetaInstance], ctx: str) -
     return _validate_polyline_node(polyline, axes, f"{ctx}/POLYLINE")
 
 
-def _validate_surface_node(node: RawNode, expected_tag: str, axes: list[MetaInstance], ctx: str) -> list[str]:
-    """Validate a SURFACE or AREA node (same Boundaries structure for both).
-
-    `expected_tag` = "SURFACE" or "AREA".
-    """
-    if node.tag != expected_tag:
-        return [f"{ctx}: expected {expected_tag} geometry, found tag {node.tag!r}"]
+def _validate_surface_node(node: RawNode, axes: list[MetaInstance], ctx: str) -> list[str]:
+    """Validate a SURFACE node (also used for LineType Kind=Area - see `_LINE_KIND_TAGS`)."""
+    if node.tag != "SURFACE":
+        return [f"{ctx}: expected SURFACE geometry, found tag {node.tag!r}"]
     boundaries = [c for c in node.children if c.tag == "BOUNDARY"]
     if not boundaries:
-        return [f"{ctx}: {expected_tag} without any BOUNDARY"]
+        return [f"{ctx}: SURFACE without any BOUNDARY"]
     problems: list[str] = []
     for i, boundary in enumerate(boundaries):
         problems.extend(_validate_boundary_node(boundary, axes, f"{ctx}[{i}]"))
@@ -381,9 +383,14 @@ def _validate_coord_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: s
     return problems
 
 
-_LINE_KIND_TAGS = {"Polyline": "POLYLINE", "DirectedPolyline": "POLYLINE", "Surface": "SURFACE", "Area": "AREA"}
+# AREA is a semantic constraint on top of SURFACE (planar partition), not a
+# distinct wire tag - eCH-0031 V2.1.0 §4.3.11.15 states explicitly "SURFACE
+# und AREA werden wie folgt codiert" (one shared encoding rule for both
+# Kinds). Confirmed against a real file (iox-ili's Xtf23Overlap/AreaSimple.xtf,
+# `Kind=Area` attribute encoded as `<SURFACE><BOUNDARY>...`, never `<AREA>`).
+_LINE_KIND_TAGS = {"Polyline": "POLYLINE", "DirectedPolyline": "POLYLINE", "Surface": "SURFACE", "Area": "SURFACE"}
 _LINE_KIND_MULTI_TAGS = {
-    "Polyline": "MULTIPOLYLINE", "DirectedPolyline": "MULTIPOLYLINE", "Surface": "MULTISURFACE", "Area": "MULTIAREA",
+    "Polyline": "MULTIPOLYLINE", "DirectedPolyline": "MULTIPOLYLINE", "Surface": "MULTISURFACE", "Area": "MULTISURFACE",
 }
 
 
@@ -443,9 +450,7 @@ def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: st
         found = child.tag if child is not None else "(empty)"
         return [f"{ctx}: expected {expected_tag} geometry (LineType Kind={kind!r}, Multi={multi}), found {found!r}"], []
     infos = _line_form_infos(child, ctx)
-    validator = _validate_polyline_node if single_tag == "POLYLINE" else (
-        lambda n, ax, c: _validate_surface_node(n, single_tag, ax, c)
-    )
+    validator = _validate_polyline_node if single_tag == "POLYLINE" else _validate_surface_node
     if not multi:
         return validator(child, axes, ctx), infos
     parts = [c for c in child.children if c.tag == single_tag]
@@ -458,8 +463,8 @@ def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: st
 
 
 _GENERIC_RESTRICTION_INFO = (
-    "attribut de type reference/structure sans REF reconnu (valeur texte nue, "
-    "probable structure a 1 attribut - voir docs/xtf-transfer-encoding-notes.md)"
+    "reference/structure-typed attribute with no recognized REF (bare text value, "
+    "likely a 1-attribute structure - see docs/xtf-transfer-encoding-notes.md)"
 )
 
 

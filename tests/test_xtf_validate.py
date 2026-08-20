@@ -105,7 +105,7 @@ def test_numeric_non_numeric_value_flagged(builder):
     transfer = _transfer(_object("t1", {"Name": "Alice", "BirthYear": "not-a-number"}))
     issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
     msgs = _messages(issues, attribute="BirthYear", severity="error")
-    assert any("non numerique" in m for m in msgs)
+    assert any("not numeric" in m for m in msgs)
 
 
 def test_enum_invalid_value_flagged(builder):
@@ -588,7 +588,7 @@ def test_coord_non_numeric_component_flagged(geometry_builder):
     obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("abc", "100.0")))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     msgs = _messages(issues, attribute="Pos", severity="error")
-    assert any("non numerique" in m for m in msgs)
+    assert any("not numeric" in m for m in msgs)
 
 
 def test_coord_component_count_mismatch_flagged(geometry_builder):
@@ -599,7 +599,7 @@ def test_coord_component_count_mismatch_flagged(geometry_builder):
     obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("50.0")))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     msgs = _messages(issues, attribute="Pos", severity="error")
-    assert any("composante(s) C" in m for m in msgs)
+    assert any("C component(s)" in m for m in msgs)
 
 
 def test_multicoord_valid_has_no_issue(geometry_builder):
