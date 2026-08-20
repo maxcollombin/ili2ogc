@@ -71,7 +71,7 @@ Model Name='Example' Kind='NormalM'
 
 Options:
 - `-q`/`--quiet`: hide warnings (known, non-fatal spec gaps flagged during
-  construction - see [Known limitations](#known-limitations)).
+  construction).
 - `--repo DIR`: directory of `.ili` files to resolve `IMPORTS` references
   against (repeatable). Omit for single-file resolution only.
 
@@ -98,8 +98,7 @@ Options:
   against (repeatable).
 - `--catalog FILE.xtf`: additional transfer (repeatable) whose objects
   should also count as resolvable targets - typically a catalogue/code-list
-  basket distributed separately from the main data transfer (see
-  [Known limitations](#known-limitations)).
+  basket distributed separately from the main data transfer.
 - `-v`/`--verbose`: also show `info`-level issues (types still unhandled by
   the validator, e.g. `FORMAT`ted values).
 - `-q`/`--quiet`: only print the final summary.
@@ -110,8 +109,7 @@ Exit code is `1` if any `error`-severity issue was found, `0` otherwise
 Geometry/coordinate attributes (`COORD`/`MULTICOORD`,
 `POLYLINE`/`SURFACE`/`AREA`/`MULTI*`) are validated structurally and, where
 the coordinate domain's axis ranges are resolvable, against their declared
-`Min`/`Max` per axis - see [Known limitations](#known-limitations) for the
-encoding forms this doesn't cover yet.
+`Min`/`Max` per axis.
 
 When `--repo` is given, every model declared in the transfer's
 `HEADERSECTION/MODELS` is proactively checked for resolvability against it
@@ -164,77 +162,6 @@ issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
 Each `issue` carries a `severity` (`error`/`warning`/`info`), a `message`,
 and enough context (class, attribute, object TID) to locate the problem in
 the source data.
-
-## Known limitations
-
-- **INTERLIS 2 only, by design - not INTERLIS 1**: the grammar, metamodel
-  (IlisMeta16), and every mapping in this project target INTERLIS 2
-  exclusively. `.ili` files declaring `INTERLIS1` at the top fail to parse
-  with a syntax error (`expecting 'INTERLIS1'`) - this is not a bug or a
-  gap to close, INTERLIS 1 is a different, older language with its own
-  grammar and metamodel, out of scope for this project entirely.
-- **`IMPORTS` resolution is local-only, opt-in, and best-effort**: without
-  `--repo`/`repository=...`, a reference into an imported model stays an
-  unresolved named reference (`UnresolvedNamedReference`) rather than an
-  error. With it, resolution only ever looks at the given local
-  directories - never the network - so any model not present there stays
-  unresolved too. This includes the handful of "core" INTERLIS models
-  (`Units`, `CoordSys`, ...) that real-world data commonly imports but
-  that are NOT hosted on models.geo.admin.ch - they live at
-  `https://models.interlis.ch/ilimodels.xml` instead (same
-  `IliRepository20.RepositoryIndex.ModelMetadata` index format) - pass a
-  directory populated from there as an additional
-  `--repo`/`ModelRepository([...])` entry to resolve them too. Exception:
-  the predefined `INTERLIS` namespace (see next bullet) always resolves,
-  `--repo` or not - it needs no directory lookup.
-- **Formal constraints are not evaluated**: `CONSTRAINT`/`MANDATORY
-  CONSTRAINT` clauses are built as data (an expression tree), never
-  executed against real data.
-- **Topic-level default OID** (`OID AS <domain>;` without `BASKET`,
-  applied to every class in the topic that doesn't declare its own OID
-  clause) is not yet wired - it needs a post-processing pass over all
-  classes in a topic, which the current engine doesn't perform yet.
-- **INTERLIS predefined namespace domains** (Reference Manual Annex A):
-  `NOOID`/`I32OID`/`STANDARDOID` are modeled and resolve both qualified
-  (`INTERLIS.I32OID`) and unqualified (`I32OID` after `IMPORTS UNQUALIFIED
-  INTERLIS;`). `ANYOID`/`UUIDOID` are NOT modeled: unlike the other three,
-  the grammar treats them as reserved lexer tokens usable only through the
-  special `INTERLIS.ANYOID`/`INTERLIS.UUIDOID` qualified forms (not through
-  ordinary `domainRef`), which would need a dedicated binding - out of
-  scope so far (no corpus file has needed it yet).
-- **XTF catalogue/code-list references** (`REFERENCE TO (EXTERNAL) X`,
-  common Swiss pattern via `CatalogueObjects_V1.Catalogues.
-  MandatoryCatalogueReference`) resolve only if their target basket is
-  supplied via `--catalog` - `interlis validate` cannot locate it on its
-  own (neither `.ili` nor `.xtf` encode a physical location for it). See
-  `docs/xtf-catalogue-references.md` for the full investigation and how
-  unresolved references are classified either way.
-- **Attributes inherited via `EXTENDS`** are seen by the XTF validator's
-  schema lookup, resolved transitively up the `Super` chain, own
-  attributes winning over inherited ones of the same name. A `TOPIC B
-  EXTENDS TOPIC A` (common Swiss pattern, e.g. CHBase) also makes `A`'s own
-  short names resolvable unqualified inside `B`, per eCH-0031 V2.1.0
-  §3.5.4 - this only degrades gracefully (`UnresolvedNamedReference`,
-  never a crash) when the base model itself cannot be built.
-- **Geometry/coordinate validation** (`COORD`/`MULTICOORD`/`POLYLINE`/
-  `SURFACE`/`AREA`/`MULTI*`) checks structure and, where resolvable,
-  per-axis `Min`/`Max` ranges (with a rounding tolerance, per Reference
-  Manual §2.8/§4.3.11.4) - but: a custom `LINE FORM` segment (anything
-  other than `STRAIGHTS`/`ARCS` in a `WITH (...)` clause) is not
-  interpreted (silently skipped, not flagged); `MULTICOORD`/
-  `MULTIPOLYLINE`/`MULTISURFACE`/`MULTIAREA`/`AREA`/`ARC` are implemented
-  by extrapolation from the Reference Manual and the confirmed
-  `COORD`/`POLYLINE` encoding convention, not confirmed against a real
-  file (none in this project's inventory uses them). A `LineType`'s
-  coordinate domain (`VERTEX` clause) is followed up the `EXTENDS` chain
-  when the attribute's own declaration has none.
-- **`DataUnit.Super` (`TOPIC ... EXTENDS`) is deliberately never read by
-  the XTF validator**: unlike `Class`/`Structure EXTENDS` (previous
-  bullet), a `TOPIC EXTENDS` is a *namespace-only* construct (eCH-0031
-  V2.1.0 §3.5.4 - it makes the base topic's own names resolvable
-  unqualified, nothing more); it never implies attribute inheritance for
-  classes, which always goes through their own `Class.Super`/`Inheritance`
-  link regardless of which topic they live in.
 
 ## Architecture
 
