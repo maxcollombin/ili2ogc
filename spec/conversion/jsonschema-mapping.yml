@@ -61,6 +61,29 @@ BooleanType:
       value: boolean
       note: "own: {} - pure marker type, nothing else to bind"
 
+FormattedType:
+  qualified_name: IlisMeta16.ModelData.FormattedType
+  json_schema:
+    type:
+      value: string
+      note: "conservative mapping - no pattern/format derived from Format's predefined-format name"
+  not_mapped:
+    Format: "predefined/custom format name (e.g. INTERLIS.XMLDate) - not translated to a JSON Schema pattern"
+    Min: "example/template string bound (shares NumType's Min/Max slot, not a numeric bound here) - irrelevant to a plain string schema"
+    Max: "see Min"
+  # Struct (FORMAT BASED ON structureRef) is an association role (StructOfFormat),
+  # not a class attribute - not listed in not_mapped for that reason, but equally
+  # irrelevant to the formatted-string output shape.
+
+BlackboxType:
+  qualified_name: IlisMeta16.ModelData.BlackboxType
+  json_schema:
+    type:
+      value: string
+    x-interlis-blackbox-kind:
+      source: {field: Kind}
+      note: "Xml/Binary - no native JSON Schema content-shape equivalent, surfaced as an informational marker (RULE #5)"
+
 # Class.Documentation exists on the metamodel (inherited from MetaElement)
 # but is never populated by InterlisModelBuilder - INTERLIS `/** ... */`
 # doc comments aren't captured as AST nodes anywhere in

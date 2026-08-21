@@ -122,6 +122,44 @@ END Foo.
     assert schema["properties"]["Active"] == {"type": "boolean"}
 
 
+def test_formattedtype_attribute_gets_string_type():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Datum = FORMAT INTERLIS.XMLDate "1900-01-01" .. "2999-12-31";
+  TOPIC T =
+    CLASS A =
+      Erstellt : Datum;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Erstellt"] == {"type": "string"}
+
+
+def test_blackboxtype_attribute_surfaces_kind_marker():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Bild : BLACKBOX BINARY;
+      Meta : BLACKBOX XML;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Bild"] == {"type": "string", "x-interlis-blackbox-kind": "Binary"}
+    assert schema["properties"]["Meta"] == {"type": "string", "x-interlis-blackbox-kind": "Xml"}
+
+
 def test_mandatory_attribute_is_required():
     builder = _build(
         """INTERLIS 2.4;
