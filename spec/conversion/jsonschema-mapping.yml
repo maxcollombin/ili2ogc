@@ -131,6 +131,29 @@ StructureNesting:
       rule: "#/$defs/<key assigned to the referenced Class's own $defs entry>"
       note: "see StructureNesting in mappings/ilismeta16-to-jsonschema-rules.yml"
 
+# Lot 6: a plain REFERENCE TO X attribute does NOT inline/$ref the target
+# class's schema (unlike StructureNesting above) - the XTF wire format
+# transfers a reference as a REF="<oid>" XML attribute, never the
+# referenced object itself.
+ReferenceType:
+  qualified_name: IlisMeta16.ModelData.ReferenceType
+  json_schema:
+    type:
+      value: string
+      note: "the OID value, matching the XTF wire format's REF=... attribute"
+    x-interlis-reference-target:
+      source: {function: "xtf.schema.reference_target_class(resolved).Name"}
+      note: >
+        Declared target class name, when resolvable (BaseClass
+        association, same mechanism as Role - see rules.yml). Omitted if
+        unresolved (e.g. cross-model reference without --repo).
+    x-interlis-reference-external:
+      source: {field: External}
+      note: >
+        Own BOOLEAN, mandatory (the (EXTERNAL) clause) - via
+        xtf.schema.reference_external_status. Marker omitted unless
+        true, same RULE #5 presence-only style already used elsewhere.
+
 MultiValue:
   qualified_name: IlisMeta16.ModelData.MultiValue
   json_schema:

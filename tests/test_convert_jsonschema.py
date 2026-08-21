@@ -160,6 +160,50 @@ END Foo.
     assert schema["properties"]["Meta"] == {"type": "string", "x-interlis-blackbox-kind": "Xml"}
 
 
+def test_reference_to_attribute_gets_string_type_and_target_marker():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Item =
+      Name : TEXT*20;
+    END Item;
+    CLASS A =
+      Ref : REFERENCE TO Item;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Ref"] == {"type": "string", "x-interlis-reference-target": "Item"}
+
+
+def test_reference_to_external_attribute_surfaces_external_marker():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Item =
+      Name : TEXT*20;
+    END Item;
+    CLASS A =
+      Ref : MANDATORY REFERENCE TO (EXTERNAL) Item;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Ref"] == {
+        "type": "string",
+        "x-interlis-reference-target": "Item",
+        "x-interlis-reference-external": True,
+    }
+
+
 def test_mandatory_attribute_is_required():
     builder = _build(
         """INTERLIS 2.4;

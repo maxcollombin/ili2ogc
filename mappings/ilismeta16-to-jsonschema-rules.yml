@@ -121,12 +121,42 @@ concepts:
       surfaced instead as an informational `x-interlis-ordered: bool`
       marker, RULE #5 style, rather than silently lost.
 
+  ReferenceType:
+    qualified_name: IlisMeta16.ModelData.ReferenceType
+    status: mapped
+    note: >
+      Lot 6. Plain `REFERENCE TO X` (own: External, BOOLEAN mandatory;
+      target class reached via the BaseClass association, same generic
+      mechanism as Role - `xtf.schema.reference_target_class`, reused
+      directly, not duplicated) -> `{"type": "string"}` (the OID value,
+      matching how the XTF wire format transfers a reference: a
+      `REF="<oid>"` XML attribute, never the referenced object inline -
+      unlike a Class/STRUCTURE attribute, which DOES inline via `$ref`,
+      see StructureNesting below). Declared target class name and the
+      `(EXTERNAL)` flag have no native JSON Schema equivalent - surfaced
+      as informational `x-interlis-reference-target`/
+      `x-interlis-reference-external` markers (RULE #5), reusing
+      `xtf.schema.reference_external_status` directly.
+      A `BAG`/`LIST OF REFERENCE TO X` element (not seen in the 54-file
+      real corpus, but grammatically legal) still gets a bare
+      `{"type": "string"}` rather than the unsupported marker - only the
+      two informational markers require the full `ResolvedAttribute`
+      context unavailable at that level.
+
   Role:
     qualified_name: IlisMeta16.ModelData.Role
     status: backlog
     note: >
-      Embedded association roles (REFERENCE TO / embedded associations) -
-      deferred; needs a decision on $ref vs inline target-class expansion.
+      Embedded association roles (transferred as pseudo-attributes via
+      `xtf.schema.embedded_roles_of`/`schema_members_of`, eCH-0031
+      SS4.3.9) - deferred, separate from Lot 6's plain `REFERENCE TO`:
+      requires threading a `SymbolTable` through the conversion pipeline
+      (`class_to_json_schema` currently only takes a bare `Class`
+      instance) AND a decision on cardinality (a `Role`'s own
+      `Multiplicity` can make it multi-valued WITHOUT a wrapping
+      `MultiValue`, unlike a regular attribute - `MultiValue`
+      wrapping/unwrapping in Lot 2's `_multi_value_schema` assumes the
+      multi-ness is always explicit).
 
   Inheritance:
     qualified_name: IlisMeta16.ModelData.Inheritance

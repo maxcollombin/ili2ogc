@@ -1,4 +1,4 @@
-""".ili -> JSON Schema conversion (Lot 1: scalar types, Lot 2: STRUCTURE/BAG/LIST nesting, Lot 4: BooleanType, Lot 5: FormattedType/BlackboxType).
+""".ili -> JSON Schema conversion (Lot 1: scalar types, Lot 2: STRUCTURE/BAG/LIST nesting, Lot 4: BooleanType, Lot 5: FormattedType/BlackboxType, Lot 6: plain REFERENCE TO).
 
 See docs/jsonschema-conversion-strategy.md for the design decision and
 mappings/ilismeta16-to-jsonschema-rules.yml /
@@ -11,7 +11,14 @@ resolution logic - convert() is a decoupled stage from validate().
 from typing import Any
 
 from interlis.metamodel.instance import MetaInstance
-from interlis.xtf.schema import ResolvedAttribute, attributes_of, enum_values, resolve_attribute
+from interlis.xtf.schema import (
+    ResolvedAttribute,
+    attributes_of,
+    enum_values,
+    reference_external_status,
+    reference_target_class,
+    resolve_attribute,
+)
 
 JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
 
@@ -102,6 +109,29 @@ def _scalar_type_schema(kind: str | None, type_instance: MetaInstance | None) ->
     return None
 
 
+def _reference_type_schema(resolved: ResolvedAttribute) -> dict[str, Any]:
+    """Plain `REFERENCE TO X` -> the OID value as `type: string`.
+
+    Matches the XTF wire format, which transfers a reference as a
+    `REF="<oid>"` XML attribute - never the referenced object inline
+    (unlike a Class/STRUCTURE attribute, Lot 2's `$ref`). The declared
+    target class and the `(EXTERNAL)` flag have no native JSON Schema
+    equivalent - surfaced as informational markers instead of being
+    silently dropped (RULE #5, same pattern as MultiValue's
+    `x-interlis-ordered`). Reuses `reference_target_class`/
+    `reference_external_status` directly (xtf.schema), no duplicated
+    resolution logic.
+    """
+    schema: dict[str, Any] = {"type": "string"}
+    target = reference_target_class(resolved)
+    target_name = getattr(target, "Name", None) if target is not None else None
+    if target_name:
+        schema["x-interlis-reference-target"] = target_name
+    if reference_external_status(resolved):
+        schema["x-interlis-reference-external"] = True
+    return schema
+
+
 def _class_ref_or_marker(class_instance: MetaInstance | None, ref_keys: dict[int, str]) -> dict[str, Any]:
     """Return a `$ref` to `class_instance`'s own $defs entry, or the unsupported marker.
 
@@ -118,12 +148,21 @@ def _class_ref_or_marker(class_instance: MetaInstance | None, ref_keys: dict[int
 
 
 def _element_schema(kind: str | None, type_instance: MetaInstance | None, ref_keys: dict[int, str]) -> dict[str, Any]:
-    """Return the schema for one "leaf" type - a plain attribute's type, or a MultiValue's BaseType."""
+    """Return the schema for one "leaf" type - a plain attribute's type, or a MultiValue's BaseType.
+
+    `ReferenceType` here (a `BAG`/`LIST OF REFERENCE TO X` element, not
+    seen in the real corpus so far but grammatically legal) falls back to
+    a bare `{"type": "string"}` - the richer `x-interlis-reference-*`
+    markers need a full `ResolvedAttribute` (see `_reference_type_schema`,
+    used instead for the direct-attribute case by `_attribute_schema`).
+    """
     scalar = _scalar_type_schema(kind, type_instance)
     if scalar is not None:
         return scalar
     if kind == "Class":
         return _class_ref_or_marker(type_instance, ref_keys)
+    if kind == "ReferenceType" and type_instance is not None:
+        return {"type": "string"}
     return {"x-interlis-unsupported": kind or "unknown"}
 
 
@@ -167,15 +206,17 @@ def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> 
     """Return the JSON Schema for one resolved attribute.
 
     An attribute whose type falls outside the mapped set (NumType/
-    TextType/EnumType/BooleanType/FormattedType/BlackboxType/Class/
-    MultiValue) is never silently dropped - it gets an explicit
-    `x-interlis-unsupported` marker instead (RULE #5, see
+    TextType/EnumType/BooleanType/FormattedType/BlackboxType/
+    ReferenceType/Class/MultiValue) is never silently dropped - it gets
+    an explicit `x-interlis-unsupported` marker instead (RULE #5, see
     docs/jsonschema-conversion-strategy.md).
     """
     if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
         return _multi_value_schema(resolved.type_instance, ref_keys)
     if resolved.type_kind == "Class":
         return _class_ref_or_marker(resolved.type_instance, ref_keys)
+    if resolved.type_kind == "ReferenceType" and resolved.type_instance is not None:
+        return _reference_type_schema(resolved)
     return _element_schema(resolved.type_kind, resolved.type_instance, ref_keys)
 
 
@@ -236,16 +277,18 @@ def class_to_json_schema(class_instance: MetaInstance, ref_keys: dict[int, str] 
     """Convert one IlisMeta16 Class (or Structure - same metaclass) instance.
 
     Own+inherited attributes: NumType/TextType/EnumType map per Lot 1,
-    BooleanType per Lot 4, FormattedType/BlackboxType per Lot 5; a
+    BooleanType per Lot 4, FormattedType/BlackboxType per Lot 5, plain
+    `REFERENCE TO X` per Lot 6 (embedded association roles remain
+    backlog, see mappings/ilismeta16-to-jsonschema-rules.yml); a
     Class-typed (nested structure) or MultiValue-typed (BAG/LIST OF)
     attribute maps per Lot 2, via `ref_keys` (instance id -> its own
     `$defs` key - normally supplied by `model_to_json_schema`, which
     discovers and assigns keys for every reachable class first). Called
     standalone with `ref_keys=None` (e.g. in a unit test), a nested
     Class-typed attribute falls back to the `x-interlis-unsupported`
-    marker rather than crashing - associations/REF, geometry, inheritance-
-    as-oneOf, OID and formal constraints remain backlog regardless (see
-    mappings/ilismeta16-to-jsonschema-rules.yml).
+    marker rather than crashing - embedded association roles, geometry,
+    inheritance-as-oneOf, OID and formal constraints remain backlog
+    regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
     """
     ref_keys = ref_keys or {}
     properties: dict[str, Any] = {}
