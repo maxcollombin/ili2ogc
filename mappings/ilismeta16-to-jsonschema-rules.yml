@@ -1,0 +1,102 @@
+# Contract for the `.ili` -> JSON Schema conversion pipeline (backlog item
+# 5, Lot 1 - see docs/jsonschema-conversion-strategy.md).
+#
+# Mirrors mappings/grammar-rules.yml's role for the grammar pipeline: one
+# entry per IlisMeta16 concept a converter needs a decision for. Every
+# concept relevant to attribute typing/class shape must appear here, either
+# `status: mapped` (field bindings live in
+# spec/conversion/jsonschema-mapping.yml) or `status: backlog` (deliberately
+# out of scope for this lot, with a reason - RULE #7, one thematic lot at a
+# time). Checked by scripts/validate_conversion_spec.py.
+
+concepts:
+  NumType:
+    qualified_name: IlisMeta16.ModelData.NumType
+    status: mapped
+
+  TextType:
+    qualified_name: IlisMeta16.ModelData.TextType
+    status: mapped
+
+  EnumType:
+    qualified_name: IlisMeta16.ModelData.EnumType
+    status: mapped
+
+  Class:
+    qualified_name: IlisMeta16.ModelData.Class
+    status: mapped
+    note: >
+      Covers both `CLASS` and `STRUCTURE` declarations (same metamodel
+      class, discriminated by `Kind` - see structureDef/classDef in
+      spec/grammar/mapping/03_classes_and_structures.yml). Lot 1 only
+      converts a class's own+inherited SCALAR attributes into a flat JSON
+      object - see the Structure-nesting/Role backlog entries below for
+      what's excluded.
+
+  FormattedType:
+    qualified_name: IlisMeta16.ModelData.FormattedType
+    status: backlog
+    note: >
+      NumType subclass with a `Format` pattern (numeric formatting, e.g.
+      date-like domains) - needs its own JSON Schema representation
+      (likely `pattern`/`format`), not just min/max. Deferred to a later
+      lot.
+
+  BlackboxType:
+    qualified_name: IlisMeta16.ModelData.BlackboxType
+    status: backlog
+    note: "XML/BINARY blackbox content - no JSON Schema equivalent decided yet."
+
+  BooleanType:
+    qualified_name: IlisMeta16.ModelData.BooleanType
+    status: backlog
+    note: >
+      Discovered missing while running Lot 1 against a real corpus file
+      (ElektrischeAnlagenNennspannungUeber36kV_V1.ili: BOOLEAN attributes
+      get the x-interlis-unsupported marker). Not in scope of the agreed
+      "NumType/TextType/EnumType" Lot 1 slice - trivial
+      `{"type": "boolean"}` mapping, flagged to the user as a good
+      candidate for the very next lot rather than silently folded into
+      this one.
+
+  CoordType:
+    qualified_name: IlisMeta16.ModelData.CoordType
+    status: backlog
+    note: >
+      Geometry - conceptually closer to the future .xtf -> JSON-FG stage
+      of item 5 than to a plain JSON Schema attribute mapping. Attributes
+      of this type get the `x-interlis-unsupported` marker in Lot 1's
+      output rather than being silently dropped.
+
+  LineType:
+    qualified_name: IlisMeta16.ModelData.LineType
+    status: backlog
+    note: "Geometry (polyline/surface/area) - same reasoning as CoordType."
+
+  EnumTreeValueType:
+    qualified_name: IlisMeta16.ModelData.EnumTreeValueType
+    status: backlog
+    note: "ENUMTREE OF domains - not seen in scope for Lot 1's real fixtures, deferred."
+
+  StructureNesting:
+    qualified_name: IlisMeta16.ModelData.Class
+    status: backlog
+    note: >
+      An attribute typed as a `Class(Kind=Structure)` (optionally `BAG OF`)
+      needs recursive $ref/nested-object handling - deferred; Lot 1's
+      Class mapping only walks scalar attributes.
+
+  Role:
+    qualified_name: IlisMeta16.ModelData.Role
+    status: backlog
+    note: >
+      Embedded association roles (REFERENCE TO / embedded associations) -
+      deferred; needs a decision on $ref vs inline target-class expansion.
+
+  Inheritance:
+    qualified_name: IlisMeta16.ModelData.Inheritance
+    status: backlog
+    note: >
+      EXTENDS/CHOICE/RESTRICTION beyond the flat own+inherited attribute
+      merge already reused from xtf.schema.attributes_of() - polymorphic
+      JSON Schema shape (oneOf/discriminator) not designed yet.

@@ -9,6 +9,7 @@ root in that mode, never copied under src/interlis/).
 """
 import argparse
 import importlib.resources
+import json
 import sys
 import warnings
 from contextlib import ExitStack, contextmanager
@@ -16,6 +17,7 @@ from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
+from interlis.convert.jsonschema import model_to_json_schema
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_file
 from interlis.xtf.model_resolution import header_completeness, header_model_lookup, root_model_names
@@ -113,6 +115,45 @@ def cmd_build(args: argparse.Namespace) -> int:
         for w in caught:
             print(f"  {w.message}", file=sys.stderr)
 
+    return 0
+
+
+def cmd_convert(args: argparse.Namespace) -> int:
+    """Convert an .ili model to JSON Schema (Lot 1: scalar types only).
+
+    See docs/jsonschema-conversion-strategy.md for scope - a Class/Structure
+    attribute whose type isn't NumType/TextType/EnumType gets an explicit
+    `x-interlis-unsupported` marker rather than being silently dropped.
+    """
+    path = Path(args.file)
+    if not path.exists():
+        print(f"file not found: {path}", file=sys.stderr)
+        return 1
+
+    tree, syntax_errors = parse_file(path)
+    if syntax_errors:
+        print(f"{len(syntax_errors)} syntax error(s):", file=sys.stderr)
+        for e in syntax_errors:
+            print(f"  {e}", file=sys.stderr)
+        return 1
+
+    repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+    with _resource_dirs() as (mappings_dir, spec_dir):
+        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+
+    classes = [
+        instance for instance in builder.symbol_table.all_registered()
+        if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
+    ]
+    schema = model_to_json_schema(classes)
+    text = json.dumps(schema, indent=2, ensure_ascii=False)
+    if args.output:
+        Path(args.output).write_text(text + "\n", encoding="utf-8")
+    else:
+        print(text)
     return 0
 
 
@@ -239,6 +280,17 @@ def main(argv: list[str] | None = None) -> int:
              "(IMPORTS) - repeatable. Absent by default: no cross-file resolution (V1 behavior).",
     )
     build_parser.set_defaults(func=cmd_build)
+
+    convert_parser = subparsers.add_parser(
+        "convert", help="Convert an .ili model to JSON Schema (Lot 1: scalar types only).",
+    )
+    convert_parser.add_argument("file", help="Path to the .ili file to convert.")
+    convert_parser.add_argument(
+        "--repo", action="append", default=[], metavar="DIR",
+        help="Directory of .ili models used to resolve references to imported models (IMPORTS) - repeatable.",
+    )
+    convert_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
+    convert_parser.set_defaults(func=cmd_convert)
 
     validate_parser = subparsers.add_parser(
         "validate", help="Validate an .xtf file against an .ili file's schema.",

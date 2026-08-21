@@ -1,0 +1,84 @@
+# Declarative field bindings for the `.ili` -> JSON Schema conversion,
+# Lot 1 (scalar types only - see docs/jsonschema-conversion-strategy.md and
+# mappings/ilismeta16-to-jsonschema-rules.yml for the contract this spec
+# fills in). Checked by scripts/validate_conversion_spec.py.
+#
+# Style mirrors spec/grammar/mapping/*.yml's attribute_bindings: each
+# `source` names a real own/inherited IlisMeta16 attribute (verified against
+# mappings/ilismeta16-classes.yml by the validator), each `target` names the
+# JSON Schema keyword it produces. Implemented by
+# src/interlis/convert/jsonschema.py - this file documents the mapping
+# decision, it is not executed directly.
+
+NumType:
+  qualified_name: IlisMeta16.ModelData.NumType
+  json_schema:
+    type:
+      rule: "integer if Min and Max both parse as decimal-point-free integers, else number"
+      note: >
+        No dedicated precision/decimals field exists on NumType (own:
+        {Min, Max, Circular, Clockwise} only) - same shape heuristic
+        already read (not duplicated as a second implementation) from
+        xtf/validate.py's _decimal_places.
+    minimum:
+      source: {field: Min}
+    maximum:
+      source: {field: Max}
+  not_mapped:
+    Circular: "arc-related, irrelevant to a scalar JSON Schema attribute"
+    Clockwise: "arc-related, irrelevant to a scalar JSON Schema attribute"
+
+TextType:
+  qualified_name: IlisMeta16.ModelData.TextType
+  json_schema:
+    type:
+      value: string
+    maxLength:
+      source: {field: MaxLength}
+      note: "absent (0..1) -> maxLength omitted, unbounded string"
+  not_mapped:
+    Kind: "NAME/plain/... text-kind distinction - status: backlog, no pattern/format decided yet"
+
+EnumType:
+  qualified_name: IlisMeta16.ModelData.EnumType
+  json_schema:
+    type:
+      value: string
+    enum:
+      source: {function: "xtf.schema.enum_values(type_instance)"}
+      note: >
+        Reuses xtf.schema.enum_values() directly (dotted paths, includes
+        non-leaf nodes per eCH-0031 SS4.3.11.3) - sorted for deterministic
+        output. The "OTHERS" runtime escape value is deliberately excluded
+        (see docs/jsonschema-conversion-strategy.md).
+  not_mapped:
+    Order: "ordered/unordered enumeration - no JSON Schema equivalent needed for value validation"
+
+# Class.Documentation exists on the metamodel (inherited from MetaElement)
+# but is never populated by InterlisModelBuilder - INTERLIS `/** ... */`
+# doc comments aren't captured as AST nodes anywhere in
+# spec/grammar/mapping/*.yml (grepped, zero attribute_bindings target it).
+# A real Class instance's Documentation is therefore always empty - Lot 1
+# uses only Name (-> title), no description field.
+
+Class:
+  qualified_name: IlisMeta16.ModelData.Class
+  json_schema:
+    type:
+      value: object
+    title:
+      source: {field: Name}
+    properties:
+      source: {function: "xtf.schema.attributes_of(class_instance)"}
+      note: >
+        Own+inherited scalar attributes only (own name wins over
+        inherited, same as xtf.schema.attributes_of()). Each property's
+        schema comes from resolving the attribute's type via
+        xtf.schema.resolve_attribute() and dispatching on type_kind to
+        the NumType/TextType/EnumType mapping above; a type_kind outside
+        {NumType, TextType, EnumType} produces
+        `{"x-interlis-unsupported": type_kind}` instead of being
+        dropped (see docs/jsonschema-conversion-strategy.md).
+    required:
+      source: {function: "resolve_attribute(attr).mandatory"}
+      note: "one entry per attribute where mandatory is true"
