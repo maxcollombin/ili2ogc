@@ -64,6 +64,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
         self.parser_symbolic_names = InterlisParser.symbolicNames
         self._construction_stack: list[dict] = []
         self._parent_stack: list[MetaInstance] = []
+        # eCH-0117 meta-attribute capture (see build()/
+        # _attach_pending_meta_attributes) - empty unless build() is
+        # called with meta_attributes=... (root file only; an imported
+        # file's own comments aren't captured yet, see build()'s docstring).
+        self._pending_meta_attributes: list[tuple[int, str, str]] = []
+        self._meta_attribute_index = 0
         self.repository.bind_builder_factory(self._make_sub_builder)
 
     def _make_sub_builder(self) -> "InterlisModelBuilder":
@@ -72,10 +78,60 @@ class InterlisModelBuilder(InterlisParserVisitor):
     # ------------------------------------------------------------------
     # Point d'entree public
     # ------------------------------------------------------------------
-    def build(self, tree: ParserRuleContext) -> Any:
+    def build(self, tree: ParserRuleContext, *, meta_attributes: list[tuple[int, str, str]] | None = None) -> Any:
+        """Build `tree`, optionally capturing eCH-0117 `!!@Name=Value` comments.
+
+        `meta_attributes` (typically `runtime.parse.meta_attribute_comments(text)`
+        for this SAME source text) is attached to the built instances via
+        `_attach_pending_meta_attributes`, per eCH-0117's "first following
+        language construct" rule - a `MetaAttribute` instance per pair, via
+        the real `MetaAttributes` association (IlisMeta16.ModelData), so it
+        shows up as `instance.MetaAttribute` (a list) exactly like any
+        other multi-valued association. Omitted (the default): no
+        meta-attribute capture, zero behavior change from before this was
+        added. Only the ROOT tree passed here is covered - an imported
+        model's own comments are not (each is built by its own sub-builder,
+        via ModelRepository, without this argument).
+        """
+        self._pending_meta_attributes = sorted(meta_attributes or [], key=lambda triple: triple[0])
+        self._meta_attribute_index = 0
         result = self.visit(tree)
         self.forward_refs.resolve_all(repository=self.repository)
         return result
+
+    @staticmethod
+    def _ctx_line(ctx: Any) -> int | None:
+        """Return the source line of a ParserRuleContext OR a bare Token."""
+        start = getattr(ctx, "start", None)
+        return getattr(start if start is not None else ctx, "line", None)
+
+    def _attach_pending_meta_attributes(self, instance: MetaInstance, ctx: Any) -> None:
+        """Attach every pending meta-attribute comment up to `ctx`'s own line.
+
+        eCH-0117 SS3: "le meta-attribut se rapporte a la premiere
+        construction de langue suivante" - since built instances are
+        visited depth-first in source order (matching ANTLR's own
+        traversal), and `_pending_meta_attributes` is consumed by a single
+        monotonic index (never re-scanned/reset), the first instance whose
+        own line is >= a pending comment's line IS that "first following
+        construct". No-op if `ctx`'s line can't be determined (e.g. a
+        synthetic instance with no real source position) or nothing is
+        pending.
+        """
+        line = self._ctx_line(ctx)
+        if line is None or self._meta_attribute_index >= len(self._pending_meta_attributes):
+            return
+        while self._meta_attribute_index < len(self._pending_meta_attributes):
+            comment_line, name, value = self._pending_meta_attributes[self._meta_attribute_index]
+            if comment_line > line:
+                break
+            meta = self.registry.new_instance("IlisMeta16.ModelData.MetaAttribute")
+            meta.Name = name
+            meta.Value = value
+            self.attachment.attach(
+                instance, "MetaAttribute", meta, association="MetaAttributes", role="MetaAttribute", rule="metaAttribute",
+            )
+            self._meta_attribute_index += 1
 
     # ------------------------------------------------------------------
     # Generic dispatch (replaces ANTLR's visitXxx pattern)
@@ -117,6 +173,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         instance = self.registry.new_instance(entry.target)
         instance._source_ctx = ctx
+        self._attach_pending_meta_attributes(instance, ctx)
 
         outer_ctx = self._construction_stack[-1] if self._construction_stack else {}
         consumed: set[int] = set()
@@ -212,6 +269,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         submodel = instances.get("SubModel")
         if submodel is not None:
+            # eCH-0117 SS5: a TopicDef's meta-attributes belong to the
+            # SCHEMA side (SubModel), never DataUnit - the two twins share
+            # the same source ctx, so this must be scoped explicitly
+            # rather than left to the generic _build_instance hook (which
+            # _build_multi_target bypasses entirely).
+            self._attach_pending_meta_attributes(submodel, ctx)
             self._push_construction_context(rule_name, submodel)
             self._parent_stack.append(submodel)
             try:
@@ -322,6 +385,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 instance = self._build_domain_class_restriction(segment, rule_name)
                 if not isinstance(instance, MetaInstance):
                     continue
+                # _build_domain_class_restriction builds its instance
+                # directly (not via _build_instance/visit_wrapped), so it
+                # never got a _source_ctx - fall back to this segment's own
+                # Name token (a bare Token, not a ParserRuleContext -
+                # _ctx_line handles both shapes).
+                instance._source_ctx = instance._source_ctx or name_node.symbol
+                self._attach_pending_meta_attributes(instance, instance._source_ctx)
                 self._attach_domain_extends(instance, segment, rule_name)
                 if getattr(instance, "Name", None) is None:
                     instance.Name = name_node.getText()
@@ -1299,6 +1369,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
         of this new instance.
         """
         instance = self.registry.new_instance(target)
+        instance._source_ctx = node
+        self._attach_pending_meta_attributes(instance, node)
         self._parent_stack.append(instance)
         try:
             bag = self.visit(node)

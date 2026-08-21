@@ -2,6 +2,7 @@
 
 Runs the Lexer+Parser.
 """
+import re
 from pathlib import Path
 
 from antlr4 import CommonTokenStream, InputStream
@@ -9,6 +10,10 @@ from antlr4.error.ErrorListener import ErrorListener
 
 from interlis.antlr.InterlisLexer import InterlisLexer
 from interlis.antlr.InterlisParser import InterlisParser
+
+_META_ATTRIBUTE_PREFIX = "!!@"
+# eCH-0117 SS4.2 Escape = '\' ('"' | '\' | 'u' HexDigit HexDigit HexDigit HexDigit)
+_ESCAPE_RE = re.compile(r'\\(["\\]|u[0-9a-fA-F]{4})')
 
 
 class SyntaxErrorCollector(ErrorListener):
@@ -61,3 +66,68 @@ def parse_text(text: str):
     exists as an .ili file nowhere on disk.
     """
     return _parse_stream(InputStream(text))
+
+
+def _unquote_meta_attribute_value(value: str) -> str:
+    """Strip eCH-0117 SS4.1 String quoting/escapes, if present.
+
+    `Value = Metaattributename | String` - a bare (unquoted) value is
+    returned as-is; a `"..."` value has its `\\"`/`\\\\`/`\\uXXXX` escapes
+    resolved.
+    """
+    if len(value) < 2 or value[0] != '"' or value[-1] != '"':
+        return value
+    inner = value[1:-1]
+    return _ESCAPE_RE.sub(
+        lambda m: m.group(1) if m.group(1) in ('"', "\\") else chr(int(m.group(1)[1:], 16)),
+        inner,
+    )
+
+
+def meta_attribute_comments(text: str) -> list[tuple[int, str, str]]:
+    """Return every eCH-0117 `!!@Name=Value` meta-attribute comment in `text`.
+
+    eCH-0117 ("Meta-attributs pour modeles INTERLIS") formalizes `!!@...`
+    as an INTERLIS line comment (`SingleLineComment : '!!' ~[\\r\\n]* ->
+    channel(HIDDEN);`, vendor/interlis-antlr4/InterlisLexer.g4) whose 3rd
+    character is `@` - the grammar itself never sees these (they're on
+    ANTLR's hidden channel, invisible to the 121 mapped parser rules), but
+    the lexer does NOT discard them (`channel(HIDDEN)`, not `-> skip`), so
+    a second, independent lex-only pass over the same source recovers them
+    fully, with exact line numbers - no grammar/parser change needed.
+
+    Returns `(line, name, value)` triples in source order (one per
+    `Name=Value` pair - a single comment can carry several, separated by
+    `;`: `!!@a=1;b=2`). An ordinary `!!` comment (no `@`) is not a
+    meta-attribute per eCH-0117 SS3/SS4 and is excluded. Positioning
+    (which built instance a given triple actually belongs to - "the first
+    following language construct", eCH-0117 SS3) is NOT decided here -
+    see InterlisModelBuilder._attach_pending_meta_attributes.
+    """
+    stream = InputStream(text)
+    lexer = InterlisLexer(stream)
+    tokens = CommonTokenStream(lexer)
+    tokens.fill()
+    results: list[tuple[int, str, str]] = []
+    for token in tokens.tokens:
+        if token.channel == 0 or token.text is None or not token.text.startswith(_META_ATTRIBUTE_PREFIX):
+            continue
+        body = token.text[len(_META_ATTRIBUTE_PREFIX):]
+        for pair in body.split(";"):
+            if "=" not in pair:
+                continue
+            name, _, raw_value = pair.partition("=")
+            name = name.strip()
+            if not name:
+                continue
+            results.append((token.line, name, _unquote_meta_attribute_value(raw_value.strip())))
+    return results
+
+
+def meta_attribute_comments_in_file(path: Path) -> list[tuple[int, str, str]]:
+    """Same as `meta_attribute_comments`, reading `path` (same encoding fallback as `parse_file`)."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = path.read_text(encoding="iso-8859-1")
+    return meta_attribute_comments(text)
