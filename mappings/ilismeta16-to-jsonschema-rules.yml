@@ -145,18 +145,41 @@ concepts:
 
   Role:
     qualified_name: IlisMeta16.ModelData.Role
-    status: backlog
+    status: mapped
     note: >
-      Embedded association roles (transferred as pseudo-attributes via
-      `xtf.schema.embedded_roles_of`/`schema_members_of`, eCH-0031
-      SS4.3.9) - deferred, separate from Lot 6's plain `REFERENCE TO`:
-      requires threading a `SymbolTable` through the conversion pipeline
-      (`class_to_json_schema` currently only takes a bare `Class`
-      instance) AND a decision on cardinality (a `Role`'s own
-      `Multiplicity` can make it multi-valued WITHOUT a wrapping
-      `MultiValue`, unlike a regular attribute - `MultiValue`
-      wrapping/unwrapping in Lot 2's `_multi_value_schema` assumes the
-      multi-ness is always explicit).
+      Lot 7. Embedded association roles (transferred as pseudo-attributes
+      via `xtf.schema.embedded_roles_of`/`schema_members_of`, eCH-0031
+      SS4.3.9) - opt-in via a new `symbol_table` parameter on
+      `class_to_json_schema`/`model_to_json_schema` (`None`, the default,
+      preserves exact Lot 1-6 behavior; `cli.cmd_convert` always passes
+      `builder.symbol_table`). Mapped the SAME way as a plain
+      `REFERENCE TO` (Lot 6) - `{"type": "string"}` +
+      `x-interlis-reference-target`/`x-interlis-reference-external` -
+      NEVER `$ref`/inlined: `resolve_attribute` resolves a `Role` to
+      `type_kind="Class"`, the SAME shape as genuine `Class(Kind=Structure)`
+      nesting (Lot 2), but `Role`'s target is always `Kind="Class"` (a
+      real class instance, transferred via `REF`/OID), never
+      `Kind="Structure"` - confirmed by `xtf/validate.py`'s own dispatch
+      (`_validate_resolved_attr`: `Kind == "Structure"` recurses into
+      inline content, anything else expects a `REF`). `_is_structure`
+      (new helper, `src/interlis/convert/jsonschema.py`) is the single
+      dispatch point checking this for both sources (`attributes_of` AND
+      `embedded_roles_of`), so nesting-vs-reference is decided by the
+      target's OWN `Kind`, never by which enumeration function produced
+      the attribute.
+      Cardinality: NO array-wrapping needed - confirmed by
+      `embedded_roles_of`'s own embedding algorithm (`xtf/schema.py`):
+      the surfaced `embedded_role` is ALWAYS the non-multi side of the
+      association (when one role has `Max == "*"`, the OTHER, non-multi
+      role is what gets embedded; the multi side is never itself embedded
+      as a pseudo-attribute - eCH-0031 SS4.3.9.2, "transferred as a
+      separate class instance" instead). The Lot 6 concern about a
+      `Role`'s own `Multiplicity` bypassing `MultiValue` therefore does
+      not materialize for `embedded_roles_of`'s output in practice -
+      `_role_is_multi`'s own known simplification (only `Max == "*"`
+      counts as "multi", a bounded `{0..5}` role would not) is a
+      pre-existing `xtf.schema`-layer scope limit, not something this
+      lot introduces or fixes (RULE #7 - different layer).
 
   Inheritance:
     qualified_name: IlisMeta16.ModelData.Inheritance

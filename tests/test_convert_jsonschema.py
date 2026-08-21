@@ -204,6 +204,65 @@ END Foo.
     }
 
 
+_ASSOCIATION_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Location =
+      Name : TEXT*20;
+    END Location;
+    CLASS Indicator =
+      Value : TEXT*20;
+    END Indicator;
+    ASSOCIATION Location_Indicator =
+      rLocation (EXTERNAL) -<#> Location;
+      rIndicator -- {0..*} Indicator;
+    END Location_Indicator;
+  END T;
+END Foo.
+"""
+
+
+def test_embedded_role_absent_without_symbol_table():
+    builder = _build(_ASSOCIATION_MODEL)
+    cls = _resolved_class(builder, "Indicator")
+    schema = class_to_json_schema(cls)
+    assert set(schema["properties"]) == {"Value"}
+
+
+def test_embedded_role_gets_reference_schema_with_symbol_table():
+    builder = _build(_ASSOCIATION_MODEL)
+    cls = _resolved_class(builder, "Indicator")
+    schema = class_to_json_schema(cls, symbol_table=builder.symbol_table)
+    assert schema["properties"]["rLocation"] == {
+        "type": "string",
+        "x-interlis-reference-target": "Location",
+        "x-interlis-reference-external": True,
+    }
+    assert schema["properties"]["Value"] == {"type": "string", "maxLength": 20}
+    # rIndicator (the {0..*} side) is never embedded on ITS OWN target
+    # (Indicator) - eCH-0031 SS4.3.9, confirmed by xtf.schema.embedded_roles_of.
+    assert "rIndicator" not in schema["properties"]
+
+
+def test_embedded_role_target_never_gets_a_defs_entry():
+    """An embedded role is a REFERENCE (REF/OID), not containment - its
+    target must not be pulled into $defs the way a STRUCTURE would be
+    (same as a plain REFERENCE TO target, Lot 6)."""
+    builder = _build(_ASSOCIATION_MODEL)
+    classes = [
+        instance for instance in builder.symbol_table.all_registered()
+        if hasattr(instance, "_qualified_class") and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
+        and getattr(instance, "Kind", None) == "Class"
+    ]
+    schema = model_to_json_schema(classes, symbol_table=builder.symbol_table)
+    assert schema["$defs"]["Indicator"]["properties"]["rLocation"] == {
+        "type": "string",
+        "x-interlis-reference-target": "Location",
+        "x-interlis-reference-external": True,
+    }
+    assert "Location_Indicator" not in schema["$defs"]  # the ASSOCIATION class itself, never a root here
+
+
 def test_mandatory_attribute_is_required():
     builder = _build(
         """INTERLIS 2.4;

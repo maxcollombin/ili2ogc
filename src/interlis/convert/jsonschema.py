@@ -1,15 +1,17 @@
-""".ili -> JSON Schema conversion (Lot 1: scalar types, Lot 2: STRUCTURE/BAG/LIST nesting, Lot 4: BooleanType, Lot 5: FormattedType/BlackboxType, Lot 6: plain REFERENCE TO).
+""".ili -> JSON Schema conversion (Lot 1: scalar types, Lot 2: STRUCTURE/BAG/LIST nesting, Lot 4: BooleanType, Lot 5: FormattedType/BlackboxType, Lot 6: plain REFERENCE TO, Lot 7: embedded association roles).
 
 See docs/jsonschema-conversion-strategy.md for the design decision and
 mappings/ilismeta16-to-jsonschema-rules.yml /
 spec/conversion/jsonschema-mapping.yml for the concept/field contract this
 module implements. Walks IlisMeta16 instances already built by
 InterlisModelBuilder, reusing xtf.schema's type-resolution helpers
-(resolve_attribute/attributes_of/enum_values) rather than duplicating any
-resolution logic - convert() is a decoupled stage from validate().
+(resolve_attribute/attributes_of/schema_members_of/enum_values) rather than
+duplicating any resolution logic - convert() is a decoupled stage from
+validate().
 """
 from typing import Any
 
+from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.schema import (
     ResolvedAttribute,
@@ -18,6 +20,7 @@ from interlis.xtf.schema import (
     reference_external_status,
     reference_target_class,
     resolve_attribute,
+    schema_members_of,
 )
 
 JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
@@ -132,13 +135,29 @@ def _reference_type_schema(resolved: ResolvedAttribute) -> dict[str, Any]:
     return schema
 
 
+def _is_structure(type_instance: MetaInstance | None) -> bool:
+    """True if a `type_kind == "Class"` resolution is genuine STRUCTURE nesting.
+
+    `resolve_attribute` resolves BOTH a `Class(Kind=Structure)` attribute
+    (Lot 2) AND an embedded association role (Lot 7,
+    `xtf.schema.embedded_roles_of` - always `Kind == "Class"`, a role
+    points at a real class instance, never a structure) to the SAME
+    `type_kind == "Class"`. `Kind` is the only signal that tells them
+    apart - confirmed by `xtf/validate.py`'s own `_validate_resolved_attr`
+    dispatch (`Kind == "Structure"` recurses into inline content;
+    anything else expects a `REF`/OID, same as a plain `REFERENCE TO`).
+    """
+    return type_instance is not None and getattr(type_instance, "Kind", None) == "Structure"
+
+
 def _class_ref_or_marker(class_instance: MetaInstance | None, ref_keys: dict[int, str]) -> dict[str, Any]:
     """Return a `$ref` to `class_instance`'s own $defs entry, or the unsupported marker.
 
-    A Class not present in `ref_keys` means it wasn't reachable from the
-    roots given to `model_to_json_schema` (e.g. an unresolved cross-model
-    reference, no `--repo` given) - RULE #5, marked explicitly rather than
-    emitting a dangling `$ref`.
+    Only called for genuine STRUCTURE nesting (`_is_structure` already
+    checked by the caller) - a Class not present in `ref_keys` means it
+    wasn't reachable from the roots given to `model_to_json_schema` (e.g.
+    an unresolved cross-model reference, no `--repo` given) - RULE #5,
+    marked explicitly rather than emitting a dangling `$ref`.
     """
     if class_instance is not None:
         ref = ref_keys.get(id(class_instance))
@@ -150,17 +169,22 @@ def _class_ref_or_marker(class_instance: MetaInstance | None, ref_keys: dict[int
 def _element_schema(kind: str | None, type_instance: MetaInstance | None, ref_keys: dict[int, str]) -> dict[str, Any]:
     """Return the schema for one "leaf" type - a plain attribute's type, or a MultiValue's BaseType.
 
-    `ReferenceType` here (a `BAG`/`LIST OF REFERENCE TO X` element, not
-    seen in the real corpus so far but grammatically legal) falls back to
-    a bare `{"type": "string"}` - the richer `x-interlis-reference-*`
-    markers need a full `ResolvedAttribute` (see `_reference_type_schema`,
-    used instead for the direct-attribute case by `_attribute_schema`).
+    `ReferenceType`/non-structure `Class` here (a `BAG`/`LIST OF
+    REFERENCE TO X` element or an embedded role reached via `MultiValue`
+    - neither seen in the real corpus so far, and the latter never
+    happens by construction of `embedded_roles_of`, but both
+    grammatically/structurally possible) fall back to a bare
+    `{"type": "string"}` - the richer `x-interlis-reference-*` markers
+    need a full `ResolvedAttribute` (see `_reference_type_schema`, used
+    instead for the direct-attribute case by `_attribute_schema`).
     """
     scalar = _scalar_type_schema(kind, type_instance)
     if scalar is not None:
         return scalar
-    if kind == "Class":
+    if kind == "Class" and _is_structure(type_instance):
         return _class_ref_or_marker(type_instance, ref_keys)
+    if kind == "Class" and type_instance is not None:
+        return {"type": "string"}
     if kind == "ReferenceType" and type_instance is not None:
         return {"type": "string"}
     return {"x-interlis-unsupported": kind or "unknown"}
@@ -210,23 +234,38 @@ def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> 
     ReferenceType/Class/MultiValue) is never silently dropped - it gets
     an explicit `x-interlis-unsupported` marker instead (RULE #5, see
     docs/jsonschema-conversion-strategy.md).
+
+    `type_kind == "Class"` covers two DIFFERENT things (see `_is_structure`):
+    genuine STRUCTURE nesting (`$ref`, Lot 2) vs. an embedded association
+    role (Lot 7) - which, like a plain `REFERENCE TO` (Lot 6), is
+    transferred as a `REF`/OID, not inlined, so it reuses
+    `_reference_type_schema` (`reference_target_class`/
+    `reference_external_status` already handle a `Role`-typed `resolved`
+    correctly, no separate code path needed).
     """
     if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
         return _multi_value_schema(resolved.type_instance, ref_keys)
-    if resolved.type_kind == "Class":
+    if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
         return _class_ref_or_marker(resolved.type_instance, ref_keys)
-    if resolved.type_kind == "ReferenceType" and resolved.type_instance is not None:
+    if resolved.type_kind in ("Class", "ReferenceType") and resolved.type_instance is not None:
         return _reference_type_schema(resolved)
     return _element_schema(resolved.type_kind, resolved.type_instance, ref_keys)
 
 
 def _nested_class(resolved: ResolvedAttribute) -> MetaInstance | None:
-    """Return the Class a structure/BAG/LIST-of-structure attribute points to, else None."""
-    if resolved.type_kind == "Class" and resolved.type_instance is not None:
+    """Return the Class a structure/BAG/LIST-of-structure attribute points to, else None.
+
+    Only genuine STRUCTURE nesting counts as "reachable" for `$defs`
+    discovery (`_is_structure`) - an embedded association role's target
+    (Lot 7) is a REFERENCE, not containment, same as a plain
+    `REFERENCE TO` target (Lot 6, also never added to `$defs` by this
+    discovery).
+    """
+    if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
         return resolved.type_instance
     if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
         base = getattr(resolved.type_instance, "BaseType", None)
-        if isinstance(base, MetaInstance) and base._qualified_class.rsplit(".", 1)[-1] == "Class":
+        if isinstance(base, MetaInstance) and base._qualified_class.rsplit(".", 1)[-1] == "Class" and _is_structure(base):
             return base
     return None
 
@@ -273,27 +312,37 @@ def _assign_keys(classes_by_id: dict[int, MetaInstance]) -> dict[int, str]:
     return keys
 
 
-def class_to_json_schema(class_instance: MetaInstance, ref_keys: dict[int, str] | None = None) -> dict[str, Any]:
+def class_to_json_schema(
+    class_instance: MetaInstance, ref_keys: dict[int, str] | None = None, symbol_table: SymbolTable | None = None,
+) -> dict[str, Any]:
     """Convert one IlisMeta16 Class (or Structure - same metaclass) instance.
 
     Own+inherited attributes: NumType/TextType/EnumType map per Lot 1,
     BooleanType per Lot 4, FormattedType/BlackboxType per Lot 5, plain
-    `REFERENCE TO X` per Lot 6 (embedded association roles remain
-    backlog, see mappings/ilismeta16-to-jsonschema-rules.yml); a
-    Class-typed (nested structure) or MultiValue-typed (BAG/LIST OF)
-    attribute maps per Lot 2, via `ref_keys` (instance id -> its own
-    `$defs` key - normally supplied by `model_to_json_schema`, which
-    discovers and assigns keys for every reachable class first). Called
-    standalone with `ref_keys=None` (e.g. in a unit test), a nested
-    Class-typed attribute falls back to the `x-interlis-unsupported`
-    marker rather than crashing - embedded association roles, geometry,
-    inheritance-as-oneOf, OID and formal constraints remain backlog
-    regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
+    `REFERENCE TO X` per Lot 6; a Class-typed (nested structure) or
+    MultiValue-typed (BAG/LIST OF) attribute maps per Lot 2, via
+    `ref_keys` (instance id -> its own `$defs` key - normally supplied by
+    `model_to_json_schema`, which discovers and assigns keys for every
+    reachable class first). Called standalone with `ref_keys=None` (e.g.
+    in a unit test), a nested Class-typed attribute falls back to the
+    `x-interlis-unsupported` marker rather than crashing.
+
+    `symbol_table`, when given (Lot 7), additionally includes EMBEDDED
+    ASSOCIATION ROLES (`xtf.schema.schema_members_of` instead of plain
+    `attributes_of`) as pseudo-attributes - mapped the SAME way as a
+    plain `REFERENCE TO` (a `REF`/OID, never inlined - see
+    `_is_structure`), since that's how the XTF wire format actually
+    transfers them. `None` (the default) preserves the exact Lot 1-6
+    behavior - own+inherited `ClassAttribute`s only, no embedded roles.
+
+    Geometry, inheritance-as-oneOf, OID and formal constraints remain
+    backlog regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
     """
     ref_keys = ref_keys or {}
     properties: dict[str, Any] = {}
     required: list[str] = []
-    for name, attr in attributes_of(class_instance).items():
+    members = schema_members_of(class_instance, symbol_table) if symbol_table is not None else attributes_of(class_instance)
+    for name, attr in members.items():
         resolved = resolve_attribute(attr)
         properties[name] = _attribute_schema(resolved, ref_keys)
         if resolved.mandatory:
@@ -307,7 +356,7 @@ def class_to_json_schema(class_instance: MetaInstance, ref_keys: dict[int, str] 
     return schema
 
 
-def model_to_json_schema(classes: list[MetaInstance]) -> dict[str, Any]:
+def model_to_json_schema(classes: list[MetaInstance], symbol_table: SymbolTable | None = None) -> dict[str, Any]:
     """Convert every Class/Structure reachable from `classes` into one JSON Schema document.
 
     `classes` is typically every `Class`-kind instance from a built
@@ -320,8 +369,17 @@ def model_to_json_schema(classes: list[MetaInstance]) -> dict[str, Any]:
     across topics, while possible, is only disambiguated by an
     incrementing suffix, not a qualified key; revisit if a later lot
     needs qualified `$defs` keys).
+
+    `symbol_table` (Lot 7), when given, is forwarded to `class_to_json_schema`
+    so each `$defs` entry also includes its embedded association roles -
+    NOT used by `_discover_classes` itself (an embedded role is a
+    reference, never containment, so it never contributes a new reachable
+    class, same as a plain `REFERENCE TO` target).
     """
     reachable = _discover_classes(classes)
     ref_keys = _assign_keys(reachable)
-    defs = {ref_keys[instance_id]: class_to_json_schema(cls, ref_keys) for instance_id, cls in reachable.items()}
+    defs = {
+        ref_keys[instance_id]: class_to_json_schema(cls, ref_keys, symbol_table)
+        for instance_id, cls in reachable.items()
+    }
     return {"$schema": JSON_SCHEMA_DRAFT, "$defs": defs}

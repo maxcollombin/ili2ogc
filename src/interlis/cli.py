@@ -119,10 +119,11 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
-    """Convert an .ili model to JSON Schema (Lot 1: scalar types only).
+    """Convert an .ili model to JSON Schema.
 
-    See docs/jsonschema-conversion-strategy.md for scope - a Class/Structure
-    attribute whose type isn't NumType/TextType/EnumType gets an explicit
+    See docs/jsonschema-conversion-strategy.md and
+    mappings/ilismeta16-to-jsonschema-rules.yml for scope - a mapped type
+    outside the current lot's coverage gets an explicit
     `x-interlis-unsupported` marker rather than being silently dropped.
     """
     path = Path(args.file)
@@ -148,7 +149,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         instance for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
     ]
-    schema = model_to_json_schema(classes)
+    schema = model_to_json_schema(classes, symbol_table=builder.symbol_table)
     text = json.dumps(schema, indent=2, ensure_ascii=False)
     if args.output:
         Path(args.output).write_text(text + "\n", encoding="utf-8")

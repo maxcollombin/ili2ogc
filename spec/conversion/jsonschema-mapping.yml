@@ -154,6 +154,40 @@ ReferenceType:
         xtf.schema.reference_external_status. Marker omitted unless
         true, same RULE #5 presence-only style already used elsewhere.
 
+# Lot 7: an embedded association role (xtf.schema.embedded_roles_of,
+# discovered only when class_to_json_schema/model_to_json_schema is given
+# a symbol_table) resolves to type_kind="Class" (same shape as
+# StructureNesting above) but is mapped like ReferenceType above instead -
+# resolve_attribute's target IS ALREADY the Role's target class, and that
+# target is always Kind="Class" (a real class instance, transferred via
+# REF/OID), never Kind="Structure" - the src/interlis/convert/jsonschema.py
+# _is_structure() helper is the single place deciding which of the two
+# this block vs. StructureNesting applies, checking the target's OWN Kind
+# rather than which function (attributes_of vs embedded_roles_of) produced
+# the attribute.
+Role:
+  qualified_name: IlisMeta16.ModelData.Role
+  json_schema:
+    type:
+      value: string
+      note: "same REF/OID representation as ReferenceType above - reference_target_class(resolved) already returns resolved.type_instance directly for a Role"
+    x-interlis-reference-target:
+      source: {function: "xtf.schema.reference_target_class(resolved).Name"}
+      note: "identical binding to ReferenceType above - reused as-is, no Role-specific code needed"
+    x-interlis-reference-external:
+      source: {field: EmbeddedTransfer}
+      note: >
+        Own BOOLEAN, mandatory (roleDef()'s own (EXTERNAL) clause, a
+        DIFFERENT own attribute name than ReferenceType.External despite
+        the same semantic meaning) - via
+        xtf.schema.reference_external_status, which already branches on
+        attr being a Role. Marker omitted unless true, same as ReferenceType.
+  not_mapped:
+    Strongness: "aggregation/composition semantics (association strength) - no JSON Schema equivalent for a bare REF/OID value"
+    Ordered: "role-level ordering - not surfaced, unlike MultiValue.Ordered's x-interlis-ordered (an embedded role is never array-wrapped, see rules.yml note on cardinality)"
+    Multiplicity: "confirmed (rules.yml) embedded_roles_of always selects the non-multi side - no array-wrapping needed for what this concept actually produces"
+    Derivates: "derived-role expression - out of scope, same category as formal constraints"
+
 MultiValue:
   qualified_name: IlisMeta16.ModelData.MultiValue
   json_schema:
