@@ -1,4 +1,4 @@
-""".ili -> JSON Schema conversion (Lot 1: scalar types, Lot 2: STRUCTURE/BAG/LIST nesting).
+""".ili -> JSON Schema conversion (Lot 1: scalar types, Lot 2: STRUCTURE/BAG/LIST nesting, Lot 4: BooleanType).
 
 See docs/jsonschema-conversion-strategy.md for the design decision and
 mappings/ilismeta16-to-jsonschema-rules.yml /
@@ -61,13 +61,15 @@ def _enum_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
 
 
 def _scalar_type_schema(kind: str | None, type_instance: MetaInstance | None) -> dict[str, Any] | None:
-    """Return the Lot 1 scalar mapping for one (kind, instance) pair, or None if unmapped."""
+    """Return the scalar mapping for one (kind, instance) pair, or None if unmapped."""
     if kind == "NumType" and type_instance is not None:
         return _num_type_schema(type_instance)
     if kind == "TextType" and type_instance is not None:
         return _text_type_schema(type_instance)
     if kind == "EnumType" and type_instance is not None:
         return _enum_type_schema(type_instance)
+    if kind == "BooleanType" and type_instance is not None:
+        return {"type": "boolean"}
     return None
 
 
@@ -136,9 +138,9 @@ def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> 
     """Return the JSON Schema for one resolved attribute.
 
     An attribute whose type falls outside the mapped set (NumType/
-    TextType/EnumType/Class/MultiValue) is never silently dropped - it
-    gets an explicit `x-interlis-unsupported` marker instead (RULE #5, see
-    docs/jsonschema-conversion-strategy.md).
+    TextType/EnumType/BooleanType/Class/MultiValue) is never silently
+    dropped - it gets an explicit `x-interlis-unsupported` marker instead
+    (RULE #5, see docs/jsonschema-conversion-strategy.md).
     """
     if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
         return _multi_value_schema(resolved.type_instance, ref_keys)
@@ -203,8 +205,9 @@ def _assign_keys(classes_by_id: dict[int, MetaInstance]) -> dict[int, str]:
 def class_to_json_schema(class_instance: MetaInstance, ref_keys: dict[int, str] | None = None) -> dict[str, Any]:
     """Convert one IlisMeta16 Class (or Structure - same metaclass) instance.
 
-    Own+inherited attributes: NumType/TextType/EnumType map per Lot 1;
-    a Class-typed (nested structure) or MultiValue-typed (BAG/LIST OF)
+    Own+inherited attributes: NumType/TextType/EnumType map per Lot 1,
+    BooleanType per Lot 4; a Class-typed (nested structure) or
+    MultiValue-typed (BAG/LIST OF)
     attribute maps per Lot 2, via `ref_keys` (instance id -> its own
     `$defs` key - normally supplied by `model_to_json_schema`, which
     discovers and assigns keys for every reachable class first). Called

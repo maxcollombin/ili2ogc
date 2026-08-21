@@ -54,6 +54,13 @@ EnumType:
   not_mapped:
     Order: "ordered/unordered enumeration - no JSON Schema equivalent needed for value validation"
 
+BooleanType:
+  qualified_name: IlisMeta16.ModelData.BooleanType
+  json_schema:
+    type:
+      value: boolean
+      note: "own: {} - pure marker type, nothing else to bind"
+
 # Class.Documentation exists on the metamodel (inherited from MetaElement)
 # but is never populated by InterlisModelBuilder - INTERLIS `/** ... */`
 # doc comments aren't captured as AST nodes anywhere in

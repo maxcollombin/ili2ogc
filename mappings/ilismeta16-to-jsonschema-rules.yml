@@ -49,15 +49,11 @@ concepts:
 
   BooleanType:
     qualified_name: IlisMeta16.ModelData.BooleanType
-    status: backlog
+    status: mapped
     note: >
-      Discovered missing while running Lot 1 against a real corpus file
-      (ElektrischeAnlagenNennspannungUeber36kV_V1.ili: BOOLEAN attributes
-      get the x-interlis-unsupported marker). Not in scope of the agreed
-      "NumType/TextType/EnumType" Lot 1 slice - trivial
-      `{"type": "boolean"}` mapping, flagged to the user as a good
-      candidate for the very next lot rather than silently folded into
-      this one.
+      Lot 4. Pure marker type (own: {}, matches only the BOOLEAN keyword -
+      see spec/grammar/mapping/06_types.yml booleanType()) -> plain
+      `{"type": "boolean"}`, no further fields to bind.
 
   CoordType:
     qualified_name: IlisMeta16.ModelData.CoordType

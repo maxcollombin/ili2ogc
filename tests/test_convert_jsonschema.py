@@ -105,6 +105,23 @@ END Foo.
     }
 
 
+def test_booleantype_attribute():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Active : BOOLEAN;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Active"] == {"type": "boolean"}
+
+
 def test_mandatory_attribute_is_required():
     builder = _build(
         """INTERLIS 2.4;
