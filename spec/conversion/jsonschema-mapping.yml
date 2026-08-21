@@ -81,4 +81,40 @@ Class:
         dropped (see docs/jsonschema-conversion-strategy.md).
     required:
       source: {function: "resolve_attribute(attr).mandatory"}
-      note: "one entry per attribute where mandatory is true"
+      note: >
+        One entry per attribute where mandatory is true. Known gap
+        (pre-existing in xtf.schema.resolve_attribute, not fixed here -
+        see mappings/ilismeta16-to-jsonschema-rules.yml StructureNesting
+        note): a structure-typed attribute's `mandatory` is always False,
+        since `Class` (unlike `DomainType`) has no own `Mandatory`
+        attribute for resolve_attribute to read.
+
+# Lot 2: a Class-typed attribute (STRUCTURE nesting) does not inline the
+# target class's schema - it references the target's own top-level
+# $defs entry, built once per class regardless of how many attributes
+# point to it (recursion-safe by construction, see
+# mappings/ilismeta16-to-jsonschema-rules.yml).
+StructureNesting:
+  qualified_name: IlisMeta16.ModelData.Class
+  json_schema:
+    $ref:
+      rule: "#/$defs/<key assigned to the referenced Class's own $defs entry>"
+      note: "see StructureNesting in mappings/ilismeta16-to-jsonschema-rules.yml"
+
+MultiValue:
+  qualified_name: IlisMeta16.ModelData.MultiValue
+  json_schema:
+    type:
+      value: array
+    items:
+      source: {function: "getattr(multi_value, 'BaseType', None)"}
+      note: "same scalar/$ref dispatch as a plain attribute, applied to BaseType (the element type)"
+    minItems:
+      source: {field: Multiplicity}
+      note: "Multiplicity.Min"
+    maxItems:
+      source: {field: Multiplicity}
+      note: "Multiplicity.Max, omitted when '*' (unbounded)"
+    x-interlis-ordered:
+      source: {field: Ordered}
+      note: "True=LIST, False=BAG - no native JSON Schema equivalent, see rules.yml note"

@@ -185,6 +185,148 @@ END Foo.
     assert doc["$defs"]["A"]["properties"]["Code"]["type"] == "string"
 
 
+def test_structure_attribute_gets_ref_when_target_reachable():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Sub =
+      Value : TEXT*10;
+    END Sub;
+    CLASS A =
+      Position : Sub;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "A")
+    sub = _resolved_class(builder, "Sub")
+    doc = model_to_json_schema([a, sub])
+    assert set(doc["$defs"]) == {"A", "Sub"}
+    assert doc["$defs"]["A"]["properties"]["Position"] == {"$ref": "#/$defs/Sub"}
+    assert doc["$defs"]["Sub"]["properties"]["Value"] == {"type": "string", "maxLength": 10}
+
+
+def test_structure_attribute_discovered_even_when_not_in_given_roots():
+    # model_to_json_schema must pull in a nested Structure even if the
+    # caller only passed the top-level Class (mirrors a cross-model
+    # reference resolved via --repo but never locally registered).
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Sub =
+      Value : TEXT*10;
+    END Sub;
+    CLASS A =
+      Position : Sub;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "A")
+    doc = model_to_json_schema([a])
+    assert set(doc["$defs"]) == {"A", "Sub"}
+    assert doc["$defs"]["A"]["properties"]["Position"] == {"$ref": "#/$defs/Sub"}
+
+
+def test_structure_attribute_standalone_without_ref_keys_gets_marker():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Sub =
+      Value : TEXT*10;
+    END Sub;
+    CLASS A =
+      Position : Sub;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "A")
+    schema = class_to_json_schema(a)
+    assert schema["properties"]["Position"] == {"x-interlis-unsupported": "Class"}
+
+
+def test_bag_of_structure_gets_array_of_ref_and_ordered_marker():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Sub =
+      Value : TEXT*10;
+    END Sub;
+    CLASS A =
+      Many : BAG {0..*} OF Sub;
+      Ordered : LIST {1..5} OF Sub;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "A")
+    sub = _resolved_class(builder, "Sub")
+    doc = model_to_json_schema([a, sub])
+    props = doc["$defs"]["A"]["properties"]
+    assert props["Many"] == {
+        "type": "array", "items": {"$ref": "#/$defs/Sub"}, "minItems": 0, "x-interlis-ordered": False,
+    }
+    assert props["Ordered"] == {
+        "type": "array", "items": {"$ref": "#/$defs/Sub"},
+        "minItems": 1, "maxItems": 5, "x-interlis-ordered": True,
+    }
+
+
+def test_list_of_scalar_type():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Tags : LIST {1..3} OF TEXT*5;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "A")
+    schema = class_to_json_schema(a)
+    assert schema["properties"]["Tags"] == {
+        "type": "array",
+        "items": {"type": "string", "maxLength": 5},
+        "minItems": 1, "maxItems": 3, "x-interlis-ordered": True,
+    }
+
+
+def test_recursive_structure_produces_ref_not_infinite_expansion():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Node =
+      Label : TEXT*10;
+      Children : BAG {0..*} OF Node;
+    END Node;
+    CLASS A =
+      Root : Node;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "A")
+    doc = model_to_json_schema([a])
+    assert set(doc["$defs"]) == {"A", "Node"}
+    assert doc["$defs"]["A"]["properties"]["Root"] == {"$ref": "#/$defs/Node"}
+    assert doc["$defs"]["Node"]["properties"]["Children"] == {
+        "type": "array", "items": {"$ref": "#/$defs/Node"}, "minItems": 0, "x-interlis-ordered": False,
+    }
+
+
 def test_attributes_of_and_resolve_attribute_are_reused_not_duplicated():
     # Sanity check that convert.jsonschema is layered on top of
     # xtf.schema's existing resolution, not a parallel implementation.

@@ -80,11 +80,39 @@ concepts:
 
   StructureNesting:
     qualified_name: IlisMeta16.ModelData.Class
-    status: backlog
+    status: mapped
     note: >
-      An attribute typed as a `Class(Kind=Structure)` (optionally `BAG OF`)
-      needs recursive $ref/nested-object handling - deferred; Lot 1's
-      Class mapping only walks scalar attributes.
+      Lot 2. An attribute typed as a `Class(Kind=Structure)` maps to
+      `{"$ref": "#/$defs/<Name>"}` - the referenced class gets its own
+      top-level $defs entry (recursion-safe: a class is discovered and
+      converted at most once, by identity, so self-referencing/mutually
+      recursive structures produce a valid recursive $ref, never infinite
+      expansion). Known limitation carried over from xtf.schema itself,
+      not fixed here (RULE #7 - a metamodel-binding gap belongs to a
+      different pipeline layer/lot): `MANDATORY` on a structure-typed
+      attribute is not captured ANYWHERE in the built metamodel (`Class`
+      extends `Type`, not `DomainType`, so it has no `Mandatory` own
+      attribute for `resolve_attribute` to read - confirmed empirically,
+      `attr.MANDATORY` on a bare `Single: MANDATORY Sub;` attribute is
+      simply absent from the built AttrOrParam AND its Type instance) -
+      such an attribute therefore never appears in `required`, regardless
+      of its actual MANDATORY declaration.
+
+  MultiValue:
+    qualified_name: IlisMeta16.ModelData.MultiValue
+    status: mapped
+    note: >
+      Lot 2. `BAG {m..n} OF X` / `LIST {m..n} OF X` -> `type: array`,
+      `items` = the SAME dispatch used for a plain attribute (scalar
+      mapping, or `$ref` if X is itself a Class/Structure) applied to
+      `MultiValue.BaseType`, `minItems`/`maxItems` from
+      `MultiValue.Multiplicity.Min`/`.Max` (`Max == "*"` -> maxItems
+      omitted). `MultiValue.Ordered` (True=LIST, False=BAG) has no native
+      JSON Schema equivalent (a JSON array is always ordered syntactically
+      - BAG's "order doesn't matter" is a semantic note, and importantly
+      NOT the same as `uniqueItems` since a BAG still allows duplicates) -
+      surfaced instead as an informational `x-interlis-ordered: bool`
+      marker, RULE #5 style, rather than silently lost.
 
   Role:
     qualified_name: IlisMeta16.ModelData.Role

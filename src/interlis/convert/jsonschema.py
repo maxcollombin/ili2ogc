@@ -1,4 +1,4 @@
-""".ili -> JSON Schema conversion (Lot 1: scalar types only).
+""".ili -> JSON Schema conversion (Lot 1: scalar types, Lot 2: STRUCTURE/BAG/LIST nesting).
 
 See docs/jsonschema-conversion-strategy.md for the design decision and
 mappings/ilismeta16-to-jsonschema-rules.yml /
@@ -60,35 +60,166 @@ def _enum_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     return {"type": "string", "enum": sorted(values)}
 
 
-def _attribute_schema(resolved: ResolvedAttribute) -> dict[str, Any]:
+def _scalar_type_schema(kind: str | None, type_instance: MetaInstance | None) -> dict[str, Any] | None:
+    """Return the Lot 1 scalar mapping for one (kind, instance) pair, or None if unmapped."""
+    if kind == "NumType" and type_instance is not None:
+        return _num_type_schema(type_instance)
+    if kind == "TextType" and type_instance is not None:
+        return _text_type_schema(type_instance)
+    if kind == "EnumType" and type_instance is not None:
+        return _enum_type_schema(type_instance)
+    return None
+
+
+def _class_ref_or_marker(class_instance: MetaInstance | None, ref_keys: dict[int, str]) -> dict[str, Any]:
+    """Return a `$ref` to `class_instance`'s own $defs entry, or the unsupported marker.
+
+    A Class not present in `ref_keys` means it wasn't reachable from the
+    roots given to `model_to_json_schema` (e.g. an unresolved cross-model
+    reference, no `--repo` given) - RULE #5, marked explicitly rather than
+    emitting a dangling `$ref`.
+    """
+    if class_instance is not None:
+        ref = ref_keys.get(id(class_instance))
+        if ref is not None:
+            return {"$ref": f"#/$defs/{ref}"}
+    return {"x-interlis-unsupported": "Class"}
+
+
+def _element_schema(kind: str | None, type_instance: MetaInstance | None, ref_keys: dict[int, str]) -> dict[str, Any]:
+    """Return the schema for one "leaf" type - a plain attribute's type, or a MultiValue's BaseType."""
+    scalar = _scalar_type_schema(kind, type_instance)
+    if scalar is not None:
+        return scalar
+    if kind == "Class":
+        return _class_ref_or_marker(type_instance, ref_keys)
+    return {"x-interlis-unsupported": kind or "unknown"}
+
+
+def _multi_value_schema(multi_value: MetaInstance, ref_keys: dict[int, str]) -> dict[str, Any]:
+    """`BAG {m..n} OF X` / `LIST {m..n} OF X` -> `type: array`.
+
+    `items` reuses the same scalar/$ref dispatch as a plain attribute,
+    applied to `MultiValue.BaseType` (the element type). `Ordered`
+    (True=LIST, False=BAG) has no native JSON Schema equivalent - it is
+    NOT the same as `uniqueItems` (a BAG still allows duplicates, it just
+    doesn't order them) - surfaced as an informational
+    `x-interlis-ordered` marker instead of being silently lost.
+    """
+    base = getattr(multi_value, "BaseType", None)
+    base = base if isinstance(base, MetaInstance) else None
+    base_kind = base._qualified_class.rsplit(".", 1)[-1] if base is not None else None
+    schema: dict[str, Any] = {"type": "array", "items": _element_schema(base_kind, base, ref_keys)}
+
+    mult = getattr(multi_value, "Multiplicity", None)
+    if isinstance(mult, MetaInstance):
+        min_raw = getattr(mult, "Min", None)
+        max_raw = getattr(mult, "Max", None)
+        if min_raw is not None:
+            try:
+                schema["minItems"] = int(min_raw)
+            except (TypeError, ValueError):
+                pass
+        if max_raw is not None and max_raw != "*":
+            try:
+                schema["maxItems"] = int(max_raw)
+            except (TypeError, ValueError):
+                pass
+
+    ordered = getattr(multi_value, "Ordered", None)
+    if isinstance(ordered, bool):
+        schema["x-interlis-ordered"] = ordered
+    return schema
+
+
+def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> dict[str, Any]:
     """Return the JSON Schema for one resolved attribute.
 
-    An attribute whose type falls outside Lot 1's mapped set (NumType/
-    TextType/EnumType) is never silently dropped - it gets an explicit
-    `x-interlis-unsupported` marker instead (RULE #5, see
+    An attribute whose type falls outside the mapped set (NumType/
+    TextType/EnumType/Class/MultiValue) is never silently dropped - it
+    gets an explicit `x-interlis-unsupported` marker instead (RULE #5, see
     docs/jsonschema-conversion-strategy.md).
     """
-    if resolved.type_kind == "NumType" and resolved.type_instance is not None:
-        return _num_type_schema(resolved.type_instance)
-    if resolved.type_kind == "TextType" and resolved.type_instance is not None:
-        return _text_type_schema(resolved.type_instance)
-    if resolved.type_kind == "EnumType" and resolved.type_instance is not None:
-        return _enum_type_schema(resolved.type_instance)
-    return {"x-interlis-unsupported": resolved.type_kind or "unknown"}
+    if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
+        return _multi_value_schema(resolved.type_instance, ref_keys)
+    if resolved.type_kind == "Class":
+        return _class_ref_or_marker(resolved.type_instance, ref_keys)
+    return _element_schema(resolved.type_kind, resolved.type_instance, ref_keys)
 
 
-def class_to_json_schema(class_instance: MetaInstance) -> dict[str, Any]:
+def _nested_class(resolved: ResolvedAttribute) -> MetaInstance | None:
+    """Return the Class a structure/BAG/LIST-of-structure attribute points to, else None."""
+    if resolved.type_kind == "Class" and resolved.type_instance is not None:
+        return resolved.type_instance
+    if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
+        base = getattr(resolved.type_instance, "BaseType", None)
+        if isinstance(base, MetaInstance) and base._qualified_class.rsplit(".", 1)[-1] == "Class":
+            return base
+    return None
+
+
+def _discover_classes(roots: list[MetaInstance]) -> dict[int, MetaInstance]:
+    """BFS over every Class reachable from `roots` via structure/BAG/LIST attributes.
+
+    Reachable classes not among `roots` (e.g. a STRUCTURE declared in an
+    imported model, resolved via `--repo` but never registered in the
+    local model's own SymbolTable) are discovered here rather than left
+    unconverted. Dedups by Python identity, so a class is visited/
+    converted at most once - self-referencing or mutually recursive
+    structures terminate naturally (the second encounter is already in
+    `found`, no re-enqueue), which is what makes emitting a plain `$ref`
+    (rather than inlining) recursion-safe.
+    """
+    found: dict[int, MetaInstance] = {}
+    queue: list[MetaInstance] = list(roots)
+    while queue:
+        cls = queue.pop(0)
+        if id(cls) in found:
+            continue
+        found[id(cls)] = cls
+        for attr in attributes_of(cls).values():
+            nested = _nested_class(resolve_attribute(attr))
+            if nested is not None and id(nested) not in found:
+                queue.append(nested)
+    return found
+
+
+def _assign_keys(classes_by_id: dict[int, MetaInstance]) -> dict[int, str]:
+    """Assign each discovered class a unique `$defs` key from its own `Name`."""
+    keys: dict[int, str] = {}
+    used: set[str] = set()
+    for instance_id, cls in classes_by_id.items():
+        base_name = getattr(cls, "Name", None) or "Unnamed"
+        key = base_name
+        suffix = 2
+        while key in used:
+            key = f"{base_name}_{suffix}"
+            suffix += 1
+        used.add(key)
+        keys[instance_id] = key
+    return keys
+
+
+def class_to_json_schema(class_instance: MetaInstance, ref_keys: dict[int, str] | None = None) -> dict[str, Any]:
     """Convert one IlisMeta16 Class (or Structure - same metaclass) instance.
 
-    Own+inherited SCALAR attributes only (Lot 1 scope) - STRUCTURE/BAG
-    nesting, associations/REF, geometry, and inheritance-as-oneOf are
-    backlog (see mappings/ilismeta16-to-jsonschema-rules.yml).
+    Own+inherited attributes: NumType/TextType/EnumType map per Lot 1;
+    a Class-typed (nested structure) or MultiValue-typed (BAG/LIST OF)
+    attribute maps per Lot 2, via `ref_keys` (instance id -> its own
+    `$defs` key - normally supplied by `model_to_json_schema`, which
+    discovers and assigns keys for every reachable class first). Called
+    standalone with `ref_keys=None` (e.g. in a unit test), a nested
+    Class-typed attribute falls back to the `x-interlis-unsupported`
+    marker rather than crashing - associations/REF, geometry, inheritance-
+    as-oneOf, OID and formal constraints remain backlog regardless (see
+    mappings/ilismeta16-to-jsonschema-rules.yml).
     """
+    ref_keys = ref_keys or {}
     properties: dict[str, Any] = {}
     required: list[str] = []
     for name, attr in attributes_of(class_instance).items():
         resolved = resolve_attribute(attr)
-        properties[name] = _attribute_schema(resolved)
+        properties[name] = _attribute_schema(resolved, ref_keys)
         if resolved.mandatory:
             required.append(name)
     schema: dict[str, Any] = {"type": "object", "properties": properties}
@@ -101,25 +232,20 @@ def class_to_json_schema(class_instance: MetaInstance) -> dict[str, Any]:
 
 
 def model_to_json_schema(classes: list[MetaInstance]) -> dict[str, Any]:
-    """Convert every given Class/Structure instance into one JSON Schema document.
+    """Convert every Class/Structure reachable from `classes` into one JSON Schema document.
 
-    `classes` is typically every `Class`-kind instance from a built model's
-    SymbolTable (`builder.symbol_table.all_registered()`, filtered by
-    `_qualified_class` - see `cli.cmd_convert`). Each class becomes one
-    `$defs` entry, keyed by its own `Name` (not a fully model-qualified
-    name - no cross-model $ref resolution exists yet in Lot 1, so a
-    short-name collision across topics, while possible, isn't disambiguated
-    here; revisit if/when a later lot needs qualified $defs keys).
+    `classes` is typically every `Class`-kind instance from a built
+    model's SymbolTable (`builder.symbol_table.all_registered()`,
+    filtered by `_qualified_class` - see `cli.cmd_convert`) - the roots
+    for `_discover_classes`, which also pulls in any nested structure
+    reachable only via an attribute (e.g. imported from another model).
+    Each discovered class becomes one `$defs` entry, keyed by its own
+    `Name` (not a fully model-qualified name - a short-name collision
+    across topics, while possible, is only disambiguated by an
+    incrementing suffix, not a qualified key; revisit if a later lot
+    needs qualified `$defs` keys).
     """
-    defs: dict[str, Any] = {}
-    for class_instance in classes:
-        class_name = getattr(class_instance, "Name", None)
-        if not class_name:
-            continue
-        key = class_name
-        suffix = 2
-        while key in defs:
-            key = f"{class_name}_{suffix}"
-            suffix += 1
-        defs[key] = class_to_json_schema(class_instance)
+    reachable = _discover_classes(classes)
+    ref_keys = _assign_keys(reachable)
+    defs = {ref_keys[instance_id]: class_to_json_schema(cls, ref_keys) for instance_id, cls in reachable.items()}
     return {"$schema": JSON_SCHEMA_DRAFT, "$defs": defs}
