@@ -1,5 +1,5 @@
-# Declarative field bindings for the `.ili` -> JSON Schema conversion,
-# Lot 1 (scalar types only - see docs/jsonschema-conversion-strategy.md and
+# Declarative field bindings for the `.ili` -> JSON Schema conversion
+# (see docs/jsonschema-conversion-strategy.md and
 # mappings/ilismeta16-to-jsonschema-rules.yml for the contract this spec
 # fills in). Checked by scripts/validate_conversion_spec.py.
 #
@@ -88,8 +88,8 @@ BlackboxType:
 # but is never populated by InterlisModelBuilder - INTERLIS `/** ... */`
 # doc comments aren't captured as AST nodes anywhere in
 # spec/grammar/mapping/*.yml (grepped, zero attribute_bindings target it).
-# A real Class instance's Documentation is therefore always empty - Lot 1
-# uses only Name (-> title), no description field.
+# A real Class instance's Documentation is therefore always empty - the
+# Class mapping uses only Name (-> title), no description field.
 
 Class:
   qualified_name: IlisMeta16.ModelData.Class
@@ -119,7 +119,7 @@ Class:
         since `Class` (unlike `DomainType`) has no own `Mandatory`
         attribute for resolve_attribute to read.
 
-# Lot 2: a Class-typed attribute (STRUCTURE nesting) does not inline the
+# A Class-typed attribute (STRUCTURE nesting) does not inline the
 # target class's schema - it references the target's own top-level
 # $defs entry, built once per class regardless of how many attributes
 # point to it (recursion-safe by construction, see
@@ -131,7 +131,7 @@ StructureNesting:
       rule: "#/$defs/<key assigned to the referenced Class's own $defs entry>"
       note: "see StructureNesting in mappings/ilismeta16-to-jsonschema-rules.yml"
 
-# Lot 6: a plain REFERENCE TO X attribute does NOT inline/$ref the target
+# A plain REFERENCE TO X attribute does NOT inline/$ref the target
 # class's schema (unlike StructureNesting above) - the XTF wire format
 # transfers a reference as a REF="<oid>" XML attribute, never the
 # referenced object itself.
@@ -154,7 +154,7 @@ ReferenceType:
         xtf.schema.reference_external_status. Marker omitted unless
         true, same RULE #5 presence-only style already used elsewhere.
 
-# Lot 7: an embedded association role (xtf.schema.embedded_roles_of,
+# An embedded association role (xtf.schema.embedded_roles_of,
 # discovered only when class_to_json_schema/model_to_json_schema is given
 # a symbol_table) resolves to type_kind="Class" (same shape as
 # StructureNesting above) but is mapped like ReferenceType above instead -

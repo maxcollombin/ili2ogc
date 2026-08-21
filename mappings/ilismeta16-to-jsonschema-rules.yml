@@ -1,13 +1,13 @@
 # Contract for the `.ili` -> JSON Schema conversion pipeline (backlog item
-# 5, Lot 1 - see docs/jsonschema-conversion-strategy.md).
+# 5 - see docs/jsonschema-conversion-strategy.md).
 #
 # Mirrors mappings/grammar-rules.yml's role for the grammar pipeline: one
 # entry per IlisMeta16 concept a converter needs a decision for. Every
 # concept relevant to attribute typing/class shape must appear here, either
 # `status: mapped` (field bindings live in
 # spec/conversion/jsonschema-mapping.yml) or `status: backlog` (deliberately
-# out of scope for this lot, with a reason - RULE #7, one thematic lot at a
-# time). Checked by scripts/validate_conversion_spec.py.
+# out of scope, with a reason - RULE #7, one thematic slice at a time).
+# Checked by scripts/validate_conversion_spec.py.
 
 concepts:
   NumType:
@@ -28,16 +28,16 @@ concepts:
     note: >
       Covers both `CLASS` and `STRUCTURE` declarations (same metamodel
       class, discriminated by `Kind` - see structureDef/classDef in
-      spec/grammar/mapping/03_classes_and_structures.yml). Lot 1 only
-      converts a class's own+inherited SCALAR attributes into a flat JSON
-      object - see the Structure-nesting/Role backlog entries below for
-      what's excluded.
+      spec/grammar/mapping/03_classes_and_structures.yml). Own+inherited
+      SCALAR attributes convert into a flat JSON object - see the
+      StructureNesting/MultiValue/ReferenceType/Role entries below for
+      the non-scalar cases.
 
   FormattedType:
     qualified_name: IlisMeta16.ModelData.FormattedType
     status: mapped
     note: >
-      Lot 5. NumType subclass (own: Format, TEXT, mandatory - names a
+      NumType subclass (own: Format, TEXT, mandatory - names a
       predefined/custom format e.g. `INTERLIS.XMLDate`, or a STRUCT-based
       template) -> conservative `{"type": "string"}`. No `pattern`/
       `format` keyword is derived from the format name (would need a
@@ -50,7 +50,7 @@ concepts:
     qualified_name: IlisMeta16.ModelData.BlackboxType
     status: mapped
     note: >
-      Lot 5. XML/BINARY blackbox content -> `{"type": "string"}` (neither
+      XML/BINARY blackbox content -> `{"type": "string"}` (neither
       variant has a native JSON Schema content-shape equivalent - XML as
       an embedded document, BINARY typically base64 in a JSON transfer).
       `Kind` ("Xml"/"Binary", own attribute, mandatory - confirmed via
@@ -62,8 +62,8 @@ concepts:
     qualified_name: IlisMeta16.ModelData.BooleanType
     status: mapped
     note: >
-      Lot 4. Pure marker type (own: {}, matches only the BOOLEAN keyword -
-      see spec/grammar/mapping/06_types.yml booleanType()) -> plain
+      Pure marker type (own: {}, matches only the BOOLEAN keyword - see
+      spec/grammar/mapping/06_types.yml booleanType()) -> plain
       `{"type": "boolean"}`, no further fields to bind.
 
   CoordType:
@@ -72,8 +72,8 @@ concepts:
     note: >
       Geometry - conceptually closer to the future .xtf -> JSON-FG stage
       of item 5 than to a plain JSON Schema attribute mapping. Attributes
-      of this type get the `x-interlis-unsupported` marker in Lot 1's
-      output rather than being silently dropped.
+      of this type get the `x-interlis-unsupported` marker rather than
+      being silently dropped.
 
   LineType:
     qualified_name: IlisMeta16.ModelData.LineType
@@ -83,20 +83,20 @@ concepts:
   EnumTreeValueType:
     qualified_name: IlisMeta16.ModelData.EnumTreeValueType
     status: backlog
-    note: "ENUMTREE OF domains - not seen in scope for Lot 1's real fixtures, deferred."
+    note: "ENUMTREE OF domains - not seen in the real corpus fixtures used so far, deferred."
 
   StructureNesting:
     qualified_name: IlisMeta16.ModelData.Class
     status: mapped
     note: >
-      Lot 2. An attribute typed as a `Class(Kind=Structure)` maps to
+      An attribute typed as a `Class(Kind=Structure)` maps to
       `{"$ref": "#/$defs/<Name>"}` - the referenced class gets its own
       top-level $defs entry (recursion-safe: a class is discovered and
       converted at most once, by identity, so self-referencing/mutually
       recursive structures produce a valid recursive $ref, never infinite
       expansion). Known limitation carried over from xtf.schema itself,
       not fixed here (RULE #7 - a metamodel-binding gap belongs to a
-      different pipeline layer/lot): `MANDATORY` on a structure-typed
+      different pipeline layer): `MANDATORY` on a structure-typed
       attribute is not captured ANYWHERE in the built metamodel (`Class`
       extends `Type`, not `DomainType`, so it has no `Mandatory` own
       attribute for `resolve_attribute` to read - confirmed empirically,
@@ -109,9 +109,9 @@ concepts:
     qualified_name: IlisMeta16.ModelData.MultiValue
     status: mapped
     note: >
-      Lot 2. `BAG {m..n} OF X` / `LIST {m..n} OF X` -> `type: array`,
-      `items` = the SAME dispatch used for a plain attribute (scalar
-      mapping, or `$ref` if X is itself a Class/Structure) applied to
+      `BAG {m..n} OF X` / `LIST {m..n} OF X` -> `type: array`, `items` =
+      the SAME dispatch used for a plain attribute (scalar mapping, or
+      `$ref` if X is itself a Class/Structure) applied to
       `MultiValue.BaseType`, `minItems`/`maxItems` from
       `MultiValue.Multiplicity.Min`/`.Max` (`Max == "*"` -> maxItems
       omitted). `MultiValue.Ordered` (True=LIST, False=BAG) has no native
@@ -125,14 +125,14 @@ concepts:
     qualified_name: IlisMeta16.ModelData.ReferenceType
     status: mapped
     note: >
-      Lot 6. Plain `REFERENCE TO X` (own: External, BOOLEAN mandatory;
-      target class reached via the BaseClass association, same generic
-      mechanism as Role - `xtf.schema.reference_target_class`, reused
-      directly, not duplicated) -> `{"type": "string"}` (the OID value,
-      matching how the XTF wire format transfers a reference: a
-      `REF="<oid>"` XML attribute, never the referenced object inline -
-      unlike a Class/STRUCTURE attribute, which DOES inline via `$ref`,
-      see StructureNesting below). Declared target class name and the
+      Plain `REFERENCE TO X` (own: External, BOOLEAN mandatory; target
+      class reached via the BaseClass association, same generic mechanism
+      as Role - `xtf.schema.reference_target_class`, reused directly, not
+      duplicated) -> `{"type": "string"}` (the OID value, matching how
+      the XTF wire format transfers a reference: a `REF="<oid>"` XML
+      attribute, never the referenced object inline - unlike a
+      Class/STRUCTURE attribute, which DOES inline via `$ref`, see
+      StructureNesting above). Declared target class name and the
       `(EXTERNAL)` flag have no native JSON Schema equivalent - surfaced
       as informational `x-interlis-reference-target`/
       `x-interlis-reference-external` markers (RULE #5), reusing
@@ -147,23 +147,23 @@ concepts:
     qualified_name: IlisMeta16.ModelData.Role
     status: mapped
     note: >
-      Lot 7. Embedded association roles (transferred as pseudo-attributes
-      via `xtf.schema.embedded_roles_of`/`schema_members_of`, eCH-0031
-      SS4.3.9) - opt-in via a new `symbol_table` parameter on
+      Embedded association roles (transferred as pseudo-attributes via
+      `xtf.schema.embedded_roles_of`/`schema_members_of`, eCH-0031
+      SS4.3.9) - opt-in via a `symbol_table` parameter on
       `class_to_json_schema`/`model_to_json_schema` (`None`, the default,
-      preserves exact Lot 1-6 behavior; `cli.cmd_convert` always passes
-      `builder.symbol_table`). Mapped the SAME way as a plain
-      `REFERENCE TO` (Lot 6) - `{"type": "string"}` +
+      preserves plain-`attributes_of` behavior; `cli.cmd_convert` always
+      passes `builder.symbol_table`). Mapped the SAME way as a plain
+      `REFERENCE TO` (ReferenceType above) - `{"type": "string"}` +
       `x-interlis-reference-target`/`x-interlis-reference-external` -
       NEVER `$ref`/inlined: `resolve_attribute` resolves a `Role` to
       `type_kind="Class"`, the SAME shape as genuine `Class(Kind=Structure)`
-      nesting (Lot 2), but `Role`'s target is always `Kind="Class"` (a
-      real class instance, transferred via `REF`/OID), never
-      `Kind="Structure"` - confirmed by `xtf/validate.py`'s own dispatch
-      (`_validate_resolved_attr`: `Kind == "Structure"` recurses into
-      inline content, anything else expects a `REF`). `_is_structure`
-      (new helper, `src/interlis/convert/jsonschema.py`) is the single
-      dispatch point checking this for both sources (`attributes_of` AND
+      nesting (StructureNesting above), but `Role`'s target is always
+      `Kind="Class"` (a real class instance, transferred via `REF`/OID),
+      never `Kind="Structure"` - confirmed by `xtf/validate.py`'s own
+      dispatch (`_validate_resolved_attr`: `Kind == "Structure"` recurses
+      into inline content, anything else expects a `REF`). `_is_structure`
+      (`src/interlis/convert/jsonschema.py`) is the single dispatch point
+      checking this for both sources (`attributes_of` AND
       `embedded_roles_of`), so nesting-vs-reference is decided by the
       target's OWN `Kind`, never by which enumeration function produced
       the attribute.
@@ -173,13 +173,12 @@ concepts:
       association (when one role has `Max == "*"`, the OTHER, non-multi
       role is what gets embedded; the multi side is never itself embedded
       as a pseudo-attribute - eCH-0031 SS4.3.9.2, "transferred as a
-      separate class instance" instead). The Lot 6 concern about a
-      `Role`'s own `Multiplicity` bypassing `MultiValue` therefore does
-      not materialize for `embedded_roles_of`'s output in practice -
+      separate class instance" instead), so a `Role`'s own `Multiplicity`
+      never needs to bypass the `MultiValue`-based array handling above.
       `_role_is_multi`'s own known simplification (only `Max == "*"`
       counts as "multi", a bounded `{0..5}` role would not) is a
-      pre-existing `xtf.schema`-layer scope limit, not something this
-      lot introduces or fixes (RULE #7 - different layer).
+      pre-existing `xtf.schema`-layer scope limit, not fixed here
+      (RULE #7 - different layer).
 
   Inheritance:
     qualified_name: IlisMeta16.ModelData.Inheritance

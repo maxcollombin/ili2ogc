@@ -1,4 +1,4 @@
-""".ili -> JSON Schema conversion (Lot 1: scalar types, Lot 2: STRUCTURE/BAG/LIST nesting, Lot 4: BooleanType, Lot 5: FormattedType/BlackboxType, Lot 6: plain REFERENCE TO, Lot 7: embedded association roles).
+""".ili -> JSON Schema conversion: scalar types, STRUCTURE/BAG/LIST nesting, plain REFERENCE TO, and embedded association roles.
 
 See docs/jsonschema-conversion-strategy.md for the design decision and
 mappings/ilismeta16-to-jsonschema-rules.yml /
@@ -117,7 +117,7 @@ def _reference_type_schema(resolved: ResolvedAttribute) -> dict[str, Any]:
 
     Matches the XTF wire format, which transfers a reference as a
     `REF="<oid>"` XML attribute - never the referenced object inline
-    (unlike a Class/STRUCTURE attribute, Lot 2's `$ref`). The declared
+    (unlike a Class/STRUCTURE attribute's `$ref`). The declared
     target class and the `(EXTERNAL)` flag have no native JSON Schema
     equivalent - surfaced as informational markers instead of being
     silently dropped (RULE #5, same pattern as MultiValue's
@@ -139,8 +139,8 @@ def _is_structure(type_instance: MetaInstance | None) -> bool:
     """True if a `type_kind == "Class"` resolution is genuine STRUCTURE nesting.
 
     `resolve_attribute` resolves BOTH a `Class(Kind=Structure)` attribute
-    (Lot 2) AND an embedded association role (Lot 7,
-    `xtf.schema.embedded_roles_of` - always `Kind == "Class"`, a role
+    AND an embedded association role
+    (`xtf.schema.embedded_roles_of` - always `Kind == "Class"`, a role
     points at a real class instance, never a structure) to the SAME
     `type_kind == "Class"`. `Kind` is the only signal that tells them
     apart - confirmed by `xtf/validate.py`'s own `_validate_resolved_attr`
@@ -236,8 +236,8 @@ def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> 
     docs/jsonschema-conversion-strategy.md).
 
     `type_kind == "Class"` covers two DIFFERENT things (see `_is_structure`):
-    genuine STRUCTURE nesting (`$ref`, Lot 2) vs. an embedded association
-    role (Lot 7) - which, like a plain `REFERENCE TO` (Lot 6), is
+    genuine STRUCTURE nesting (`$ref`) vs. an embedded association
+    role - which, like a plain `REFERENCE TO`, is
     transferred as a `REF`/OID, not inlined, so it reuses
     `_reference_type_schema` (`reference_target_class`/
     `reference_external_status` already handle a `Role`-typed `resolved`
@@ -257,9 +257,8 @@ def _nested_class(resolved: ResolvedAttribute) -> MetaInstance | None:
 
     Only genuine STRUCTURE nesting counts as "reachable" for `$defs`
     discovery (`_is_structure`) - an embedded association role's target
-    (Lot 7) is a REFERENCE, not containment, same as a plain
-    `REFERENCE TO` target (Lot 6, also never added to `$defs` by this
-    discovery).
+    is a REFERENCE, not containment, same as a plain `REFERENCE TO`
+    target (also never added to `$defs` by this discovery).
     """
     if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
         return resolved.type_instance
@@ -317,23 +316,23 @@ def class_to_json_schema(
 ) -> dict[str, Any]:
     """Convert one IlisMeta16 Class (or Structure - same metaclass) instance.
 
-    Own+inherited attributes: NumType/TextType/EnumType map per Lot 1,
-    BooleanType per Lot 4, FormattedType/BlackboxType per Lot 5, plain
-    `REFERENCE TO X` per Lot 6; a Class-typed (nested structure) or
-    MultiValue-typed (BAG/LIST OF) attribute maps per Lot 2, via
-    `ref_keys` (instance id -> its own `$defs` key - normally supplied by
+    Own+inherited attributes: NumType/TextType/EnumType/BooleanType/
+    FormattedType/BlackboxType/plain `REFERENCE TO X` map to their
+    respective scalar/string schema; a Class-typed (nested structure) or
+    MultiValue-typed (BAG/LIST OF) attribute maps via `ref_keys` (instance
+    id -> its own `$defs` key - normally supplied by
     `model_to_json_schema`, which discovers and assigns keys for every
     reachable class first). Called standalone with `ref_keys=None` (e.g.
     in a unit test), a nested Class-typed attribute falls back to the
     `x-interlis-unsupported` marker rather than crashing.
 
-    `symbol_table`, when given (Lot 7), additionally includes EMBEDDED
+    `symbol_table`, when given, additionally includes EMBEDDED
     ASSOCIATION ROLES (`xtf.schema.schema_members_of` instead of plain
     `attributes_of`) as pseudo-attributes - mapped the SAME way as a
     plain `REFERENCE TO` (a `REF`/OID, never inlined - see
     `_is_structure`), since that's how the XTF wire format actually
-    transfers them. `None` (the default) preserves the exact Lot 1-6
-    behavior - own+inherited `ClassAttribute`s only, no embedded roles.
+    transfers them. `None` (the default) means own+inherited
+    `ClassAttribute`s only, no embedded roles.
 
     Geometry, inheritance-as-oneOf, OID and formal constraints remain
     backlog regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
@@ -367,10 +366,10 @@ def model_to_json_schema(classes: list[MetaInstance], symbol_table: SymbolTable 
     Each discovered class becomes one `$defs` entry, keyed by its own
     `Name` (not a fully model-qualified name - a short-name collision
     across topics, while possible, is only disambiguated by an
-    incrementing suffix, not a qualified key; revisit if a later lot
-    needs qualified `$defs` keys).
+    incrementing suffix, not a qualified key; revisit if qualified
+    `$defs` keys turn out to be needed).
 
-    `symbol_table` (Lot 7), when given, is forwarded to `class_to_json_schema`
+    `symbol_table`, when given, is forwarded to `class_to_json_schema`
     so each `$defs` entry also includes its embedded association roles -
     NOT used by `_discover_classes` itself (an embedded role is a
     reference, never containment, so it never contributes a new reachable

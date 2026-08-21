@@ -283,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     build_parser.set_defaults(func=cmd_build)
 
     convert_parser = subparsers.add_parser(
-        "convert", help="Convert an .ili model to JSON Schema (Lot 1: scalar types only).",
+        "convert", help="Convert an .ili model to JSON Schema.",
     )
     convert_parser.add_argument("file", help="Path to the .ili file to convert.")
     convert_parser.add_argument(
