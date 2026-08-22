@@ -268,28 +268,34 @@ concepts:
       resolved by InterlisModelBuilder._attach_class_oid/
       _apply_topic_oid_clauses: own `OID AS`/`NO OID` clause, or the
       topic-level default when the class has none of its own) is
-      deliberately NOT surfaced by this pipeline yet. Confirmed via
-      eCH-0031 V2.1.0 SS4.3.11.1/SS3.5.2: the OID is transferred as the
-      mandatory XML attribute `TID` on every transferred Class object
-      (never on a Structure element, and never one of the class's own
-      `attributes_of()` - a DIFFERENT kind of value than any of the
-      properties this pipeline maps today). Real corpus survey (18/54
-      `ili_corpus/` files declare an explicit OID clause at all):
-      dominant form `OID AS INTERLIS.UUIDOID`/`OID AS UUIDOID` (the
+      deliberately NOT surfaced in this module's `properties`/`required`
+      output. Confirmed via eCH-0031 V2.1.0 SS4.3.11.1/SS3.5.2: the OID
+      is transferred as the mandatory XML attribute `TID` on every
+      transferred Class object (never on a Structure element, and never
+      one of the class's own `attributes_of()` - a DIFFERENT kind of
+      value than any of the properties this pipeline maps). Real corpus
+      survey (18/54 `ili_corpus/` files declare an explicit OID clause at
+      all): dominant form `OID AS INTERLIS.UUIDOID`/`OID AS UUIDOID` (the
       `AnyOIDType` marker), a handful of named domains (`TypeID`,
       `haz_map_oid`, `TypID` - real TEXT/NUM domains), and most classes
       have NO OID clause anywhere (own or topic-level default) - eCH-0031
       confirms this means the object has NO stable identification at all
       (transfer-scoped TID only), not an error/gap to guess around.
 
-      **User decision (2026-08-22, explicit defer)**: presented with the
-      concrete choice between a real `oid` property in `properties`
-      (anticipating reuse as the future JSON-FG stage's Feature `id`) and
-      an `x-interlis-oid-type` marker only, the user chose to defer this
-      decision entirely until the `.xtf` -> JSON-FG stage's own
-      Feature/`id` conventions are designed (RULE #7) - deciding a
-      property name/shape now risks a mismatch that would have to be
-      revisited anyway once that stage's real requirements are known.
+      **Resolved (2026-08-22)**: this entry was originally left open
+      pending the `.xtf` -> JSON-FG stage's own Feature/`id` conventions,
+      to avoid fixing a property name/shape that might not match. That
+      stage is now built (`convert/jsonfg.py`'s `object_to_feature`) and
+      confirms OID maps to a JSON-FG Feature's `"id"` member - a
+      Feature-level concept, entirely separate from `"properties"`
+      (GeoJSON/JSON-FG RFC 7946 SS3.2). `class_to_json_schema` only ever
+      describes the `properties` object's shape (reused identically for
+      both a top-level Class and a nested Structure's `$defs` entry) -
+      OID structurally does not belong there, and never will, regardless
+      of which lot runs next. `status: backlog` is kept (this contract
+      has no separate "permanently out of scope" status, same as
+      `Constraint` below) but this is a closed, evidence-based
+      conclusion, not a still-pending decision.
 
   Constraint:
     qualified_name: IlisMeta16.ModelData.Constraint
