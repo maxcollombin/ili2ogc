@@ -1,4 +1,4 @@
-"""Lot 1-2 (backlog item 5, second stage) - .xtf -> JSON-FG, flat Feature + single-attribute geometry.
+"""Lot 1-3 (backlog item 5, second stage) - .xtf -> JSON-FG, Feature/FeatureCollection + single-attribute geometry.
 
 See docs/jsonfg-conversion-strategy.md for the design decision and scope
 (JSON-FG "core" + "types-schemas" requirements classes only).
@@ -7,9 +7,9 @@ import warnings
 from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.convert.jsonfg import CONF_CORE, CONF_TYPES_SCHEMAS, object_to_feature
+from interlis.convert.jsonfg import CONF_CORE, CONF_TYPES_SCHEMAS, object_to_feature, transfer_to_feature_collection
 from interlis.runtime.parse import meta_attribute_comments, parse_text
-from interlis.xtf.parse import RawNode, XtfObject
+from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 
 ROOT = Path(__file__).resolve().parent.parent
 MAPPINGS_DIR = ROOT / "mappings"
@@ -281,3 +281,73 @@ def test_without_meta_capture_crs_is_unresolved():
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
     assert feature["properties"]["Geom"] == {"x-interlis-unsupported": "CoordType"}
+
+
+def test_standalone_false_omits_conforms_to():
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(tid="obj-5", qualified_class="Foo.T.A", attributes={})
+    feature = object_to_feature(obj, cls, standalone=False)
+    assert "conformsTo" not in feature
+    assert feature["type"] == "Feature"
+    assert feature["featureType"] == "A"
+
+
+def test_transfer_to_feature_collection_wraps_features_without_per_feature_conforms_to():
+    builder = _build(_MODEL)
+    basket = XtfBasket(
+        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        objects=[
+            XtfObject(tid="c-1", qualified_class="Foo.T.A", attributes={"Age": [_node("Age", "1")]}),
+            XtfObject(tid="c-2", qualified_class="Foo.T.A", attributes={"Age": [_node("Age", "2")]}),
+        ],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
+    assert collection["type"] == "FeatureCollection"
+    assert collection["conformsTo"] == [CONF_CORE, CONF_TYPES_SCHEMAS]
+    assert len(collection["features"]) == 2
+    assert all("conformsTo" not in f for f in collection["features"])
+    assert {f["id"] for f in collection["features"]} == {"c-1", "c-2"}
+    # homogeneous collection (clause 13 Recommendation A): featureType hoisted too
+    assert collection["featureType"] == "A"
+
+
+def test_transfer_to_feature_collection_skips_unresolvable_class():
+    builder = _build(_MODEL)
+    basket = XtfBasket(
+        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        objects=[XtfObject(tid="u-1", qualified_class="Foo.T.DoesNotExist", attributes={})],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
+    assert collection["features"] == []
+    assert "featureType" not in collection
+
+
+def test_transfer_to_feature_collection_no_hoisted_featuretype_when_heterogeneous():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Age : 0 .. 130;
+    END A;
+    CLASS B =
+      Age : 0 .. 130;
+    END B;
+  END T;
+END Foo.
+"""
+    )
+    basket = XtfBasket(
+        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        objects=[
+            XtfObject(tid="a-1", qualified_class="Foo.T.A", attributes={}),
+            XtfObject(tid="b-1", qualified_class="Foo.T.B", attributes={}),
+        ],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
+    assert "featureType" not in collection
+    assert {f["featureType"] for f in collection["features"]} == {"A", "B"}

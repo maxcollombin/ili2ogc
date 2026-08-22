@@ -1,26 +1,30 @@
-"""XTF data instance -> JSON-FG Feature conversion: scalar properties, OID, featureType, geometry.
+"""XTF data instance -> JSON-FG conversion: Feature/FeatureCollection, scalar properties, OID, featureType, geometry.
 
 See docs/jsonfg-conversion-strategy.md for the design decision and scope.
-Converts one already-parsed XtfObject (xtf/parse.py, structural layer)
-into a JSON-FG (OGC 21-045r1) Feature object conforming to the "core" and
+`object_to_feature` converts one already-parsed XtfObject (xtf/parse.py,
+structural layer) into a JSON-FG (OGC 21-045r1) Feature object;
+`transfer_to_feature_collection` wraps every resolvable object of an
+XtfTransfer into one FeatureCollection. Both conform to the "core" and
 "types-schemas" requirements classes only - single-attribute point/line/
 polygon geometry -> "place" (never "geometry", which stays `null` - no
-WGS84 reprojection, see module docs), no FeatureCollection wrapping, no
-STRUCTURE/BAG/LIST/REFERENCE/embedded-role attributes, no multi-geometry
-classes yet (each a separate future lot). Reuses the schema resolution
-already proven by xtf/validate.py (resolve_attribute/attributes_of/
-coord_axes/line_coord_type) AND its wire-tag helpers (_geom_tag/
-_find_child/_axis_components/the BOUNDARY/SURFACE/LINE_KIND tag sets)
-rather than a second parallel implementation of the same COORD/POLYLINE/
-SURFACE/AREA/MULTI* wire conventions - convert() stays a decoupled stage
-from validate(), same split already established by convert/jsonschema.py.
+WGS84 reprojection, see module docs), no STRUCTURE/BAG/LIST/REFERENCE/
+embedded-role attributes, no multi-geometry classes yet (each a separate
+future lot). Reuses the schema resolution already proven by
+xtf/validate.py (resolve_attribute/attributes_of/coord_axes/
+line_coord_type) AND its wire-tag helpers (_geom_tag/_find_child/
+_axis_components/the BOUNDARY/SURFACE/LINE_KIND tag sets) rather than a
+second parallel implementation of the same COORD/POLYLINE/SURFACE/AREA/
+MULTI* wire conventions - convert() stays a decoupled stage from
+validate(), same split already established by convert/jsonschema.py.
 """
 from typing import Any
 
+from interlis.builder.forward_refs import SymbolTable
+from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonschema import _is_integer_range
 from interlis.metamodel.instance import MetaInstance
-from interlis.xtf.parse import RawNode, XtfObject
-from interlis.xtf.schema import ResolvedAttribute, attributes_of, line_coord_type, resolve_attribute
+from interlis.xtf.parse import RawNode, XtfObject, XtfTransfer
+from interlis.xtf.schema import ResolvedAttribute, attributes_of, line_coord_type, resolve_attribute, resolve_class
 from interlis.xtf.validate import (
     _BOUNDARY_TAGS,
     _LINE_KIND_MULTI_TAGS,
@@ -233,24 +237,30 @@ def _place_and_crs(resolved: ResolvedAttribute, node: RawNode) -> tuple[dict[str
     return None if crs is None else (geometry, crs)
 
 
-def object_to_feature(obj: XtfObject, cls: MetaInstance) -> dict[str, Any]:
-    """Convert one XtfObject into a standalone JSON-FG Feature object.
+def object_to_feature(obj: XtfObject, cls: MetaInstance, *, standalone: bool = True) -> dict[str, Any]:
+    """Convert one XtfObject into a JSON-FG Feature object.
 
     `cls` is the already-resolved Class/Structure instance for
     `obj.qualified_class` (xtf.schema.resolve_class) - resolution stays
     the caller's job, same split as xtf/validate.py's `_validate_object`,
     so this function is a pure value transform.
 
-    Produced as a JSON-FG "root object" in its own right (OGC 21-045r1
-    clause 8: "not contained in another JSON-FG object") - carries its
-    own "conformsTo" (core, and types-schemas since "featureType" is
-    always included, per core requirement /req/core/metadata.H). "id" is
-    included only when `obj.tid` is set (GeoJSON RFC 7946 SS3.2: OPTIONAL,
-    string or number) - never a literal `null`, unlike "geometry" which
-    RFC 7946 requires as a member even when unlocated (`null`). "featureType"
-    reuses the class's short `Name` (same identifier convert/jsonschema.py
-    uses as its $defs key), so a Feature and its schema entry can be
-    linked by name once a future lot adds "featureSchema".
+    `standalone=True` (default): produced as a JSON-FG "root object" in
+    its own right (OGC 21-045r1 clause 8: "not contained in another
+    JSON-FG object") - carries its own "conformsTo" (core, and
+    types-schemas since "featureType" is always included, per core
+    requirement /req/core/metadata.H). `standalone=False` (used by
+    `transfer_to_feature_collection` for a Feature nested inside a
+    FeatureCollection, which becomes the root object instead) OMITS
+    "conformsTo" - required, not a style choice: /req/core/metadata.C
+    states "Every other JSON-FG object SHALL NOT include a 'conformsTo'
+    member." "id" is included only when `obj.tid` is set (GeoJSON RFC
+    7946 SS3.2: OPTIONAL, string or number) - never a literal `null`,
+    unlike "geometry" which RFC 7946 requires as a member even when
+    unlocated (`null`). "featureType" reuses the class's short `Name`
+    (same identifier convert/jsonschema.py uses as its $defs key), so a
+    Feature and its schema entry can be linked by name once a future lot
+    adds "featureSchema".
 
     Geometry ("place"/"coordRefSys"): only when `cls` has EXACTLY ONE
     own+inherited attribute whose type resolves directly to CoordType/
@@ -290,10 +300,9 @@ def object_to_feature(obj: XtfObject, cls: MetaInstance) -> dict[str, Any]:
                 place, crs_uri = result
                 properties.pop(geom_name, None)
 
-    feature: dict[str, Any] = {
-        "type": "Feature",
-        "conformsTo": [CONF_CORE, CONF_TYPES_SCHEMAS],
-    }
+    feature: dict[str, Any] = {"type": "Feature"}
+    if standalone:
+        feature["conformsTo"] = [CONF_CORE, CONF_TYPES_SCHEMAS]
     if obj.tid is not None:
         feature["id"] = obj.tid
     feature["featureType"] = getattr(cls, "Name", None) or obj.qualified_class
@@ -303,3 +312,53 @@ def object_to_feature(obj: XtfObject, cls: MetaInstance) -> dict[str, Any]:
         feature["coordRefSys"] = crs_uri
     feature["properties"] = properties
     return feature
+
+
+def transfer_to_feature_collection(
+    transfer: XtfTransfer, *, symbol_table: SymbolTable, repository: ModelRepository | None = None,
+) -> dict[str, Any]:
+    """Convert every resolvable object of `transfer` into one JSON-FG FeatureCollection.
+
+    Walks all of `transfer`'s baskets (real corpus evidence: 11/12
+    xtf_corpus/geoadmin files hold exactly 1 basket, the one exception
+    holds 2 - not worth a separate per-basket entry point) and resolves
+    each object's Class itself (xtf.schema.resolve_class), same
+    architecture as xtf/validate.py's `validate_transfer` (which likewise
+    resolves internally, unlike the single-object `object_to_feature`/
+    `_validate_object` pair - a whole-transfer entry point naturally has
+    `symbol_table`/`repository` on hand already, e.g. from
+    `cli.cmd_convert_jsonfg`). An object whose class doesn't resolve is
+    skipped - not this converter's job to flag (validate() does), same
+    stance `object_to_feature` already takes for an unknown attribute
+    NAME; there is no schema to draw even a featureType/properties from
+    without a resolved class, so there is nothing to emit for it.
+
+    Each Feature is produced with `standalone=False` (no per-feature
+    "conformsTo" - the FeatureCollection is the JSON-FG root object here,
+    RULE /req/core/metadata.C). When every produced Feature shares the
+    same "featureType", it is ALSO set once on the collection itself
+    (clause 13 Recommendation A, "homogeneous feature collections") -
+    purely additive, never replaces the per-feature member (clause 13
+    Requirement B already allows either placement, so both stay valid).
+    "coordRefSys" stays per-feature for now (not hoisted to the
+    collection level even when uniform - a valid, spec-recommended future
+    optimization, not required for correctness, see
+    docs/jsonfg-conversion-strategy.md).
+    """
+    features: list[dict[str, Any]] = []
+    for basket in transfer.baskets:
+        for obj in basket.objects:
+            cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
+            if cls is None:
+                continue
+            features.append(object_to_feature(obj, cls, standalone=False))
+
+    collection: dict[str, Any] = {
+        "type": "FeatureCollection",
+        "conformsTo": [CONF_CORE, CONF_TYPES_SCHEMAS],
+        "features": features,
+    }
+    feature_types = {f["featureType"] for f in features}
+    if len(feature_types) == 1:
+        collection["featureType"] = next(iter(feature_types))
+    return collection

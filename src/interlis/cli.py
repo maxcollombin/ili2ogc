@@ -17,6 +17,7 @@ from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
+from interlis.convert.jsonfg import transfer_to_feature_collection
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_file
@@ -158,14 +159,13 @@ def cmd_convert(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_validate(args: argparse.Namespace) -> int:
-    """Validate an .xtf transfer file against its schema.
+def _resolve_schema_model_path(
+    xtf_path: Path, transfer, args: argparse.Namespace, repository: ModelRepository | None,
+) -> tuple[Path, str | None] | None:
+    """Resolve the .ili file describing `transfer`'s schema, or print an error and return `None`.
 
-    Checks base types, MANDATORY, structure, and cross-basket TID/REF
-    resolution (see docs/xtf-transfer-encoding-notes.md for exact scope).
-
-    The schema is resolved in one of two ways (see
-    docs/model-resolution-strategy.md for the architecture decision):
+    Shared between `cmd_validate` and `cmd_convert_jsonfg` (same
+    resolution rule, see docs/model-resolution-strategy.md):
     - an explicit `--model <file.ili>` (historical behavior, still
       supported);
     - otherwise, auto-detected from the transfer itself (never a Model
@@ -174,6 +174,38 @@ def cmd_validate(args: argparse.Namespace) -> int:
       `--repo` directories - one is enough as an entry point, the rest
       (remaining roots, or an imported "core" model) resolve through the
       existing cross-model mechanism (ModelRepository.resolve_external).
+
+    Returns `(model_path, root_model_name)` - `root_model_name` is `None`
+    for the explicit `--model` path (never looked up by name in that
+    case).
+    """
+    if args.model:
+        model_path = Path(args.model)
+        if not model_path.exists():
+            print(f".ili file not found: {model_path}", file=sys.stderr)
+            return None
+        return model_path, None
+    if repository is None:
+        print("no --model given: --repo is required for schema auto-detection.", file=sys.stderr)
+        return None
+    for name in root_model_names(transfer):
+        candidate = repository.path_for(name)
+        if candidate is not None:
+            return candidate, name
+    header = header_model_lookup(transfer)
+    print(f"no root model of {xtf_path} is available in --repo. Required models (HEADERSECTION):", file=sys.stderr)
+    for name in root_model_names(transfer):
+        version, uri = header.get(name, ["?", "?"])
+        print(f"  {name} VERSION={version!r} URI={uri!r}", file=sys.stderr)
+    return None
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Validate an .xtf transfer file against its schema.
+
+    Checks base types, MANDATORY, structure, and cross-basket TID/REF
+    resolution (see docs/xtf-transfer-encoding-notes.md for exact scope).
+    Schema resolution: see `_resolve_schema_model_path`.
     """
     xtf_path = Path(args.xtf)
     if not xtf_path.exists():
@@ -183,30 +215,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
     transfer = parse_xtf(xtf_path)
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
 
-    root_model_name = None
-    if args.model:
-        model_path = Path(args.model)
-        if not model_path.exists():
-            print(f".ili file not found: {model_path}", file=sys.stderr)
-            return 1
-    else:
-        if repository is None:
-            print("no --model given: --repo is required for schema auto-detection.", file=sys.stderr)
-            return 1
-        model_path = None
-        for name in root_model_names(transfer):
-            candidate = repository.path_for(name)
-            if candidate is not None:
-                model_path = candidate
-                root_model_name = name
-                break
-        if model_path is None:
-            header = header_model_lookup(transfer)
-            print(f"no root model of {xtf_path} is available in --repo. Required models (HEADERSECTION):", file=sys.stderr)
-            for name in root_model_names(transfer):
-                version, uri = header.get(name, ["?", "?"])
-                print(f"  {name} VERSION={version!r} URI={uri!r}", file=sys.stderr)
-            return 1
+    resolved = _resolve_schema_model_path(xtf_path, transfer, args, repository)
+    if resolved is None:
+        return 1
+    model_path, root_model_name = resolved
 
     tree, syntax_errors = parse_file(model_path)
     if syntax_errors:
@@ -268,6 +280,53 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 1 if counts.get("error") else 0
 
 
+def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
+    """Convert an .xtf transfer to a JSON-FG FeatureCollection.
+
+    See docs/jsonfg-conversion-strategy.md for scope - the "core" and
+    "types-schemas" JSON-FG requirements classes only: scalar properties,
+    OID, featureType, and single-attribute point/line/polygon geometry
+    (`"place"`) with its `"coordRefSys"` resolved from the eCH-0117
+    `!!@CRS` meta-attribute; `"geometry"` (the WGS84 GeoJSON fallback)
+    always stays `null`. Schema resolution: see
+    `_resolve_schema_model_path` (same `--model`/`--repo` rule as
+    `interlis validate`).
+    """
+    xtf_path = Path(args.xtf)
+    if not xtf_path.exists():
+        print(f".xtf file not found: {xtf_path}", file=sys.stderr)
+        return 1
+
+    transfer = parse_xtf(xtf_path)
+    repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+
+    resolved = _resolve_schema_model_path(xtf_path, transfer, args, repository)
+    if resolved is None:
+        return 1
+    model_path, _root_model_name = resolved
+
+    tree, syntax_errors = parse_file(model_path)
+    if syntax_errors:
+        print(f"{len(syntax_errors)} syntax error(s) in {model_path}:", file=sys.stderr)
+        for e in syntax_errors:
+            print(f"  {e}", file=sys.stderr)
+        return 1
+
+    with _resource_dirs() as (mappings_dir, spec_dir):
+        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table, repository=repository)
+    text = json.dumps(collection, indent=2, ensure_ascii=False)
+    if args.output:
+        Path(args.output).write_text(text + "\n", encoding="utf-8")
+    else:
+        print(text)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="interlis", description="Pure-Python INTERLIS runtime.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -317,6 +376,24 @@ def main(argv: list[str] | None = None) -> int:
         "-v", "--verbose", action="store_true", help="Also print 'info'-severity issues (unresolved references).",
     )
     validate_parser.set_defaults(func=cmd_validate)
+
+    convert_jsonfg_parser = subparsers.add_parser(
+        "convert-jsonfg", help="Convert an .xtf transfer to a JSON-FG FeatureCollection.",
+    )
+    convert_jsonfg_parser.add_argument("xtf", help="Path to the .xtf file to convert.")
+    convert_jsonfg_parser.add_argument(
+        "--model", default=None,
+        help="Path to the .ili file describing the expected schema. Omitted: auto-detected from the "
+        "transfer's own HEADERSECTION/DATASECTION (requires --repo, see docs/model-resolution-strategy.md).",
+    )
+    convert_jsonfg_parser.add_argument(
+        "--repo", action="append", default=[], metavar="DIR",
+        help="Directory of .ili models to resolve the schema's IMPORTS (repeatable).",
+    )
+    convert_jsonfg_parser.add_argument(
+        "-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.",
+    )
+    convert_jsonfg_parser.set_defaults(func=cmd_convert_jsonfg)
 
     args = parser.parse_args(argv)
     return args.func(args)
