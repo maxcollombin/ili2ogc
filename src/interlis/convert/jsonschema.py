@@ -16,7 +16,9 @@ from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.schema import (
     ResolvedAttribute,
     attributes_of,
+    coord_axes,
     enum_values,
+    line_coord_type,
     reference_external_status,
     reference_target_class,
     resolve_attribute,
@@ -95,6 +97,83 @@ def _enum_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     return {"type": "string", "enum": sorted(values)}
 
 
+def _position_schema(coord_type: MetaInstance | None) -> dict[str, Any]:
+    """A single position - `[x, y, (z)]`, one array item per `CoordType.Axis`.
+
+    `xtf.schema.coord_axes` (association `AxisSpec`, ORDERED `{1..3}
+    NumType`) gives the exact axis count plus each axis's own Min/Max -
+    reused directly via `_num_type_schema` (no duplicated numeric-range
+    logic), one `prefixItems` entry per axis (2020-12 tuple validation),
+    `items: false` to forbid a 4th coordinate. Falls back to an
+    open-ended array of numbers when `Axis` isn't resolved (e.g. an
+    external domain not loaded via `--repo`) - same graceful-degradation
+    style already used by the XTF validator for the identical case.
+    """
+    axes = coord_axes(coord_type)
+    if not axes:
+        return {"type": "array", "items": {"type": "number"}}
+    return {
+        "type": "array",
+        "prefixItems": [_num_type_schema(a) for a in axes],
+        "items": False,
+        "minItems": len(axes),
+        "maxItems": len(axes),
+    }
+
+
+def _wrap_multi(schema: dict[str, Any], multi: object) -> dict[str, Any]:
+    """Wrap `schema` in one more array level for MULTICOORD/MULTIPOLYLINE/MULTISURFACE/MULTIAREA.
+
+    `Multi` (own BOOLEAN on `CoordType`/`LineType`, true for the `MULTI*`
+    keyword) - the extra array level fully captures "possibly disjoint
+    parts" on its own; unlike `MultiValue.Ordered`, no marker is needed
+    since no information is lost by the nesting alone.
+    """
+    return {"type": "array", "items": schema} if bool(multi) else schema
+
+
+def _coord_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
+    """`COORD`/`MULTICOORD` attribute -> a position, or an array of positions if `Multi`."""
+    return _wrap_multi(_position_schema(type_instance), getattr(type_instance, "Multi", None))
+
+
+_SURFACE_LIKE_KINDS = frozenset({"Surface", "Area"})
+
+
+def _line_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
+    """`POLYLINE`/`DIRECTED POLYLINE` -> array of positions; `SURFACE`/`AREA` -> array of boundary rings.
+
+    Vertex coordinate shape comes from `xtf.schema.line_coord_type`
+    (association `LineCoord`, walks the `EXTENDS` chain like
+    `xtf.schema.attributes_of`) fed into `_position_schema` - a vertex is
+    always a single position, never itself MULTI, so `_coord_type_schema`
+    (which would apply `Multi`-wrapping) is deliberately NOT reused here:
+    that flag belongs to the referenced `CoordType` domain in its OWN
+    right, unrelated to its use as a polyline/surface vertex type.
+    `Kind in {Surface, Area}` (eCH-0031: both encoded identically on the
+    wire - `AREA` is a semantic "WITHOUT OVERLAPS" constraint over the
+    same `SURFACE` shape, not a distinct geometry) -> one more array
+    level (boundary rings) than Polyline/DirectedPolyline; the first ring
+    is the outer boundary, the rest are holes - no native JSON Schema
+    keyword expresses "first item is special", surfaced as an
+    informational `x-interlis-boundary-order` marker (RULE #5). ARC
+    segments (a circular arc between two vertices) have no representation
+    here - a straight-line-only simplification shared by GeoJSON itself,
+    not something this mapping alone introduces.
+    """
+    coord_schema = _position_schema(line_coord_type(type_instance))
+    position_array: dict[str, Any] = {"type": "array", "items": coord_schema}
+    if getattr(type_instance, "Kind", None) in _SURFACE_LIKE_KINDS:
+        schema: dict[str, Any] = {
+            "type": "array",
+            "items": position_array,
+            "x-interlis-boundary-order": "outer-first",
+        }
+    else:
+        schema = position_array
+    return _wrap_multi(schema, getattr(type_instance, "Multi", None))
+
+
 def _scalar_type_schema(kind: str | None, type_instance: MetaInstance | None) -> dict[str, Any] | None:
     """Return the scalar mapping for one (kind, instance) pair, or None if unmapped."""
     if kind == "NumType" and type_instance is not None:
@@ -109,6 +188,10 @@ def _scalar_type_schema(kind: str | None, type_instance: MetaInstance | None) ->
         return _formatted_type_schema(type_instance)
     if kind == "BlackboxType" and type_instance is not None:
         return _blackbox_type_schema(type_instance)
+    if kind == "CoordType" and type_instance is not None:
+        return _coord_type_schema(type_instance)
+    if kind == "LineType" and type_instance is not None:
+        return _line_type_schema(type_instance)
     return None
 
 
@@ -230,10 +313,10 @@ def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> 
     """Return the JSON Schema for one resolved attribute.
 
     An attribute whose type falls outside the mapped set (NumType/
-    TextType/EnumType/BooleanType/FormattedType/BlackboxType/
-    ReferenceType/Class/MultiValue) is never silently dropped - it gets
-    an explicit `x-interlis-unsupported` marker instead (RULE #5, see
-    docs/jsonschema-conversion-strategy.md).
+    TextType/EnumType/BooleanType/FormattedType/BlackboxType/CoordType/
+    LineType/ReferenceType/Class/MultiValue) is never silently dropped -
+    it gets an explicit `x-interlis-unsupported` marker instead (RULE #5,
+    see docs/jsonschema-conversion-strategy.md).
 
     `type_kind == "Class"` covers two DIFFERENT things (see `_is_structure`):
     genuine STRUCTURE nesting (`$ref`) vs. an embedded association
@@ -317,8 +400,9 @@ def class_to_json_schema(
     """Convert one IlisMeta16 Class (or Structure - same metaclass) instance.
 
     Own+inherited attributes: NumType/TextType/EnumType/BooleanType/
-    FormattedType/BlackboxType/plain `REFERENCE TO X` map to their
-    respective scalar/string schema; a Class-typed (nested structure) or
+    FormattedType/BlackboxType/CoordType/LineType/plain `REFERENCE TO X`
+    map to their respective scalar/string/array schema; a Class-typed
+    (nested structure) or
     MultiValue-typed (BAG/LIST OF) attribute maps via `ref_keys` (instance
     id -> its own `$defs` key - normally supplied by
     `model_to_json_schema`, which discovers and assigns keys for every
@@ -334,8 +418,8 @@ def class_to_json_schema(
     transfers them. `None` (the default) means own+inherited
     `ClassAttribute`s only, no embedded roles.
 
-    Geometry, inheritance-as-oneOf, OID and formal constraints remain
-    backlog regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
+    Inheritance-as-oneOf, OID and formal constraints remain backlog
+    regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
     """
     ref_keys = ref_keys or {}
     properties: dict[str, Any] = {}

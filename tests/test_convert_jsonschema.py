@@ -282,12 +282,12 @@ END Foo.
     assert "properties" in schema and set(schema["properties"]) == {"Id", "Opt"}
 
 
-def test_coordtype_attribute_gets_unsupported_marker_not_dropped():
+def test_coordtype_2d_gets_position_tuple():
     builder = _build(
         """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
-    Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+    Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 2000.000;
   TOPIC T =
     CLASS A =
       Position : Coord2D;
@@ -299,8 +299,167 @@ END Foo.
     )
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
-    assert schema["properties"]["Position"] == {"x-interlis-unsupported": "CoordType"}
+    assert schema["properties"]["Position"] == {
+        "type": "array",
+        "prefixItems": [
+            {"type": "number", "minimum": 0.0, "maximum": 1000.0},
+            {"type": "number", "minimum": 0.0, "maximum": 2000.0},
+        ],
+        "items": False,
+        "minItems": 2,
+        "maxItems": 2,
+    }
     assert schema["properties"]["Label"] == {"type": "string", "maxLength": 10}
+
+
+def test_coordtype_3d_gets_three_axes():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord3D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000, -200.000 .. 5000.000;
+  TOPIC T =
+    CLASS A =
+      Position : Coord3D;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert len(schema["properties"]["Position"]["prefixItems"]) == 3
+    assert schema["properties"]["Position"]["minItems"] == 3
+
+
+def test_multicoord_wraps_position_in_array():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Points2D = MULTICOORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+  TOPIC T =
+    CLASS A =
+      Positions : Points2D;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Positions"]["type"] == "array"
+    assert schema["properties"]["Positions"]["items"]["type"] == "array"
+    assert schema["properties"]["Positions"]["items"]["minItems"] == 2
+
+
+def test_polyline_gets_array_of_positions():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+    Line = POLYLINE WITH (STRAIGHTS) VERTEX Coord2D;
+  TOPIC T =
+    CLASS A =
+      Geometrie : Line;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Geometrie"] == {
+        "type": "array",
+        "items": {
+            "type": "array",
+            "prefixItems": [
+                {"type": "number", "minimum": 0.0, "maximum": 1000.0},
+                {"type": "number", "minimum": 0.0, "maximum": 1000.0},
+            ],
+            "items": False,
+            "minItems": 2,
+            "maxItems": 2,
+        },
+    }
+
+
+def test_surface_gets_array_of_rings_with_boundary_order_marker():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+    SurfaceGeom = SURFACE WITH (STRAIGHTS) VERTEX Coord2D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    CLASS A =
+      Geometrie : SurfaceGeom;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    geom = schema["properties"]["Geometrie"]
+    assert geom["type"] == "array"
+    assert geom["x-interlis-boundary-order"] == "outer-first"
+    assert geom["items"]["type"] == "array"  # one ring = array of positions
+    assert geom["items"]["items"]["type"] == "array"  # one position = [x, y]
+
+
+def test_area_gets_same_shape_as_surface():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+    SurfaceGeom = AREA WITH (STRAIGHTS) VERTEX Coord2D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    CLASS A =
+      Geometrie : SurfaceGeom;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Geometrie"]["x-interlis-boundary-order"] == "outer-first"
+
+
+def test_multisurface_wraps_ring_array_once_more():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+    MultiSurfaceGeom = MULTISURFACE WITH (STRAIGHTS) VERTEX Coord2D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    CLASS A =
+      Geometrie : MultiSurfaceGeom;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    geom = schema["properties"]["Geometrie"]
+    assert geom["type"] == "array"
+    assert geom["items"]["x-interlis-boundary-order"] == "outer-first"
+    assert geom["items"]["items"]["type"] == "array"  # ring
+    assert geom["items"]["items"]["items"]["type"] == "array"  # position
+
+
+def test_coordtype_axis_unresolved_falls_back_to_number_array():
+    """When Axis isn't resolved (e.g. an unresolved cross-model domain),
+    a position still gets a meaningfully typed schema - an open-ended
+    array of numbers, not x-interlis-unsupported."""
+    from interlis.convert.jsonschema import _position_schema
+
+    assert _position_schema(None) == {"type": "array", "items": {"type": "number"}}
 
 
 def test_class_schema_has_title_and_object_type():

@@ -84,6 +84,64 @@ BlackboxType:
       source: {field: Kind}
       note: "Xml/Binary - no native JSON Schema content-shape equivalent, surfaced as an informational marker (RULE #5)"
 
+# A COORD/MULTICOORD attribute -> a GeoJSON/JSON-FG-style position tuple.
+# Chosen to already match the eventual .xtf -> JSON-FG position encoding.
+CoordType:
+  qualified_name: IlisMeta16.ModelData.CoordType
+  json_schema:
+    type:
+      value: array
+      note: >
+        `Multi` (own BOOLEAN, MULTICOORD) is structural, not a keyword:
+        when true, the whole position schema described below is wrapped
+        in one more `{"type": "array", "items": <position>}` level
+        (_wrap_multi) rather than being surfaced as a marker - the
+        nesting alone is a complete, lossless representation.
+    prefixItems:
+      source: {function: "xtf.schema.coord_axes(type_instance)"}
+      note: >
+        One entry per axis (association AxisSpec, role Axis - NOT a
+        class attribute, hence "function" not "field" here), each a
+        NumType instance fed straight into _num_type_schema (reused,
+        not duplicated).
+    items:
+      value: false
+      note: "forbid a coordinate beyond what prefixItems declares"
+    minItems:
+      source: {function: "len(xtf.schema.coord_axes(type_instance))"}
+    maxItems:
+      source: {function: "len(xtf.schema.coord_axes(type_instance))"}
+  not_mapped:
+    NullAxis: "rotation/axis-order metadata (ROTATION clause) - irrelevant to the plain position-tuple shape"
+    PiHalfAxis: "see NullAxis"
+    Multi: "structural (wraps the whole schema in one more array level), not a keyword - see the type note above"
+
+# A POLYLINE/DIRECTED POLYLINE/SURFACE/AREA (+ MULTI* variants) attribute.
+LineType:
+  qualified_name: IlisMeta16.ModelData.LineType
+  json_schema:
+    type:
+      value: array
+    items:
+      source: {function: "xtf.schema.line_coord_type(type_instance)"}
+      note: >
+        Kind in {Polyline, DirectedPolyline}: one CoordType-shaped
+        position per array item. Kind in {Surface, Area}: one more
+        array level (boundary rings) - each ring itself an array of
+        positions. line_coord_type (association LineCoord, walks the
+        EXTENDS chain) is reused directly for vertex shape, deliberately
+        via _position_schema rather than CoordType's own mapping above
+        (a vertex is never itself Multi).
+    x-interlis-boundary-order:
+      value: outer-first
+      note: >
+        Surface/Area only - the first boundary ring is the outer
+        contour, the rest are holes (eCH-0031). No native JSON Schema
+        keyword expresses "first item is special".
+  not_mapped:
+    MaxOverlap: "WITHOUT OVERLAPS > X threshold - a data-quality tolerance, irrelevant to the geometry's JSON shape"
+    Multi: "structural (wraps the whole schema in one more array level, MULTIPOLYLINE/MULTISURFACE/MULTIAREA), not a keyword - same as CoordType.Multi above"
+
 # Class.Documentation exists on the metamodel (inherited from MetaElement)
 # but is never populated by InterlisModelBuilder - INTERLIS `/** ... */`
 # doc comments aren't captured as AST nodes anywhere in

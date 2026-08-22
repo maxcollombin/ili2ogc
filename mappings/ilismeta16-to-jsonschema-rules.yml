@@ -68,17 +68,57 @@ concepts:
 
   CoordType:
     qualified_name: IlisMeta16.ModelData.CoordType
-    status: backlog
+    status: mapped
     note: >
-      Geometry - conceptually closer to the future .xtf -> JSON-FG stage
-      of item 5 than to a plain JSON Schema attribute mapping. Attributes
-      of this type get the `x-interlis-unsupported` marker rather than
-      being silently dropped.
+      A `COORD`/`MULTICOORD` attribute maps to a GeoJSON/JSON-FG-style
+      position tuple - `{"type": "array", "prefixItems": [<axis 1
+      number schema>, <axis 2>, ...], "items": false, "minItems": N,
+      "maxItems": N}` (N = 2 or 3, from `xtf.schema.coord_axes`,
+      association `AxisSpec` {1..3} `NumType` ORDERED). Each
+      `prefixItems` entry reuses `_num_type_schema` directly on the
+      axis's own `Min`/`Max` (an `AxisSpec.Axis` is itself a `NumType`
+      instance - no duplicated numeric-range logic). Falls back to an
+      open-ended `{"type": "array", "items": {"type": "number"}}` when
+      `Axis` isn't resolved (e.g. an external domain not loaded via
+      `--repo`) - meaningfully typed rather than
+      `x-interlis-unsupported`. `Multi` (own BOOLEAN,
+      `MULTICOORD`/possibly-disjoint points) wraps the position schema
+      in one more array level - no marker needed, the extra nesting
+      alone is a complete, lossless representation.
+      Chosen deliberately to already match the eventual `.xtf ->
+      JSON-FG` position encoding, so this shape is expected to be reused
+      as-is rather than redesigned at that stage.
 
   LineType:
     qualified_name: IlisMeta16.ModelData.LineType
-    status: backlog
-    note: "Geometry (polyline/surface/area) - same reasoning as CoordType."
+    status: mapped
+    note: >
+      `Kind in {Polyline, DirectedPolyline}` -> `{"type": "array",
+      "items": <CoordType above>}` (an ordered array of positions).
+      `Kind in {Surface, Area}` -> one more array level (boundary
+      rings): `{"type": "array", "items": {"type": "array", "items":
+      <position>}}` - eCH-0031 encodes `SURFACE` and `AREA` identically
+      on the wire (`AREA` is a semantic "WITHOUT OVERLAPS" constraint
+      over the same shape, not a distinct geometry); the first ring is
+      the outer boundary, the rest are holes - no native JSON Schema
+      keyword expresses "first item is special", surfaced instead as an
+      informational `x-interlis-boundary-order: "outer-first"` marker
+      (RULE #5). Vertex coordinate shape comes from
+      `xtf.schema.line_coord_type` (association `LineCoord`, walks the
+      `EXTENDS` chain) fed into the SAME position-tuple logic as
+      `CoordType` above (reused, not duplicated) - a vertex position is
+      never itself `Multi` regardless of the referenced `CoordType`
+      domain's own `Multi` flag (that flag only applies when the
+      `CoordType` is used directly as an attribute's type). `Multi` on
+      the `LineType` itself (`MULTIPOLYLINE`/`MULTISURFACE`/
+      `MULTIAREA`) wraps the whole result in one more array level, same
+      as `CoordType.Multi`.
+      ARC segments (a circular arc between two vertices, `WITH (...,
+      ARCS)`) have no representation in this position-array shape - a
+      straight-line-only simplification GeoJSON itself shares, not
+      something this mapping alone introduces; a custom `LINE FORM`
+      segment is likewise not structurally interpreted (same scope limit
+      already documented for the XTF validator, `xtf/validate.py`).
 
   EnumTreeValueType:
     qualified_name: IlisMeta16.ModelData.EnumTreeValueType
