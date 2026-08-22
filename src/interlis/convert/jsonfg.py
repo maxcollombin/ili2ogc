@@ -468,10 +468,22 @@ def transfer_to_feature_collection(
     (clause 13 Recommendation A, "homogeneous feature collections") -
     purely additive, never replaces the per-feature member (clause 13
     Requirement B already allows either placement, so both stay valid).
-    "coordRefSys" stays per-feature for now (not hoisted to the
-    collection level even when uniform - a valid, spec-recommended future
-    optimization, not required for correctness, see
-    docs/jsonfg-conversion-strategy.md).
+
+    "coordRefSys" hoisting (uniform case only) is NOT an optional
+    optimization - it is what `/req/core/same-crs` actually requires
+    ("A 'coordRefSys' member SHALL only be included in the JSON-FG root
+    object and not in any other JSON-FG objects") and what the
+    Standard's OWN official example demonstrates verbatim
+    (`core/examples/airports.json`, opengeospatial/ogc-feat-geo-json):
+    `"coordRefSys"` declared once on the `FeatureCollection`, entirely
+    ABSENT from each nested Feature. When every Feature that has a
+    "place" shares the same "coordRefSys", it is moved to the collection
+    and removed from every Feature. When they differ (heterogeneous CRS
+    within one collection - no real corpus evidence found: every basket
+    seen so far uses one CRS throughout), per-feature "coordRefSys" is
+    left as a conservative fallback rather than inventing an unverified
+    geometry-level placement with no official example to check it
+    against (see docs/jsonfg-conversion-strategy.md).
     """
     features: list[dict[str, Any]] = []
     for basket in transfer.baskets:
@@ -489,4 +501,11 @@ def transfer_to_feature_collection(
     feature_types = {f["featureType"] for f in features}
     if len(feature_types) == 1:
         collection["featureType"] = next(iter(feature_types))
+
+    crs_values = {f["coordRefSys"] for f in features if "coordRefSys" in f}
+    if len(crs_values) == 1:
+        collection["coordRefSys"] = next(iter(crs_values))
+        for f in features:
+            f.pop("coordRefSys", None)
+
     return collection

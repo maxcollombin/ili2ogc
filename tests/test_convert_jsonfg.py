@@ -501,3 +501,32 @@ def test_multivalue_of_structures_becomes_array_of_nested_objects():
             {"Language": "fr", "Text": "Bonjour"},
         ],
     }
+
+
+def test_transfer_to_feature_collection_hoists_uniform_coord_ref_sys():
+    """Matches the JSON-FG Standard's own official example verbatim.
+
+    core/examples/airports.json (opengeospatial/ogc-feat-geo-json):
+    "coordRefSys" declared once on the collection, entirely absent from
+    each nested Feature - not just an optimization, what
+    /req/core/same-crs actually requires.
+    """
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    basket = XtfBasket(
+        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        objects=[
+            XtfObject(
+                tid="p-1", qualified_class="Foo.T.APoint",
+                attributes={"Geom": [_wrap("Geom", _coord("2600000.0", "1200000.0"))]},
+            ),
+            XtfObject(
+                tid="p-2", qualified_class="Foo.T.APoint",
+                attributes={"Geom": [_wrap("Geom", _coord("2650000.0", "1250000.0"))]},
+            ),
+        ],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
+    assert collection["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+    assert all("coordRefSys" not in f for f in collection["features"])
+    assert all(f["place"]["type"] == "Point" for f in collection["features"])
