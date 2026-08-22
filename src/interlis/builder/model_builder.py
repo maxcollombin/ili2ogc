@@ -204,6 +204,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         if rule_name == "classDef":
             self._attach_class_oid(instance, ctx)
+        elif rule_name == "unitDef":
+            self._register_unit_alias(instance, ctx)
 
         if entry.parent and self._parent_stack:
             self.attachment.attach(
@@ -1482,6 +1484,30 @@ class InterlisModelBuilder(InterlisParserVisitor):
             return
         qualified = self._qualify_name(name)
         self.symbol_table.register(qualified, instance)
+
+    def _register_unit_alias(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Register a UNIT's bracketed short-name alias under the SAME instance too.
+
+        Grammar (unitDef, InterlisParser.py): `UNIT? Name (LSBR Name RSBR)?
+        ...` - `ctx.Name(0)` is the primary Name (already registered by
+        `_maybe_register_symbol` above), `ctx.Name(1)` the optional
+        bracketed alias (e.g. `CubicMeterPerSecond [m3sec] = ...;`). The
+        metamodel's `Unit` class has no dedicated ShortName attribute (only
+        the inherited `Name`, `ilismeta16-classes.yml`), so without this the
+        alias is never registered anywhere - confirmed on real corpus data
+        (`PlanerischerGewaesserschutz_V1_1.ili`/`Hazard_Mapping_V1_3.ili`):
+        a later `[m3sec]`/`[m2s]` unitRef elsewhere in the SAME file raised
+        `BuildError: unresolved reference, not attributable to an import`,
+        since only the primary Name was ever findable. Registers a SECOND
+        symbol table entry pointing at the SAME instance - same alias
+        mechanism already used by `SymbolTable.rekey_model_prefix`, applied
+        here per-unit instead of per-model.
+        """
+        names = ctx.Name()
+        if len(names) < 2:
+            return
+        alias = names[1].getText()
+        self.symbol_table.register(self._qualify_name(alias), instance)
 
     def _qualify_name(self, name: str) -> str:
         parts = [getattr(inst, "Name", None) for inst in self._parent_stack if getattr(inst, "Name", None)]
