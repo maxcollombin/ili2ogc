@@ -1,0 +1,283 @@
+"""Lot 1-2 (backlog item 5, second stage) - .xtf -> JSON-FG, flat Feature + single-attribute geometry.
+
+See docs/jsonfg-conversion-strategy.md for the design decision and scope
+(JSON-FG "core" + "types-schemas" requirements classes only).
+"""
+import warnings
+from pathlib import Path
+
+from interlis.builder.model_builder import InterlisModelBuilder
+from interlis.convert.jsonfg import CONF_CORE, CONF_TYPES_SCHEMAS, object_to_feature
+from interlis.runtime.parse import meta_attribute_comments, parse_text
+from interlis.xtf.parse import RawNode, XtfObject
+
+ROOT = Path(__file__).resolve().parent.parent
+MAPPINGS_DIR = ROOT / "mappings"
+SPEC_DIR = ROOT / "spec/grammar/mapping"
+
+_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Age : 0 .. 130;
+      Height : 0.000 .. 999.999;
+      Code : TEXT*20;
+      Active : BOOLEAN;
+      Ref : REFERENCE TO A;
+    END A;
+  END T;
+END Foo.
+"""
+
+
+def _build(src: str, *, capture_meta: bool = False):
+    tree, errors = parse_text(src)
+    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if capture_meta:
+            builder.build(tree, meta_attributes=meta_attribute_comments(src))
+        else:
+            builder.build(tree)
+    return builder
+
+
+def _resolved_class(builder, name: str):
+    return builder.symbol_table.resolve(name)
+
+
+def _node(tag: str, text: str) -> RawNode:
+    return RawNode(tag=tag, text=text, attrib={}, children=[])
+
+
+def _wrap(tag: str, *children: RawNode) -> RawNode:
+    return RawNode(tag=tag, text=None, attrib={}, children=list(children))
+
+
+def _coord(c1: str, c2: str) -> RawNode:
+    return _wrap("COORD", _node("C1", c1), _node("C2", c2))
+
+
+_GEOM_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    !!@CRS=EPSG:2056
+    Coord2D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000;
+    !!@CRS=EPSG:2056
+    MultiCoord2D = MULTICOORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000;
+    NoCrsCoord = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+    Line = POLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2D;
+    Poly = SURFACE WITH (STRAIGHTS) VERTEX Coord2D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    CLASS APoint =
+      Geom : MANDATORY Coord2D;
+    END APoint;
+    CLASS AMultiPoint =
+      Geom : MANDATORY MultiCoord2D;
+    END AMultiPoint;
+    CLASS ALine =
+      Geom : MANDATORY Line;
+    END ALine;
+    CLASS APoly =
+      Geom : MANDATORY Poly;
+    END APoly;
+    CLASS ANoCrs =
+      Geom : MANDATORY NoCrsCoord;
+    END ANoCrs;
+    CLASS ATwoGeoms =
+      Point : MANDATORY Coord2D;
+      Area : Poly;
+    END ATwoGeoms;
+  END T;
+END Foo.
+"""
+
+
+def test_scalar_properties_id_and_metadata():
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(
+        tid="obj-1",
+        qualified_class="Foo.T.A",
+        attributes={
+            "Age": [_node("Age", "42")],
+            "Height": [_node("Height", "1.75")],
+            "Code": [_node("Code", "hello")],
+            "Active": [_node("Active", "true")],
+        },
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["type"] == "Feature"
+    assert feature["id"] == "obj-1"
+    assert feature["featureType"] == "A"
+    assert feature["geometry"] is None
+    assert feature["conformsTo"] == [CONF_CORE, CONF_TYPES_SCHEMAS]
+    assert feature["properties"] == {"Age": 42, "Height": 1.75, "Code": "hello", "Active": True}
+
+
+def test_boolean_false_and_integer_vs_number_typing():
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(
+        tid="obj-2",
+        qualified_class="Foo.T.A",
+        attributes={
+            "Age": [_node("Age", "7")],
+            "Height": [_node("Height", "2")],
+            "Active": [_node("Active", "false")],
+        },
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"]["Age"] == 7
+    assert isinstance(feature["properties"]["Age"], int)
+    assert feature["properties"]["Height"] == 2.0
+    assert isinstance(feature["properties"]["Height"], float)
+    assert feature["properties"]["Active"] is False
+
+
+def test_missing_tid_omits_id():
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(tid=None, qualified_class="Foo.T.A", attributes={})
+    feature = object_to_feature(obj, cls)
+    assert "id" not in feature
+
+
+def test_out_of_scope_attribute_gets_marker_not_dropped():
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(
+        tid="obj-3", qualified_class="Foo.T.A",
+        attributes={"Ref": [_node("Ref", "obj-1")]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"]["Ref"] == {"x-interlis-unsupported": "ReferenceType"}
+
+
+def test_unknown_attribute_name_skipped():
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(
+        tid="obj-4", qualified_class="Foo.T.A",
+        attributes={"NotInSchema": [_node("NotInSchema", "x")]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"] == {}
+
+
+def test_coord_attribute_becomes_place_point_with_crs():
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "APoint")
+    obj = XtfObject(
+        tid="p-1", qualified_class="Foo.T.APoint",
+        attributes={"Geom": [_wrap("Geom", _coord("2600000.0", "1200000.0"))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {"type": "Point", "coordinates": [2600000.0, 1200000.0]}
+    assert feature["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+    assert "Geom" not in feature["properties"]
+    assert feature["geometry"] is None
+
+
+def test_multicoord_attribute_becomes_place_multipoint():
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "AMultiPoint")
+    obj = XtfObject(
+        tid="mp-1", qualified_class="Foo.T.AMultiPoint",
+        attributes={"Geom": [_wrap("Geom", _wrap(
+            "MULTICOORD", _coord("2600000.0", "1200000.0"), _coord("2600100.0", "1200100.0"),
+        ))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "MultiPoint", "coordinates": [[2600000.0, 1200000.0], [2600100.0, 1200100.0]],
+    }
+    assert "Geom" not in feature["properties"]
+
+
+def test_polyline_attribute_becomes_place_linestring():
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ALine")
+    obj = XtfObject(
+        tid="l-1", qualified_class="Foo.T.ALine",
+        attributes={"Geom": [_wrap("Geom", _wrap(
+            "POLYLINE", _coord("2600000.0", "1200000.0"), _coord("2600100.0", "1200100.0"),
+        ))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "LineString", "coordinates": [[2600000.0, 1200000.0], [2600100.0, 1200100.0]],
+    }
+
+
+def test_surface_attribute_becomes_place_polygon_outer_ring_first():
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "APoly")
+    outer = _wrap("BOUNDARY", _wrap(
+        "POLYLINE", _coord("0.0", "0.0"), _coord("10.0", "0.0"), _coord("10.0", "10.0"), _coord("0.0", "0.0"),
+    ))
+    hole = _wrap("BOUNDARY", _wrap(
+        "POLYLINE", _coord("1.0", "1.0"), _coord("2.0", "1.0"), _coord("2.0", "2.0"), _coord("1.0", "1.0"),
+    ))
+    obj = XtfObject(
+        tid="s-1", qualified_class="Foo.T.APoly",
+        attributes={"Geom": [_wrap("Geom", _wrap("SURFACE", outer, hole))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"]["type"] == "Polygon"
+    rings = feature["place"]["coordinates"]
+    assert len(rings) == 2
+    assert rings[0][0] == [0.0, 0.0]  # outer ring listed first, eCH-0031 order-only convention
+    assert rings[1][0] == [1.0, 1.0]
+
+
+def test_arc_segment_falls_back_to_unsupported_property():
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ALine")
+    arc = _wrap("ARC", _node("C1", "2600100.0"), _node("C2", "1200100.0"), _node("A1", "2600050.0"), _node("A2", "1200050.0"))
+    obj = XtfObject(
+        tid="l-2", qualified_class="Foo.T.ALine",
+        attributes={"Geom": [_wrap("Geom", _wrap("POLYLINE", _coord("2600000.0", "1200000.0"), arc))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert feature["properties"]["Geom"] == {"x-interlis-unsupported": "LineType"}
+
+
+def test_missing_crs_meta_falls_back_to_unsupported_property():
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ANoCrs")
+    obj = XtfObject(
+        tid="nc-1", qualified_class="Foo.T.ANoCrs",
+        attributes={"Geom": [_wrap("Geom", _coord("100.0", "200.0"))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert feature["properties"]["Geom"] == {"x-interlis-unsupported": "CoordType"}
+
+
+def test_multi_geometry_class_gets_no_place():
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ATwoGeoms")
+    obj = XtfObject(
+        tid="tg-1", qualified_class="Foo.T.ATwoGeoms",
+        attributes={"Point": [_wrap("Point", _coord("2600000.0", "1200000.0"))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert "coordRefSys" not in feature
+    assert feature["properties"]["Point"] == {"x-interlis-unsupported": "CoordType"}
+
+
+def test_without_meta_capture_crs_is_unresolved():
+    """`meta_attributes` is opt-in (Lot 3, .ili side) - without it, even a CRS-carrying domain yields no place."""
+    builder = _build(_GEOM_MODEL, capture_meta=False)
+    cls = _resolved_class(builder, "APoint")
+    obj = XtfObject(
+        tid="p-2", qualified_class="Foo.T.APoint",
+        attributes={"Geom": [_wrap("Geom", _coord("2600000.0", "1200000.0"))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert feature["properties"]["Geom"] == {"x-interlis-unsupported": "CoordType"}

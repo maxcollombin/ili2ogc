@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from interlis.builder.errors import BuildError
-from interlis.runtime.parse import parse_file, parse_text
+from interlis.runtime.parse import meta_attribute_comments, meta_attribute_comments_in_file, parse_file, parse_text
 
 # Matches the real grammar (`modeldef`, vendor/interlis-antlr4/InterlisParser.g4):
 # `CONTRACTED? (TYPE | REFSYSTEM | SYMBOLOGY)? MODEL Name ...` - MODEL is
@@ -147,16 +147,32 @@ class ModelRepository:
         return self._get_table(model_name)
 
     def _get_table(self, model_name: str):
+        """Build (or return the cached) SymbolTable for `model_name`.
+
+        Passes `meta_attributes` (eCH-0117 `!!@Name=Value` comments, see
+        `runtime.parse.meta_attribute_comments`) into the sub-build - an
+        imported model's own MetaAttribute instances (e.g. `!!@CRS=...`
+        on a CoordType domain) are otherwise never captured, since only
+        the file passed directly to `InterlisModelBuilder.build()` used
+        to get this treatment. A real-corpus gap surfaced while building
+        `.xtf` -> JSON-FG geometry conversion (backlog item 5): every
+        Swiss geometry domain in practice is imported (from
+        `CHBase_Part1_GEOMETRY_V1`), never declared locally, so without
+        this the CRS meta-attribute mechanism had zero real coverage.
+        """
         if model_name in self._cache:
             return self._cache[model_name]
         if model_name in _BUILTIN_SOURCES:
-            tree, syntax_errors = parse_text(_BUILTIN_SOURCES[model_name])
+            source = _BUILTIN_SOURCES[model_name]
+            tree, syntax_errors = parse_text(source)
+            meta_attributes = meta_attribute_comments(source)
         else:
             path = self._index.get(model_name)
             if path is None:
                 self._cache[model_name] = None
                 return None
             tree, syntax_errors = parse_file(path)
+            meta_attributes = meta_attribute_comments_in_file(path)
         if syntax_errors or self._make_sub_builder is None:
             self._cache[model_name] = None
             return None
@@ -169,7 +185,7 @@ class ModelRepository:
         # load of the same file.
         self._cache[model_name] = builder.symbol_table
         try:
-            result = builder.build(tree)
+            result = builder.build(tree, meta_attributes=meta_attributes)
         except BuildError:
             # An EXTERNAL model indexed successfully can still genuinely
             # fail to build (a binding/mapping error on this specific
