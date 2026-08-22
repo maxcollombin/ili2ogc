@@ -7,9 +7,13 @@ structural layer) into a JSON-FG (OGC 21-045r1) Feature object;
 XtfTransfer into one FeatureCollection. Both conform to the "core" and
 "types-schemas" requirements classes only - single-attribute point/line/
 polygon geometry -> "place" (never "geometry", which stays `null` - no
-WGS84 reprojection, see module docs), no STRUCTURE/BAG/LIST/REFERENCE/
-embedded-role attributes, no multi-geometry classes yet (each a separate
-future lot). Reuses the schema resolution already proven by
+WGS84 reprojection, see module docs); a plain REFERENCE TO, an embedded
+association role, or a 1-own-attribute STRUCTURE wrapping a REFERENCE TO
+(all 3 real wire shapes, unified via the SAME `_extract_reference` search
+already proven by xtf/validate.py) -> the referenced object's OID as a
+plain string. No STRUCTURE/BAG/LIST nesting (a genuine STRUCTURE with no
+findable REF) or multi-geometry classes yet (each a separate future
+lot). Reuses the schema resolution already proven by
 xtf/validate.py (resolve_attribute/attributes_of/coord_axes/
 line_coord_type) AND its wire-tag helpers (_geom_tag/_find_child/
 _axis_components/the BOUNDARY/SURFACE/LINE_KIND tag sets) rather than a
@@ -24,13 +28,22 @@ from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonschema import _is_integer_range
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfObject, XtfTransfer
-from interlis.xtf.schema import ResolvedAttribute, attributes_of, line_coord_type, resolve_attribute, resolve_class
+from interlis.xtf.schema import (
+    ResolvedAttribute,
+    attributes_of,
+    line_coord_type,
+    resolve_attribute,
+    resolve_class,
+    schema_members_of,
+)
 from interlis.xtf.validate import (
     _BOUNDARY_TAGS,
     _LINE_KIND_MULTI_TAGS,
     _LINE_KIND_TAGS,
+    _REFERENCE_TYPE_KINDS,
     _SURFACE_TAGS,
     _axis_components,
+    _extract_reference,
     _find_child,
     _geom_tag,
 )
@@ -75,12 +88,30 @@ def _scalar_value(resolved: ResolvedAttribute, node: RawNode) -> Any:
 
 
 def _attribute_value(resolved: ResolvedAttribute, raw_nodes: list[RawNode]) -> Any:
-    if resolved.type_kind not in _SCALAR_KINDS:
-        # Same "unknown" fallback as convert/jsonschema.py's
-        # _attribute_schema, for an unresolved Type (type_kind is None -
-        # e.g. an external/unqualified reference not loaded via --repo).
-        return {"x-interlis-unsupported": resolved.type_kind or "unknown"}
-    return _scalar_value(resolved, raw_nodes[0])
+    kind = resolved.type_kind
+    if kind in _SCALAR_KINDS:
+        return _scalar_value(resolved, raw_nodes[0])
+    if kind in _REFERENCE_TYPE_KINDS:
+        # Same dispatch as xtf/validate.py's _validate_resolved_attr: a
+        # "ReferenceType"/"Class" kind doesn't always mean a plain
+        # REFERENCE TO or an embedded association role - a 1-own-attribute
+        # STRUCTURE wrapping a REFERENCE TO (the "MandatoryCatalogueReference"
+        # pattern, real corpus example: RoadTrafficAccidentLocation_V2's
+        # AccidentType/AccidentSeverityCategory/RoadType/AccidentWeekDay)
+        # is ALSO transferred with a findable REF, several levels deep -
+        # _extract_reference searches the whole subtree regardless of which
+        # of these 3 real wire shapes produced it, so all 3 are handled by
+        # this ONE lookup, never 3 separate cases. Only a GENUINE
+        # STRUCTURE occurrence with no REF anywhere (Kind=Structure, real
+        # nested content - out of scope until STRUCTURE/BAG/LIST nesting
+        # exists) falls through to the marker below.
+        ref = _extract_reference(raw_nodes[0]) if raw_nodes else None
+        if ref is not None:
+            return ref
+    # Same "unknown" fallback as convert/jsonschema.py's _attribute_schema,
+    # for an unresolved Type (type_kind is None - e.g. an external/
+    # unqualified reference not loaded via --repo).
+    return {"x-interlis-unsupported": kind or "unknown"}
 
 
 # --- Geometry (`"place"`) ----------------------------------------------------
@@ -237,13 +268,21 @@ def _place_and_crs(resolved: ResolvedAttribute, node: RawNode) -> tuple[dict[str
     return None if crs is None else (geometry, crs)
 
 
-def object_to_feature(obj: XtfObject, cls: MetaInstance, *, standalone: bool = True) -> dict[str, Any]:
+def object_to_feature(
+    obj: XtfObject, cls: MetaInstance, *, standalone: bool = True, symbol_table: SymbolTable | None = None,
+) -> dict[str, Any]:
     """Convert one XtfObject into a JSON-FG Feature object.
 
     `cls` is the already-resolved Class/Structure instance for
     `obj.qualified_class` (xtf.schema.resolve_class) - resolution stays
     the caller's job, same split as xtf/validate.py's `_validate_object`,
     so this function is a pure value transform.
+
+    `symbol_table`, when given, additionally includes EMBEDDED
+    ASSOCIATION ROLES (`xtf.schema.schema_members_of` instead of plain
+    `attributes_of`) as pseudo-attributes - same opt-in precondition as
+    `convert/jsonschema.py`'s `class_to_json_schema`. `None` (the
+    default) means own+inherited `ClassAttribute`s only.
 
     `standalone=True` (default): produced as a JSON-FG "root object" in
     its own right (OGC 21-045r1 clause 8: "not contained in another
@@ -279,7 +318,7 @@ def object_to_feature(obj: XtfObject, cls: MetaInstance, *, standalone: bool = T
     this pure-Python runtime; JSON-FG core explicitly allows this
     ("geometry" is `null` when no valid WGS84 representation exists).
     """
-    schema_attrs = attributes_of(cls)
+    schema_attrs = schema_members_of(cls, symbol_table) if symbol_table is not None else attributes_of(cls)
     resolved_attrs = {name: resolve_attribute(attr) for name, attr in schema_attrs.items()}
 
     properties: dict[str, Any] = {}
@@ -351,7 +390,7 @@ def transfer_to_feature_collection(
             cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
             if cls is None:
                 continue
-            features.append(object_to_feature(obj, cls, standalone=False))
+            features.append(object_to_feature(obj, cls, standalone=False, symbol_table=symbol_table))
 
     collection: dict[str, Any] = {
         "type": "FeatureCollection",

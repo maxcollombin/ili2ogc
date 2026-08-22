@@ -51,12 +51,48 @@ def _node(tag: str, text: str) -> RawNode:
     return RawNode(tag=tag, text=text, attrib={}, children=[])
 
 
+def _ref_node(tag: str, target: str) -> RawNode:
+    return RawNode(tag=tag, text=None, attrib={"REF": target}, children=[])
+
+
 def _wrap(tag: str, *children: RawNode) -> RawNode:
     return RawNode(tag=tag, text=None, attrib={}, children=list(children))
 
 
 def _coord(c1: str, c2: str) -> RawNode:
     return _wrap("COORD", _node("C1", c1), _node("C2", c2))
+
+
+_REF_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Item =
+      Code : TEXT*10;
+    END Item;
+    CLASS Location =
+      Name : TEXT*20;
+    END Location;
+    CLASS Indicator =
+      Value : TEXT*20;
+    END Indicator;
+    ASSOCIATION Location_Indicator =
+      rLocation (EXTERNAL) -<#> Location;
+      rIndicator -- {0..*} Indicator;
+    END Location_Indicator;
+    STRUCTURE ItemRef =
+      Reference : MANDATORY REFERENCE TO Item;
+    END ItemRef;
+    STRUCTURE PlainWrapper =
+      Sub : TEXT*10;
+    END PlainWrapper;
+    CLASS Holder =
+      DirectRef : REFERENCE TO Item;
+      CatalogRef : ItemRef;
+      NoRefStruct : PlainWrapper;
+    END Holder;
+  END T;
+END Foo.
+"""
 
 
 _GEOM_MODEL = """INTERLIS 2.4;
@@ -351,3 +387,66 @@ END Foo.
     collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
     assert "featureType" not in collection
     assert {f["featureType"] for f in collection["features"]} == {"A", "B"}
+
+
+def test_plain_reference_to_becomes_string_oid():
+    builder = _build(_REF_MODEL)
+    cls = _resolved_class(builder, "Holder")
+    obj = XtfObject(
+        tid="h-1", qualified_class="Foo.T.Holder",
+        attributes={"DirectRef": [_wrap("DirectRef", _ref_node("Item", "tgt-1"))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"]["DirectRef"] == "tgt-1"
+
+
+def test_catalog_reference_structure_becomes_string_oid():
+    """1-own-attribute STRUCTURE wrapping a REFERENCE TO.
+
+    Real corpus pattern, RoadTrafficAccidentLocation_V2's AccidentType/
+    RoadType/... attributes - the REF is findable 2 levels deep, same
+    _extract_reference search as a plain REFERENCE TO, no special-casing
+    needed.
+    """
+    builder = _build(_REF_MODEL)
+    cls = _resolved_class(builder, "Holder")
+    obj = XtfObject(
+        tid="h-2", qualified_class="Foo.T.Holder",
+        attributes={"CatalogRef": [_wrap("CatalogRef", _wrap("ItemRefWrapper", _ref_node("Reference", "tgt-2")))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"]["CatalogRef"] == "tgt-2"
+
+
+def test_genuine_structure_without_ref_stays_unsupported():
+    builder = _build(_REF_MODEL)
+    cls = _resolved_class(builder, "Holder")
+    obj = XtfObject(
+        tid="h-3", qualified_class="Foo.T.Holder",
+        attributes={"NoRefStruct": [_wrap("NoRefStruct", _wrap("PlainWrapperWrapper", _node("Sub", "hello")))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"]["NoRefStruct"] == {"x-interlis-unsupported": "Class"}
+
+
+def test_embedded_role_absent_without_symbol_table():
+    builder = _build(_REF_MODEL)
+    cls = _resolved_class(builder, "Indicator")
+    obj = XtfObject(
+        tid="i-1", qualified_class="Foo.T.Indicator",
+        attributes={"Value": [_node("Value", "v")], "rLocation": [_ref_node("rLocation", "loc-1")]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert set(feature["properties"]) == {"Value"}
+
+
+def test_embedded_role_becomes_string_oid_with_symbol_table():
+    builder = _build(_REF_MODEL)
+    cls = _resolved_class(builder, "Indicator")
+    obj = XtfObject(
+        tid="i-2", qualified_class="Foo.T.Indicator",
+        attributes={"Value": [_node("Value", "v")], "rLocation": [_ref_node("rLocation", "loc-1")]},
+    )
+    feature = object_to_feature(obj, cls, symbol_table=builder.symbol_table)
+    assert feature["properties"]["rLocation"] == "loc-1"
+    assert feature["properties"]["Value"] == "v"
