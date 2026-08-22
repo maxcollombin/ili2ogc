@@ -221,9 +221,107 @@ concepts:
       (RULE #7 - different layer).
 
   Inheritance:
-    qualified_name: IlisMeta16.ModelData.Inheritance
+    qualified_name: IlisMeta16.ModelData.Class
+    status: mapped
+    note: >
+      Covers ABSTRACT structure polymorphism only: a Class(Kind=Structure)
+      attribute (direct, or via MultiValue.BaseType) whose resolved type
+      is Abstract=true maps to `anyOf` over every concrete (non-abstract)
+      subclass found via the `Inheritance`/`Super` chain (own+inherited
+      merge itself was already covered by StructureNesting/xtf.schema.attributes_of()
+      since Lot 1/2 - this concept entry is specifically about the
+      polymorphic case). `anyOf` chosen over `oneOf` (user decision) since
+      a concrete subclass can itself be extended by another concrete
+      subclass (real corpus case, CHBase_Part8_GEOMETRY3D_V2.ili:
+      `Surface3D` (ABSTRACT) -> `PlanarSurface3D` (concrete) ->
+      `Triangle3D` (concrete)) - a `Triangle3D` value would validate
+      against both branches under `oneOf`'s "exactly one match"
+      requirement, since none of this pipeline's $defs schemas set
+      `additionalProperties: false`. Requires `symbol_table` (subclasses
+      are found by scanning every registered Class, there being no
+      reverse-of-`Super` link) - without it, or when no concrete subclass
+      is found, falls back to the pre-existing plain `$ref`, now with an
+      informational `x-interlis-abstract` marker (RULE #5).
+
+      Explicitly still `status: backlog` within this same concept, NOT
+      separately mapped (RULE #7 - no real corpus evidence to build
+      against): RESTRICTION(...) narrowing a STRUCTURE-typed attribute's
+      candidate set (`restrictedStructureRef`/`restrictedClassOrStructureRef`,
+      spec/grammar/mapping/04_attributes.yml) - the entire 54-file
+      `ili_corpus/` has exactly one real RESTRICTION occurrence
+      (RoadTrafficCensus_V1_1.ili), and it is the DOMAIN-level `CLASS
+      RESTRICTION(...)` form already covered by Lot 6/7's
+      xtf.schema.restriction_candidates() (ReferenceType/Role only), not
+      an attribute-level structure restriction. Confirmed this form isn't
+      even captured by InterlisModelBuilder today (no
+      `_build_domain_class_restriction`-equivalent call site for
+      `restrictedStructureRef`'s own Restrictions binding) - a pre-existing
+      builder-layer gap, not something to build blind for a construct
+      with zero real evidence, same discipline as the MANDATORY-on-structure
+      gap documented under StructureNesting (Lot 2).
+
+  ObjectOID:
+    qualified_name: IlisMeta16.ModelData.ObjectOID
     status: backlog
     note: >
-      EXTENDS/CHOICE/RESTRICTION beyond the flat own+inherited attribute
-      merge already reused from xtf.schema.attributes_of() - polymorphic
-      JSON Schema shape (oneOf/discriminator) not designed yet.
+      `Class.Oid` (association ObjectOID, role Oid - already fully
+      resolved by InterlisModelBuilder._attach_class_oid/
+      _apply_topic_oid_clauses: own `OID AS`/`NO OID` clause, or the
+      topic-level default when the class has none of its own) is
+      deliberately NOT surfaced by this pipeline yet. Confirmed via
+      eCH-0031 V2.1.0 SS4.3.11.1/SS3.5.2: the OID is transferred as the
+      mandatory XML attribute `TID` on every transferred Class object
+      (never on a Structure element, and never one of the class's own
+      `attributes_of()` - a DIFFERENT kind of value than any of the
+      properties this pipeline maps today). Real corpus survey (18/54
+      `ili_corpus/` files declare an explicit OID clause at all):
+      dominant form `OID AS INTERLIS.UUIDOID`/`OID AS UUIDOID` (the
+      `AnyOIDType` marker), a handful of named domains (`TypeID`,
+      `haz_map_oid`, `TypID` - real TEXT/NUM domains), and most classes
+      have NO OID clause anywhere (own or topic-level default) - eCH-0031
+      confirms this means the object has NO stable identification at all
+      (transfer-scoped TID only), not an error/gap to guess around.
+
+      **User decision (2026-08-22, explicit defer)**: presented with the
+      concrete choice between a real `oid` property in `properties`
+      (anticipating reuse as the future JSON-FG stage's Feature `id`) and
+      an `x-interlis-oid-type` marker only, the user chose to defer this
+      decision entirely until the `.xtf` -> JSON-FG stage's own
+      Feature/`id` conventions are designed (RULE #7) - deciding a
+      property name/shape now risks a mismatch that would have to be
+      revisited anyway once that stage's real requirements are known.
+
+  Constraint:
+    qualified_name: IlisMeta16.ModelData.Constraint
+    status: backlog
+    note: >
+      `CONSTRAINT`/`MANDATORY CONSTRAINT` (`SimpleConstraint.LogicalExpression`,
+      `Kind`/`Percentage` for the "AT LEAST n% MUST BE TRUE" plausibility
+      form) holds an arbitrary boolean `Expression` AST - AND/OR/NOT,
+      comparisons, enum literals, `DEFINED(...)`, cross-attribute paths.
+      Real corpus survey: 202 occurrences across 27/54 `ili_corpus/` files,
+      almost all cross-attribute conditional forms (e.g. `NOT (KBfrei ==
+      #false AND Datum != "1991-02-27") OR DEFINED (REPflichtPers)`, real,
+      `ERKAS_Strassen_V2_0.ili`) - never a single-value range/pattern check
+      that would map onto an existing JSON Schema keyword
+      (`minimum`/`maximum`/`pattern`/`enum` all constrain ONE value, none
+      express inter-attribute boolean logic). No JSON Schema 2020-12
+      keyword covers arbitrary cross-attribute boolean logic in general
+      (`if`/`then`/`else`/`dependentRequired`/`dependentSchemas` cover only
+      specific structural patterns, not an arbitrary compiled expression
+      tree) - a general compiler from this AST to JSON Schema would be an
+      open-ended undertaking disproportionate to every other concept in
+      this contract, each a fixed, well-defined transformation.
+
+      **User decision (2026-08-22, explicit backlog)**: presented with the
+      choice between documenting this as backlog (no code) and adding a
+      cheap `x-interlis-constraints` marker (raw constraint text/Name per
+      class, no semantic translation attempted), the user chose the
+      documented-backlog option - consistent with this project's own XTF
+      validator, which likewise never executes these expressions against
+      real data (`.claude/PROGRESS.md`, "Gaps techniques restants").
+      `UniqueConstraint`/`ExistenceConstraint`/`SetConstraint` (the `UNIQUE`/
+      `EXISTS`/set-membership constructs, distinct concrete `Constraint`
+      subclasses from `SimpleConstraint`) were not surveyed separately -
+      out of scope for this same reason, revisit together if constraint
+      support is ever taken up.

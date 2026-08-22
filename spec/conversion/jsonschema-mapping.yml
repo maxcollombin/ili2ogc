@@ -246,6 +246,44 @@ Role:
     Multiplicity: "confirmed (rules.yml) embedded_roles_of always selects the non-multi side - no array-wrapping needed for what this concept actually produces"
     Derivates: "derived-role expression - out of scope, same category as formal constraints"
 
+# ABSTRACT structure polymorphism only (see rules.yml Inheritance note for
+# the full scope decision, including what stays backlog). qualified_name
+# is Class (not the Inheritance association itself, same pattern as
+# StructureNesting above): the gating field (Abstract) lives on Class,
+# same convention as StructureNesting using Class rather than DomainType.
+Inheritance:
+  qualified_name: IlisMeta16.ModelData.Class
+  json_schema:
+    anyOf:
+      rule: "one {\"$ref\": \"#/$defs/<key>\"} per concrete (non-abstract) subclass of an Abstract=true STRUCTURE, in place of StructureNesting's single $ref"
+      source: {field: Abstract}
+      note: >
+        Class.Abstract (inherited from ExtendableME) gates this; concrete
+        subclasses are found via
+        src/interlis/convert/jsonschema.py:_concrete_subclasses (reuses
+        xtf.schema.is_class_compatible against every Class registered in
+        the given symbol_table - the Inheritance association's Super role
+        is a forward-only child->parent pointer, there is no reverse
+        link to walk directly). Requires symbol_table to be given to
+        class_to_json_schema/model_to_json_schema (same opt-in
+        precondition as Role above); without it, or when no concrete
+        subclass is found, produces the plain $ref instead (see
+        x-interlis-abstract below).
+    x-interlis-abstract:
+      source: {field: Abstract}
+      note: >
+        Marker on the plain-$ref fallback path (no symbol_table given, or
+        an Abstract structure with zero concrete subclasses found) -
+        RULE #5, never leaves an Abstract structure's $ref looking
+        identical to a concrete one's.
+# NOT mapped here, stays backlog (see rules.yml Inheritance note): the
+# ClassRestriction association role, which would feed attribute-level
+# RESTRICTION(...) on a STRUCTURE-typed attribute - zero real corpus
+# occurrence and not even captured by InterlisModelBuilder today for this
+# construct, so not covered under not_mapped as a real Class attribute
+# either (it isn't one - it's an association role, UmlIndex.attribute_exists
+# only checks attributes.own/inherited).
+
 MultiValue:
   qualified_name: IlisMeta16.ModelData.MultiValue
   json_schema:

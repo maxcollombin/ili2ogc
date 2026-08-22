@@ -662,3 +662,76 @@ END Foo.
     attrs = attributes_of(cls)
     resolved = resolve_attribute(attrs["Age"])
     assert resolved.type_kind == "NumType"
+
+
+# Mirrors the real CHBase_Part8_GEOMETRY3D_V2.ili shape: an ABSTRACT
+# structure (Surface3D) with a two-level concrete EXTENDS chain
+# (PlanarSurface3D -> Triangle3D, both concrete), referenced via a plain
+# structure attribute and via BAG OF.
+_ABSTRACT_STRUCTURE_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Surface (ABSTRACT) =
+      Area : 0.0 .. 1000.0;
+    END Surface;
+    STRUCTURE PlanarSurface EXTENDS Surface =
+      Normal : TEXT*5;
+    END PlanarSurface;
+    STRUCTURE Triangle EXTENDS PlanarSurface =
+      Base : 0.0 .. 100.0;
+    END Triangle;
+    STRUCTURE OrphanAbstract (ABSTRACT) =
+      Note : TEXT*5;
+    END OrphanAbstract;
+    CLASS A =
+      Shape : Surface;
+      Shapes : BAG {0..*} OF Surface;
+      Orphan : OrphanAbstract;
+    END A;
+  END T;
+END Foo.
+"""
+
+
+def test_abstract_structure_attribute_without_symbol_table_keeps_ref_with_abstract_marker():
+    # No symbol_table -> no anyOf (subclasses can't be enumerated), but the
+    # plain $ref still gets an informational x-interlis-abstract marker
+    # (RULE #5) rather than silently looking identical to a concrete ref.
+    builder = _build(_ABSTRACT_STRUCTURE_MODEL)
+    a = _resolved_class(builder, "A")
+    surface = _resolved_class(builder, "Surface")
+    doc = model_to_json_schema([a, surface])
+    assert doc["$defs"]["A"]["properties"]["Shape"] == {
+        "$ref": "#/$defs/Surface", "x-interlis-abstract": True,
+    }
+
+
+def test_abstract_structure_attribute_gets_anyof_over_concrete_subclasses():
+    # PlanarSurface AND Triangle are both concrete, and Triangle itself
+    # extends PlanarSurface (not just Surface directly) - both must be
+    # listed, confirming the discovery isn't limited to direct children.
+    builder = _build(_ABSTRACT_STRUCTURE_MODEL)
+    a = _resolved_class(builder, "A")
+    doc = model_to_json_schema([a], symbol_table=builder.symbol_table)
+    assert set(doc["$defs"]) >= {"A", "Surface", "PlanarSurface", "Triangle"}
+    assert doc["$defs"]["A"]["properties"]["Shape"] == {
+        "anyOf": [{"$ref": "#/$defs/PlanarSurface"}, {"$ref": "#/$defs/Triangle"}],
+    }
+
+
+def test_bag_of_abstract_structure_gets_array_of_anyof():
+    builder = _build(_ABSTRACT_STRUCTURE_MODEL)
+    a = _resolved_class(builder, "A")
+    doc = model_to_json_schema([a], symbol_table=builder.symbol_table)
+    assert doc["$defs"]["A"]["properties"]["Shapes"]["items"] == {
+        "anyOf": [{"$ref": "#/$defs/PlanarSurface"}, {"$ref": "#/$defs/Triangle"}],
+    }
+
+
+def test_abstract_structure_with_no_concrete_subclass_falls_back_to_marked_ref():
+    builder = _build(_ABSTRACT_STRUCTURE_MODEL)
+    a = _resolved_class(builder, "A")
+    doc = model_to_json_schema([a], symbol_table=builder.symbol_table)
+    assert doc["$defs"]["A"]["properties"]["Orphan"] == {
+        "$ref": "#/$defs/OrphanAbstract", "x-interlis-abstract": True,
+    }

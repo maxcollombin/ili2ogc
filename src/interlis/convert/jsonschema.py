@@ -1,4 +1,4 @@
-""".ili -> JSON Schema conversion: scalar types, STRUCTURE/BAG/LIST nesting, plain REFERENCE TO, and embedded association roles.
+""".ili -> JSON Schema conversion: scalar types, STRUCTURE/BAG/LIST nesting, plain REFERENCE TO, embedded association roles, and ABSTRACT structure polymorphism.
 
 See docs/jsonschema-conversion-strategy.md for the design decision and
 mappings/ilismeta16-to-jsonschema-rules.yml /
@@ -18,6 +18,7 @@ from interlis.xtf.schema import (
     attributes_of,
     coord_axes,
     enum_values,
+    is_class_compatible,
     line_coord_type,
     reference_external_status,
     reference_target_class,
@@ -233,7 +234,36 @@ def _is_structure(type_instance: MetaInstance | None) -> bool:
     return type_instance is not None and getattr(type_instance, "Kind", None) == "Structure"
 
 
-def _class_ref_or_marker(class_instance: MetaInstance | None, ref_keys: dict[int, str]) -> dict[str, Any]:
+def _concrete_subclasses(abstract_class: MetaInstance, symbol_table: SymbolTable) -> list[MetaInstance]:
+    """Every concrete (non-abstract) STRUCTURE subclass of an ABSTRACT one.
+
+    `Inheritance`/`Super` is a forward-only pointer (child -> parent, see
+    `xtf.schema.attributes_of`/`is_class_compatible`) - there is no reverse
+    "subclasses of" link, so finding them means scanning every registered
+    Class and keeping the ones for which `is_class_compatible` holds.
+    Abstract intermediates are excluded: eCH-0031 SS3.6.4
+    ("Strukturattribute") - only concrete structures (or their own further
+    concrete extensions) are valid transferred structure elements, an
+    abstract one never is.
+    """
+    seen: set[int] = set()
+    result: list[MetaInstance] = []
+    for candidate in symbol_table.all_registered():
+        if not isinstance(candidate, MetaInstance) or candidate._qualified_class.rsplit(".", 1)[-1] != "Class":
+            continue
+        if candidate is abstract_class or id(candidate) in seen:
+            continue
+        if getattr(candidate, "Kind", None) != "Structure" or bool(getattr(candidate, "Abstract", False)):
+            continue
+        if is_class_compatible(candidate, abstract_class):
+            seen.add(id(candidate))
+            result.append(candidate)
+    return result
+
+
+def _class_ref_or_marker(
+    class_instance: MetaInstance | None, ref_keys: dict[int, str], symbol_table: SymbolTable | None = None,
+) -> dict[str, Any]:
     """Return a `$ref` to `class_instance`'s own $defs entry, or the unsupported marker.
 
     Only called for genuine STRUCTURE nesting (`_is_structure` already
@@ -241,15 +271,46 @@ def _class_ref_or_marker(class_instance: MetaInstance | None, ref_keys: dict[int
     wasn't reachable from the roots given to `model_to_json_schema` (e.g.
     an unresolved cross-model reference, no `--repo` given) - RULE #5,
     marked explicitly rather than emitting a dangling `$ref`.
+
+    An ABSTRACT structure (e.g. real `CHBase_Part8_GEOMETRY3D_V2.ili`:
+    `Curve3D (ABSTRACT)`/`Surface3D (ABSTRACT)`, used via `BAG`/`LIST OF`)
+    is transferred on the wire as one of its concrete subclasses - the XML
+    encoding's own element tag IS the concrete structure's name (eCH-0031
+    SS4.3.11.12), so a single `$ref` to the abstract class's own (often
+    empty) schema would misrepresent the actual possible shapes. Resolved
+    instead as `anyOf` over every concrete subclass found in
+    `symbol_table` (needs the symbol table to enumerate them - without one,
+    or when none is found, this falls back to the plain `$ref`). `anyOf`
+    rather than `oneOf`: a concrete subclass can itself be extended by
+    ANOTHER concrete subclass (real case: `Surface3D` -> `PlanarSurface3D`
+    -> `Triangle3D`, both concrete) - a `Triangle3D` value would then
+    validate against both branches (its extra own attributes are not
+    forbidden by `PlanarSurface3D`'s schema, which has no
+    `additionalProperties: false`), which `oneOf`'s "exactly one match"
+    requirement cannot tolerate. The plain-`$ref` fallback (no
+    `symbol_table`, or no concrete subclass found in it) still carries an
+    informational `x-interlis-abstract` marker (RULE #5) whenever
+    `class_instance` is ABSTRACT - never silently indistinguishable from a
+    concrete structure's `$ref`.
     """
     if class_instance is not None:
+        if symbol_table is not None and bool(getattr(class_instance, "Abstract", False)):
+            concrete = _concrete_subclasses(class_instance, symbol_table)
+            refs = sorted(ref_keys[id(c)] for c in concrete if id(c) in ref_keys)
+            if refs:
+                return {"anyOf": [{"$ref": f"#/$defs/{r}"} for r in refs]}
         ref = ref_keys.get(id(class_instance))
         if ref is not None:
-            return {"$ref": f"#/$defs/{ref}"}
+            schema: dict[str, Any] = {"$ref": f"#/$defs/{ref}"}
+            if bool(getattr(class_instance, "Abstract", False)):
+                schema["x-interlis-abstract"] = True
+            return schema
     return {"x-interlis-unsupported": "Class"}
 
 
-def _element_schema(kind: str | None, type_instance: MetaInstance | None, ref_keys: dict[int, str]) -> dict[str, Any]:
+def _element_schema(
+    kind: str | None, type_instance: MetaInstance | None, ref_keys: dict[int, str], symbol_table: SymbolTable | None = None,
+) -> dict[str, Any]:
     """Return the schema for one "leaf" type - a plain attribute's type, or a MultiValue's BaseType.
 
     `ReferenceType`/non-structure `Class` here (a `BAG`/`LIST OF
@@ -265,7 +326,7 @@ def _element_schema(kind: str | None, type_instance: MetaInstance | None, ref_ke
     if scalar is not None:
         return scalar
     if kind == "Class" and _is_structure(type_instance):
-        return _class_ref_or_marker(type_instance, ref_keys)
+        return _class_ref_or_marker(type_instance, ref_keys, symbol_table)
     if kind == "Class" and type_instance is not None:
         return {"type": "string"}
     if kind == "ReferenceType" and type_instance is not None:
@@ -273,7 +334,9 @@ def _element_schema(kind: str | None, type_instance: MetaInstance | None, ref_ke
     return {"x-interlis-unsupported": kind or "unknown"}
 
 
-def _multi_value_schema(multi_value: MetaInstance, ref_keys: dict[int, str]) -> dict[str, Any]:
+def _multi_value_schema(
+    multi_value: MetaInstance, ref_keys: dict[int, str], symbol_table: SymbolTable | None = None,
+) -> dict[str, Any]:
     """`BAG {m..n} OF X` / `LIST {m..n} OF X` -> `type: array`.
 
     `items` reuses the same scalar/$ref dispatch as a plain attribute,
@@ -286,7 +349,7 @@ def _multi_value_schema(multi_value: MetaInstance, ref_keys: dict[int, str]) -> 
     base = getattr(multi_value, "BaseType", None)
     base = base if isinstance(base, MetaInstance) else None
     base_kind = base._qualified_class.rsplit(".", 1)[-1] if base is not None else None
-    schema: dict[str, Any] = {"type": "array", "items": _element_schema(base_kind, base, ref_keys)}
+    schema: dict[str, Any] = {"type": "array", "items": _element_schema(base_kind, base, ref_keys, symbol_table)}
 
     mult = getattr(multi_value, "Multiplicity", None)
     if isinstance(mult, MetaInstance):
@@ -309,7 +372,9 @@ def _multi_value_schema(multi_value: MetaInstance, ref_keys: dict[int, str]) -> 
     return schema
 
 
-def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> dict[str, Any]:
+def _attribute_schema(
+    resolved: ResolvedAttribute, ref_keys: dict[int, str], symbol_table: SymbolTable | None = None,
+) -> dict[str, Any]:
     """Return the JSON Schema for one resolved attribute.
 
     An attribute whose type falls outside the mapped set (NumType/
@@ -319,7 +384,8 @@ def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> 
     see docs/jsonschema-conversion-strategy.md).
 
     `type_kind == "Class"` covers two DIFFERENT things (see `_is_structure`):
-    genuine STRUCTURE nesting (`$ref`) vs. an embedded association
+    genuine STRUCTURE nesting (`$ref`/`anyOf` if ABSTRACT, see
+    `_class_ref_or_marker`) vs. an embedded association
     role - which, like a plain `REFERENCE TO`, is
     transferred as a `REF`/OID, not inlined, so it reuses
     `_reference_type_schema` (`reference_target_class`/
@@ -327,12 +393,12 @@ def _attribute_schema(resolved: ResolvedAttribute, ref_keys: dict[int, str]) -> 
     correctly, no separate code path needed).
     """
     if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
-        return _multi_value_schema(resolved.type_instance, ref_keys)
+        return _multi_value_schema(resolved.type_instance, ref_keys, symbol_table)
     if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
-        return _class_ref_or_marker(resolved.type_instance, ref_keys)
+        return _class_ref_or_marker(resolved.type_instance, ref_keys, symbol_table)
     if resolved.type_kind in ("Class", "ReferenceType") and resolved.type_instance is not None:
         return _reference_type_schema(resolved)
-    return _element_schema(resolved.type_kind, resolved.type_instance, ref_keys)
+    return _element_schema(resolved.type_kind, resolved.type_instance, ref_keys, symbol_table)
 
 
 def _nested_class(resolved: ResolvedAttribute) -> MetaInstance | None:
@@ -352,7 +418,7 @@ def _nested_class(resolved: ResolvedAttribute) -> MetaInstance | None:
     return None
 
 
-def _discover_classes(roots: list[MetaInstance]) -> dict[int, MetaInstance]:
+def _discover_classes(roots: list[MetaInstance], symbol_table: SymbolTable | None = None) -> dict[int, MetaInstance]:
     """BFS over every Class reachable from `roots` via structure/BAG/LIST attributes.
 
     Reachable classes not among `roots` (e.g. a STRUCTURE declared in an
@@ -363,6 +429,13 @@ def _discover_classes(roots: list[MetaInstance]) -> dict[int, MetaInstance]:
     structures terminate naturally (the second encounter is already in
     `found`, no re-enqueue), which is what makes emitting a plain `$ref`
     (rather than inlining) recursion-safe.
+
+    An ABSTRACT structure encountered along the way (`symbol_table`
+    given) also enqueues its concrete subclasses (`_concrete_subclasses`)
+    - needed so `_class_ref_or_marker`'s `anyOf` branches always resolve
+    to a real `$defs` entry, even for a concrete subclass never directly
+    named by any attribute (only reachable as "one of the possible
+    shapes" of the abstract type).
     """
     found: dict[int, MetaInstance] = {}
     queue: list[MetaInstance] = list(roots)
@@ -371,6 +444,10 @@ def _discover_classes(roots: list[MetaInstance]) -> dict[int, MetaInstance]:
         if id(cls) in found:
             continue
         found[id(cls)] = cls
+        if symbol_table is not None and getattr(cls, "Kind", None) == "Structure" and bool(getattr(cls, "Abstract", False)):
+            for concrete in _concrete_subclasses(cls, symbol_table):
+                if id(concrete) not in found:
+                    queue.append(concrete)
         for attr in attributes_of(cls).values():
             nested = _nested_class(resolve_attribute(attr))
             if nested is not None and id(nested) not in found:
@@ -418,8 +495,10 @@ def class_to_json_schema(
     transfers them. `None` (the default) means own+inherited
     `ClassAttribute`s only, no embedded roles.
 
-    Inheritance-as-oneOf, OID and formal constraints remain backlog
-    regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
+    ABSTRACT structure polymorphism (`anyOf` over concrete subclasses, see
+    `_class_ref_or_marker`) is included when `symbol_table` is given.
+    RESTRICTION-narrowed structure attributes, OID and formal constraints
+    remain backlog regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
     """
     ref_keys = ref_keys or {}
     properties: dict[str, Any] = {}
@@ -427,7 +506,7 @@ def class_to_json_schema(
     members = schema_members_of(class_instance, symbol_table) if symbol_table is not None else attributes_of(class_instance)
     for name, attr in members.items():
         resolved = resolve_attribute(attr)
-        properties[name] = _attribute_schema(resolved, ref_keys)
+        properties[name] = _attribute_schema(resolved, ref_keys, symbol_table)
         if resolved.mandatory:
             required.append(name)
     schema: dict[str, Any] = {"type": "object", "properties": properties}
@@ -453,13 +532,15 @@ def model_to_json_schema(classes: list[MetaInstance], symbol_table: SymbolTable 
     incrementing suffix, not a qualified key; revisit if qualified
     `$defs` keys turn out to be needed).
 
-    `symbol_table`, when given, is forwarded to `class_to_json_schema`
-    so each `$defs` entry also includes its embedded association roles -
-    NOT used by `_discover_classes` itself (an embedded role is a
-    reference, never containment, so it never contributes a new reachable
-    class, same as a plain `REFERENCE TO` target).
+    `symbol_table`, when given, is forwarded to `class_to_json_schema` so
+    each `$defs` entry also includes its embedded association roles, AND
+    to `_discover_classes` so an ABSTRACT structure's concrete subclasses
+    are pulled in too (needed for `_class_ref_or_marker`'s `anyOf`
+    branches to resolve) - an embedded role itself still contributes no
+    new reachable class (a reference, never containment, same as a plain
+    `REFERENCE TO` target).
     """
-    reachable = _discover_classes(classes)
+    reachable = _discover_classes(classes, symbol_table)
     ref_keys = _assign_keys(reachable)
     defs = {
         ref_keys[instance_id]: class_to_json_schema(cls, ref_keys, symbol_table)

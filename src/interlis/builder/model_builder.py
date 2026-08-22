@@ -381,7 +381,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     (c for c in segment if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.CLASS), None,
                 )
                 if class_token is None:
-                    continue  # segment sans Name reconnu de contenu direct - voir domainDef, note STRING DOTDOT STRING
+                    continue  # unreachable in practice: a bare "STRING DOTDOT STRING" domainDef alternative parses via type_'s own alternative instead (ANTLR resolves the ambiguity there - see type.text_range_alt, spec/grammar/mapping/06_types.yml) - kept as a defensive no-op, not a real gap
                 instance = self._build_domain_class_restriction(segment, rule_name)
                 if not isinstance(instance, MetaInstance):
                     continue
