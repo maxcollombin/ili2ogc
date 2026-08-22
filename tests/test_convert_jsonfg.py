@@ -94,6 +94,24 @@ MODEL Foo AT "http://x" VERSION "1" =
 END Foo.
 """
 
+_MULTI_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE LocalisedText =
+      Language : TEXT*2;
+      Text : TEXT*100;
+    END LocalisedText;
+    STRUCTURE MultilingualText =
+      LocalisedText : BAG {1..*} OF LocalisedText;
+    END MultilingualText;
+    CLASS Facility =
+      Codes : BAG {0..*} OF TEXT*5;
+      Name : MultilingualText;
+    END Facility;
+  END T;
+END Foo.
+"""
+
 
 _GEOM_MODEL = """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
@@ -418,7 +436,7 @@ def test_catalog_reference_structure_becomes_string_oid():
     assert feature["properties"]["CatalogRef"] == "tgt-2"
 
 
-def test_genuine_structure_without_ref_stays_unsupported():
+def test_genuine_structure_without_ref_recurses_into_nested_object():
     builder = _build(_REF_MODEL)
     cls = _resolved_class(builder, "Holder")
     obj = XtfObject(
@@ -426,7 +444,7 @@ def test_genuine_structure_without_ref_stays_unsupported():
         attributes={"NoRefStruct": [_wrap("NoRefStruct", _wrap("PlainWrapperWrapper", _node("Sub", "hello")))]},
     )
     feature = object_to_feature(obj, cls)
-    assert feature["properties"]["NoRefStruct"] == {"x-interlis-unsupported": "Class"}
+    assert feature["properties"]["NoRefStruct"] == {"Sub": "hello"}
 
 
 def test_embedded_role_absent_without_symbol_table():
@@ -450,3 +468,36 @@ def test_embedded_role_becomes_string_oid_with_symbol_table():
     feature = object_to_feature(obj, cls, symbol_table=builder.symbol_table)
     assert feature["properties"]["rLocation"] == "loc-1"
     assert feature["properties"]["Value"] == "v"
+
+
+def test_multivalue_of_scalars_becomes_array():
+    builder = _build(_MULTI_MODEL)
+    cls = _resolved_class(builder, "Facility")
+    obj = XtfObject(
+        tid="f-1", qualified_class="Foo.T.Facility",
+        attributes={"Codes": [_wrap("Codes", _node("Item", "AA"), _node("Item", "BB"))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"]["Codes"] == ["AA", "BB"]
+
+
+def test_multivalue_of_structures_becomes_array_of_nested_objects():
+    """Real corpus pattern: Facility.Name (MultilingualText) -> BAG OF LocalisedText.
+
+    Each occurrence itself a structure with own scalar attributes -
+    2-level recursion, already_unwrapped correctly distinguishing the
+    container level from the occurrence level.
+    """
+    builder = _build(_MULTI_MODEL)
+    cls = _resolved_class(builder, "Facility")
+    localised_en = _wrap("LocalisedText", _node("Language", "en"), _node("Text", "Hello"))
+    localised_fr = _wrap("LocalisedText", _node("Language", "fr"), _node("Text", "Bonjour"))
+    name_wire = _wrap("Name", _wrap("MultilingualText", _wrap("LocalisedText", localised_en, localised_fr)))
+    obj = XtfObject(tid="f-2", qualified_class="Foo.T.Facility", attributes={"Name": [name_wire]})
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"]["Name"] == {
+        "LocalisedText": [
+            {"Language": "en", "Text": "Hello"},
+            {"Language": "fr", "Text": "Bonjour"},
+        ],
+    }

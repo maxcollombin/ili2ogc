@@ -11,9 +11,15 @@ WGS84 reprojection, see module docs); a plain REFERENCE TO, an embedded
 association role, or a 1-own-attribute STRUCTURE wrapping a REFERENCE TO
 (all 3 real wire shapes, unified via the SAME `_extract_reference` search
 already proven by xtf/validate.py) -> the referenced object's OID as a
-plain string. No STRUCTURE/BAG/LIST nesting (a genuine STRUCTURE with no
-findable REF) or multi-geometry classes yet (each a separate future
-lot). Reuses the schema resolution already proven by
+plain string; a genuine STRUCTURE (no findable REF) -> a nested JSON
+object, `BAG`/`LIST OF X` -> a JSON array, both recursively (same
+"resolve schema, dispatch per kind" logic as the root object, mirroring
+xtf/validate.py's own `_validate_attrs` recursion). CoordType/LineType
+NESTED inside a structure/list element still stays unsupported (no real
+corpus DATA evidence for it - the top-level Feature's own "place" is the
+only geometry shape built so far). Multi-geometry classes stay out of
+scope too (each a separate future lot). Reuses the schema resolution
+already proven by
 xtf/validate.py (resolve_attribute/attributes_of/coord_axes/
 line_coord_type) AND its wire-tag helpers (_geom_tag/_find_child/
 _axis_components/the BOUNDARY/SURFACE/LINE_KIND tag sets) rather than a
@@ -46,6 +52,7 @@ from interlis.xtf.validate import (
     _extract_reference,
     _find_child,
     _geom_tag,
+    _group_by_tag,
 )
 
 JSON_FG_VERSION = "1.0"
@@ -87,10 +94,15 @@ def _scalar_value(resolved: ResolvedAttribute, node: RawNode) -> Any:
     return text  # TextType/EnumType: the wire text itself (EnumType: a dotted path)
 
 
-def _attribute_value(resolved: ResolvedAttribute, raw_nodes: list[RawNode]) -> Any:
+def _attribute_value(
+    resolved: ResolvedAttribute, raw_nodes: list[RawNode], *,
+    symbol_table: SymbolTable | None = None, already_unwrapped: bool = False,
+) -> Any:
     kind = resolved.type_kind
     if kind in _SCALAR_KINDS:
         return _scalar_value(resolved, raw_nodes[0])
+    if kind == "MultiValue":
+        return _multi_value(resolved, raw_nodes, symbol_table=symbol_table)
     if kind in _REFERENCE_TYPE_KINDS:
         # Same dispatch as xtf/validate.py's _validate_resolved_attr: a
         # "ReferenceType"/"Class" kind doesn't always mean a plain
@@ -101,17 +113,99 @@ def _attribute_value(resolved: ResolvedAttribute, raw_nodes: list[RawNode]) -> A
         # is ALSO transferred with a findable REF, several levels deep -
         # _extract_reference searches the whole subtree regardless of which
         # of these 3 real wire shapes produced it, so all 3 are handled by
-        # this ONE lookup, never 3 separate cases. Only a GENUINE
-        # STRUCTURE occurrence with no REF anywhere (Kind=Structure, real
-        # nested content - out of scope until STRUCTURE/BAG/LIST nesting
-        # exists) falls through to the marker below.
+        # this ONE lookup, never 3 separate cases.
         ref = _extract_reference(raw_nodes[0]) if raw_nodes else None
         if ref is not None:
             return ref
+        # A GENUINE STRUCTURE occurrence (Kind=Structure, no REF anywhere -
+        # real nested content, e.g. MultilingualText) recurses into its own
+        # content instead of falling through to the marker below.
+        if kind == "Class" and getattr(resolved.type_instance, "Kind", None) == "Structure":
+            return _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=already_unwrapped)
     # Same "unknown" fallback as convert/jsonschema.py's _attribute_schema,
     # for an unresolved Type (type_kind is None - e.g. an external/
-    # unqualified reference not loaded via --repo).
+    # unqualified reference not loaded via --repo). Also covers CoordType/
+    # LineType NESTED inside a structure/list element (as opposed to the
+    # top-level Feature's own geometry attribute, handled separately via
+    # "place") - no real corpus DATA shows this occurring, so it stays
+    # unsupported rather than reusing the "place" geometry shape without
+    # evidence (RULE #7).
     return {"x-interlis-unsupported": kind or "unknown"}
+
+
+def _structure_value(
+    resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, symbol_table: SymbolTable | None, already_unwrapped: bool,
+) -> dict[str, Any]:
+    """Recurse into a genuine STRUCTURE occurrence's own attributes.
+
+    Value-producing counterpart of xtf/validate.py's `_validate_attrs`
+    recursion (same real wire convention, same `already_unwrapped`
+    distinction - a bug there, fixed once, is worth respecting exactly
+    rather than re-deriving): `already_unwrapped=False` (a root/plain
+    structure-typed attribute) - `raw_nodes[0]` is the node NAMED AFTER
+    THE ATTRIBUTE (e.g. `<Name>`), whose ONLY child is the actual
+    structure-content wrapper (`<...MultilingualText>`) - one level of
+    unwrapping needed. `already_unwrapped=True` (a `MultiValue`
+    occurrence, see `_multi_value`) - `raw_nodes[0]` IS ALREADY that
+    wrapper - unwrapping it again would misgroup the grandchildren
+    instead of the real attributes.
+    """
+    node = raw_nodes[0] if raw_nodes else None
+    if node is None:
+        return {}
+    wrapper = node if already_unwrapped else (node.children[0] if node.children else None)
+    if wrapper is None or not isinstance(resolved.type_instance, MetaInstance):
+        return {}
+    return _members_value(resolved.type_instance, _group_by_tag(wrapper.children), symbol_table=symbol_table)
+
+
+def _multi_value(resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, symbol_table: SymbolTable | None) -> Any:
+    """`BAG {m..n} OF X` / `LIST {m..n} OF X` -> a JSON array of converted occurrences.
+
+    Real wire convention (confirmed on `KGS_PBC_V2_2.ili`'s
+    `Objektart`/`EGID`/`Adressen`, same as xtf/validate.py's own
+    MultiValue handling): a SINGLE element named after the attribute,
+    containing each occurrence as a DIRECT CHILD - never repeated
+    attribute-name tags at the object level (that convention is what
+    `XtfObject.attributes` itself already captures, a DIFFERENT kind of
+    repetition). Each occurrence is re-dispatched through
+    `_attribute_value` via a synthetic `ResolvedAttribute` for
+    `MultiValue.BaseType` (Structure, Reference, scalar, ... - the exact
+    same generic mechanism, unlimited recursion), `already_unwrapped=True`
+    since an occurrence IS the content wrapper already (see
+    `_structure_value`).
+    """
+    base_type = getattr(resolved.type_instance, "BaseType", None)
+    if not isinstance(base_type, MetaInstance):
+        return {"x-interlis-unsupported": "MultiValue"}
+    base_kind = base_type._qualified_class.rsplit(".", 1)[-1]
+    values: list[Any] = []
+    for node in raw_nodes:
+        for occurrence in node.children:
+            occ_resolved = ResolvedAttribute(attr=resolved.attr, type_instance=base_type, type_kind=base_kind, mandatory=False)
+            values.append(_attribute_value(occ_resolved, [occurrence], symbol_table=symbol_table, already_unwrapped=True))
+    return values
+
+
+def _members_value(cls: MetaInstance, attrs: dict[str, list[RawNode]], *, symbol_table: SymbolTable | None) -> dict[str, Any]:
+    """Convert every attribute present in `attrs` against `cls`'s own schema into a plain dict.
+
+    Shared by `object_to_feature` (the root object) and `_structure_value`
+    (nested STRUCTURE content) - same "resolve schema, dispatch per kind"
+    logic applied to any Class/Structure's own attribute set, mirroring
+    xtf/validate.py's `_validate_attrs` (there: valid/invalid issues;
+    here: a value). An attribute present on the wire but not found in the
+    schema is silently skipped - not this converter's job to flag,
+    `validate()` does.
+    """
+    schema_attrs = schema_members_of(cls, symbol_table) if symbol_table is not None else attributes_of(cls)
+    resolved_attrs = {name: resolve_attribute(attr) for name, attr in schema_attrs.items()}
+    result: dict[str, Any] = {}
+    for name, raw_nodes in attrs.items():
+        if name not in resolved_attrs:
+            continue
+        result[name] = _attribute_value(resolved_attrs[name], raw_nodes, symbol_table=symbol_table)
+    return result
 
 
 # --- Geometry (`"place"`) ----------------------------------------------------
@@ -320,12 +414,7 @@ def object_to_feature(
     """
     schema_attrs = schema_members_of(cls, symbol_table) if symbol_table is not None else attributes_of(cls)
     resolved_attrs = {name: resolve_attribute(attr) for name, attr in schema_attrs.items()}
-
-    properties: dict[str, Any] = {}
-    for name, raw_nodes in obj.attributes.items():
-        if name not in resolved_attrs:
-            continue  # unknown to the schema - not this converter's job to flag, validate() does
-        properties[name] = _attribute_value(resolved_attrs[name], raw_nodes)
+    properties = _members_value(cls, obj.attributes, symbol_table=symbol_table)
 
     place: dict[str, Any] | None = None
     crs_uri: str | None = None
