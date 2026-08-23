@@ -258,9 +258,18 @@ inspection:
     _kind:
       source:
         field: AREA
-        index: null
-      note: confirmed IlisMeta16.ModelData.View.FormationKind.children.Inspection = [Normal, Area] (kind-values.yml)
-        - optional AREA token dispatches Normal vs Area.
+        presence: true
+      note: >
+        Confirmed IlisMeta16.ModelData.View.FormationKind.children.Inspection = [Normal, Area]
+        (kind-values.yml) - AREA is OPTIONAL at the grammar level (InterlisParser.py's inspection()
+        method matches AREA only inside an "if" guard on the lookahead token, never unconditionally),
+        same presence-dispatch pattern as viewDef.Abstract/Final/Transient above (an absent optional
+        token is a valid outcome, not missing data). Was previously bound via plain field+index with
+        no optional/presence flag, which source_resolver.py treats as MANDATORY - raised a BuildError
+        on any real inspection() without AREA. Confirmed real (ili_corpus/ full-corpus grep for
+        "INSPECTION OF" without a preceding "AREA"): LWB_Nutzungsflaechen_V3_0.ili's
+        "VIEW InspectionOfProgramm INSPECTION OF LNF_Nutzung_Programm ~ ... -> Programm;" - the only
+        real occurrence found, but the grammar makes AREA optional regardless of corpus frequency.
     FormationParameter:
       source:
         field: Name
