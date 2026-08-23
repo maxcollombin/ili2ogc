@@ -34,6 +34,38 @@ def _strip_ns(tag: str) -> str:
     return tag.rsplit("}", 1)[-1] if tag.startswith("{") else tag
 
 
+def _model_name_from_tag(tag: str) -> str | None:
+    """Recover a namespaced XTF 2.4 data tag's declaring MODEL name, or `None` for a bare (XTF 2.3) tag.
+
+    A basket/object/attribute tag in real XTF 2.4 data uses a genuine XML
+    namespace whose URI is the transferred model's own name, one segment
+    per model (`xmlns:Holznutzungsbewilligung_V1_0=
+    "http://www.interlis.ch/xtf/2.4/Holznutzungsbewilligung_V1_0"` -
+    confirmed on multiple real geodienste.ch XTF 2.4 files, one `xmlns:`
+    declaration per IMPORTed model, always ending in the model's own bare
+    Name) - unlike XTF 2.3, where the SAME information is already baked
+    into the bare, undotted-namespace tag text itself (e.g.
+    `RoadTrafficAccidentLocation_V2.RoadTrafficAccident`, `_strip_ns` is a
+    no-op there). `_strip_ns` alone loses this prefix for a REAL
+    namespace (Clark notation `{uri}local`, ElementTree's own
+    resolution), taking only `local` - fine for the fixed `ili:`/`geom:`
+    structural keywords (HEADERSECTION/COORD/...), but silently wrong for
+    a basket/object tag, which needs the full `Model.Topic[.Class]` to
+    resolve against a schema. Returns `None` (not a real transferred
+    model) for anything not matching this URI shape, including the fixed
+    `ili:` namespace itself (`.../2.4/INTERLIS`) - never mistaken for a
+    model named "INTERLIS".
+    """
+    if not tag.startswith("{"):
+        return None
+    uri = tag[1:].split("}", 1)[0]
+    prefix = "http://www.interlis.ch/xtf/2.4/"
+    if not uri.startswith(prefix):
+        return None
+    name = uri[len(prefix):]
+    return name if name and name != "INTERLIS" else None
+
+
 def _get_attr_ci(elem: ET.Element, name: str) -> str | None:
     """Case/namespace-insensitive attribute lookup - `name` is UPPERCASE.
 
@@ -163,13 +195,28 @@ def parse_xtf(path: Path) -> XtfTransfer:
                 role = "model"
             elif parent_role == "datasection":
                 role = "basket"
+                model_name = _model_name_from_tag(elem.tag)
+                qualified_topic = f"{model_name}.{tag}" if model_name else tag
                 current_basket = XtfBasket(
-                    bid=_get_attr_ci(elem, "BID") or "", qualified_topic=tag,
+                    bid=_get_attr_ci(elem, "BID") or "", qualified_topic=qualified_topic,
                     kind=_get_attr_ci(elem, "KIND"), endstate=_get_attr_ci(elem, "ENDSTATE"),
                 )
             elif parent_role == "basket":
                 role = "object"
-                current_object = XtfObject(tid=_get_attr_ci(elem, "TID"), qualified_class=tag, attributes={})
+                # XTF 2.4: the object's own namespace prefix names its
+                # OWN model (e.g. via `TOPIC EXTENDS`, can differ from the
+                # basket's) and its local tag is the bare Class name alone
+                # - needs the enclosing basket's own TOPIC to reconstruct
+                # `Model.Topic.Class` (namespace alone only gives `Model`).
+                # XTF 2.3 (`model_name is None`): the bare tag is already
+                # the complete `Model.Topic.Class` on its own (e.g.
+                # `RoadTrafficAccidentLocation_V2.RoadTrafficAccident.
+                # RoadTrafficAccident`) - used as-is, unchanged from before
+                # this fix.
+                model_name = _model_name_from_tag(elem.tag)
+                basket_topic = current_basket.qualified_topic.rsplit(".", 1)[-1]
+                qualified_class = f"{model_name}.{basket_topic}.{tag}" if model_name else tag
+                current_object = XtfObject(tid=_get_attr_ci(elem, "TID"), qualified_class=qualified_class, attributes={})
             elif parent_role == "object":
                 role = "attribute"
             else:

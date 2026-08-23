@@ -43,13 +43,18 @@ def issues(builder):
 
 
 def test_envelope_parsed_as_xtf24(builder):
-    """Sanity check that the file was actually parsed, not silently skipped -
-    a class/topic resolved by its BARE tag name (XTF 2.4 has no
-    Model.Topic.Class-qualified tags, unlike XTF 2.3)."""
+    """Sanity check that the file was actually parsed, not silently skipped.
+
+    A class/topic is resolved by its full Model.Topic.Class-qualified name,
+    reconstructed from the tag's own real XML namespace (the model's own
+    URI, `http://www.interlis.ch/xtf/2.4/<Model>`) plus the enclosing
+    basket's TOPIC - XTF 2.4 tags carry only the bare local name on the
+    wire, unlike XTF 2.3's own already-fully-qualified bare tags.
+    """
     transfer = parse_xtf(FIXTURE_DIR / "AllErrors24-ok.xtf")
     assert transfer.baskets
     assert transfer.baskets[0].objects
-    assert any(obj.qualified_class == "GeometryClass" for obj in transfer.baskets[0].objects)
+    assert any(obj.qualified_class == "AllErrors24.MainTopic.GeometryClass" for obj in transfer.baskets[0].objects)
 
 
 def test_geometry_class_has_no_error(issues):
@@ -57,13 +62,16 @@ def test_geometry_class_has_no_error(issues):
     MULTISURFACE, all in one real object - the regression case for both the
     XTF 2.4 tag-case fix (interlis.xtf.validate) and the envelope-parsing
     fix (interlis.xtf.parse)."""
-    errors = [i for i in issues if i.qualified_class == "GeometryClass" and i.severity == "error"]
+    errors = [i for i in issues if i.qualified_class == "AllErrors24.MainTopic.GeometryClass" and i.severity == "error"]
     assert not errors, errors
 
 
 def test_area_topology_class_has_no_error(issues):
     """AREA (Kind=Area, wire-encoded as <geom:surface> like Kind=Surface)."""
-    errors = [i for i in issues if i.qualified_class == "AreaTopologyClass" and i.severity == "error"]
+    errors = [
+        i for i in issues
+        if i.qualified_class == "AllErrors24.MainTopic.AreaTopologyClass" and i.severity == "error"
+    ]
     assert not errors, errors
 
 

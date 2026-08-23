@@ -26,13 +26,17 @@ def test_header_sender_and_model_name():
 
 
 def test_basket_and_object_use_namespaced_bid_tid():
+    """qualified_topic/qualified_class are reconstructed as Model.Topic[.Class]
+    from the tag's own real XML namespace (DataTest1's own URI) plus the
+    bare local tag - XTF 2.4 tags carry only the bare local name on the
+    wire, unlike XTF 2.3's own already-fully-qualified bare tags."""
     transfer = parse_xtf(FIXTURE)
     (basket,) = transfer.baskets
     assert basket.bid == "bidB"
-    assert basket.qualified_topic == "TopicB"
+    assert basket.qualified_topic == "DataTest1.TopicB"
     (obj,) = basket.objects
     assert obj.tid == "mOid"
-    assert obj.qualified_class == "MultiCoord"
+    assert obj.qualified_class == "DataTest1.TopicB.MultiCoord"
 
 
 def test_multicoord_attribute_tag_is_lowercase_namespaced():
