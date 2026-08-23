@@ -65,28 +65,52 @@ def _text_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     return schema
 
 
+# eCH-0118 ("Regles de codification GML pour INTERLIS") SS6.15.5 singles
+# out exactly these 3 well-known format names for a specific target type
+# (xsd:date/time/dateTime) - every OTHER (custom/STRUCT-based) format
+# stays a plain string, same as before. Values are stored bare (e.g.
+# "XMLDate", confirmed empirically - the "INTERLIS." qualifier is not
+# part of FormattedType.Format's own text). JSON Schema 2020-12's
+# "format" keyword (SS7.3.1) has the exact same 3-way vocabulary.
+_KNOWN_FORMAT_TO_JSON_FORMAT = {"XMLDate": "date", "XMLTime": "time", "XMLDateTime": "date-time"}
+
+
 def _formatted_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     """FormattedType always describes a formatted TEXT value - `type: string`.
 
     `Format` names a predefined/custom format (e.g. `INTERLIS.XMLDate`) or
-    a STRUCT-based template - no regex `pattern` is derived from it, only
-    a conservative `string` type (see docs/jsonschema-conversion-strategy.md).
+    a STRUCT-based template - no regex `pattern` is derived from it (see
+    docs/jsonschema-conversion-strategy.md), but the 3 recognized
+    date/time format names get the matching JSON Schema `format` hint
+    (see docs/ech-0118-gml-mapping-analysis.md, finding 1) - additive,
+    `type: string` alone still covers every legal value regardless.
     """
-    return {"type": "string"}
+    schema: dict[str, Any] = {"type": "string"}
+    json_format = _KNOWN_FORMAT_TO_JSON_FORMAT.get(getattr(type_instance, "Format", None))
+    if json_format is not None:
+        schema["format"] = json_format
+    return schema
 
 
 def _blackbox_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     """BlackboxType (XML or BINARY payload) -> `type: string`.
 
-    Neither variant has a native JSON Schema equivalent for its content
-    shape - `Kind` ("Xml"/"Binary") is surfaced as an informational
+    `Kind` ("Xml"/"Binary") is surfaced as an informational
     `x-interlis-blackbox-kind` marker instead of being silently dropped
-    (RULE #5, same pattern as MultiValue's `x-interlis-ordered`).
+    (RULE #5, same pattern as MultiValue's `x-interlis-ordered`). The
+    BINARY variant additionally gets `contentEncoding: "base64"` (JSON
+    Schema 2020-12 SS8.3) - matching eCH-0118 SS6.15.6, which maps BINARY
+    specifically to `xsd:base64Binary` (see
+    docs/ech-0118-gml-mapping-analysis.md, finding 1). XML has no
+    equivalent native JSON Schema content-shape keyword, stays plain
+    `string`.
     """
     schema: dict[str, Any] = {"type": "string"}
     kind = getattr(type_instance, "Kind", None)
     if kind is not None:
         schema["x-interlis-blackbox-kind"] = kind
+    if kind == "Binary":
+        schema["contentEncoding"] = "base64"
     return schema
 
 

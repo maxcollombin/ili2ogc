@@ -127,10 +127,10 @@ def test_formattedtype_attribute_gets_string_type():
         """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
-    Datum = FORMAT INTERLIS.XMLDate "1900-01-01" .. "2999-12-31";
+    Kommentar = FORMAT MyCustomFormat "a" .. "z";
   TOPIC T =
     CLASS A =
-      Erstellt : Datum;
+      Notiz : Kommentar;
     END A;
   END T;
 END Foo.
@@ -138,7 +138,36 @@ END Foo.
     )
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
-    assert schema["properties"]["Erstellt"] == {"type": "string"}
+    assert schema["properties"]["Notiz"] == {"type": "string"}
+
+
+def test_formattedtype_known_format_gets_json_schema_format_hint():
+    """eCH-0118 SS6.15.5: the 3 well-known format names get a matching JSON Schema `format` hint.
+
+    See docs/ech-0118-gml-mapping-analysis.md.
+    """
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    ADate = FORMAT INTERLIS.XMLDate "1900-01-01" .. "2999-12-31";
+    ATime = FORMAT INTERLIS.XMLTime "00:00:00.000" .. "23:59:59.999";
+    ADateTime = FORMAT INTERLIS.XMLDateTime "1900-01-01T00:00:00.000" .. "2999-12-31T23:59:59.999";
+  TOPIC T =
+    CLASS A =
+      D : ADate;
+      Tm : ATime;
+      Dt : ADateTime;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["D"] == {"type": "string", "format": "date"}
+    assert schema["properties"]["Tm"] == {"type": "string", "format": "time"}
+    assert schema["properties"]["Dt"] == {"type": "string", "format": "date-time"}
 
 
 def test_blackboxtype_attribute_surfaces_kind_marker():
@@ -156,7 +185,9 @@ END Foo.
     )
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
-    assert schema["properties"]["Bild"] == {"type": "string", "x-interlis-blackbox-kind": "Binary"}
+    assert schema["properties"]["Bild"] == {
+        "type": "string", "x-interlis-blackbox-kind": "Binary", "contentEncoding": "base64",
+    }
     assert schema["properties"]["Meta"] == {"type": "string", "x-interlis-blackbox-kind": "Xml"}
 
 

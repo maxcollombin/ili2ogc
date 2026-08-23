@@ -39,24 +39,31 @@ concepts:
     note: >
       NumType subclass (own: Format, TEXT, mandatory - names a
       predefined/custom format e.g. `INTERLIS.XMLDate`, or a STRUCT-based
-      template) -> conservative `{"type": "string"}`. No `pattern`/
-      `format` keyword is derived from the format name (would need a
-      lookup table of predefined INTERLIS format names to regexes - not
-      attempted here, `Format`'s own value is not surfaced either since
-      plain `string` already covers every legal value without risking a
-      wrong/overly strict pattern).
+      template) -> `{"type": "string"}`, plus a JSON Schema `format` hint
+      ("date"/"time"/"date-time") for the 3 well-known format names
+      `XMLDate`/`XMLTime`/`XMLDateTime` (stored bare, without the
+      `INTERLIS.` qualifier - confirmed empirically), matching eCH-0118
+      SS6.15.5's own treatment of exactly these 3 names (see
+      docs/ech-0118-gml-mapping-analysis.md). No `pattern` is derived
+      from any OTHER format name (would need a lookup table of INTERLIS
+      format names to regexes - not attempted here; plain `string`
+      already covers every legal value without risking a wrong/overly
+      strict pattern).
 
   BlackboxType:
     qualified_name: IlisMeta16.ModelData.BlackboxType
     status: mapped
     note: >
-      XML/BINARY blackbox content -> `{"type": "string"}` (neither
-      variant has a native JSON Schema content-shape equivalent - XML as
-      an embedded document, BINARY typically base64 in a JSON transfer).
-      `Kind` ("Xml"/"Binary", own attribute, mandatory - confirmed via
+      XML/BINARY blackbox content -> `{"type": "string"}`. `Kind`
+      ("Xml"/"Binary", own attribute, mandatory - confirmed via
       ilismeta16-kind-values.yml) is not dropped: surfaced as an
       informational `x-interlis-blackbox-kind` marker, same RULE #5
-      pattern as MultiValue's `x-interlis-ordered`.
+      pattern as MultiValue's `x-interlis-ordered`. The BINARY variant
+      additionally gets `contentEncoding: "base64"` (JSON Schema
+      2020-12), matching eCH-0118 SS6.15.6's own `xsd:base64Binary`
+      mapping for BINARY specifically (see
+      docs/ech-0118-gml-mapping-analysis.md) - XML has no native JSON
+      Schema content-shape equivalent, stays plain `string` only.
 
   BooleanType:
     qualified_name: IlisMeta16.ModelData.BooleanType

@@ -66,9 +66,11 @@ FormattedType:
   json_schema:
     type:
       value: string
-      note: "conservative mapping - no pattern/format derived from Format's predefined-format name"
+      note: "conservative mapping - no pattern derived from Format's predefined-format name"
+    format:
+      source: {field: Format}
+      note: "only for the 3 well-known bare names XMLDate/XMLTime/XMLDateTime -> date/time/date-time (eCH-0118 SS6.15.5) - omitted for any other Format value"
   not_mapped:
-    Format: "predefined/custom format name (e.g. INTERLIS.XMLDate) - not translated to a JSON Schema pattern"
     Min: "example/template string bound (shares NumType's Min/Max slot, not a numeric bound here) - irrelevant to a plain string schema"
     Max: "see Min"
   # Struct (FORMAT BASED ON structureRef) is an association role (StructOfFormat),
@@ -83,6 +85,9 @@ BlackboxType:
     x-interlis-blackbox-kind:
       source: {field: Kind}
       note: "Xml/Binary - no native JSON Schema content-shape equivalent, surfaced as an informational marker (RULE #5)"
+    contentEncoding:
+      source: {field: Kind}
+      note: "only for Kind=Binary -> \"base64\" (eCH-0118 SS6.15.6's xsd:base64Binary) - omitted for Kind=Xml"
 
 # A COORD/MULTICOORD attribute -> a GeoJSON/JSON-FG-style position tuple.
 # Chosen to already match the eventual .xtf -> JSON-FG position encoding.
