@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 /xtf_corpus/
 /ili_corpus/
+/jsonfg_corpus/
