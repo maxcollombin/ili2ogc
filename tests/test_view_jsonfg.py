@@ -124,6 +124,39 @@ def test_join_evaluates_cartesian_product_of_two_bases():
     assert by_id["b2_c1"] == {"Attr1": "y", "Attr2": "z"}
 
 
+def test_join_feature_carries_join_members_pointing_back_to_editable_base_features():
+    builder = _build(_VIEW_MODEL)
+    view = _view(builder, "VJ")
+    transfer = _transfer(_b("b1", "x"), _c("c1", "z"))
+
+    [feature] = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert feature["x-interlis-join-members"] == [
+        {"featureType": "B", "id": "b1"},
+        {"featureType": "C", "id": "c1"},
+    ]
+
+
+def test_join_or_null_placeholder_omitted_from_join_members():
+    builder = _build(_VIEW_MODEL)
+    view = _view(builder, "VJN")
+    transfer = _transfer(_b("b1", "x"))  # no C objects, C is (OR NULL)
+
+    [feature] = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert feature["x-interlis-join-members"] == [{"featureType": "B", "id": "b1"}]
+
+
+def test_projection_feature_has_no_join_members_marker():
+    builder = _build(_VIEW_MODEL)
+    view = _view(builder, "VP")
+    transfer = _transfer(_b("b1", "x"))
+
+    [feature] = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert "x-interlis-join-members" not in feature
+
+
 def test_join_without_or_null_and_empty_base_yields_no_features():
     builder = _build(_VIEW_MODEL)
     view = _view(builder, "VJ")

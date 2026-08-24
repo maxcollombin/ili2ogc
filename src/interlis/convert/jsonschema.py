@@ -11,6 +11,8 @@ validate().
 """
 from typing import Any
 
+import jsonschema
+
 from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.schema import (
@@ -46,6 +48,36 @@ def _meta_marker(instance: MetaInstance | None) -> dict[str, str]:
         for m in (getattr(instance, "MetaAttribute", None) or [])
         if isinstance(m, MetaInstance) and getattr(m, "Name", None) is not None
     }
+
+
+_FULL_CRUD = ("GET", "POST", "PUT", "PATCH", "DELETE")
+_READ_ONLY = ("GET",)
+
+
+def _crud_operations(class_instance: MetaInstance) -> tuple[str, ...] | None:
+    """Return the HTTP operations a future OGC API Features publication of `class_instance` could support, or `None`.
+
+    `None` for `Kind in ("Structure", "Association")` - nested/embedded
+    content is never its own collection, CRUD semantics don't apply.
+    `Kind == "View"` with `FormationKind == "Join"`: GET-only - see
+    .claude/PROGRESS.md item 8 Lot D's decision, by direct analogy with
+    SQL view updatability (the report's own pipeline, chapter 6 step 2a,
+    materializes `JOIN OF` as a real multi-table database VIEW via
+    `ili2db` - PostgreSQL/PostGIS, GeoPackage and ESRI FileGDB all require
+    a SINGLE source relation, or `INSTEAD OF` triggers INTERLIS provides
+    no metadata to generate, for a view to be automatically updatable).
+    Every other case - a plain `Class`, or a `PROJECTION OF` View (1:1
+    with its single base, the direct equivalent of a single-table SQL
+    view) - gets full CRUD: OGC API Features - Part 4 doesn't require
+    every collection to be writable, a provider declares per-collection
+    which HTTP methods it supports (unsupported ones simply answer 405).
+    """
+    kind = getattr(class_instance, "Kind", None)
+    if kind not in ("Class", "View"):
+        return None
+    if kind == "View" and getattr(class_instance, "FormationKind", None) == "Join":
+        return _READ_ONLY
+    return _FULL_CRUD
 
 
 def _is_integer_range(min_raw: str | None, max_raw: str | None) -> bool:
@@ -565,6 +597,13 @@ def class_to_json_schema(
     mechanism is generic (any `MetaElement`, `Class` included) and this
     costs nothing extra to support - verified by a synthetic fixture
     rather than real-corpus proof for this specific branch.
+
+    `x-interlis-crud` (`_crud_operations`, backlog item 8 Lot D) declares
+    which HTTP operations a future OGC API Features publication of this
+    `$defs` entry could support - `["GET"]` for a `JOIN OF` View,
+    otherwise the full CRUD set. Omitted entirely for `Kind in
+    ("Structure", "Association")` (nested content, never its own
+    collection).
     """
     ref_keys = ref_keys or {}
     properties: dict[str, Any] = {}
@@ -584,7 +623,43 @@ def class_to_json_schema(
     class_meta = _meta_marker(class_instance)
     if class_meta:
         schema["x-interlis-meta"] = class_meta
+    crud = _crud_operations(class_instance)
+    if crud is not None:
+        schema["x-interlis-crud"] = list(crud)
     return schema
+
+
+def validate_feature_properties(properties: dict[str, Any], schema: dict[str, Any], key: str) -> list[str]:
+    """Validate a candidate PUT/PATCH `properties` payload against one `$defs` entry of a `model_to_json_schema` document.
+
+    Backlog item 8 Lot D ("CRUD PUT-PATCH-DELETE, validation via le même
+    JSON Schema") - the building block a future write-capable OGC API
+    Features layer (pygeoapi or otherwise, not implemented in this
+    project - see .claude/PROGRESS.md item 8) would call before accepting
+    a write. Uses the standard `jsonschema` package rather than
+    reimplementing JSON Schema semantics (type/format/pattern/anyOf/
+    required/`$ref` resolution...) by hand - this runtime's own output
+    already conforms to draft 2020-12, so there is a real validator to
+    reuse rather than a problem to re-solve.
+
+    `schema` is a FULL `model_to_json_schema` document - its `$defs` is
+    needed to resolve the `$ref`s a single `class_to_json_schema` entry
+    contains (e.g. a nested STRUCTURE attribute), which can't resolve on
+    their own without the sibling `$defs` they were generated alongside.
+    `key` is the `$defs` key to validate against (the same key
+    `model_to_json_schema`/`_assign_keys` assigned - typically the class/
+    View's own `Name`, see `class_to_json_schema`'s `title`).
+
+    Returns every violation's human-readable message (empty list = valid)
+    rather than raising on the first one - a caller building an HTTP 400
+    response benefits from the full list, not just one error at a time.
+    Does NOT check `x-interlis-crud`/whether this write is even allowed
+    for this collection (a JOIN OF View) - that's `_crud_operations`'s
+    job, a separate concern from payload SHAPE validation.
+    """
+    root = {"$schema": schema.get("$schema", JSON_SCHEMA_DRAFT), "$defs": schema.get("$defs", {}), "$ref": f"#/$defs/{key}"}
+    validator = jsonschema.Draft202012Validator(root)
+    return [error.message for error in validator.iter_errors(properties)]
 
 
 def model_to_json_schema(classes: list[MetaInstance], symbol_table: SymbolTable | None = None) -> dict[str, Any]:

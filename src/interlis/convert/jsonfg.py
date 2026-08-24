@@ -582,9 +582,37 @@ def evaluate_view(
 
     view_name = getattr(view, "Name", None) or "View"
     combos = _join_combinations(bases, objects_by_base)
+    features = []
+    for combo in combos:
+        feature = object_to_feature(_merge_join_combo(combo, view_name), view, standalone=standalone, symbol_table=symbol_table)
+        members = _join_members(bases, combo)
+        if members:
+            feature["x-interlis-join-members"] = members
+        features.append(feature)
+    return features
+
+
+def _join_members(bases: list[MetaInstance], combo: list[XtfObject | None]) -> list[dict[str, Any]]:
+    """Return `{"featureType": ..., "id": ...}` for every real (non-`None`) participant of one JOIN combination.
+
+    Backlog item 8 Lot D: a `JOIN OF` collection is GET-only
+    (`.claude/PROGRESS.md`'s CRUD decision - no natural single writable
+    target for a multi-base combination, by analogy with non-updatable
+    SQL views). This is what makes that limitation actionable rather than
+    a dead end: each base object this Lot's runtime ALREADY publishes as
+    its own, independently fully-writable collection (a plain `Class` -
+    `transfer_to_feature_collection` emits it via `resolve_class`
+    regardless of any `views=` given), so a client that needs to edit a
+    property coming from one specific base can resolve WHICH collection/
+    id to `PUT`/`PATCH` instead, straight off the JOIN Feature itself -
+    no need to reverse-engineer `_merge_join_combo`'s `tid` join
+    convention. `featureType` mirrors `object_to_feature`'s own
+    convention (`cls.Name`, falling back to the wire tag).
+    """
     return [
-        object_to_feature(_merge_join_combo(combo, view_name), view, standalone=standalone, symbol_table=symbol_table)
-        for combo in combos
+        {"featureType": getattr(base.BaseView, "Name", None) or obj.qualified_class, "id": obj.tid}
+        for base, obj in zip(bases, combo)
+        if obj is not None
     ]
 
 
