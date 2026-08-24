@@ -182,6 +182,31 @@ Class:
         since `Class` (unlike `DomainType`) has no own `Mandatory`
         attribute for resolve_attribute to read.
 
+View:
+  qualified_name: IlisMeta16.ModelData.View
+  json_schema:
+    type:
+      value: object
+    title:
+      source: {field: Name}
+    properties:
+      source: {function: "xtf.schema.attributes_of(view_instance)"}
+      note: >
+        Reuses the SAME code path as Class.properties above unchanged
+        (class_to_json_schema takes any MetaInstance with a
+        ClassAttribute list - View EXTENDS Class, ilismeta16-classes.yml
+        - no View-specific branch exists in
+        src/interlis/convert/jsonschema.py). ClassAttribute itself is
+        populated by InterlisModelBuilder._expand_view_all_of/
+        _apply_pending_view_all_of (ATTRIBUTE ALL OF <base>;) or the
+        already-generic attributeDef handling - see
+        mappings/ilismeta16-to-jsonschema-rules.yml, View, for the full
+        rationale and the FormationKind restriction applied at the CLI
+        level (cli.cmd_convert, _SUPPORTED_VIEW_FORMATION_KINDS).
+    required:
+      source: {function: "resolve_attribute(attr).mandatory"}
+      note: "Same mechanism as Class.required above, applied to View.ClassAttribute."
+
 # A Class-typed attribute (STRUCTURE nesting) does not inline the
 # target class's schema - it references the target's own top-level
 # $defs entry, built once per class regardless of how many attributes

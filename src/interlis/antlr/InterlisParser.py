@@ -1043,7 +1043,7 @@ class InterlisParser ( Parser ):
                      "'STRUCTURE'", "'SUBDIVISION'", "'SURFACE'", "'SYMBOLOGY'", 
                      "'TEXT'", "'THATAREA'", "'THIS'", "'THISAREA'", "'~'", 
                      "'TIMEOFDAY'", "'TO'", "'TOPIC'", "'TRANSFER'", "'TRANSIENT'", 
-                     "'TRANSLATION'", "'TYPE'", "'UNDEFINED'", "'UNION_OF'", 
+                     "'TRANSLATION'", "'TYPE'", "'UNDEFINED'", "'UNION OF'", 
                      "'UNIQUE'", "'UNIT'", "'UNQUALIFIED'", "'URI'", "'UUIDOID'", 
                      "'VALIGNMENT'", "'VERSION'", "'VERTEX'", "'VIEW'", 
                      "'WHEN'", "'WHERE'", "'WITH'", "'WITHOUT'", "'XML'", 

@@ -119,6 +119,9 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+_SUPPORTED_VIEW_FORMATION_KINDS = ("Projection", "Join")
+
+
 def cmd_convert(args: argparse.Namespace) -> int:
     """Convert an .ili model to JSON Schema.
 
@@ -126,6 +129,21 @@ def cmd_convert(args: argparse.Namespace) -> int:
     mappings/ilismeta16-to-jsonschema-rules.yml for scope - a mapped type
     outside the current lot's coverage gets an explicit
     `x-interlis-unsupported` marker rather than being silently dropped.
+
+    Every `Class` becomes its own `$defs` entry, as before. A `VIEW` is
+    ALSO a root, restricted to `FormationKind in {Projection, Join}`
+    (`_SUPPORTED_VIEW_FORMATION_KINDS`, backlog item 8's Lot B scope,
+    `.claude/PROGRESS.md` - matches the FGDM4GS report's own §4.4.2/4.4.3
+    prioritization; `Union`/`Aggregation`/`Inspection` Views are excluded
+    from this CLI's root selection rather than converted, a deliberate
+    scope decision, not a silent drop of supported data). `View` extends
+    `Class` in the metamodel (`ilismeta16-classes.yml`) and its
+    `ClassAttribute` list is populated the same way (backlog item 8's
+    Lot A2) - `class_to_json_schema`/`model_to_json_schema` need no View-
+    specific code at all, confirmed empirically: a View's flattened
+    (`JOIN OF`-joined, or `PROJECTION OF`-selected) attribute set already
+    produces a correct JSON Schema `$defs` entry through the exact same
+    path as a plain Class.
     """
     path = Path(args.file)
     if not path.exists():
@@ -150,7 +168,12 @@ def cmd_convert(args: argparse.Namespace) -> int:
         instance for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
     ]
-    schema = model_to_json_schema(classes, symbol_table=builder.symbol_table)
+    views = [
+        instance for instance in builder.symbol_table.all_registered()
+        if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
+        and getattr(instance, "FormationKind", None) in _SUPPORTED_VIEW_FORMATION_KINDS
+    ]
+    schema = model_to_json_schema(classes + views, symbol_table=builder.symbol_table)
     text = json.dumps(schema, indent=2, ensure_ascii=False)
     if args.output:
         Path(args.output).write_text(text + "\n", encoding="utf-8")
