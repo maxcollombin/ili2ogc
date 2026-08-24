@@ -467,6 +467,10 @@ viewAttributes:
         AttrOrParam instances or a dedicated metamodel flag
         - a pure syntax shortcut on the ModelBuilder side (at construction time, iterate the attributes
         of the resolved BaseView Class and create one ClassAttr per attribute, empty Derivates).
+        Implemented: `InterlisModelBuilder._expand_view_all_of` (only the FIRST "ALL OF Name;" per
+        viewAttributes() - the grammar itself never supports a second one in the same call, see that
+        method''s docstring for the real-corpus caveat found on multi-base JOIN OF views), own attributes
+        of the matched RenamedBaseView.BaseView only (inherited via EXTENDS not walked, no evidence yet).
 
         '
     bare_redefinition_list:
@@ -550,16 +554,18 @@ viewDef:
       note: View.own.Transient (INTERLIS.BOOLEAN) - see Abstract above, same pattern, independent TRANSIENT()
         accessor.
     FormationKind:
-      source:
-        field: formationDef
-        index: 0
-      note: 'confirmed IlisMeta16.ModelData.View.FormationKind (kind-values.yml: Projection/Join/Union/Aggregation/Inspection)
-        - ModelBuilder must dispatch on which of formationDef''s 5 sub-rules (projection/join/union/aggregation/inspection)
-        actually matched, since formationDef itself has target:null (pure dispatcher, see below).'
+      note: 'confirmed IlisMeta16.ModelData.View.FormationKind (kind-values.yml: Projection/Join/Union/Aggregation/Inspection).
+        No `source:` here deliberately: a plain `field: formationDef` binding would make the generic
+        engine call `visit(formationDef())` a SECOND time on top of the natural unclaimed-children sweep
+        that already builds and attaches every RenamedBaseView reachable from it (formationDef/projection/join/...
+        are dispatchers with no own instance, see below) - doubling every RenamedBaseView instance built,
+        and assigning FormationKind to whatever that visit happens to return (a RenamedBaseView or list
+        thereof) instead of an enum string. Set instead by
+        `InterlisModelBuilder._set_view_formation_kind` (rule_name == "viewDef" special case in
+        `_build_instance`, same family as classDef''s OID/unitDef''s alias registration), which reads the
+        raw ViewDefContext directly to determine which of formationDef''s 5 sub-rules matched, without
+        triggering a second visit.'
     FormationParameter:
-      source:
-        field: formationDef
-        index: null
       note: 'INTERLIS 2 Metamodel edition 2022-06-17, exact
         IDL text of CLASS View: "FormationParameter: LIST OF Expression; !! PathOrInspFactor only /**
         Aggr.Equal: UniqueEl * Inspection: Attributepath */" - and the descriptive text

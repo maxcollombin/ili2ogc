@@ -70,6 +70,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
         # file's own comments aren't captured yet, see build()'s docstring).
         self._pending_meta_attributes: list[tuple[int, str, str]] = []
         self._meta_attribute_index = 0
+        # "ATTRIBUTE ALL OF <Name>;" (see _expand_view_all_of) needs
+        # RenamedBaseView.BaseView already resolved to a real Class -
+        # still a ForwardRef at construction time whenever the base is
+        # itself forward-referenced (a later TOPIC, or an imported model
+        # resolved via ModelRepository), since forward_refs.resolve_all()
+        # only runs once at the END of build(). Recorded here during
+        # construction, actually expanded in build() AFTER resolve_all().
+        self._pending_view_all_of: list[tuple[MetaInstance, ParserRuleContext]] = []
         self.repository.bind_builder_factory(self._make_sub_builder)
 
     def _make_sub_builder(self) -> "InterlisModelBuilder":
@@ -97,6 +105,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
         self._meta_attribute_index = 0
         result = self.visit(tree)
         self.forward_refs.resolve_all(repository=self.repository)
+        self._apply_pending_view_all_of()
         return result
 
     @staticmethod
@@ -206,6 +215,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
             self._attach_class_oid(instance, ctx)
         elif rule_name == "unitDef":
             self._register_unit_alias(instance, ctx)
+        elif rule_name == "viewDef":
+            self._set_view_formation_kind(instance, ctx)
+            self._expand_view_all_of(instance, ctx)
 
         if entry.parent and self._parent_stack:
             self.attachment.attach(
@@ -1509,6 +1521,172 @@ class InterlisModelBuilder(InterlisParserVisitor):
         alias = names[1].getText()
         self.symbol_table.register(self._qualify_name(alias), instance)
 
+    _FORMATION_KIND_BY_SUBRULE = {
+        "projection": "Projection",
+        "join": "Join",
+        "union": "Union",
+        "aggregation": "Aggregation",
+        "inspection": "Inspection",
+    }
+
+    def _set_view_formation_kind(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Set View.FormationKind from which formationDef() alternative matched.
+
+        `formationDef()` is a pure dispatcher (no own metamodel instance,
+        spec/grammar/mapping/09_views_graphics.yml) - by the time this runs,
+        the natural unclaimed-children sweep in `_build_instance` has
+        already visited it once and, through it, built and attached every
+        `RenamedBaseView` reachable from `projection()`/`join()`/etc. (each
+        has its own `parent: {association: BaseViewDef, role:
+        RenamedBaseView}` binding, applied against `instance` since it's
+        still on top of `_parent_stack`). There is therefore nothing left
+        to VISIT here - reads the raw `ViewDefContext` directly instead
+        (`ctx.formationDef()`, then which of ITS OWN 5 sub-rule accessors
+        matched) to determine the enum value, exactly once, with no side
+        effects of its own. A view using `EXTENDS viewRef` instead of a
+        `formationDef` (grammatically mutually exclusive, see viewDef())
+        has no FormationKind of its own to set here - left unset,
+        inherited from the extended view via the separate
+        `extends_viewRef`/Inheritance binding.
+        """
+        formation = ca.call(ctx, "formationDef")
+        if formation is None:
+            return
+        for subrule, value in self._FORMATION_KIND_BY_SUBRULE.items():
+            if ca.has_accessor(formation, subrule) and ca.call(formation, subrule) is not None:
+                instance.FormationKind = value
+                return
+
+    def _expand_view_all_of(self, view: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Record a View's `ATTRIBUTE ALL OF <Name>;` for deferred expansion.
+
+        `viewAttributes()` (spec/grammar/mapping/09_views_graphics.yml,
+        `all_of_redefinition`, `status: not_applicable`) documents this as
+        "a pure syntax shortcut on the ModelBuilder side ... iterate the
+        attributes of the resolved BaseView Class and create one ClassAttr
+        per attribute, empty Derivates" - `viewAttributes()`'s own
+        `attribute_bindings` never produce a `ClassAttr` for this
+        alternative (`ALL_OF` has no accessor of its own to bind against;
+        it's a bare-token alternative), so without this, a View built this
+        way has NO usable attribute list of its own for a future
+        View->JSON Schema stage, even though it structurally builds fine.
+
+        Only records here (`view`, `ctx`) rather than expanding immediately:
+        the matched `RenamedBaseView.BaseView` can still be an unresolved
+        `ForwardRef` at this point (e.g. a base declared later in the file,
+        or in another TOPIC/model reached via `DEPENDS ON`/`IMPORTS`) -
+        `forward_refs.resolve_all()` only runs once, at the very end of
+        `build()`. The real expansion happens in
+        `_apply_pending_view_all_of`, called right after that.
+        """
+        va = ca.call(ctx, "viewAttributes")
+        if va is None or not ca.has_accessor(va, "ALL") or ca.call(va, "ALL") is None:
+            return
+        self._pending_view_all_of.append((view, ctx))
+
+    def _apply_pending_view_all_of(self) -> None:
+        """Expand every View recorded by `_expand_view_all_of`, once refs are resolved.
+
+        Scope of this lot (RULE #7 - real corpus evidence only): only the
+        FIRST "ALL OF Name;" in one viewAttributes() (the grammar itself
+        only supports one per call - see the ATTRIBUTE-alt1 loop in
+        viewAttributes()'s generated body, `(Name ASSIGN expression;)*`
+        AFTER "ALL OF Name;", never a second "ALL OF"), and only OWN
+        attributes of the matched base (`base.BaseView.ClassAttribute` -
+        inherited attributes via EXTENDS not walked here: no real corpus
+        evidence yet that a View's "ALL OF" base itself has an EXTENDS
+        chain, and duplicating `xtf.schema.attributes_of`'s inheritance
+        walk here would cross a layering boundary - `xtf/schema.py`
+        imports FROM `interlis.builder`, not the other way around). A base
+        that's still unresolved after `resolve_all()` (e.g.
+        `UnresolvedNamedReference`, a genuinely absent cross-file model) is
+        skipped, same "no crash on a known limit" stance as
+        `xtf.schema.attributes_of`.
+
+        `viewAttributes()`'s grammar (`vendor/interlis-antlr4/InterlisParser.g4`)
+        used to allow only ONE "ALL OF Name;" per call, picked via a single
+        top-level alternative among 4 mutually exclusive ones - a real,
+        legal pattern with MULTIPLE consecutive "ALL OF Name;" statements
+        (one per base of a multi-base `JOIN OF`/`UNION OF`, e.g.
+        `ili_corpus/ERKAS_Strassen_V2_0.ili`'s `VIEW vVA`/`vER`) then had
+        its 2nd (and further) "ALL OF" silently swallowed by
+        `constraintDef()` instead (confirmed by direct AST inspection - it
+        became its own bogus `ConstraintDefContext` with no usable
+        content). **Fixed at the grammar level** (2026-08-24, matching the
+        official EBNF, Reference Manual eCH-0031 V2.1.0 §3.15
+        "ViewAttributes = [ATTRIBUTE] {'ALL' 'OF' Base-Name ';' |
+        AttributeDef | Attribute-Name Properties<...> ':=' Expression
+        ';'}." - a REPEATED, 0..* choice of 3 alternatives, not a single
+        pick among 4): `viewAttributes()` now loops
+        (`(ALL OF Name SEMI | attributeDef | Name (Properties)? ASSIGN
+        expression SEMI)*`), so ANY number of "ALL OF" clauses (freely
+        interleaved with `attributeDef`/`Name := expression` redefinitions,
+        in any order, exactly per the EBNF) land in the SAME
+        `ViewAttributesContext` - confirmed empirically on the ERKAS
+        example above (`ALL()`/`Name()` accessors both become multi).
+        Walks `va.children` positionally (same technique as
+        `_register_unqualified_imports`) to pair each `ALL` terminal with
+        the `Name` terminal immediately following its `OF` - the ONLY
+        reliable way to recover "which Name belongs to which ALL OF",
+        since `Name` is ALSO used by the (unrelated) `Name := expression`
+        alternative in the same repeated group.
+        `attributeDef`-form attributes (bare `Name: Type;` inside
+        ATTRIBUTE) are unaffected either way - already handled generically
+        by the existing engine (verified separately, no change needed
+        here), independently of how many times it now repeats.
+        """
+        pending, self._pending_view_all_of = self._pending_view_all_of, []
+        for view, ctx in pending:
+            va = ca.call(ctx, "viewAttributes")
+            for all_of_name in self._all_of_base_names(va):
+                base = self._find_renamed_base_view(view, all_of_name)
+                if base is None or not isinstance(base.BaseView, MetaInstance):
+                    continue
+                for attr in getattr(base.BaseView, "ClassAttribute", None) or []:
+                    copy = self.registry.new_instance("IlisMeta16.ModelData.AttrOrParam")
+                    copy.Name = attr.Name
+                    self.attachment.attach(copy, "Type", attr.Type, association="AttrOrParamType", role="Type", rule="viewAttributes")
+                    self.attachment.attach(
+                        view, "ClassAttribute", copy, association="ClassAttr", role="ClassAttribute", rule="viewAttributes",
+                    )
+
+    @staticmethod
+    def _all_of_base_names(va: ParserRuleContext) -> list[str]:
+        """Extract every "ALL OF <Name>" base name from a ViewAttributesContext, in order.
+
+        Positional walk (same technique as `_register_unqualified_imports`):
+        an `ALL` terminal is always immediately followed by `OF` then the
+        base `Name` (`ALL OF Name SEMI`, see `_apply_pending_view_all_of`'s
+        docstring) - `Name` alone isn't enough to disambiguate, since the
+        SAME accessor is also used by the unrelated `Name ':=' expression`
+        alternative in the same repeated group.
+        """
+        if not ca.has_accessor(va, "ALL"):
+            return []
+        children = list(va.children or [])
+        names = []
+        for node in ca.call_list(va, "ALL"):
+            i = children.index(node)
+            if i + 2 < len(children):
+                names.append(children[i + 2].getText())
+        return names
+
+    @staticmethod
+    def _find_renamed_base_view(view: MetaInstance, name: str) -> MetaInstance | None:
+        """Find `view`'s RenamedBaseView referred to by "ALL OF <name>"/"<name> ASSIGN ...".
+
+        `name` is the base's rename alias if one was given (`Name TILDE
+        viewableRef`), or - the majority real-world case, e.g. `PROJECTION
+        OF Test.Base.B;` + `ALL OF B;` - the base Class's own short name
+        when no alias was used (`renamedViewableRef.Name` then stays
+        unset).
+        """
+        for base in getattr(view, "RenamedBaseView", None) or []:
+            candidate = base.Name or (base.BaseView.Name if base.BaseView else None)
+            if candidate == name:
+                return base
+        return None
+
     def _qualify_name(self, name: str) -> str:
         parts = [getattr(inst, "Name", None) for inst in self._parent_stack if getattr(inst, "Name", None)]
         parts.append(name)
@@ -1580,6 +1758,24 @@ class InterlisModelBuilder(InterlisParserVisitor):
         """
         for child_rule, value in sweep_results:
             if value is None:
+                continue
+            if child_rule == "formationDef":
+                # viewDef-only: a pure dispatcher relaying to projection()/
+                # join()/union()/aggregation()/inspection() (spec/grammar/
+                # mapping/09_views_graphics.yml, "No direct IlisMeta16
+                # instance expected"), none of which declare their OWN
+                # `parent:` either (they're Containers too) - so the
+                # `child_entry.parent` check below can't detect that
+                # whatever bubbles up (a RenamedBaseView or list thereof)
+                # was already self-attached several levels down by
+                # renamedViewableRef's OWN `parent:` (BaseViewDef). Without
+                # this, a single-base formationDef (PROJECTION OF) got its
+                # one RenamedBaseView re-attached a SECOND time here
+                # (find_association_connecting silently succeeds, since
+                # View<->RenamedBaseView is a real association) - a
+                # multi-base one (JOIN OF/UNION OF) never hit this because
+                # its bubbled-up value is a list, not a MetaInstance, so the
+                # dict/instance branches below never matched it anyway.
                 continue
             child_entry = self.spec.get(child_rule)
             if child_entry is not None and child_entry.parent:
