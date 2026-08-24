@@ -29,6 +29,25 @@ from interlis.xtf.schema import (
 JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
 
 
+def _meta_marker(instance: MetaInstance | None) -> dict[str, str]:
+    """Return `instance`'s eCH-0117 `!!@Name=Value` meta-attributes as a plain `Name -> Value` dict, or `{}`.
+
+    See docs/ech-0117-meta-attributes.md - a `MetaAttribute` is only ever
+    present when the caller built the model with `meta_attributes=...`
+    (`InterlisModelBuilder.build`); otherwise `instance.MetaAttribute` is
+    simply absent/empty, so this degrades to `{}` with no special-casing
+    needed. A duplicate `Name` on the SAME construct (not seen in the real
+    corpus so far) would have the later one win - consistent with this
+    codebase's existing stance on unproven collisions elsewhere (e.g.
+    `convert/jsonfg.py`'s JOIN attribute pooling).
+    """
+    return {
+        m.Name: m.Value
+        for m in (getattr(instance, "MetaAttribute", None) or [])
+        if isinstance(m, MetaInstance) and getattr(m, "Name", None) is not None
+    }
+
+
 def _is_integer_range(min_raw: str | None, max_raw: str | None) -> bool:
     """True if both bounds are present and neither has a decimal point.
 
@@ -415,14 +434,27 @@ def _attribute_schema(
     `_reference_type_schema` (`reference_target_class`/
     `reference_external_status` already handle a `Role`-typed `resolved`
     correctly, no separate code path needed).
+
+    eCH-0117 meta-attributes (`_meta_marker`) on the attribute's OWN
+    `AttrOrParam`/`Role` are surfaced as `x-interlis-meta` regardless of
+    which branch below produced the schema - real corpus evidence:
+    `!!@basketRef=...` lands on the FIRST attribute right after `CLASS
+    Datenbestand =` (this project's "first following construct"
+    attachment, not the CLASS itself - see docs/ech-0117-meta-attributes.md),
+    confirmed empirically on `ili_corpus/Zones_reservees_V1_1_o1.ili`.
     """
     if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
-        return _multi_value_schema(resolved.type_instance, ref_keys, symbol_table)
-    if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
-        return _class_ref_or_marker(resolved.type_instance, ref_keys, symbol_table)
-    if resolved.type_kind in ("Class", "ReferenceType") and resolved.type_instance is not None:
-        return _reference_type_schema(resolved)
-    return _element_schema(resolved.type_kind, resolved.type_instance, ref_keys, symbol_table)
+        schema = _multi_value_schema(resolved.type_instance, ref_keys, symbol_table)
+    elif resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
+        schema = _class_ref_or_marker(resolved.type_instance, ref_keys, symbol_table)
+    elif resolved.type_kind in ("Class", "ReferenceType") and resolved.type_instance is not None:
+        schema = _reference_type_schema(resolved)
+    else:
+        schema = _element_schema(resolved.type_kind, resolved.type_instance, ref_keys, symbol_table)
+    meta = _meta_marker(resolved.attr)
+    if meta:
+        schema["x-interlis-meta"] = meta
+    return schema
 
 
 def _nested_class(resolved: ResolvedAttribute) -> MetaInstance | None:
@@ -523,6 +555,16 @@ def class_to_json_schema(
     `_class_ref_or_marker`) is included when `symbol_table` is given.
     RESTRICTION-narrowed structure attributes, OID and formal constraints
     remain backlog regardless (see mappings/ilismeta16-to-jsonschema-rules.yml).
+
+    eCH-0117 meta-attributes (`_meta_marker`) attached directly to
+    `class_instance` itself (as opposed to one of its attributes, see
+    `_attribute_schema`) are surfaced as a top-level `x-interlis-meta` -
+    no real corpus evidence of a CLASS-level meta-attribute has been found
+    so far (MODEL/DOMAIN/CONSTRAINT/ATTRIBUTE are the confirmed real
+    attachment points, see docs/ech-0117-meta-attributes.md), but the
+    mechanism is generic (any `MetaElement`, `Class` included) and this
+    costs nothing extra to support - verified by a synthetic fixture
+    rather than real-corpus proof for this specific branch.
     """
     ref_keys = ref_keys or {}
     properties: dict[str, Any] = {}
@@ -539,6 +581,9 @@ def class_to_json_schema(
         schema["title"] = class_name
     if required:
         schema["required"] = sorted(required)
+    class_meta = _meta_marker(class_instance)
+    if class_meta:
+        schema["x-interlis-meta"] = class_meta
     return schema
 
 

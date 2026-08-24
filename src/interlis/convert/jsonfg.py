@@ -37,6 +37,7 @@ from interlis.xtf.parse import RawNode, XtfObject, XtfTransfer
 from interlis.xtf.schema import (
     ResolvedAttribute,
     attributes_of,
+    is_class_compatible,
     line_coord_type,
     resolve_attribute,
     resolve_class,
@@ -442,8 +443,154 @@ def object_to_feature(
     return feature
 
 
+# --- VIEW evaluation (backlog item 8, Lot C) --------------------------------
+#
+# PROJECTION OF/JOIN OF Views evaluated in memory against an already-parsed
+# XtfTransfer, producing JSON-FG Features shaped like the VIEW rather than
+# its raw base class(es) - the FGDM4GS report's central equivalence (a VIEW
+# = the FeatureType projection instruction, docs/... item 8/.claude/PROGRESS.md).
+# WHERE-filtered Views are explicitly OUT of scope here (see
+# `unsupported_view_reason`) rather than evaluated against the Expression
+# tree: investigation (2026-08-24) found 4 real bugs in Expression
+# construction (PathOrInspFactor.PathEls empty, CompoundExpr.Operation lost,
+# Constant.Value shape mismatch, DEFINED() losing its target) with zero real
+# corpus WHERE-on-VIEW evidence to justify fixing them blind - a VIEW with a
+# WHERE is skipped with a clear diagnostic (RULE #5: never a silently wrong
+# result) rather than silently dropped or wrongly evaluated.
+
+_UNSET = object()
+
+
+def unsupported_view_reason(view: MetaInstance) -> str | None:
+    """Return why `evaluate_view` can't evaluate `view`, or `None` if it can.
+
+    Reused by `cli.cmd_convert_jsonfg` to print a clear diagnostic for
+    every VIEW it skips instead of a silent omission.
+    """
+    kind = getattr(view, "FormationKind", None)
+    if kind not in ("Projection", "Join"):
+        return f"FormationKind {kind!r} not evaluated (only Projection/Join)"
+    if getattr(view, "Where", None) is not None:
+        return "WHERE clause present - Expression evaluation isn't supported yet (see .claude/HANDOFF.md)"
+    bases = [b for b in getattr(view, "RenamedBaseView", None) or [] if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
+    if not bases:
+        return "no resolvable base (RenamedBaseView.BaseView unresolved)"
+    return None
+
+
+def _join_combinations(bases: list[MetaInstance], objects_by_base: list[list[XtfObject]]) -> list[list[XtfObject | None]]:
+    """Cartesian product of `objects_by_base`, one list per base, with `RenamedBaseView.OrNull` outer-join handling.
+
+    Reference Manual eCH-0031 V2.1.0 SS3.16 (JOIN OF): "kartesisches Produkt
+    der Basis-Klassen" - a literal cartesian product, no join KEY/condition
+    of its own (a WHERE clause narrows the result on top, out of this
+    Lot's scope, see `unsupported_view_reason`). "(OR NULL)": "wenn zu
+    einer bestimmten Kombination der vorangegangenen Objekte kein Objekt
+    der gewuenschten weiteren Klasse gefunden wird" - since there is no
+    WHERE here to narrow a combination-by-combination match, a base
+    contributes "no object found" only when it has ZERO objects in the
+    whole transfer; `OrNull` then keeps every partial combination alive
+    with a `None` placeholder for that base (contributing no attributes)
+    instead of collapsing the whole JOIN to the empty set.
+    """
+    combos: list[list[XtfObject | None]] = [[]]
+    for base, objs in zip(bases, objects_by_base):
+        if objs:
+            combos = [combo + [obj] for combo in combos for obj in objs]
+        elif bool(getattr(base, "OrNull", False)):
+            combos = [combo + [None] for combo in combos]
+        else:
+            return []
+    return combos
+
+
+def _merge_join_combo(combo: list[XtfObject | None], view_name: str) -> XtfObject:
+    """Merge one JOIN OF combination into a single synthetic `XtfObject`, re-fed through `object_to_feature`.
+
+    `attributes` are pooled from every non-`None` participant (a real
+    key collision between 2 bases' own attribute names would let the
+    later participant win silently - no real corpus evidence of this, the
+    2 known real JOIN OF examples are attribute-disjoint). `tid` joins
+    every participant's own tid with `_` (`None` if none has one) - a
+    simple, stable synthetic id; JSON-FG's "id" is OPTIONAL (RFC 7946
+    SS3.2), so this is a convenience, not a spec requirement.
+    `qualified_class` is set to the VIEW's own short name - never read by
+    `object_to_feature` (it derives "featureType" from `cls.Name`, the
+    VIEW itself, passed separately), kept only for readability/debugging.
+    """
+    attributes: dict[str, list[RawNode]] = {}
+    tid_parts: list[str] = []
+    for obj in combo:
+        if obj is None:
+            continue
+        attributes.update(obj.attributes)
+        if obj.tid is not None:
+            tid_parts.append(obj.tid)
+    return XtfObject(tid="_".join(tid_parts) or None, qualified_class=view_name, attributes=attributes)
+
+
+def evaluate_view(
+    view: MetaInstance, transfer: XtfTransfer, *,
+    symbol_table: SymbolTable, repository: ModelRepository | None = None, standalone: bool = False,
+) -> list[dict[str, Any]]:
+    """Evaluate one PROJECTION OF/JOIN OF `view` against `transfer` into JSON-FG Features.
+
+    Raises `ValueError` if `unsupported_view_reason(view)` isn't `None` -
+    callers (e.g. `cmd_convert_jsonfg`) are expected to check that first
+    and skip with a diagnostic, never call this blind.
+
+    `PROJECTION OF` (single base): each matching base object is re-tagged
+    with `view` as its `cls` directly, no data transformation at all - the
+    View's `ClassAttribute` list (backlog item 8 Lot A2's `ALL OF`
+    expansion) already carries the SAME attribute names as the base
+    Class's own wire encoding, so `object_to_feature` naturally emits only
+    the View's declared properties, exactly like Lot B's `View -> JSON
+    Schema` needed no View-specific code either.
+
+    `JOIN OF` (N bases): the full cartesian product of each base's
+    matching objects (`_join_combinations`), each combination merged into
+    one synthetic `XtfObject` (`_merge_join_combo`) then fed through the
+    same `object_to_feature(obj, view, ...)` path.
+
+    Base matching (`is_class_compatible`, same mechanism already used by
+    `_extract_reference`'s embedded-role/reference resolution elsewhere in
+    this module): an XtfObject's resolved Class must BE, or be a SUBCLASS
+    of, a `RenamedBaseView.BaseView` - real corpus data can transfer a
+    concrete subclass where the VIEW's base names an abstract superclass.
+    """
+    reason = unsupported_view_reason(view)
+    if reason is not None:
+        raise ValueError(f"cannot evaluate view {getattr(view, 'Name', None)!r}: {reason}")
+
+    bases = [b for b in view.RenamedBaseView if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
+
+    resolved_by_qualified_class: dict[str, MetaInstance | None] = {}
+    resolved_objects: list[tuple[XtfObject, MetaInstance]] = []
+    for basket in transfer.baskets:
+        for obj in basket.objects:
+            cls = resolved_by_qualified_class.get(obj.qualified_class, _UNSET)
+            if cls is _UNSET:
+                cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
+                resolved_by_qualified_class[obj.qualified_class] = cls
+            if cls is not None:
+                resolved_objects.append((obj, cls))
+
+    objects_by_base = [[obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases]
+
+    if view.FormationKind == "Projection":
+        return [object_to_feature(obj, view, standalone=standalone, symbol_table=symbol_table) for obj in objects_by_base[0]]
+
+    view_name = getattr(view, "Name", None) or "View"
+    combos = _join_combinations(bases, objects_by_base)
+    return [
+        object_to_feature(_merge_join_combo(combo, view_name), view, standalone=standalone, symbol_table=symbol_table)
+        for combo in combos
+    ]
+
+
 def transfer_to_feature_collection(
     transfer: XtfTransfer, *, symbol_table: SymbolTable, repository: ModelRepository | None = None,
+    views: list[MetaInstance] | None = None,
 ) -> dict[str, Any]:
     """Convert every resolvable object of `transfer` into one JSON-FG FeatureCollection.
 
@@ -484,6 +631,17 @@ def transfer_to_feature_collection(
     left as a conservative fallback rather than inventing an unverified
     geometry-level placement with no official example to check it
     against (see docs/jsonfg-conversion-strategy.md).
+
+    `views` (backlog item 8 Lot C, optional): PROJECTION OF/JOIN OF Views
+    already filtered by the caller to ones `evaluate_view` can actually
+    handle (same `unsupported_view_reason` check `cmd_convert_jsonfg`
+    applies before calling this - this function assumes every given view
+    IS evaluable, raising via `evaluate_view` rather than silently
+    skipping one that isn't). Evaluated against the SAME `transfer` and
+    folded into the SAME feature list BEFORE the featureType/coordRefSys
+    uniformity hoisting below runs, so a transfer producing only
+    view-shaped Features (or a homogeneous mix of both) still benefits
+    from collection-level hoisting exactly like class-shaped Features do.
     """
     features: list[dict[str, Any]] = []
     for basket in transfer.baskets:
@@ -492,6 +650,9 @@ def transfer_to_feature_collection(
             if cls is None:
                 continue
             features.append(object_to_feature(obj, cls, standalone=False, symbol_table=symbol_table))
+
+    for view in views or []:
+        features.extend(evaluate_view(view, transfer, symbol_table=symbol_table, repository=repository, standalone=False))
 
     collection: dict[str, Any] = {
         "type": "FeatureCollection",

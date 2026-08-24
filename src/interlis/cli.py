@@ -17,7 +17,7 @@ from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
-from interlis.convert.jsonfg import transfer_to_feature_collection
+from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_file
@@ -314,6 +314,16 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     always stays `null`. Schema resolution: see
     `_resolve_schema_model_path` (same `--model`/`--repo` rule as
     `interlis validate`).
+
+    Backlog item 8 Lot C: `VIEW`s are ALSO evaluated into Features, same
+    root selection as `cmd_convert`'s JSON Schema path
+    (`_SUPPORTED_VIEW_FORMATION_KINDS` - `Union`/`Aggregation`/`Inspection`
+    excluded silently, a pre-existing deliberate scope decision, not
+    repeated here as a diagnostic). Among `Projection`/`Join` Views, one
+    with a `WHERE` clause is additionally excluded HERE, with a clear
+    stderr diagnostic (`unsupported_view_reason`) - Expression tree
+    evaluation isn't supported yet (see .claude/HANDOFF.md), so silently
+    dropping or wrongly evaluating it would misrepresent the data.
     """
     xtf_path = Path(args.xtf)
     if not xtf_path.exists():
@@ -341,7 +351,22 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         warnings.simplefilter("ignore")
         builder.build(tree)
 
-    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table, repository=repository)
+    candidate_views = [
+        instance for instance in builder.symbol_table.all_registered()
+        if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
+        and getattr(instance, "FormationKind", None) in _SUPPORTED_VIEW_FORMATION_KINDS
+    ]
+    views = []
+    for view in candidate_views:
+        reason = unsupported_view_reason(view)
+        if reason is not None:
+            print(f"skipping VIEW {getattr(view, 'Name', None)!r}: {reason}", file=sys.stderr)
+            continue
+        views.append(view)
+
+    collection = transfer_to_feature_collection(
+        transfer, symbol_table=builder.symbol_table, repository=repository, views=views,
+    )
     text = json.dumps(collection, indent=2, ensure_ascii=False)
     if args.output:
         Path(args.output).write_text(text + "\n", encoding="utf-8")

@@ -97,9 +97,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
         shows up as `instance.MetaAttribute` (a list) exactly like any
         other multi-valued association. Omitted (the default): no
         meta-attribute capture, zero behavior change from before this was
-        added. Only the ROOT tree passed here is covered - an imported
-        model's own comments are not (each is built by its own sub-builder,
-        via ModelRepository, without this argument).
+        added. Only `tree` itself is covered by THIS call - an imported
+        model gets the same treatment independently, via its own
+        sub-builder's `build()` call (`ModelRepository._get_table` passes
+        that model's own `meta_attribute_comments`/
+        `meta_attribute_comments_in_file`, not this call's `meta_attributes`).
         """
         self._pending_meta_attributes = sorted(meta_attributes or [], key=lambda triple: triple[0])
         self._meta_attribute_index = 0
@@ -1555,7 +1557,45 @@ class InterlisModelBuilder(InterlisParserVisitor):
         for subrule, value in self._FORMATION_KIND_BY_SUBRULE.items():
             if ca.has_accessor(formation, subrule) and ca.call(formation, subrule) is not None:
                 instance.FormationKind = value
+                if subrule == "join":
+                    self._set_join_or_null(instance, ca.call(formation, subrule))
                 return
+
+    def _set_join_or_null(self, view: MetaInstance, join_ctx: ParserRuleContext) -> None:
+        """Set `RenamedBaseView.OrNull` for every base of a `JOIN OF` carrying a trailing `(OR NULL)`.
+
+        `join()`'s own grammar (`RenamedViewableRef (',' RenamedViewableRef
+        ['(' 'OR' 'NULL' ')'])*`, eCH-0031 V2.1.0 SS3.15) attaches an
+        optional `(OR NULL)` to the IMMEDIATELY PRECEDING
+        `renamedViewableRef` positionally among `join_ctx`'s own children -
+        never to the 1st base (only "further" bases of a JOIN can be
+        outer-joined against the first, per the manual's own text).
+        `renamedViewableRef()` has no accessor of its own for this sibling
+        token (it lives on `join()`'s context, one level up), so - like
+        `_set_view_formation_kind` for `FormationKind` above - this reads
+        `join_ctx.children` directly rather than a binding on
+        `renamedViewableRef` itself (spec/grammar/mapping/09_views_graphics.yml,
+        `join.attribute_bindings._resolution`/`renamedViewableRef.attribute_bindings.OrNull`
+        both already documented this as fed by the caller, never
+        implemented until this fix). Positional pairing with
+        `view.RenamedBaseView` (i-th `renamedViewableRef` -> i-th base)
+        relies on the same depth-first, source-order build guarantee
+        already used by `_apply_pending_view_all_of`.
+
+        Previously never implemented (no real corpus `(OR NULL)`
+        occurrence existed to surface the gap) - `RenamedBaseView.OrNull`
+        stayed `None`/falsy for every JOIN, silently breaking backlog item
+        8 Lot C's outer-join evaluation (`convert/jsonfg.py`'s
+        `_join_combinations`) until a synthetic fixture caught it.
+        """
+        bases = [b for b in getattr(view, "RenamedBaseView", None) or [] if isinstance(b, MetaInstance)]
+        children = list(join_ctx.children or [])
+        for i, ref_ctx in enumerate(ca.call_list(join_ctx, "renamedViewableRef")):
+            if i >= len(bases):
+                break
+            idx = children.index(ref_ctx)
+            if idx + 1 < len(children) and children[idx + 1].getText() == "(":
+                bases[i].OrNull = True
 
     def _expand_view_all_of(self, view: MetaInstance, ctx: ParserRuleContext) -> None:
         """Record a View's `ATTRIBUTE ALL OF <Name>;` for deferred expansion.
