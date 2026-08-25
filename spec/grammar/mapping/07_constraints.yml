@@ -313,6 +313,19 @@ mandatoryConstraint:
   discriminant:
     attribute: Kind
     value: MandC
+  parent:
+    association: ClassConstraint
+    role: Constraint
+    note: 'Same association/role already used correctly by `constraintsDef` (the standalone
+      `CONSTRAINTS OF X = ... END;` topic-level form) - previously MISSING here entirely, the
+      real root cause of a constraint declared INLINE inside a CLASS/STRUCTURE body never
+      appearing on `Class.Constraint` (confirmed empirically: `cls.Constraint == []` even
+      right after building a class with a real `MANDATORY CONSTRAINT` in its body - the
+      instance was built, then silently discarded, never attached anywhere). `self._parent_stack[-1]`
+      at build time is the enclosing classDef/structureDef instance (classOrStructureDef''s
+      generic `children:` dispatch visits constraintDef -> this rule while that instance is
+      still on top of the stack, same mechanism already relied on by attributeDef''s own
+      `parent: {association: ClassAttr, role: ClassAttribute}`).'
   attribute_bindings:
     Name:
       source:
@@ -474,25 +487,6 @@ pathEl:
   kind: Instance
   target: IlisMeta16.ModelData.PathEl
   attribute_bindings:
-    Kind:
-      source:
-        field: THIS|THISAREA|THATAREA|PARENT|attributeRef|associationPath|Name+COLON|Name(no bracket)|Name+LSBR+Name+RSBR|Name+EQ+EQ+STRING
-        kind: alt_dispatch
-      mapping:
-        THIS: This
-        THISAREA: ThisArea
-        THATAREA: ThatArea
-        PARENT: Parent
-        Name (alt5, no bracket): ReferenceAttr
-        associationPath_alt: AssocPath
-        Name COLON: Role
-        Name LSBR Name RSBR (alt5, with bracket): ViewBase
-        attributeRef_alt: Attribute
-        Name EQ EQ STRING (alt9): MetaObject
-      note: 'alt1-4 (THIS/THISAREA/THATAREA/PARENT) are literal matches; alt5 without its optional bracket
-        -> ReferenceAttr, alt5 WITH the bracket -> ViewBase (see the rule-level note below for the split);
-        alt6 (''Name COLON'') -> Role; alt7 (associationPath()) -> AssocPath; alt8 (attributeRef()) ->
-        Attribute; alt9 (''Name EQ EQ STRING'') -> MetaObject.'
     Ref:
       source:
         field: Name
@@ -536,7 +530,21 @@ pathEl:
     ''Name EQ EQ STRING'' (Name==STRING) = MetaObject: matches Reference Manual section 2.10 "Dealing with
     meta objects" (p.55-56, e.g. SIGN/REFSYSTEM/AXIS meta objects) - meta objects are identified purely by
     NAME (a string) within a basket, with no dedicated reference syntax of their own, so "Name == STRING"
-    reads naturally as testing/selecting a meta-object-typed path element by its name literal.'
+    reads naturally as testing/selecting a meta-object-typed path element by its name literal.
+
+    Kind has no `attribute_bindings` entry (same convention as viewDef.FormationKind, deliberately
+    omitted rather than declared unusable) - resolved by `InterlisModelBuilder._set_path_el_kind`,
+    reading `PathElContext`''s real accessors directly instead of a generic binding: 6 of the 9
+    alternatives share the SAME leading `Name` token (alt5 bare/bracketed, alt6 ''Name COLON'', alt9
+    ''Name EQ EQ STRING''), so no composed field name like "Name+COLON"/"Name(no bracket)"/
+    "Name+EQ+EQ+STRING" (as this rule used to spec it) matches any real ANTLR accessor -
+    `ca.has_accessor` is always False for those, and no `mapping:` key matched the field-split names
+    either (mismatched text, e.g. "Name (alt5, no bracket)" vs the real split "Name(no bracket)").
+    Confirmed empirically: `PathEl.Kind` always resolved to `None` for every real pathEl before this
+    fix (a swallowed `warnings.warn` "no alternative present", silent under this project''s
+    `warnings.catch_warnings()` convention around every `build()` call). alt1-4/7/8 are each
+    individually resolvable via one real, unambiguous accessor; only the alt5/6/9 bare-Name group
+    needs COLON/EQ-count/LSBR disambiguation on top - see `_set_path_el_kind`.'
 plausibilityConstraint:
   grammar:
     rule: plausibilityConstraint
@@ -548,6 +556,10 @@ plausibilityConstraint:
     rule:
       LTEQ: LowPercC
       GTEQ: HighPercC
+  parent:
+    association: ClassConstraint
+    role: Constraint
+    note: see mandatoryConstraint's parent note - same previously-missing attachment, same fix.
   attribute_bindings:
     Name:
       source:
@@ -586,64 +598,52 @@ predicate:
         optional: true
       note: '`expression` is a direct accessor of `predicate` (factor | (NOT)? LPAR expression
         RPAR | DEFINED LPAR factor RPAR | LPAR BASKET RPAR factor) only on alternative 2.
-        Note (verified against `_build_conditional`, model_builder.py): THIS binding AND `_defined_factor` are BOTH
-        evaluated for EVERY `when_present` branch taken (NOT or DEFINED) - not only the
-        branch each one "belongs to" semantically - so `optional: true` is REQUIRED here
-        (the accessor is genuinely absent in the DEFINED branch), not just a safety margin.
-        Alt2''s parenthesized expression, wrapped as SubExpression when NOT is present.'
-    _defined_factor:
-      source:
-        field: factor
-        optional: true
-      note: '`factor` is also a direct accessor of alternatives 1 and 4 (unrelated to the
-        concern below). `optional: true` is required: unlike
-        `Format`/`Struct`/etc. (rules `Instance`/`Container`, a single pass over ctx), `predicate` is
-        `kind: Conditional` - `_build_conditional` applies the WHOLE of `attribute_bindings` (so
-        `_defined_factor` too) for EVERY `when_present` branch taken, not just the one where its
-        accessor genuinely applies. Without `optional: true`, the NOT branch (where `factor` is
-        legitimately absent) would raise a `BuildError` instead of returning None.
-        Alt3''s DEFINED LPAR factor RPAR - UnaryExpr.SubExpression is typed Expression,
-        not Factor directly (ilismeta16-datatypes.yml); ModelBuilder must wrap the factor in an Expression
-        envelope to satisfy the type, or this indicates SubExpression''s declared type is looser than
-        shown - not fully reconciled here.'
+        This binding is evaluated for EVERY `when_present` branch taken (NOT or DEFINED), not
+        only the one it "belongs to" semantically - `optional: true` is REQUIRED (the accessor is
+        genuinely absent in the DEFINED branch, where it degrades to a harmless no-op rather than a
+        BuildError - see `_set_defined_subexpression` for how DEFINED''s own SubExpression is set
+        instead). Alt2''s parenthesized expression, wrapped as SubExpression when NOT is present.'
   note: 'Conditionally produces IlisMeta16.ModelData.UnaryExpr (Operation=Not or Operation=Defined) when
     NOT/DEFINED tokens are present; otherwise pure pass-through to factor or a parenthesized expression.
     Grammar (predicate()), 4 alternatives: alt1 factor() -> pure pass-through; alt2 NOT? LPAR expression
     RPAR -> UnaryExpr(Not) if NOT present, else pass-through to expression; alt3 DEFINED LPAR factor RPAR
-    -> UnaryExpr(Defined); alt4 LPAR BASKET RPAR factor -> unresolved special case.'
+    -> UnaryExpr(Defined), SubExpression set by `InterlisModelBuilder._set_defined_subexpression`
+    (called explicitly by `_build_conditional` for predicate/DEFINED - alt3''s `factor` accessor has no
+    direct role/attribute name of its own to bind against via the generic attribute_bindings mechanism;
+    `UnaryExpr.SubExpression` is typed Expression while `factor()` builds a Factor - EXTENDS Expression,
+    ilismeta16-datatypes.yml - so a direct assignment is enough, no wrapping needed); alt4 LPAR BASKET
+    RPAR factor -> unresolved special case.'
 relation:
   grammar:
     rule: relation
   kind: Container
-  attribute_bindings:
-    RelationKind:
-      source:
-        field: EQ+EQ|NOT_EQ|LT+GT|LTEQ|GTEQ|LT|GT
-        kind: alt_token
-      mapping:
-        EQ EQ: Equal
-        NOT_EQ: NotEqual
-        LT GT: NotEqual
-        LTEQ: LessOrEqual
-        GTEQ: GreaterOrEqual
-        LT: Less
-        GT: Greater
-      note: 7 grammar alternatives map onto 6 confirmed enum children with NOT_EQ and 'LT GT' both plausibly
-        meaning not-equal (two spellings of the same relation, similar to '<>' vs '#'/'!=' conventions
-        in other languages) - this specific double-mapping is inferred from count/semantics, not from
-        a cited spec section; documented rather than silently assumed elsewhere. This rule itself constructs
-        no class instance - it only supplies the RelationKind value consumed by the enclosing term2's
-        CompoundExpr(Operation=Relation).
   note: 'No direct IlisMeta16 instance expected. Resolves the relational operator symbol
     (EQ/NOT_EQ/LT/GT/LTEQ/GTEQ) used by term2 to set CompoundExpr.Operation=Relation with the matching
     sub-value (Equal/NotEqual/Less/Greater/LessOrEqual/GreaterOrEqual). Grammar (relation()), 7
     alternatives mapping to the 6 children of CompoundExpr.Operation=Relation
-    (ilismeta16-kind-values.yml): Equal/NotEqual/LessOrEqual/GreaterOrEqual/Less/Greater.'
+    (ilismeta16-kind-values.yml): Equal/NotEqual/LessOrEqual/GreaterOrEqual/Less/Greater - NOT_EQ and
+    "LT GT" both mean not-equal (two spellings, like "<>" vs "#"/"!=" in other languages).
+
+    Resolved by `InterlisModelBuilder._relation_kind`, reading RelationContext''s real accessors
+    directly, NOT by a generic attribute_bindings entry: a composed field name like "EQ+EQ"/"LT+GT"
+    (needed since alt1/"==" and alt3/"<>" each consume TWO separate single-character tokens) does not
+    match any real ANTLR accessor - the generic `alt_token` mechanism''s field-splitting only understands
+    "|"-separated alternatives, never "+"-joined multi-token sequences within one alternative. Confirmed
+    empirically: the previous `attribute_bindings.RelationKind` entry (composed field
+    "EQ+EQ|NOT_EQ|LT+GT|LTEQ|GTEQ|LT|GT") always resolved to `None`, and `CompoundExpr.Operation` stayed
+    the literal group name "Relation" instead of Equal/NotEqual/etc. for every real relational
+    expression built by this project - only ever discovered once `_build_conditional`''s single-key bag
+    unwrap was fixed made the discarded result surface as a crash instead of a silent no-op (see
+    `_relay`''s "len(bag) == 1" handling).'
 setConstraint:
   grammar:
     rule: setConstraint
   kind: Instance
   target: IlisMeta16.ModelData.SetConstraint
+  parent:
+    association: ClassConstraint
+    role: Constraint
+    note: see mandatoryConstraint's parent note - same previously-missing attachment, same fix.
   attribute_bindings:
     Name:
       source:
@@ -676,7 +676,7 @@ term:
     rule: term
   kind: Conditional
   when_present:
-    EQ_GT:
+    EQ:
       target: IlisMeta16.ModelData.CompoundExpr
       discriminant:
         attribute: Operation
@@ -692,7 +692,14 @@ term:
   note: 'The optional EQ GT term0 produces a CompoundExpr with Operation=Implication (kind-values.yml),
     aligned with the same Conditional schema as term0/term1/term2/predicate.
     Grammar (term()): term0(0) (EQ GT
-    term0(1))?  -- i.e. ''term0 (=> term0)?'' EQ+GT together spell the ''=>'' (implication) operator.'
+    term0(1))?  -- i.e. ''term0 (=> term0)?'' EQ+GT together spell the ''=>'' (implication) operator.
+    `when_present` keys on "EQ" (not a composed "EQ_GT", which does not exist as a real accessor -
+    TermContext exposes EQ()/GT() separately, both single `getToken` accessors, real `None` when
+    absent): confirmed unambiguous for THIS rule specifically (term() has no other use of EQ/GT), so
+    checking EQ alone correctly detects the ''=>'' branch. Previously spec''d as the nonexistent
+    "EQ_GT", making `ca.has_accessor(ctx, "EQ_GT")` always False and this branch permanently dead -
+    every `A => B` expression silently fell through to the plain pass-through (term0(0) only, B
+    silently discarded) instead of building the intended Implication CompoundExpr.'
 term0:
   grammar:
     rule: term0
@@ -787,6 +794,10 @@ uniquenessConstraint:
     rule: uniquenessConstraint
   kind: Instance
   target: IlisMeta16.ModelData.UniqueConstraint
+  parent:
+    association: ClassConstraint
+    role: Constraint
+    note: see mandatoryConstraint's parent note - same previously-missing attachment, same fix.
   attribute_bindings:
     Name:
       source:

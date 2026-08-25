@@ -128,7 +128,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
     See docs/jsonschema-conversion-strategy.md and
     mappings/ilismeta16-to-jsonschema-rules.yml for scope - a mapped type
     outside the current lot's coverage gets an explicit
-    `x-interlis-unsupported` marker rather than being silently dropped.
+    `x-unsupported` marker rather than being silently dropped.
 
     Every `Class` becomes its own `$defs` entry, as before. A `VIEW` is
     ALSO a root, restricted to `FormationKind in {Projection, Join}`

@@ -1,0 +1,38 @@
+INTERLIS 2.3;
+MODEL BaseModel_SectoralPlans_LV95_V1_4_d
+AT "mailto:test@example.org"
+VERSION "2023-12-17" =
+    IMPORTS BaseModel_SectoralPlans_LV95_V1_4, BaseModel_SectoralPlans_Catalogues_V1_4;
+        TOPIC SPRI_d =
+        DEPENDS ON BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_FacilityStatus;
+        DEPENDS ON BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification;
+        DEPENDS ON BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_FacilityKind;
+            VIEW view_sri
+                JOIN OF 
+                    BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.Facility,
+                    BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_FacilityStatus.FacilityStatus,
+                    BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_FacilityKind.FacilityKind,
+                    BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.Object,
+                    BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.Document;
+                WHERE
+                    Facility->Object == Object
+                    AND
+                    Document->Object == Object;
+                    =
+                ATTRIBUTE
+                point_geometry := Facility -> Point;             !! point
+                polyline_geometry := Facility -> Line;           !! poyline 
+                polygone_geometry := Facility -> Surface;        !! polygone 
+                facname := Facility -> Name;
+                facstatus_tid := FacilityStatus -> StatusID;
+                facstatus_text := FacilityStatus -> Name;
+                fackind_tid := FacilityKind -> KindID;
+                fackind_text := FacilityKind -> Name;
+                description := Facility -> Description;        !! this attribute is ambiguous
+                objname := Object -> Name;
+                validfrom := Document -> ModInfo;              !! this attribute is ambiguous; only the attribute validfrom is needed; this definition is proably wrong
+                doc_title := Document -> Title;
+                doc_web := Document -> Web;
+            END view_sri;
+        END SPRI_d; 
+END BaseModel_SectoralPlans_LV95_V1_4_d.

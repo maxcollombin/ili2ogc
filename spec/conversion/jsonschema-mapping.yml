@@ -82,7 +82,7 @@ BlackboxType:
   json_schema:
     type:
       value: string
-    x-interlis-blackbox-kind:
+    x-blackbox-kind:
       source: {field: Kind}
       note: "Xml/Binary - no native JSON Schema content-shape equivalent, surfaced as an informational marker (RULE #5)"
     contentEncoding:
@@ -137,7 +137,7 @@ LineType:
         EXTENDS chain) is reused directly for vertex shape, deliberately
         via _position_schema rather than CoordType's own mapping above
         (a vertex is never itself Multi).
-    x-interlis-boundary-order:
+    x-boundary-order:
       value: outer-first
       note: >
         Surface/Area only - the first boundary ring is the outer
@@ -170,7 +170,7 @@ Class:
         xtf.schema.resolve_attribute() and dispatching on type_kind to
         the NumType/TextType/EnumType mapping above; a type_kind outside
         {NumType, TextType, EnumType} produces
-        `{"x-interlis-unsupported": type_kind}` instead of being
+        `{"x-unsupported": type_kind}` instead of being
         dropped (see docs/jsonschema-conversion-strategy.md).
     required:
       source: {function: "resolve_attribute(attr).mandatory"}
@@ -229,13 +229,13 @@ ReferenceType:
     type:
       value: string
       note: "the OID value, matching the XTF wire format's REF=... attribute"
-    x-interlis-reference-target:
+    x-reference-target:
       source: {function: "xtf.schema.reference_target_class(resolved).Name"}
       note: >
         Declared target class name, when resolvable (BaseClass
         association, same mechanism as Role - see rules.yml). Omitted if
         unresolved (e.g. cross-model reference without --repo).
-    x-interlis-reference-external:
+    x-reference-external:
       source: {field: External}
       note: >
         Own BOOLEAN, mandatory (the (EXTERNAL) clause) - via
@@ -259,10 +259,10 @@ Role:
     type:
       value: string
       note: "same REF/OID representation as ReferenceType above - reference_target_class(resolved) already returns resolved.type_instance directly for a Role"
-    x-interlis-reference-target:
+    x-reference-target:
       source: {function: "xtf.schema.reference_target_class(resolved).Name"}
       note: "identical binding to ReferenceType above - reused as-is, no Role-specific code needed"
-    x-interlis-reference-external:
+    x-reference-external:
       source: {field: EmbeddedTransfer}
       note: >
         Own BOOLEAN, mandatory (roleDef()'s own (EXTERNAL) clause, a
@@ -272,7 +272,7 @@ Role:
         attr being a Role. Marker omitted unless true, same as ReferenceType.
   not_mapped:
     Strongness: "aggregation/composition semantics (association strength) - no JSON Schema equivalent for a bare REF/OID value"
-    Ordered: "role-level ordering - not surfaced, unlike MultiValue.Ordered's x-interlis-ordered (an embedded role is never array-wrapped, see rules.yml note on cardinality)"
+    Ordered: "role-level ordering - not surfaced, unlike MultiValue.Ordered's x-ordered (an embedded role is never array-wrapped, see rules.yml note on cardinality)"
     Multiplicity: "confirmed (rules.yml) embedded_roles_of always selects the non-multi side - no array-wrapping needed for what this concept actually produces"
     Derivates: "derived-role expression - out of scope, same category as formal constraints"
 
@@ -298,8 +298,8 @@ Inheritance:
         class_to_json_schema/model_to_json_schema (same opt-in
         precondition as Role above); without it, or when no concrete
         subclass is found, produces the plain $ref instead (see
-        x-interlis-abstract below).
-    x-interlis-abstract:
+        x-abstract below).
+    x-abstract:
       source: {field: Abstract}
       note: >
         Marker on the plain-$ref fallback path (no symbol_table given, or
@@ -328,6 +328,6 @@ MultiValue:
     maxItems:
       source: {field: Multiplicity}
       note: "Multiplicity.Max, omitted when '*' (unbounded)"
-    x-interlis-ordered:
+    x-ordered:
       source: {field: Ordered}
       note: "True=LIST, False=BAG - no native JSON Schema equivalent, see rules.yml note"

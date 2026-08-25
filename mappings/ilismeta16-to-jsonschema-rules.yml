@@ -57,8 +57,8 @@ concepts:
       XML/BINARY blackbox content -> `{"type": "string"}`. `Kind`
       ("Xml"/"Binary", own attribute, mandatory - confirmed via
       ilismeta16-kind-values.yml) is not dropped: surfaced as an
-      informational `x-interlis-blackbox-kind` marker, same RULE #5
-      pattern as MultiValue's `x-interlis-ordered`. The BINARY variant
+      informational `x-blackbox-kind` marker, same RULE #5
+      pattern as MultiValue's `x-ordered`. The BINARY variant
       additionally gets `contentEncoding: "base64"` (JSON Schema
       2020-12), matching eCH-0118 SS6.15.6's own `xsd:base64Binary`
       mapping for BINARY specifically (see
@@ -88,7 +88,7 @@ concepts:
       open-ended `{"type": "array", "items": {"type": "number"}}` when
       `Axis` isn't resolved (e.g. an external domain not loaded via
       `--repo`) - meaningfully typed rather than
-      `x-interlis-unsupported`. `Multi` (own BOOLEAN,
+      `x-unsupported`. `Multi` (own BOOLEAN,
       `MULTICOORD`/possibly-disjoint points) wraps the position schema
       in one more array level - no marker needed, the extra nesting
       alone is a complete, lossless representation.
@@ -109,7 +109,7 @@ concepts:
       over the same shape, not a distinct geometry); the first ring is
       the outer boundary, the rest are holes - no native JSON Schema
       keyword expresses "first item is special", surfaced instead as an
-      informational `x-interlis-boundary-order: "outer-first"` marker
+      informational `x-boundary-order: "outer-first"` marker
       (RULE #5). Vertex coordinate shape comes from
       `xtf.schema.line_coord_type` (association `LineCoord`, walks the
       `EXTENDS` chain) fed into the SAME position-tuple logic as
@@ -165,7 +165,7 @@ concepts:
       JSON Schema equivalent (a JSON array is always ordered syntactically
       - BAG's "order doesn't matter" is a semantic note, and importantly
       NOT the same as `uniqueItems` since a BAG still allows duplicates) -
-      surfaced instead as an informational `x-interlis-ordered: bool`
+      surfaced instead as an informational `x-ordered: bool`
       marker, RULE #5 style, rather than silently lost.
 
   ReferenceType:
@@ -181,8 +181,8 @@ concepts:
       Class/STRUCTURE attribute, which DOES inline via `$ref`, see
       StructureNesting above). Declared target class name and the
       `(EXTERNAL)` flag have no native JSON Schema equivalent - surfaced
-      as informational `x-interlis-reference-target`/
-      `x-interlis-reference-external` markers (RULE #5), reusing
+      as informational `x-reference-target`/
+      `x-reference-external` markers (RULE #5), reusing
       `xtf.schema.reference_external_status` directly.
       A `BAG`/`LIST OF REFERENCE TO X` element (not seen in the 54-file
       real corpus, but grammatically legal) still gets a bare
@@ -201,7 +201,7 @@ concepts:
       preserves plain-`attributes_of` behavior; `cli.cmd_convert` always
       passes `builder.symbol_table`). Mapped the SAME way as a plain
       `REFERENCE TO` (ReferenceType above) - `{"type": "string"}` +
-      `x-interlis-reference-target`/`x-interlis-reference-external` -
+      `x-reference-target`/`x-reference-external` -
       NEVER `$ref`/inlined: `resolve_attribute` resolves a `Role` to
       `type_kind="Class"`, the SAME shape as genuine `Class(Kind=Structure)`
       nesting (StructureNesting above), but `Role`'s target is always
@@ -248,7 +248,7 @@ concepts:
       are found by scanning every registered Class, there being no
       reverse-of-`Super` link) - without it, or when no concrete subclass
       is found, falls back to the pre-existing plain `$ref`, now with an
-      informational `x-interlis-abstract` marker (RULE #5).
+      informational `x-abstract` marker (RULE #5).
 
       Explicitly still `status: backlog` within this same concept, NOT
       separately mapped (RULE #7 - no real corpus evidence to build
@@ -359,7 +359,7 @@ concepts:
 
       **User decision (2026-08-22, explicit backlog)**: presented with the
       choice between documenting this as backlog (no code) and adding a
-      cheap `x-interlis-constraints` marker (raw constraint text/Name per
+      cheap `x-constraints` marker (raw constraint text/Name per
       class, no semantic translation attempted), the user chose the
       documented-backlog option - consistent with this project's own XTF
       validator, which likewise never executes these expressions against
@@ -369,3 +369,16 @@ concepts:
       subclasses from `SimpleConstraint`) were not surveyed separately -
       out of scope for this same reason, revisit together if constraint
       support is ever taken up.
+
+      This JSON Schema mapping still stays backlog by design - the
+      resolution is `interlis.convert.constraint_eval` (a Python evaluator
+      that walks the already-built `Expression` AST directly against a
+      candidate Feature's `properties`, exposed alongside
+      `validate_feature_properties`), not a JSON Schema keyword. Covers
+      `Equal`/`NotEqual`/`Less`/`Greater`/`LessOrEqual`/`GreaterOrEqual`/
+      `And`/`Or`/`Not`/`Implication`/`DEFINED(...)` and plain attribute-path
+      resolution, including the exact `ERKAS_Strassen_V2_0.ili` example
+      above end to end. `THIS`/`PARENT`/aggregate paths/`FunctionCall`/
+      arithmetic operators, and the percentage-based plausibility form and
+      `UniqueConstraint`/`SetConstraint`/`ExistenceConstraint` (population/
+      basket-level, not evaluable against one Feature), remain unevaluated.

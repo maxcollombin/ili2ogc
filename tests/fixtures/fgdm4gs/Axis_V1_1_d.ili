@@ -1,0 +1,28 @@
+INTERLIS 2.3;
+MODEL Axis_LV95_V1_1_d (en)
+  AT "mailto:test@example.org"
+  VERSION "2023-12-06" =
+    IMPORTS Axis_LV95_V1_1;
+    TOPIC Axis_d EXTENDS Axis_LV95_V1_1.Axis =
+      VIEW view_Axis
+        JOIN OF Axis_LV95_V1_1.Axis.Axis, Axis_LV95_V1_1.Axis.AxisSegment, Axis_LV95_V1_1.Axis.Sector;
+        WHERE
+          Axis->rAxisSegment == AxisSegment
+          AND
+          AxisSegment->rLinearReference == Sector; 
+          =
+        ATTRIBUTE
+          wkb_geometry := AxisSegment -> Geometry;
+          Eigenumer := Axis -> Owner;
+          Segmentname := AxisSegment -> SegmentName;
+          Strassennummer := Axis -> AxisName;
+          Bezeichnung := Axis -> AxisNameLong;
+          Positionscode := Axis -> AxisPositionCode;
+          Type := Axis -> AxisType;
+          Bezugspunkt_Name := Sector -> SectorName;
+          Kilometerwert_km := Sector -> Km;
+          Sektorlange_m := Sector -> SectorLength;
+          Sequenz := Sector -> Sequence;
+      END view_Axis;
+    END Axis_d;
+END   Axis_LV95_V1_1_d.

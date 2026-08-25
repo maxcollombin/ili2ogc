@@ -186,9 +186,9 @@ END Foo.
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Bild"] == {
-        "type": "string", "x-interlis-blackbox-kind": "Binary", "contentEncoding": "base64",
+        "type": "string", "x-blackbox-kind": "Binary", "contentEncoding": "base64",
     }
-    assert schema["properties"]["Meta"] == {"type": "string", "x-interlis-blackbox-kind": "Xml"}
+    assert schema["properties"]["Meta"] == {"type": "string", "x-blackbox-kind": "Xml"}
 
 
 def test_reference_to_attribute_gets_string_type_and_target_marker():
@@ -208,7 +208,7 @@ END Foo.
     )
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
-    assert schema["properties"]["Ref"] == {"type": "string", "x-interlis-reference-target": "Item"}
+    assert schema["properties"]["Ref"] == {"type": "string", "x-reference-target": "Item"}
 
 
 def test_reference_to_external_attribute_surfaces_external_marker():
@@ -230,8 +230,8 @@ END Foo.
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Ref"] == {
         "type": "string",
-        "x-interlis-reference-target": "Item",
-        "x-interlis-reference-external": True,
+        "x-reference-target": "Item",
+        "x-reference-external": True,
     }
 
 
@@ -266,8 +266,8 @@ def test_embedded_role_gets_reference_schema_with_symbol_table():
     schema = class_to_json_schema(cls, symbol_table=builder.symbol_table)
     assert schema["properties"]["rLocation"] == {
         "type": "string",
-        "x-interlis-reference-target": "Location",
-        "x-interlis-reference-external": True,
+        "x-reference-target": "Location",
+        "x-reference-external": True,
     }
     assert schema["properties"]["Value"] == {"type": "string", "maxLength": 20}
     # rIndicator (the {0..*} side) is never embedded on ITS OWN target
@@ -288,8 +288,8 @@ def test_embedded_role_target_never_gets_a_defs_entry():
     schema = model_to_json_schema(classes, symbol_table=builder.symbol_table)
     assert schema["$defs"]["Indicator"]["properties"]["rLocation"] == {
         "type": "string",
-        "x-interlis-reference-target": "Location",
-        "x-interlis-reference-external": True,
+        "x-reference-target": "Location",
+        "x-reference-external": True,
     }
     assert "Location_Indicator" not in schema["$defs"]  # the ASSOCIATION class itself, never a root here
 
@@ -435,7 +435,7 @@ END Foo.
     schema = class_to_json_schema(cls)
     geom = schema["properties"]["Geometrie"]
     assert geom["type"] == "array"
-    assert geom["x-interlis-boundary-order"] == "outer-first"
+    assert geom["x-boundary-order"] == "outer-first"
     assert geom["items"]["type"] == "array"  # one ring = array of positions
     assert geom["items"]["items"]["type"] == "array"  # one position = [x, y]
 
@@ -457,7 +457,7 @@ END Foo.
     )
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
-    assert schema["properties"]["Geometrie"]["x-interlis-boundary-order"] == "outer-first"
+    assert schema["properties"]["Geometrie"]["x-boundary-order"] == "outer-first"
 
 
 def test_multisurface_wraps_ring_array_once_more():
@@ -479,7 +479,7 @@ END Foo.
     schema = class_to_json_schema(cls)
     geom = schema["properties"]["Geometrie"]
     assert geom["type"] == "array"
-    assert geom["items"]["x-interlis-boundary-order"] == "outer-first"
+    assert geom["items"]["x-boundary-order"] == "outer-first"
     assert geom["items"]["items"]["type"] == "array"  # ring
     assert geom["items"]["items"]["items"]["type"] == "array"  # position
 
@@ -487,7 +487,7 @@ END Foo.
 def test_coordtype_axis_unresolved_falls_back_to_number_array():
     """When Axis isn't resolved (e.g. an unresolved cross-model domain),
     a position still gets a meaningfully typed schema - an open-ended
-    array of numbers, not x-interlis-unsupported."""
+    array of numbers, not x-unsupported."""
     from interlis.convert.jsonschema import _position_schema
 
     assert _position_schema(None) == {"type": "array", "items": {"type": "number"}}
@@ -597,7 +597,7 @@ END Foo.
     )
     a = _resolved_class(builder, "A")
     schema = class_to_json_schema(a)
-    assert schema["properties"]["Position"] == {"x-interlis-unsupported": "Class"}
+    assert schema["properties"]["Position"] == {"x-unsupported": "Class"}
 
 
 def test_bag_of_structure_gets_array_of_ref_and_ordered_marker():
@@ -621,11 +621,11 @@ END Foo.
     doc = model_to_json_schema([a, sub])
     props = doc["$defs"]["A"]["properties"]
     assert props["Many"] == {
-        "type": "array", "items": {"$ref": "#/$defs/Sub"}, "minItems": 0, "x-interlis-ordered": False,
+        "type": "array", "items": {"$ref": "#/$defs/Sub"}, "minItems": 0, "x-ordered": False,
     }
     assert props["Ordered"] == {
         "type": "array", "items": {"$ref": "#/$defs/Sub"},
-        "minItems": 1, "maxItems": 5, "x-interlis-ordered": True,
+        "minItems": 1, "maxItems": 5, "x-ordered": True,
     }
 
 
@@ -646,7 +646,7 @@ END Foo.
     assert schema["properties"]["Tags"] == {
         "type": "array",
         "items": {"type": "string", "maxLength": 5},
-        "minItems": 1, "maxItems": 3, "x-interlis-ordered": True,
+        "minItems": 1, "maxItems": 3, "x-ordered": True,
     }
 
 
@@ -671,7 +671,7 @@ END Foo.
     assert set(doc["$defs"]) == {"A", "Node"}
     assert doc["$defs"]["A"]["properties"]["Root"] == {"$ref": "#/$defs/Node"}
     assert doc["$defs"]["Node"]["properties"]["Children"] == {
-        "type": "array", "items": {"$ref": "#/$defs/Node"}, "minItems": 0, "x-interlis-ordered": False,
+        "type": "array", "items": {"$ref": "#/$defs/Node"}, "minItems": 0, "x-ordered": False,
     }
 
 
@@ -726,14 +726,14 @@ END Foo.
 
 def test_abstract_structure_attribute_without_symbol_table_keeps_ref_with_abstract_marker():
     # No symbol_table -> no anyOf (subclasses can't be enumerated), but the
-    # plain $ref still gets an informational x-interlis-abstract marker
+    # plain $ref still gets an informational x-abstract marker
     # (RULE #5) rather than silently looking identical to a concrete ref.
     builder = _build(_ABSTRACT_STRUCTURE_MODEL)
     a = _resolved_class(builder, "A")
     surface = _resolved_class(builder, "Surface")
     doc = model_to_json_schema([a, surface])
     assert doc["$defs"]["A"]["properties"]["Shape"] == {
-        "$ref": "#/$defs/Surface", "x-interlis-abstract": True,
+        "$ref": "#/$defs/Surface", "x-abstract": True,
     }
 
 
@@ -764,5 +764,5 @@ def test_abstract_structure_with_no_concrete_subclass_falls_back_to_marked_ref()
     a = _resolved_class(builder, "A")
     doc = model_to_json_schema([a], symbol_table=builder.symbol_table)
     assert doc["$defs"]["A"]["properties"]["Orphan"] == {
-        "$ref": "#/$defs/OrphanAbstract", "x-interlis-abstract": True,
+        "$ref": "#/$defs/OrphanAbstract", "x-abstract": True,
     }

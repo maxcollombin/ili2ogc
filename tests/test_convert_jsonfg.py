@@ -206,7 +206,7 @@ def test_out_of_scope_attribute_gets_marker_not_dropped():
         attributes={"Ref": [_node("Ref", "obj-1")]},
     )
     feature = object_to_feature(obj, cls)
-    assert feature["properties"]["Ref"] == {"x-interlis-unsupported": "ReferenceType"}
+    assert feature["properties"]["Ref"] == {"x-unsupported": "ReferenceType"}
 
 
 def test_unknown_attribute_name_skipped():
@@ -296,7 +296,7 @@ def test_arc_segment_falls_back_to_unsupported_property():
     )
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
-    assert feature["properties"]["Geom"] == {"x-interlis-unsupported": "LineType"}
+    assert feature["properties"]["Geom"] == {"x-unsupported": "LineType"}
 
 
 def test_missing_crs_meta_falls_back_to_unsupported_property():
@@ -308,7 +308,7 @@ def test_missing_crs_meta_falls_back_to_unsupported_property():
     )
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
-    assert feature["properties"]["Geom"] == {"x-interlis-unsupported": "CoordType"}
+    assert feature["properties"]["Geom"] == {"x-unsupported": "CoordType"}
 
 
 def test_multi_geometry_class_gets_no_place():
@@ -321,7 +321,7 @@ def test_multi_geometry_class_gets_no_place():
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
     assert "coordRefSys" not in feature
-    assert feature["properties"]["Point"] == {"x-interlis-unsupported": "CoordType"}
+    assert feature["properties"]["Point"] == {"x-unsupported": "CoordType"}
 
 
 def test_without_meta_capture_crs_is_unresolved():
@@ -334,7 +334,7 @@ def test_without_meta_capture_crs_is_unresolved():
     )
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
-    assert feature["properties"]["Geom"] == {"x-interlis-unsupported": "CoordType"}
+    assert feature["properties"]["Geom"] == {"x-unsupported": "CoordType"}
 
 
 def test_standalone_false_omits_conforms_to():

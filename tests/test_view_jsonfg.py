@@ -131,7 +131,7 @@ def test_join_feature_carries_join_members_pointing_back_to_editable_base_featur
 
     [feature] = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
 
-    assert feature["x-interlis-join-members"] == [
+    assert feature["x-join-members"] == [
         {"featureType": "B", "id": "b1"},
         {"featureType": "C", "id": "c1"},
     ]
@@ -144,7 +144,7 @@ def test_join_or_null_placeholder_omitted_from_join_members():
 
     [feature] = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
 
-    assert feature["x-interlis-join-members"] == [{"featureType": "B", "id": "b1"}]
+    assert feature["x-join-members"] == [{"featureType": "B", "id": "b1"}]
 
 
 def test_projection_feature_has_no_join_members_marker():
@@ -154,7 +154,7 @@ def test_projection_feature_has_no_join_members_marker():
 
     [feature] = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
 
-    assert "x-interlis-join-members" not in feature
+    assert "x-join-members" not in feature
 
 
 def test_join_without_or_null_and_empty_base_yields_no_features():

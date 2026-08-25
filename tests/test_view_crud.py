@@ -1,4 +1,4 @@
-"""Backlog item 8, Lot D - CRUD support marker (`x-interlis-crud`) and payload validation.
+"""Backlog item 8, Lot D - CRUD support marker (`x-crud`) and payload validation.
 
 See .claude/PROGRESS.md item 8's Lot D "point PATCH" decision: a `JOIN OF`
 View is GET-only (no natural single writable target, by analogy with
@@ -73,27 +73,27 @@ def _resolve(builder, name: str) -> MetaInstance:
 def test_class_gets_full_crud():
     builder = _build(_MODEL)
     schema = class_to_json_schema(_resolve(builder, "Test.Base.B"))
-    assert schema["x-interlis-crud"] == ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    assert schema["x-crud"] == ["GET", "POST", "PUT", "PATCH", "DELETE"]
 
 
 def test_projection_view_gets_full_crud():
     builder = _build(_MODEL)
     view = _resolve(builder, "Test.Views.VP")
     schema = class_to_json_schema(view)
-    assert schema["x-interlis-crud"] == ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    assert schema["x-crud"] == ["GET", "POST", "PUT", "PATCH", "DELETE"]
 
 
 def test_join_view_is_get_only():
     builder = _build(_MODEL)
     view = _resolve(builder, "Test.Views.VJ")
     schema = class_to_json_schema(view)
-    assert schema["x-interlis-crud"] == ["GET"]
+    assert schema["x-crud"] == ["GET"]
 
 
 def test_structure_gets_no_crud_marker():
     builder = _build(_MODEL)
     schema = class_to_json_schema(_resolve(builder, "Test.Base.S"))
-    assert "x-interlis-crud" not in schema
+    assert "x-crud" not in schema
 
 
 def test_validate_feature_properties_accepts_a_valid_payload():

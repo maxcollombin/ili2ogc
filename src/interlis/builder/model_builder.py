@@ -220,6 +220,10 @@ class InterlisModelBuilder(InterlisParserVisitor):
         elif rule_name == "viewDef":
             self._set_view_formation_kind(instance, ctx)
             self._expand_view_all_of(instance, ctx)
+        elif rule_name == "constant":
+            self._normalize_enumeration_const_value(instance)
+        elif rule_name == "pathEl":
+            self._set_path_el_kind(instance, ctx)
 
         if entry.parent and self._parent_stack:
             self.attachment.attach(
@@ -831,12 +835,40 @@ class InterlisModelBuilder(InterlisParserVisitor):
             if not ca.has_accessor(ctx, token_or_rule):
                 continue
             node = ca.call(ctx, token_or_rule)
-            if node is None:
+            if node is None or (isinstance(node, list) and not node):
+                # A MULTI token accessor (e.g. term0's OR, term1's AND/MUL/
+                # DIV - each can repeat via the grammar's `*`, so ANTLR
+                # generates `getTokens`, never `getToken`) returns an EMPTY
+                # LIST, never `None`, when the operator is absent - `node is
+                # None` alone never caught this, so term0/term1 ALWAYS took
+                # this branch (even for a single term2/term1 with no
+                # operator at all), wrapping it in a spurious CompoundExpr
+                # with exactly 1 SubExpressions entry instead of the correct
+                # pure pass-through. Confirmed empirically (a plain `KBfrei
+                # == #false` constraint produced a phantom
+                # CompoundExpr(Operation='And', SubExpressions=[<1 item>])
+                # wrapping the real Relation CompoundExpr).
                 continue
             instance = self.registry.new_instance(branch.target)
             instance._source_ctx = ctx
             if branch.discriminant:
-                setattr(instance, branch.discriminant.attribute, branch.discriminant.model_extra.get("value"))
+                value = branch.discriminant.model_extra.get("value")
+                if rule_name == "term2" and token_or_rule == "relation":
+                    # CompoundExpr.Operation=Relation is a PARENT kind-value
+                    # with its own children (Equal/NotEqual/Less/Greater/
+                    # LessOrEqual/GreaterOrEqual, ilismeta16-kind-values.yml)
+                    # - the real sub-value relation() matched, never the
+                    # literal group name "Relation" itself. relation()'s OWN
+                    # attribute_bindings.RelationKind never actually worked
+                    # (composed field names like "EQ+EQ"/"LT+GT" don't match
+                    # any real ANTLR accessor - confirmed empirically,
+                    # always resolved to `None`), so this is resolved here
+                    # directly against RelationContext's real accessors
+                    # instead (`_relation_kind`, same "read the raw ctx
+                    # directly" pattern as `_set_view_formation_kind`/
+                    # `_set_join_or_null`).
+                    value = self._relation_kind(node) or value
+                setattr(instance, branch.discriminant.attribute, value)
 
             construction_ctx = self._construction_stack[-1] if self._construction_stack else {}
             consumed: set[int] = set()
@@ -854,6 +886,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     self._merge_bag_into_instance(instance, self.visit(node), rule_name)
                 if entry.attribute_bindings:
                     self._apply_bindings(instance, ctx, rule_name, entry.attribute_bindings, construction_ctx, consumed)
+                if rule_name == "predicate" and token_or_rule == "DEFINED":
+                    self._set_defined_subexpression(instance, ctx)
             finally:
                 self._parent_stack.pop()
                 self._pop_construction_context()
@@ -1009,8 +1043,31 @@ class InterlisModelBuilder(InterlisParserVisitor):
             return result
 
         if len(bag) == 1:
-            (only_value,) = bag.values()
-            return only_value
+            (only_key, only_value), = bag.items()
+            if only_key.startswith("_") or not entry.feeds_into:
+                # Unwrap to the bare value in the common case: either a
+                # single notes-only/relay key (e.g. attributePath's own
+                # `_dispatch`, pure pass-through to objectOrAttributePath -
+                # which IS this rule's real content once the internal-
+                # marker wrapper is stripped), OR a rule with no
+                # `feeds_into:` at all (e.g. textConst's `Value`, whose
+                # single key exists only for readability in the spec - the
+                # PARENT rule's own binding, e.g. constant.Value's
+                # `alt_rule` dispatch, consumes the bare resolved value
+                # directly via `_resolve_node`, never a {key: value} dict).
+                return only_value
+            # A single REAL (non-underscore) attribute_bindings key on a
+            # rule that DOES declare `feeds_into:` (e.g.
+            # objectOrAttributePath's `PathEls`, feeds_into: PathOrInspFactor)
+            # must stay a {key: value} bag, not be unwrapped to a bare
+            # value: a Conditional branch merges this rule's result via
+            # `_merge_bag_into_instance`, which requires a dict (`if not
+            # isinstance(bag, dict): return`) - unwrapping here silently
+            # discarded it, the real root cause of
+            # `PathOrInspFactor.PathEls` staying empty for every bare
+            # attribute-name factor (e.g. `KBfrei` in `KBfrei == #false`),
+            # confirmed empirically (no `attach(key='PathEls', ...)` call
+            # ever fired) before this fix.
         if bag:
             return bag
         return None
@@ -1596,6 +1653,123 @@ class InterlisModelBuilder(InterlisParserVisitor):
             idx = children.index(ref_ctx)
             if idx + 1 < len(children) and children[idx + 1].getText() == "(":
                 bases[i].OrNull = True
+
+    _RELATION_KIND_LT_GT = {(True, False): "Less", (False, True): "Greater", (True, True): "NotEqual"}
+
+    def _relation_kind(self, ctx: ParserRuleContext) -> str | None:
+        """Resolve `relation()`'s matched alternative to its `CompoundExpr.Operation` child value.
+
+        See spec/grammar/mapping/07_constraints.yml's `relation` note for
+        why this can't be a generic `attribute_bindings` entry (no real
+        ANTLR accessor for a composed multi-token alternative like
+        "EQ EQ"/"LT GT"). Reads `RelationContext`'s real accessors
+        directly instead, same "read the raw ctx" pattern as
+        `_set_view_formation_kind`/`_set_join_or_null`.
+
+        `EQ()` is a MULTI accessor (alt1, "==", consumes 2 EQ tokens) -
+        `>= 2` distinguishes it unambiguously from every other alternative
+        (EQ never appears anywhere else in this rule). `LT()`/`GT()` are
+        each used BOTH standalone (alt6/alt7, "<"/">") AND together
+        (alt3, "<>" - not-equal) - only checking whether BOTH are present
+        at once disambiguates "<>" from a lone "<" or ">".
+        """
+        if len(ca.call_list(ctx, "EQ")) >= 2:
+            return "Equal"
+        if ca.call(ctx, "NOT_EQ") is not None:
+            return "NotEqual"
+        if ca.call(ctx, "LTEQ") is not None:
+            return "LessOrEqual"
+        if ca.call(ctx, "GTEQ") is not None:
+            return "GreaterOrEqual"
+        has_lt = ca.call(ctx, "LT") is not None
+        has_gt = ca.call(ctx, "GT") is not None
+        return self._RELATION_KIND_LT_GT.get((has_lt, has_gt))
+
+    def _set_path_el_kind(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Resolve `pathEl()`'s matched alternative to its `PathEl.Kind` value.
+
+        See spec/grammar/mapping/07_constraints.yml's `pathEl` note for
+        why this can't be a generic `attribute_bindings` entry (6 of the
+        9 alternatives share the same leading `Name` token, so no
+        composed field name matches a real ANTLR accessor). Checks the
+        unambiguous single-token/single-subrule alternatives first
+        (THIS/THISAREA/THATAREA/PARENT/associationPath/attributeRef),
+        then disambiguates the 3 remaining bare-`Name` alternatives via
+        COLON (alt6, Role), a double `EQ` (alt9, "Name==STRING",
+        MetaObject) or `LSBR` (alt5 WITH its bracket, ViewBase) -
+        anything else is alt5 without a bracket (ReferenceAttr).
+        """
+        if ca.call(ctx, "THIS") is not None:
+            instance.Kind = "This"
+        elif ca.call(ctx, "THISAREA") is not None:
+            instance.Kind = "ThisArea"
+        elif ca.call(ctx, "THATAREA") is not None:
+            instance.Kind = "ThatArea"
+        elif ca.call(ctx, "PARENT") is not None:
+            instance.Kind = "Parent"
+        elif ca.call(ctx, "associationPath") is not None:
+            instance.Kind = "AssocPath"
+        elif ca.call(ctx, "attributeRef") is not None:
+            instance.Kind = "Attribute"
+        elif ca.call(ctx, "COLON") is not None:
+            instance.Kind = "Role"
+        elif len(ca.call_list(ctx, "EQ")) >= 2:
+            instance.Kind = "MetaObject"
+        elif ca.call(ctx, "LSBR") is not None:
+            instance.Kind = "ViewBase"
+        else:
+            instance.Kind = "ReferenceAttr"
+
+    def _normalize_enumeration_const_value(self, instance: MetaInstance) -> None:
+        """Join a `Constant(Type=Enumeration)`'s raw `enumerationConst` bag into a plain dotted-path string.
+
+        `constant()`'s generic `Value` binding (spec/grammar/mapping/06_types.yml)
+        dispatches via `alt_rule` to whichever sub-rule matched
+        (numericConst/textConst/.../enumerationConst) and assigns its
+        resolved value AS-IS - correct for every OTHER alternative
+        (already a plain string), but `enumerationConst` is a `Container`
+        with 2 REAL keys (`Value`: the Name segments, `Others`: a bool) -
+        never unwrapped to a bare value by `_relay` (2 keys, not 1).
+        Without this, `Constant.Value` for e.g. `#false` was the raw bag
+        `{"Value": ["false"], "Others": False}` instead of the plain
+        dotted-path string `"false"` the metamodel actually declares
+        (TEXT, ilismeta16-datatypes.yml) - same "Name(.Name)*(.OTHERS)?"/
+        bare "OTHERS" convention `xtf.schema.enum_values` already uses for
+        a real `EnumType`'s own node tree (eCH-0031 V2.1.0 SS4.3.11.3).
+        """
+        value = getattr(instance, "Value", None)
+        if not isinstance(value, dict):
+            return
+        segments = value.get("Value") or []
+        if isinstance(segments, str):
+            segments = [segments]
+        if value.get("Others"):
+            segments = [*segments, "OTHERS"]
+        instance.Value = ".".join(segments)
+
+    def _set_defined_subexpression(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Set `UnaryExpr(Operation=Defined).SubExpression` from `DEFINED LPAR factor RPAR`'s own factor.
+
+        See spec/grammar/mapping/07_constraints.yml's `predicate` note:
+        alt3's `factor` accessor has no direct role/attribute name to bind
+        against via the generic `attribute_bindings` mechanism (unlike
+        alt2's `expression`, which the SAME `SubExpression` binding
+        already handles for the NOT branch) - `UnaryExpr.SubExpression`
+        is typed `Expression`, and `factor()` builds a `Factor`
+        (`Factor EXTENDS Expression`, ilismeta16-datatypes.yml), so a
+        direct assignment is enough, no wrapping needed.
+
+        Called only when `predicate`'s DEFINED branch matched (`ctx.factor()`
+        unambiguously refers to alt3's factor in that case - `PredicateContext`
+        has a single `factor()` accessor, shared by alt1 and alt3, but alt1
+        never reaches here since it isn't a `when_present` branch).
+        """
+        factor_node = ca.call(ctx, "factor")
+        if factor_node is None:
+            return
+        value = self.visit(factor_node)
+        if value is not None:
+            instance.SubExpression = value
 
     def _expand_view_all_of(self, view: MetaInstance, ctx: ParserRuleContext) -> None:
         """Record a View's `ATTRIBUTE ALL OF <Name>;` for deferred expansion.

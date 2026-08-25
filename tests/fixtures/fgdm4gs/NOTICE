@@ -1,0 +1,51 @@
+# NOTICE
+
+Copied unmodified from `https://github.com/MediaComem/FGDM4GS`
+(WP2-WP3 work package, "Flat Geodata Models for Geoservices"), path
+`WP2-WP3/model/<ModelDir>/<file>`:
+
+- `Axis_V1_1_d.ili` (from `Axis_V1_1/`)
+- `IVS_V3_d.ili`, `IVS_V3.ili` (from `IVS_V2_1/`)
+- `Planungszonen_V2_d_A.ili`, `Planungszonen_V2_d_B.ili`, `Planungszonen_V2.ili`
+  (from `Planungszonen_V1_1/`)
+- `SectoralPlanForRoadInfrastructure_V1_4_d.ili` (from
+  `SectoralPlanForRoadInfrastructure_V1_4/`)
+
+These are the "_d" (data) derived models from the FGDM4GS project
+(HEIG-VD, `Rapport-FGDM4GS_v1-final.pdf`) - each `IMPORTS` a real Swiss
+federal MGDM and defines one `VIEW` (`PROJECTION OF`/`JOIN OF ... WHERE`)
+that flattens it for geoservice publication, per the report's own
+methodology (chapter 4). The companion "_gm" (graphic model) files in the
+same repo are deliberately NOT vendored here - they add `StandardSymbology`
+`GRAPHIC` definitions for cartographic representation, a separate concern
+(backlog item 6, `.claude/PROGRESS.md`), not needed to exercise the VIEW
+mapping itself.
+
+The repo has no declared license (`license: null` via the GitHub API,
+checked 2026-08-24). The report and this repo share an author
+(`test@example.org`) with this project's own user - vendored
+here as real, author-confirmed corpus material for testing VIEW
+construction, not redistributed for any other purpose.
+
+**Real corpus finding these fixtures exist to preserve** (2026-08-24):
+all 5 "_d" files exclusively use the `Name := expression` view attribute
+redefinition form (`viewAttributes`'s `bare_redefinition_list`/
+`modifier_reassignment` alternative) - NONE use `ALL OF`. This form was
+previously `status: unresolved` in `InterlisModelBuilder` with "no real
+corpus evidence" noted (backlog item 8 Lot A2) - these 5 files are that
+evidence. Confirmed empirically: `View.RenamedBaseView`/`FormationKind`/
+`Where` build correctly for all 5, but `View.ClassAttribute` stays EMPTY
+(`0` for every file) - a real, high-value gap, see `.claude/PROGRESS.md`.
+
+**To build these against their full IMPORTS closure**, a repo directory
+also containing the base MGDMs they import is needed: `Axis_LV95_V1_1`
+(`Axis_V1_1_d.ili`) and `BaseModel_SectoralPlans_LV95_V1_4`/
+`BaseModel_SectoralPlans_Catalogues_V1_4`
+(`SectoralPlanForRoadInfrastructure_V1_4_d.ili`) are both already present
+in the real `ili_corpus/` scratch corpus (gitignored, re-fetched per
+session - see `docs/model-resolution-strategy.md`) under their existing
+files; `IVS_V3`/`Planungszonen_V2` are vendored directly alongside their
+derived models here (the official `models.geo.admin.ch` catalog only has
+the OLDER `IVS_V2_1`/`Planungszonen_V1_1` as of 2026-08-24 - the newer
+versions these derived models target aren't published there yet, only in
+the FGDM4GS repo itself).

@@ -131,7 +131,7 @@ def _attribute_value(
     # "place") - no real corpus DATA shows this occurring, so it stays
     # unsupported rather than reusing the "place" geometry shape without
     # evidence (RULE #7).
-    return {"x-interlis-unsupported": kind or "unknown"}
+    return {"x-unsupported": kind or "unknown"}
 
 
 def _structure_value(
@@ -178,7 +178,7 @@ def _multi_value(resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, symbo
     """
     base_type = getattr(resolved.type_instance, "BaseType", None)
     if not isinstance(base_type, MetaInstance):
-        return {"x-interlis-unsupported": "MultiValue"}
+        return {"x-unsupported": "MultiValue"}
     base_kind = base_type._qualified_class.rsplit(".", 1)[-1]
     values: list[Any] = []
     for node in raw_nodes:
@@ -402,7 +402,7 @@ def object_to_feature(
     evidence, see docs/jsonfg-conversion-strategy.md) AND that attribute's
     actual wire value converts cleanly (see `_place_and_crs` - a `None`
     result, e.g. an ARC segment or an unresolved CRS, leaves the
-    attribute in "properties" instead, marked `x-interlis-unsupported`
+    attribute in "properties" instead, marked `x-unsupported`
     like any other out-of-scope attribute - never a silent loss). A class
     with zero or multiple geometry-typed attributes gets no "place"
     either (multi-geometry real cases exist - e.g. a point + an area on
@@ -587,7 +587,7 @@ def evaluate_view(
         feature = object_to_feature(_merge_join_combo(combo, view_name), view, standalone=standalone, symbol_table=symbol_table)
         members = _join_members(bases, combo)
         if members:
-            feature["x-interlis-join-members"] = members
+            feature["x-join-members"] = members
         features.append(feature)
     return features
 

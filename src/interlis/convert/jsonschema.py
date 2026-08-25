@@ -147,8 +147,8 @@ def _blackbox_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     """BlackboxType (XML or BINARY payload) -> `type: string`.
 
     `Kind` ("Xml"/"Binary") is surfaced as an informational
-    `x-interlis-blackbox-kind` marker instead of being silently dropped
-    (RULE #5, same pattern as MultiValue's `x-interlis-ordered`). The
+    `x-blackbox-kind` marker instead of being silently dropped
+    (RULE #5, same pattern as MultiValue's `x-ordered`). The
     BINARY variant additionally gets `contentEncoding: "base64"` (JSON
     Schema 2020-12 SS8.3) - matching eCH-0118 SS6.15.6, which maps BINARY
     specifically to `xsd:base64Binary` (see
@@ -159,7 +159,7 @@ def _blackbox_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     schema: dict[str, Any] = {"type": "string"}
     kind = getattr(type_instance, "Kind", None)
     if kind is not None:
-        schema["x-interlis-blackbox-kind"] = kind
+        schema["x-blackbox-kind"] = kind
     if kind == "Binary":
         schema["contentEncoding"] = "base64"
     return schema
@@ -232,7 +232,7 @@ def _line_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     level (boundary rings) than Polyline/DirectedPolyline; the first ring
     is the outer boundary, the rest are holes - no native JSON Schema
     keyword expresses "first item is special", surfaced as an
-    informational `x-interlis-boundary-order` marker (RULE #5). ARC
+    informational `x-boundary-order` marker (RULE #5). ARC
     segments (a circular arc between two vertices) have no representation
     here - a straight-line-only simplification shared by GeoJSON itself,
     not something this mapping alone introduces.
@@ -243,7 +243,7 @@ def _line_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
         schema: dict[str, Any] = {
             "type": "array",
             "items": position_array,
-            "x-interlis-boundary-order": "outer-first",
+            "x-boundary-order": "outer-first",
         }
     else:
         schema = position_array
@@ -280,7 +280,7 @@ def _reference_type_schema(resolved: ResolvedAttribute) -> dict[str, Any]:
     target class and the `(EXTERNAL)` flag have no native JSON Schema
     equivalent - surfaced as informational markers instead of being
     silently dropped (RULE #5, same pattern as MultiValue's
-    `x-interlis-ordered`). Reuses `reference_target_class`/
+    `x-ordered`). Reuses `reference_target_class`/
     `reference_external_status` directly (xtf.schema), no duplicated
     resolution logic.
     """
@@ -288,9 +288,9 @@ def _reference_type_schema(resolved: ResolvedAttribute) -> dict[str, Any]:
     target = reference_target_class(resolved)
     target_name = getattr(target, "Name", None) if target is not None else None
     if target_name:
-        schema["x-interlis-reference-target"] = target_name
+        schema["x-reference-target"] = target_name
     if reference_external_status(resolved):
-        schema["x-interlis-reference-external"] = True
+        schema["x-reference-external"] = True
     return schema
 
 
@@ -364,7 +364,7 @@ def _class_ref_or_marker(
     `additionalProperties: false`), which `oneOf`'s "exactly one match"
     requirement cannot tolerate. The plain-`$ref` fallback (no
     `symbol_table`, or no concrete subclass found in it) still carries an
-    informational `x-interlis-abstract` marker (RULE #5) whenever
+    informational `x-abstract` marker (RULE #5) whenever
     `class_instance` is ABSTRACT - never silently indistinguishable from a
     concrete structure's `$ref`.
     """
@@ -378,9 +378,9 @@ def _class_ref_or_marker(
         if ref is not None:
             schema: dict[str, Any] = {"$ref": f"#/$defs/{ref}"}
             if bool(getattr(class_instance, "Abstract", False)):
-                schema["x-interlis-abstract"] = True
+                schema["x-abstract"] = True
             return schema
-    return {"x-interlis-unsupported": "Class"}
+    return {"x-unsupported": "Class"}
 
 
 def _element_schema(
@@ -393,7 +393,7 @@ def _element_schema(
     - neither seen in the real corpus so far, and the latter never
     happens by construction of `embedded_roles_of`, but both
     grammatically/structurally possible) fall back to a bare
-    `{"type": "string"}` - the richer `x-interlis-reference-*` markers
+    `{"type": "string"}` - the richer `x-reference-*` markers
     need a full `ResolvedAttribute` (see `_reference_type_schema`, used
     instead for the direct-attribute case by `_attribute_schema`).
     """
@@ -406,7 +406,7 @@ def _element_schema(
         return {"type": "string"}
     if kind == "ReferenceType" and type_instance is not None:
         return {"type": "string"}
-    return {"x-interlis-unsupported": kind or "unknown"}
+    return {"x-unsupported": kind or "unknown"}
 
 
 def _multi_value_schema(
@@ -419,7 +419,7 @@ def _multi_value_schema(
     (True=LIST, False=BAG) has no native JSON Schema equivalent - it is
     NOT the same as `uniqueItems` (a BAG still allows duplicates, it just
     doesn't order them) - surfaced as an informational
-    `x-interlis-ordered` marker instead of being silently lost.
+    `x-ordered` marker instead of being silently lost.
     """
     base = getattr(multi_value, "BaseType", None)
     base = base if isinstance(base, MetaInstance) else None
@@ -443,7 +443,7 @@ def _multi_value_schema(
 
     ordered = getattr(multi_value, "Ordered", None)
     if isinstance(ordered, bool):
-        schema["x-interlis-ordered"] = ordered
+        schema["x-ordered"] = ordered
     return schema
 
 
@@ -455,7 +455,7 @@ def _attribute_schema(
     An attribute whose type falls outside the mapped set (NumType/
     TextType/EnumType/BooleanType/FormattedType/BlackboxType/CoordType/
     LineType/ReferenceType/Class/MultiValue) is never silently dropped -
-    it gets an explicit `x-interlis-unsupported` marker instead (RULE #5,
+    it gets an explicit `x-unsupported` marker instead (RULE #5,
     see docs/jsonschema-conversion-strategy.md).
 
     `type_kind == "Class"` covers two DIFFERENT things (see `_is_structure`):
@@ -468,7 +468,7 @@ def _attribute_schema(
     correctly, no separate code path needed).
 
     eCH-0117 meta-attributes (`_meta_marker`) on the attribute's OWN
-    `AttrOrParam`/`Role` are surfaced as `x-interlis-meta` regardless of
+    `AttrOrParam`/`Role` are surfaced as `x-meta` regardless of
     which branch below produced the schema - real corpus evidence:
     `!!@basketRef=...` lands on the FIRST attribute right after `CLASS
     Datenbestand =` (this project's "first following construct"
@@ -485,7 +485,7 @@ def _attribute_schema(
         schema = _element_schema(resolved.type_kind, resolved.type_instance, ref_keys, symbol_table)
     meta = _meta_marker(resolved.attr)
     if meta:
-        schema["x-interlis-meta"] = meta
+        schema["x-meta"] = meta
     return schema
 
 
@@ -573,7 +573,7 @@ def class_to_json_schema(
     `model_to_json_schema`, which discovers and assigns keys for every
     reachable class first). Called standalone with `ref_keys=None` (e.g.
     in a unit test), a nested Class-typed attribute falls back to the
-    `x-interlis-unsupported` marker rather than crashing.
+    `x-unsupported` marker rather than crashing.
 
     `symbol_table`, when given, additionally includes EMBEDDED
     ASSOCIATION ROLES (`xtf.schema.schema_members_of` instead of plain
@@ -590,7 +590,7 @@ def class_to_json_schema(
 
     eCH-0117 meta-attributes (`_meta_marker`) attached directly to
     `class_instance` itself (as opposed to one of its attributes, see
-    `_attribute_schema`) are surfaced as a top-level `x-interlis-meta` -
+    `_attribute_schema`) are surfaced as a top-level `x-meta` -
     no real corpus evidence of a CLASS-level meta-attribute has been found
     so far (MODEL/DOMAIN/CONSTRAINT/ATTRIBUTE are the confirmed real
     attachment points, see docs/ech-0117-meta-attributes.md), but the
@@ -598,7 +598,7 @@ def class_to_json_schema(
     costs nothing extra to support - verified by a synthetic fixture
     rather than real-corpus proof for this specific branch.
 
-    `x-interlis-crud` (`_crud_operations`, backlog item 8 Lot D) declares
+    `x-crud` (`_crud_operations`, backlog item 8 Lot D) declares
     which HTTP operations a future OGC API Features publication of this
     `$defs` entry could support - `["GET"]` for a `JOIN OF` View,
     otherwise the full CRUD set. Omitted entirely for `Kind in
@@ -622,10 +622,10 @@ def class_to_json_schema(
         schema["required"] = sorted(required)
     class_meta = _meta_marker(class_instance)
     if class_meta:
-        schema["x-interlis-meta"] = class_meta
+        schema["x-meta"] = class_meta
     crud = _crud_operations(class_instance)
     if crud is not None:
-        schema["x-interlis-crud"] = list(crud)
+        schema["x-crud"] = list(crud)
     return schema
 
 
@@ -653,7 +653,7 @@ def validate_feature_properties(properties: dict[str, Any], schema: dict[str, An
     Returns every violation's human-readable message (empty list = valid)
     rather than raising on the first one - a caller building an HTTP 400
     response benefits from the full list, not just one error at a time.
-    Does NOT check `x-interlis-crud`/whether this write is even allowed
+    Does NOT check `x-crud`/whether this write is even allowed
     for this collection (a JOIN OF View) - that's `_crud_operations`'s
     job, a separate concern from payload SHAPE validation.
     """

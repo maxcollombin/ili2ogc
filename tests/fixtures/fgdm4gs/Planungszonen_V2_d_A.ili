@@ -1,0 +1,25 @@
+INTERLIS 2.4;
+MODEL Planungszonen_V2_d_A
+AT "mailto:test@example.org"
+VERSION "2023-12-04" =
+    IMPORTS Planungszonen_V2;
+    TOPIC PZ_d EXTENDS Planungszonen_V2.Geobasisdaten =
+      VIEW view_pz
+        JOIN OF Planungszonen_V2.Geobasisdaten.Planungszone, Planungszonen_V2.Geobasisdaten.Typ_Planungszone; 
+        WHERE 
+           Planungszone->TypPZ == Typ_Planungszone;
+           =
+        ATTRIBUTE
+         wkb_geometry := Planungszone -> Geometrie;
+         publiziert_ab := Planungszone -> publiziertAb;
+         gueltig_bis := Planungszone -> publiziertBis;
+         rechtsstatus := Planungszone -> Rechtsstatus;
+         bemerkungen := Planungszone -> Bemerkungen;
+         code_typ := Typ_Planungszone -> Code;
+         bezeichnung_typ := Typ_Planungszone -> Bezeichnung;
+         abkuerzung_typ := Typ_Planungszone -> Abkuerzung;
+         festlegung_stufe_typ := Typ_Planungszone -> Festlegung_Stufe;
+         bemerkung_typ := Typ_Planungszone -> Bemerkungen;
+      END view_pz;
+    END PZ_d;
+END Planungszonen_V2_d_A.

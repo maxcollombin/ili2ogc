@@ -1,4 +1,4 @@
-"""eCH-0117 meta-attributes surfaced as `x-interlis-meta` in JSON Schema output.
+"""eCH-0117 meta-attributes surfaced as `x-meta` in JSON Schema output.
 
 See docs/ech-0117-meta-attributes.md ("`.ili -> JSON Schema`" section) -
 attribute-level surfacing has real corpus evidence (the `CLASS
@@ -46,9 +46,9 @@ END Foo.
     cls = builder.symbol_table.resolve("Foo.T.Datenbestand")
     schema = class_to_json_schema(cls)
 
-    assert schema["properties"]["BasketID"]["x-interlis-meta"] == {"basketRef": "Foo_V1.Geobasisdaten"}
-    assert "x-interlis-meta" not in schema["properties"]["Version"]
-    assert "x-interlis-meta" not in schema
+    assert schema["properties"]["BasketID"]["x-meta"] == {"basketRef": "Foo_V1.Geobasisdaten"}
+    assert "x-meta" not in schema["properties"]["Version"]
+    assert "x-meta" not in schema
 
 
 def test_class_level_meta_attribute_surfaced_on_the_defs_entry():
@@ -67,7 +67,7 @@ END Foo.
     cls = builder.symbol_table.resolve("Foo.T.A")
     schema = class_to_json_schema(cls)
 
-    assert schema["x-interlis-meta"] == {"IDGeoIV": "219.1"}
+    assert schema["x-meta"] == {"IDGeoIV": "219.1"}
 
 
 def test_no_meta_attributes_leaves_schema_unmarked():
@@ -85,5 +85,5 @@ END Foo.
     cls = builder.symbol_table.resolve("Foo.T.A")
     schema = class_to_json_schema(cls)
 
-    assert "x-interlis-meta" not in schema
-    assert "x-interlis-meta" not in schema["properties"]["Attr1"]
+    assert "x-meta" not in schema
+    assert "x-meta" not in schema["properties"]["Attr1"]
