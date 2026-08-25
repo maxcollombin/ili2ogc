@@ -78,6 +78,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
         # only runs once at the END of build(). Recorded here during
         # construction, actually expanded in build() AFTER resolve_all().
         self._pending_view_all_of: list[tuple[MetaInstance, ParserRuleContext]] = []
+        # "Name := expression" view attributes (see
+        # _build_view_bare_attributes) build their AttrOrParam/Derivates
+        # eagerly (no forward-ref involved), but resolving their Type needs
+        # RenamedBaseView.BaseView already resolved - same ForwardRef
+        # timing issue as _pending_view_all_of above, same deferred fix.
+        self._pending_view_bare_attrs: list[tuple[MetaInstance, MetaInstance, MetaInstance]] = []
         self.repository.bind_builder_factory(self._make_sub_builder)
 
     def _make_sub_builder(self) -> "InterlisModelBuilder":
@@ -108,6 +114,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
         result = self.visit(tree)
         self.forward_refs.resolve_all(repository=self.repository)
         self._apply_pending_view_all_of()
+        self._apply_pending_view_bare_attr_types()
         return result
 
     @staticmethod
@@ -220,6 +227,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
         elif rule_name == "viewDef":
             self._set_view_formation_kind(instance, ctx)
             self._expand_view_all_of(instance, ctx)
+            self._build_view_bare_attributes(instance, ctx)
         elif rule_name == "constant":
             self._normalize_enumeration_const_value(instance)
         elif rule_name == "pathEl":
@@ -1900,6 +1908,196 @@ class InterlisModelBuilder(InterlisParserVisitor):
             if candidate == name:
                 return base
         return None
+
+    _VIEW_ATTRIBUTE_MODIFIER_TOKENS = (
+        InterlisParser.ABSTRACT, InterlisParser.EXTENDED, InterlisParser.FINAL, InterlisParser.TRANSIENT,
+    )
+
+    @staticmethod
+    def _bare_view_attribute_assignments(va: ParserRuleContext) -> list[tuple[str, set[int], ParserRuleContext]]:
+        """Extract every "Name (Properties<...>)? ASSIGN expression SEMI" occurrence from a ViewAttributesContext.
+
+        `viewAttributes()`'s 3rd alternative (spec/grammar/mapping/09_views_graphics.yml,
+        `bare_redefinition_list`/`modifier_reassignment`) - real corpus proof:
+        `tests/fixtures/fgdm4gs/` (5 real VIEW models, none use `ALL OF`).
+        Same positional-walk technique as `_all_of_base_names` (`va.children`
+        in source order): a top-level `Name` terminal belongs to THIS
+        alternative unless it's the base name of an "ALL OF Name" triple
+        (excluded via the same index arithmetic as `_all_of_base_names`) -
+        `attributeDef`'s own `Name` is nested inside its own
+        `AttributeDefContext` subtree, never a direct child of `va`, so no
+        3-way ambiguity exists at this flat level. Scans forward from each
+        such `Name` to its `ASSIGN`, collecting any modifier token
+        (`ABSTRACT`/`EXTENDED`/`FINAL`/`TRANSIENT`) met along the way
+        (inside the optional `LPAR ... RPAR`); a `SEMI` met before `ASSIGN`
+        means this `Name` wasn't actually alt3 (defensive - never observed
+        in real corpus, the grammar itself guarantees this won't happen).
+        """
+        children = list(va.children or [])
+        all_of_name_ids = set()
+        for node in ca.call_list(va, "ALL"):
+            i = children.index(node)
+            if i + 2 < len(children):
+                all_of_name_ids.add(id(children[i + 2]))
+
+        results: list[tuple[str, set[int], ParserRuleContext]] = []
+        i, n = 0, len(children)
+        while i < n:
+            node = children[i]
+            if isinstance(node, TerminalNode) and node.symbol.type == InterlisParser.Name and id(node) not in all_of_name_ids:
+                modifier_tokens: set[int] = set()
+                j = i + 1
+                while j < n:
+                    child = children[j]
+                    if isinstance(child, TerminalNode) and child.symbol.type == InterlisParser.ASSIGN:
+                        break
+                    if isinstance(child, TerminalNode) and child.symbol.type == InterlisParser.SEMI:
+                        j = -1
+                        break
+                    if isinstance(child, TerminalNode) and child.symbol.type in InterlisModelBuilder._VIEW_ATTRIBUTE_MODIFIER_TOKENS:
+                        modifier_tokens.add(child.symbol.type)
+                    j += 1
+                if j != -1 and j < n and j + 1 < n and isinstance(children[j + 1], ParserRuleContext):
+                    results.append((node.getText(), modifier_tokens, children[j + 1]))
+                    i = j + 2
+                    continue
+            i += 1
+        return results
+
+    def _build_view_bare_attributes(self, view: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Build one `AttrOrParam` per `viewAttributes()` "Name := expression" occurrence.
+
+        Reference Manual 2006-04-13 SS2.15: "it is sufficient to indicate
+        the attribute name and the assignation to the basic attribute. Such
+        definitions are always final" - `Final=True` unconditionally,
+        regardless of the optional modifier bracket. Of the 4 possible
+        modifier tokens (`ABSTRACT`/`EXTENDED`/`FINAL`/`TRANSIENT`), only
+        `TRANSIENT` maps onto a confirmed `AttrOrParam` own attribute
+        (`Transient`, ilismeta16-classes.yml); `ABSTRACT` has no evidence
+        its refman `Class.Abstract`-like semantics were meant to apply to a
+        single computed view attribute, and `EXTENDED` has no matching
+        metamodel attribute at all anywhere in `ilismeta16-*.yml` - neither
+        is guessed at (RULE #5), and no real corpus example uses this
+        optional bracket at all (all 5 `tests/fixtures/fgdm4gs/` models use
+        the bare form).
+
+        `Type` is NOT set here - `RenamedBaseView.BaseView` (needed to walk
+        the assigned expression's path) can still be an unresolved
+        `ForwardRef` at this point, same timing issue as `_expand_view_all_of`.
+        Recorded in `_pending_view_bare_attrs` for `_apply_pending_view_bare_attr_types`,
+        called after `forward_refs.resolve_all()`.
+        """
+        va = ca.call(ctx, "viewAttributes")
+        if va is None:
+            return
+        for name, modifier_tokens, expr_ctx in self._bare_view_attribute_assignments(va):
+            expr = self.visit(expr_ctx)
+            attr = self.registry.new_instance("IlisMeta16.ModelData.AttrOrParam")
+            attr.Name = name
+            attr.Final = True
+            if InterlisParser.TRANSIENT in modifier_tokens:
+                attr.Transient = True
+            if expr is not None:
+                attr.Derivates = [expr]
+            self.attachment.attach(
+                view, "ClassAttribute", attr, association="ClassAttr", role="ClassAttribute", rule="viewAttributes",
+            )
+            if expr is not None:
+                self._pending_view_bare_attrs.append((view, attr, expr))
+
+    def _apply_pending_view_bare_attr_types(self) -> None:
+        """Resolve `Type` for every `AttrOrParam` recorded by `_build_view_bare_attributes`.
+
+        Walks the assigned expression's `PathOrInspFactor.PathEls`
+        statically against the metamodel (no XTF instance data needed -
+        this only answers "what's this computed attribute's declared
+        type", for `.ili -> JSON Schema`; evaluating the expression against
+        real data is a separate, still-open concern, see
+        `.claude/PROGRESS.md`'s "cross-check WFS" item and the known
+        `.xtf -> JSON-FG` WHERE-clause exclusion). First `PathEl` selects
+        the `RenamedBaseView` (same lookup `_find_renamed_base_view`
+        already uses for `ALL OF`); each subsequent `PathEl` is tried
+        first as a plain `ClassAttribute` by name (the JOIN OF case, e.g.
+        `Axis -> AxisType` in `tests/fixtures/fgdm4gs/Axis_V1_1_d.ili`) and,
+        if that fails, as an association `Role` by name whose `BaseClass`
+        becomes the next hop's class (the PROJECTION OF an ASSOCIATION
+        case, e.g. `TypPZ_Planungszone -> Planungszone -> Geometrie` in
+        `tests/fixtures/fgdm4gs/Planungszonen_V2_d_B.ili` - `Planungszone`
+        is a role of the `TypPZ_Planungszone` association, not an
+        attribute). Only the LAST `PathEl` may resolve `Type` (a role alone
+        has none); own attributes only, no EXTENDS walk (same "no real
+        corpus evidence yet" stance as `_apply_pending_view_all_of`) - a
+        real corpus survey of all 5 `tests/fixtures/fgdm4gs/` models
+        confirmed every referenced attribute is OWN on its class, none
+        inherited. An expression that isn't a plain path (no real corpus
+        example), or a path that fails to resolve at any hop, leaves
+        `Type` unset - same graceful-degradation stance as everywhere else
+        in this builder (RULE #5), not a crash.
+        """
+        pending, self._pending_view_bare_attrs = self._pending_view_bare_attrs, []
+        for view, attr, expr in pending:
+            type_instance = self._resolve_view_attribute_type(view, expr)
+            if type_instance is not None:
+                self.attachment.attach(
+                    attr, "Type", type_instance, association="AttrOrParamType", role="Type", rule="viewAttributes",
+                )
+
+    @classmethod
+    def _resolve_view_attribute_type(cls, view: MetaInstance, expr: MetaInstance) -> MetaInstance | None:
+        if not expr._qualified_class.endswith("PathOrInspFactor"):
+            return None
+        path_els = list(getattr(expr, "PathEls", None) or [])
+        if len(path_els) < 2:
+            return None
+        base = cls._find_renamed_base_view(view, getattr(path_els[0], "Ref", None))
+        if base is None or not isinstance(base.BaseView, MetaInstance):
+            return None
+        current: MetaInstance = base.BaseView
+        last_index = len(path_els) - 1
+        for i, path_el in enumerate(path_els[1:], start=1):
+            ref = getattr(path_el, "Ref", None)
+            if ref is None:
+                return None
+            is_last = i == last_index
+            found_attr = cls._find_class_attribute(current, ref)
+            if found_attr is not None:
+                return found_attr.Type if is_last and isinstance(found_attr.Type, MetaInstance) else None
+            if is_last:
+                return None  # a role alone (no trailing attribute) has no scalar Type
+            role = cls._find_association_role(current, ref)
+            target = cls._role_target_class(role) if role is not None else None
+            if target is None:
+                return None
+            current = target
+        return None
+
+    @staticmethod
+    def _find_class_attribute(cls_or_assoc: MetaInstance, name: str) -> MetaInstance | None:
+        for attr in getattr(cls_or_assoc, "ClassAttribute", None) or []:
+            if attr.Name == name:
+                return attr
+        return None
+
+    @staticmethod
+    def _find_association_role(cls_or_assoc: MetaInstance, name: str) -> MetaInstance | None:
+        for role in getattr(cls_or_assoc, "Role", None) or []:
+            if role.Name == name:
+                return role
+        return None
+
+    @staticmethod
+    def _role_target_class(role: MetaInstance) -> MetaInstance | None:
+        """Return a `Role`'s target `Class` via `BaseClass` (same association `reference_target_class` uses for a plain REFERENCE TO).
+
+        Duplicated here rather than imported from `xtf.schema` - that
+        module imports FROM `interlis.builder`, not the other way around
+        (see `_apply_pending_view_all_of`'s note on the same layering
+        constraint).
+        """
+        base = getattr(role, "BaseClass", None)
+        if isinstance(base, list):
+            base = base[0] if base else None
+        return base if isinstance(base, MetaInstance) else None
 
     def _qualify_name(self, name: str) -> str:
         parts = [getattr(inst, "Name", None) for inst in self._parent_stack if getattr(inst, "Name", None)]

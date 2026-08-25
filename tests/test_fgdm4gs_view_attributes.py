@@ -4,11 +4,13 @@ Backlog item 8's Lot A2 left `viewAttributes`'s `Name := expression` form
 (`bare_redefinition_list`/`modifier_reassignment`) `status: unresolved`
 in `InterlisModelBuilder`, citing "no real corpus evidence" for it. These
 5 real, author-confirmed VIEW models (HEIG-VD's FGDM4GS project) are that
-evidence - ALL FIVE use this form exclusively, none use `ALL OF`. This
-test documents the CURRENT gap directly (`ClassAttribute` stays empty)
-rather than `xfail`, so it fails loudly - and needs a one-line update,
-not silent re-enabling - once the form is implemented. See
-`.claude/PROGRESS.md` for the backlog item this tracks.
+evidence - ALL FIVE use this form exclusively, none use `ALL OF`.
+`InterlisModelBuilder._build_view_bare_attributes`/`_apply_pending_view_bare_attr_types`
+now build one `AttrOrParam` per occurrence, with `Type` resolved by
+statically walking the assigned expression's attribute path against the
+metamodel (own attributes and, for a PROJECTION OF an ASSOCIATION,
+association Roles - see `Planungszonen_V2_d_B.ili`'s multi-hop
+`TypPZ_Planungszone -> Planungszone -> Geometrie` below).
 
 Only the 3 fixtures resolvable from `tests/fixtures/fgdm4gs/` alone are
 covered here (`IVS_V3_d`/`Planungszonen_V2_d_A`/`Planungszonen_V2_d_B` -
@@ -68,21 +70,66 @@ def test_view_structure_builds_correctly(fname, view_name, base_count, kind):
     assert len(view.RenamedBaseView or []) == base_count
 
 
-@pytest.mark.parametrize("fname,view_name", [
-    ("IVS_V3_d.ili", "ivs_nat"),
-    ("Planungszonen_V2_d_A.ili", "view_pz"),
-    ("Planungszonen_V2_d_B.ili", "view_pz"),
-])
-def test_name_assign_expression_view_attributes_not_yet_built(fname, view_name):
-    """Known gap (2026-08-24): `Name := expression` view attributes are not built at all.
+@pytest.mark.parametrize(
+    "fname,view_name,expected",
+    [
+        (
+            "IVS_V3_d.ili", "ivs_nat",
+            {
+                "wkb_geometry": "LineType", "ivs_nummer": "TextType", "ivs_signatur_label": "TextType",
+                "ivs_kanton": None,  # external CHAdminCodes_V2.CHCantonCode - not loaded by this hermetic repository
+                "ivs_sladatehist": "FormattedType", "ivs_sladatemorph": "FormattedType",
+                "ivs_slabedeutung": "EnumType", "ivs_sortsla": "TextType", "ivs_slaname": "TextType",
+            },
+        ),
+        (
+            "Planungszonen_V2_d_A.ili", "view_pz",
+            {
+                "wkb_geometry": "LineType",
+                "publiziert_ab": None, "gueltig_bis": None,  # external INTERLIS.XMLDate - same external-import gap
+                "rechtsstatus": "EnumType", "bemerkungen": "TextType", "code_typ": "TextType",
+                "bezeichnung_typ": "TextType", "abkuerzung_typ": "TextType",
+                "festlegung_stufe_typ": "EnumType", "bemerkung_typ": "TextType",
+            },
+        ),
+        (
+            # PROJECTION OF an ASSOCIATION: hop 1 selects the association
+            # (TypPZ_Planungszone), hop 2 is one of ITS ROLES (Planungszone/
+            # TypPZ, resolved via AssocRole/BaseClass, not a plain
+            # ClassAttribute), hop 3 is a plain attribute on the role's
+            # target class - same expected Types as the JOIN OF form above.
+            "Planungszonen_V2_d_B.ili", "view_pz",
+            {
+                "wkb_geometry": "LineType",
+                "publiziert_ab": None, "gueltig_bis": None,
+                "rechtsstatus": "EnumType", "bemerkungen": "TextType", "code_typ": "TextType",
+                "bezeichnung_typ": "TextType", "abkuerzung_typ": "TextType",
+                "festlegung_stufe_typ": "EnumType", "bemerkung_typ": "TextType",
+            },
+        ),
+    ],
+)
+def test_name_assign_expression_view_attributes_are_built_with_resolved_types(fname, view_name, expected):
+    """`Name := expression` view attributes now build one `AttrOrParam` each, `Final=True`, `Type` resolved when possible.
 
-    `View.ClassAttribute` stays empty even though every one of these real
-    models defines 9-13 attributes this way - meaning `.ili -> JSON
-    Schema`/`.xtf -> JSON-FG` would currently produce an EMPTY properties
-    object for any of these real VIEWs. Update this assertion (to the
-    real expected attribute names/count) once `viewAttributes`'s
-    `Name := expression` form is implemented - do not just delete the test.
+    `Type` stays unset for the 2 attributes referencing a domain from a
+    model this hermetic test's `ModelRepository` doesn't load
+    (`INTERLIS.XMLDate`/`CHAdminCodes_V2.CHCantonCode`) - a pre-existing
+    external-import resolution characteristic, unrelated to this feature
+    (confirmed: the SAME attributes are already `UnresolvedNamedReference`
+    directly on the base `Planungszone`/`ivs_kantone` class, before any
+    VIEW machinery is involved).
     """
     builder = _build(fname)
     [view] = [v for v in _views(builder) if v.Name == view_name]
-    assert (getattr(view, "ClassAttribute", None) or []) == []
+    attrs = getattr(view, "ClassAttribute", None) or []
+    assert {a.Name: a for a in attrs}.keys() == expected.keys()
+    for attr in attrs:
+        assert attr.Final is True
+        type_instance = getattr(attr, "Type", None)
+        expected_kind = expected[attr.Name]
+        if expected_kind is None:
+            assert not isinstance(type_instance, MetaInstance)
+        else:
+            assert isinstance(type_instance, MetaInstance)
+            assert type_instance._qualified_class == f"IlisMeta16.ModelData.{expected_kind}"
