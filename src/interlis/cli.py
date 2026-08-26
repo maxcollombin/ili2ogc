@@ -324,6 +324,12 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     stderr diagnostic (`unsupported_view_reason`) - Expression tree
     evaluation isn't supported yet (see .claude/HANDOFF.md), so silently
     dropping or wrongly evaluating it would misrepresent the data.
+
+    `--feature-schema-url`, when given, wires "featureSchema" (JSON-FG
+    clause 13) to the companion JSON Schema `interlis convert` would
+    produce for the SAME `.ili` model - this runtime has no schema-hosting
+    story of its own, so the URL is always user-supplied (same stance as
+    `--repo`/`--model`), never derived automatically.
     """
     xtf_path = Path(args.xtf)
     if not xtf_path.exists():
@@ -366,6 +372,7 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
 
     collection = transfer_to_feature_collection(
         transfer, symbol_table=builder.symbol_table, repository=repository, views=views,
+        schema_url=args.feature_schema_url,
     )
     text = json.dumps(collection, indent=2, ensure_ascii=False)
     if args.output:
@@ -440,6 +447,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     convert_jsonfg_parser.add_argument(
         "-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.",
+    )
+    convert_jsonfg_parser.add_argument(
+        "--feature-schema-url", default=None, metavar="URL",
+        help="URL/path of the companion 'interlis convert' JSON Schema output for the same .ili model - "
+        "when given, populates the JSON-FG 'featureSchema' member (clause 13). Omitted: 'featureSchema' is not emitted.",
     )
     convert_jsonfg_parser.set_defaults(func=cmd_convert_jsonfg)
 

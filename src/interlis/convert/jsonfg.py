@@ -482,8 +482,21 @@ def _place_and_crs(resolved: ResolvedAttribute, node: RawNode) -> tuple[dict[str
     return None if crs is None else (geometry, crs)
 
 
+def _feature_schema_ref(schema_url: str, feature_type: str) -> str:
+    """One `$defs` entry of a `convert/jsonschema.py.model_to_json_schema` document, addressed by URI fragment.
+
+    `schema_url` is caller-supplied (this pure-conversion runtime has no
+    schema-hosting story of its own to derive it from - same stance as
+    `--repo`/`--model`, always user-provided); `feature_type` is the SAME
+    short `Name` `model_to_json_schema` already keys `$defs` by (see
+    `class_to_json_schema`'s `title`), so the fragment always resolves.
+    """
+    return f"{schema_url}#/$defs/{feature_type}"
+
+
 def object_to_feature(
     obj: XtfObject, cls: MetaInstance, *, standalone: bool = True, symbol_table: SymbolTable | None = None,
+    schema_url: str | None = None,
 ) -> dict[str, Any]:
     """Convert one XtfObject into a JSON-FG Feature object.
 
@@ -515,8 +528,16 @@ def object_to_feature(
     unlike "geometry" which RFC 7946 requires as a member even when
     unlocated (`null`). "featureType" reuses the class's short `Name`
     (same identifier convert/jsonschema.py uses as its $defs key), so a
-    Feature and its schema entry can be linked by name once a future lot
-    adds "featureSchema".
+    Feature and its schema entry can be linked by name via "featureSchema"
+    (clause 13, `/req/types-schemas/feature-schemas`) whenever `schema_url`
+    is given - a plain string URI (`_feature_schema_ref`), valid here
+    since a standalone Feature only ever has ONE "featureType" (clause 13
+    requirement `single-feature-schema` - a string value requires every
+    "featureType" in the document to match). `None` (the default) omits
+    "featureSchema" entirely, unchanged from before this was wired - this
+    runtime has no schema-hosting story of its own, so the link is only
+    ever built when the caller supplies where the companion
+    `model_to_json_schema` document will be reachable.
 
     Geometry ("place"/"coordRefSys"): only when `cls` has EXACTLY ONE
     own+inherited attribute whose type resolves directly to CoordType/
@@ -559,7 +580,10 @@ def object_to_feature(
         feature["conformsTo"] = conforms_to
     if obj.tid is not None:
         feature["id"] = obj.tid
-    feature["featureType"] = getattr(cls, "Name", None) or obj.qualified_class
+    feature_type = getattr(cls, "Name", None) or obj.qualified_class
+    feature["featureType"] = feature_type
+    if standalone and schema_url is not None:
+        feature["featureSchema"] = _feature_schema_ref(schema_url, feature_type)
     feature["geometry"] = None
     if place is not None:
         feature["place"] = place
@@ -743,7 +767,7 @@ def _join_members(bases: list[MetaInstance], combo: list[XtfObject | None]) -> l
 
 def transfer_to_feature_collection(
     transfer: XtfTransfer, *, symbol_table: SymbolTable, repository: ModelRepository | None = None,
-    views: list[MetaInstance] | None = None,
+    views: list[MetaInstance] | None = None, schema_url: str | None = None,
 ) -> dict[str, Any]:
     """Convert every resolvable object of `transfer` into one JSON-FG FeatureCollection.
 
@@ -795,6 +819,18 @@ def transfer_to_feature_collection(
     uniformity hoisting below runs, so a transfer producing only
     view-shaped Features (or a homogeneous mix of both) still benefits
     from collection-level hoisting exactly like class-shaped Features do.
+
+    `schema_url` (optional): when given, wires "featureSchema" (clause 13)
+    at the COLLECTION level only (same "single root object carries it"
+    stance as "conformsTo" - never duplicated per-Feature here). A
+    homogeneous collection (single "featureType", the same condition
+    already used above) gets a plain string URI (`_feature_schema_ref`,
+    clause 13 requirement `single-feature-schema`); a heterogeneous one
+    gets the OTHER value shape the standard allows instead - an object
+    mapping every distinct "featureType" to its own `$defs` fragment
+    (`featureschema.json`'s `oneOf` - a bare string would otherwise wrongly
+    claim just one schema covers every Feature). `None` (the default)
+    omits "featureSchema" entirely, same as `object_to_feature`.
     """
     features: list[dict[str, Any]] = []
     for basket in transfer.baskets:
@@ -818,6 +854,12 @@ def transfer_to_feature_collection(
     feature_types = {f["featureType"] for f in features}
     if len(feature_types) == 1:
         collection["featureType"] = next(iter(feature_types))
+
+    if schema_url is not None and feature_types:
+        if len(feature_types) == 1:
+            collection["featureSchema"] = _feature_schema_ref(schema_url, next(iter(feature_types)))
+        else:
+            collection["featureSchema"] = {ft: _feature_schema_ref(schema_url, ft) for ft in sorted(feature_types)}
 
     crs_values = {f["coordRefSys"] for f in features if "coordRefSys" in f}
     if len(crs_values) == 1:

@@ -506,6 +506,31 @@ def test_standalone_false_omits_conforms_to():
     assert feature["featureType"] == "A"
 
 
+def test_schema_url_populates_feature_schema_as_string():
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(tid="obj-6", qualified_class="Foo.T.A", attributes={})
+    feature = object_to_feature(obj, cls, schema_url="schema.json")
+    assert feature["featureSchema"] == "schema.json#/$defs/A"
+
+
+def test_without_schema_url_omits_feature_schema():
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(tid="obj-7", qualified_class="Foo.T.A", attributes={})
+    feature = object_to_feature(obj, cls)
+    assert "featureSchema" not in feature
+
+
+def test_standalone_false_omits_feature_schema_even_with_schema_url():
+    """"featureSchema" stays a root-object-only member here, same stance as "conformsTo" - never duplicated per nested Feature."""
+    builder = _build(_MODEL)
+    cls = _resolved_class(builder, "A")
+    obj = XtfObject(tid="obj-8", qualified_class="Foo.T.A", attributes={})
+    feature = object_to_feature(obj, cls, standalone=False, schema_url="schema.json")
+    assert "featureSchema" not in feature
+
+
 def test_transfer_to_feature_collection_wraps_features_without_per_feature_conforms_to():
     builder = _build(_MODEL)
     basket = XtfBasket(
@@ -564,6 +589,59 @@ END Foo.
     collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
     assert "featureType" not in collection
     assert {f["featureType"] for f in collection["features"]} == {"A", "B"}
+
+
+def test_transfer_to_feature_collection_schema_url_homogeneous_is_a_string():
+    builder = _build(_MODEL)
+    basket = XtfBasket(
+        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        objects=[
+            XtfObject(tid="c-1", qualified_class="Foo.T.A", attributes={}),
+            XtfObject(tid="c-2", qualified_class="Foo.T.A", attributes={}),
+        ],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table, schema_url="schema.json")
+    assert collection["featureSchema"] == "schema.json#/$defs/A"
+    assert all("featureSchema" not in f for f in collection["features"])
+
+
+def test_transfer_to_feature_collection_schema_url_heterogeneous_is_an_object():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Age : 0 .. 130;
+    END A;
+    CLASS B =
+      Age : 0 .. 130;
+    END B;
+  END T;
+END Foo.
+"""
+    )
+    basket = XtfBasket(
+        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        objects=[
+            XtfObject(tid="a-1", qualified_class="Foo.T.A", attributes={}),
+            XtfObject(tid="b-1", qualified_class="Foo.T.B", attributes={}),
+        ],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table, schema_url="schema.json")
+    assert collection["featureSchema"] == {"A": "schema.json#/$defs/A", "B": "schema.json#/$defs/B"}
+
+
+def test_transfer_to_feature_collection_without_schema_url_omits_feature_schema():
+    builder = _build(_MODEL)
+    basket = XtfBasket(
+        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        objects=[XtfObject(tid="c-1", qualified_class="Foo.T.A", attributes={})],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
+    assert "featureSchema" not in collection
 
 
 def test_plain_reference_to_becomes_string_oid():
