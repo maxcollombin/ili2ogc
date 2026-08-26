@@ -1,20 +1,55 @@
 [project]
 name = "interlis-runtime"
 version = "0.1.0"
-description = "Add your description here"
+authors = [
+    {name = "Maxime Collombin", email = "maxime.collombin@netplus.ch"},
+]
+description = "A pure-Python INTERLIS 2 runtime: parse .ili models, validate .xtf transfers, convert to JSON Schema and OGC JSON-FG"
 readme = "README.md"
-requires-python = ">=3.14"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["interlis", "gis", "geodata", "json-schema", "json-fg", "ogc", "swisstopo"]
 dependencies = [
     "antlr4-python3-runtime==4.13.2",
-    "antlr4-tools>=0.2.2",
     "jsonschema>=4.23.0",
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
 ]
 
+[project.urls]
+Homepage = "https://github.com/maxcollombin/interlis-runtime"
+Repository = "https://github.com/maxcollombin/interlis-runtime.git"
+Issues = "https://github.com/maxcollombin/interlis-runtime/issues"
+
 [project.scripts]
 interlis = "interlis.cli:main"
 
+[project.optional-dependencies]
+dev = [
+    "antlr4-tools>=0.2.2",
+    "pytest>=8.0.0",
+    "ruamel-yaml>=0.19.1",
+    "ruff>=0.16.2",
+]
+
+# Duplicated from [project.optional-dependencies] on purpose: uv installs a
+# [dependency-groups] "dev" group by default on `uv sync`/`uv run` (no extra
+# flag needed for the uv-based workflow documented in the README), while
+# [project.optional-dependencies] keeps `pip install .[dev]` working for a
+# contributor not using uv - uv has no single-source way to get both.
 [dependency-groups]
 dev = [
     "antlr4-tools>=0.2.2",
