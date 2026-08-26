@@ -59,10 +59,15 @@ from interlis.xtf.validate import (
 JSON_FG_VERSION = "1.0"
 CONF_CORE = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/conf/core"
 CONF_TYPES_SCHEMAS = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/conf/types-schemas"
+CONF_CIRCULAR_ARCS = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/conf/circular-arcs"
 CRS_URI_PREFIX = "http://www.opengis.net/def/crs/EPSG/0/"
 
 _SCALAR_KINDS = {"NumType", "TextType", "EnumType", "BooleanType"}
 _GEOMETRY_KINDS = {"CoordType", "LineType"}
+# JSON-FG Part 1 Core §7.5 (conformance class "circular-arcs") - geometry
+# "type" values that require CONF_CIRCULAR_ARCS to be declared in
+# "conformsTo" (docs/interlis-geometry-sfa-mapping.md).
+_CIRCULAR_ARC_TYPES = frozenset({"CircularString", "CompoundCurve", "CurvePolygon", "MultiCurve", "MultiSurface"})
 
 
 def _scalar_value(resolved: ResolvedAttribute, node: RawNode) -> Any:
@@ -216,15 +221,20 @@ def _members_value(cls: MetaInstance, attrs: dict[str, list[RawNode]], *, symbol
 # same wire structure (reuses the SAME tag helpers/sets, imported directly
 # rather than duplicated), but building a JSON-FG geometry value instead of
 # a list of validation issues. Returns `None` (never raises) on anything
-# this Lot doesn't represent - an ARC segment, a custom LINE FORM segment,
-# a missing/non-numeric component - so the caller falls back to leaving the
-# attribute in "properties" (RULE #5: never silently misrepresent a curved
-# edge as a straight one).
+# this Lot doesn't represent - a custom LINE FORM segment, a missing/
+# non-numeric component - so the caller falls back to leaving the attribute
+# in "properties" (RULE #5: never silently misrepresent geometry that
+# couldn't be read). An ARC segment IS representable (see `_read_polyline`
+# below, docs/interlis-geometry-sfa-mapping.md, decision 2026-08-26): a
+# straight-only POLYLINE/BOUNDARY still returns a plain position list (as
+# before, wrapped into LineString/Polygon by the caller), but one
+# containing at least one ARC returns an already-typed JSON-FG geometry
+# object (CircularString/CompoundCurve/CurvePolygon) instead - the caller
+# (`_line_geometry`) tells the two apart via `isinstance(value, dict)`.
 
-def _read_coord(node: RawNode) -> list[float] | None:
-    if _geom_tag(node) != "COORD":
-        return None
-    components = _axis_components(node, "C")
+def _positions_from(node: RawNode, prefix: str) -> list[float] | None:
+    """Read `{prefix}1`, `{prefix}2`, ... as one position - shared by COORD (`C`) and an ARC's intermediate point (`A`)."""
+    components = _axis_components(node, prefix)
     if not components:
         return None
     try:
@@ -233,39 +243,122 @@ def _read_coord(node: RawNode) -> list[float] | None:
         return None
 
 
-def _read_polyline(node: RawNode) -> list[list[float]] | None:
+def _read_coord(node: RawNode) -> list[float] | None:
+    if _geom_tag(node) != "COORD":
+        return None
+    return _positions_from(node, "C")
+
+
+def _read_arc(node: RawNode) -> tuple[list[float], list[float]] | None:
+    """Read an ArcSegment (eCH-0031 V2.1.0 SS4.3.11.14): `(intermediate point, end point)`.
+
+    The intermediate point (A1/A2) is always 2D - INTERLIS never carries a
+    3rd component for it (confirmed in xtf/validate.py's `_validate_arc_node`)
+    even when the surrounding COORD/end point is 3D; the optional radius
+    (R) is redundant with the 3 points a `CircularString` arc needs and is
+    not read here.
+    """
+    if _geom_tag(node) != "ARC":
+        return None
+    end = _positions_from(node, "C")
+    mid = _positions_from(node, "A")
+    return None if end is None or mid is None else (mid, end)
+
+
+def _read_polyline(node: RawNode) -> list[list[float]] | dict[str, Any] | None:
+    """Read a POLYLINE's SegmentSequence into a plain position list (straight-only) or a curved geometry object.
+
+    A SegmentSequence always starts with a COORD (the path's start point),
+    then zero or more StraightSegment (COORD)/ArcSegment (ARC) - never
+    ArcSegment first (eCH-0031 V2.1.0 SS4.3.11.14). Consecutive segments of
+    the same kind are grouped into one run (a straight run -> `LineString`,
+    an arc run -> `CircularString`, chained arcs sharing their shared
+    endpoint per JSON-FG's own encoding rather than repeating it - see
+    core/examples/multi-curve.json, opengeospatial/ogc-feat-geo-json); a
+    run switch keeps the boundary point as the start of the next run. A
+    straight-only polyline collapses back to the original plain position
+    list (unchanged return shape, still what `_line_geometry` wraps into a
+    "LineString"/"Polygon"); one made of a single arc run returns a bare
+    `CircularString`; anything mixing runs returns a `CompoundCurve`
+    (JSON-FG Part 1 Core SS7.5.2 - each item's first position equals the
+    previous item's last, exactly how runs are chained here).
+    """
     if _geom_tag(node) != "POLYLINE" or not node.children:
         return None
-    positions: list[list[float]] = []
-    for seg in node.children:
-        if _geom_tag(seg) != "COORD":
-            return None  # ARC / custom LINE FORM segment - not representable here
-        pos = _read_coord(seg)
-        if pos is None:
-            return None
-        positions.append(pos)
-    return positions
+    segments = node.children
+    if _geom_tag(segments[0]) != "COORD":
+        return None
+    start = _read_coord(segments[0])
+    if start is None:
+        return None
+    parts: list[dict[str, Any]] = []
+    kind = "line"
+    points: list[list[float]] = [start]
+    for seg in segments[1:]:
+        tag = _geom_tag(seg)
+        if tag == "COORD":
+            pos = _read_coord(seg)
+            if pos is None:
+                return None
+            if kind == "arc":
+                parts.append({"type": "CircularString", "coordinates": points})
+                kind = "line"
+                points = [points[-1]]
+            points.append(pos)
+        elif tag == "ARC":
+            arc = _read_arc(seg)
+            if arc is None:
+                return None
+            mid, end = arc
+            if kind == "line":
+                if len(points) > 1:
+                    parts.append({"type": "LineString", "coordinates": points})
+                    points = [points[-1]]
+                kind = "arc"
+            points.extend((mid, end))
+        else:
+            return None  # custom LINE FORM segment - not representable here
+    parts.append({"type": "CircularString" if kind == "arc" else "LineString", "coordinates": points})
+    if len(parts) == 1:
+        sole = parts[0]
+        return sole["coordinates"] if sole["type"] == "LineString" else sole
+    return {"type": "CompoundCurve", "geometries": parts}
 
 
-def _read_boundary(node: RawNode) -> list[list[float]] | None:
+def _read_boundary(node: RawNode) -> list[list[float]] | dict[str, Any] | None:
     if _geom_tag(node) not in _BOUNDARY_TAGS:
         return None
     polyline = _find_child(node, "POLYLINE")
     return None if polyline is None else _read_polyline(polyline)
 
 
-def _read_surface(node: RawNode) -> list[list[list[float]]] | None:
+def _read_surface(node: RawNode) -> list[list[list[float]]] | dict[str, Any] | None:
+    """Read a SURFACE/AREA into plain rings (straight-only) or a `CurvePolygon` (any ring with an arc).
+
+    A `CurvePolygon`'s "geometries" member is a list of closed curve
+    geometries (JSON-FG Part 1 Core SS7.5.3) - every ring, straight or
+    curved, is wrapped as a full geometry object there (a plain ring
+    becomes `{"type": "LineString", ...}`), unlike the plain-`Polygon` case
+    where rings stay bare position lists (`_read_boundary`'s straight-only
+    return shape, unchanged).
+    """
     if _geom_tag(node) not in _SURFACE_TAGS:
         return None
     boundaries = [c for c in node.children if _geom_tag(c) in _BOUNDARY_TAGS]
     if not boundaries:
         return None
-    rings: list[list[list[float]]] = []
+    rings: list[list[list[float]] | dict[str, Any]] = []
+    any_curved = False
     for boundary in boundaries:
         ring = _read_boundary(boundary)
         if ring is None:
             return None
+        if isinstance(ring, dict):
+            any_curved = True
         rings.append(ring)  # first = outer boundary, eCH-0031 SS4.3.11.15 (order-only, no tag distinction)
+    if any_curved:
+        geometries = [r if isinstance(r, dict) else {"type": "LineString", "coordinates": r} for r in rings]
+        return {"type": "CurvePolygon", "geometries": geometries}
     return rings
 
 
@@ -290,6 +383,21 @@ def _coord_geometry(resolved: ResolvedAttribute, node: RawNode) -> dict[str, Any
 
 
 def _line_geometry(resolved: ResolvedAttribute, node: RawNode) -> dict[str, Any] | None:
+    """Build the JSON-FG geometry value for a LineType attribute occurrence.
+
+    `reader` (`_read_polyline`/`_read_surface`) returns either a plain
+    position list (straight-only - wrapped here into "LineString"/"Polygon"/
+    "MultiLineString"/"MultiPolygon", unchanged from before circular-arcs
+    support) or an already-typed geometry object (`CircularString`/
+    `CompoundCurve`/`CurvePolygon` - any run/ring containing an ARC segment,
+    see `_read_polyline`/`_read_surface`), told apart via `isinstance(...,
+    dict)`. In the `multi` case, ANY curved part switches the WHOLE
+    attribute to JSON-FG's `MultiCurve`/`MultiSurface` (SS7.5.4/.5) instead
+    of `MultiLineString`/`MultiPolygon` - both require every member to be a
+    full geometry object, so a straight part is wrapped into a
+    `LineString`/`Polygon` there too rather than left as a bare coordinate
+    array (docs/interlis-geometry-sfa-mapping.md).
+    """
     line_type = resolved.type_instance
     kind = getattr(line_type, "Kind", None)
     multi = bool(getattr(line_type, "Multi", False))
@@ -304,16 +412,27 @@ def _line_geometry(resolved: ResolvedAttribute, node: RawNode) -> dict[str, Any]
     reader = _read_polyline if is_polyline else _read_surface
     single_type = "LineString" if is_polyline else "Polygon"
     multi_type = "MultiLineString" if is_polyline else "MultiPolygon"
+    curved_multi_type = "MultiCurve" if is_polyline else "MultiSurface"
     if not multi:
         value = reader(child)
-        return None if value is None else {"type": single_type, "coordinates": value}
+        if value is None:
+            return None
+        return value if isinstance(value, dict) else {"type": single_type, "coordinates": value}
     values = []
+    any_curved = False
     for part in (c for c in child.children if _geom_tag(c) in single_tags):
         value = reader(part)
         if value is None:
             return None
+        if isinstance(value, dict):
+            any_curved = True
         values.append(value)
-    return None if not values else {"type": multi_type, "coordinates": values}
+    if not values:
+        return None
+    if any_curved:
+        geometries = [v if isinstance(v, dict) else {"type": single_type, "coordinates": v} for v in values]
+        return {"type": curved_multi_type, "geometries": geometries}
+    return {"type": multi_type, "coordinates": values}
 
 
 def _meta_value(instance: MetaInstance | None, name: str) -> str | None:
@@ -383,7 +502,10 @@ def object_to_feature(
     its own right (OGC 21-045r1 clause 8: "not contained in another
     JSON-FG object") - carries its own "conformsTo" (core, and
     types-schemas since "featureType" is always included, per core
-    requirement /req/core/metadata.H). `standalone=False` (used by
+    requirement /req/core/metadata.H; plus circular-arcs, SS7.5, whenever
+    "place" ends up one of CircularString/CompoundCurve/CurvePolygon/
+    MultiCurve/MultiSurface - see `_read_polyline`/`_read_surface`).
+    `standalone=False` (used by
     `transfer_to_feature_collection` for a Feature nested inside a
     FeatureCollection, which becomes the root object instead) OMITS
     "conformsTo" - required, not a style choice: /req/core/metadata.C
@@ -401,8 +523,8 @@ def object_to_feature(
     LineType (never via a BAG/LIST wrapper - out of scope, no real corpus
     evidence, see docs/jsonfg-conversion-strategy.md) AND that attribute's
     actual wire value converts cleanly (see `_place_and_crs` - a `None`
-    result, e.g. an ARC segment or an unresolved CRS, leaves the
-    attribute in "properties" instead, marked `x-unsupported`
+    result, e.g. a custom LINE FORM segment or an unresolved CRS, leaves
+    the attribute in "properties" instead, marked `x-unsupported`
     like any other out-of-scope attribute - never a silent loss). A class
     with zero or multiple geometry-typed attributes gets no "place"
     either (multi-geometry real cases exist - e.g. a point + an area on
@@ -431,7 +553,10 @@ def object_to_feature(
 
     feature: dict[str, Any] = {"type": "Feature"}
     if standalone:
-        feature["conformsTo"] = [CONF_CORE, CONF_TYPES_SCHEMAS]
+        conforms_to = [CONF_CORE, CONF_TYPES_SCHEMAS]
+        if place is not None and place.get("type") in _CIRCULAR_ARC_TYPES:
+            conforms_to.append(CONF_CIRCULAR_ARCS)
+        feature["conformsTo"] = conforms_to
     if obj.tid is not None:
         feature["id"] = obj.tid
     feature["featureType"] = getattr(cls, "Name", None) or obj.qualified_class
@@ -682,9 +807,12 @@ def transfer_to_feature_collection(
     for view in views or []:
         features.extend(evaluate_view(view, transfer, symbol_table=symbol_table, repository=repository, standalone=False))
 
+    conforms_to = [CONF_CORE, CONF_TYPES_SCHEMAS]
+    if any(f.get("place", {}).get("type") in _CIRCULAR_ARC_TYPES for f in features):
+        conforms_to.append(CONF_CIRCULAR_ARCS)
     collection: dict[str, Any] = {
         "type": "FeatureCollection",
-        "conformsTo": [CONF_CORE, CONF_TYPES_SCHEMAS],
+        "conformsTo": conforms_to,
         "features": features,
     }
     feature_types = {f["featureType"] for f in features}

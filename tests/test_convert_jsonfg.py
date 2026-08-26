@@ -7,7 +7,13 @@ import warnings
 from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.convert.jsonfg import CONF_CORE, CONF_TYPES_SCHEMAS, object_to_feature, transfer_to_feature_collection
+from interlis.convert.jsonfg import (
+    CONF_CIRCULAR_ARCS,
+    CONF_CORE,
+    CONF_TYPES_SCHEMAS,
+    object_to_feature,
+    transfer_to_feature_collection,
+)
 from interlis.runtime.parse import meta_attribute_comments, parse_text
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 
@@ -122,7 +128,10 @@ MODEL Foo AT "http://x" VERSION "1" =
     MultiCoord2D = MULTICOORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000;
     NoCrsCoord = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
     Line = POLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2D;
+    MultiLine = MULTIPOLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2D;
     Poly = SURFACE WITH (STRAIGHTS) VERTEX Coord2D WITHOUT OVERLAPS > 0.001;
+    PolyArc = SURFACE WITH (STRAIGHTS, ARCS) VERTEX Coord2D WITHOUT OVERLAPS > 0.001;
+    MultiPolyArc = MULTISURFACE WITH (STRAIGHTS, ARCS) VERTEX Coord2D WITHOUT OVERLAPS > 0.001;
   TOPIC T =
     CLASS APoint =
       Geom : MANDATORY Coord2D;
@@ -133,9 +142,18 @@ MODEL Foo AT "http://x" VERSION "1" =
     CLASS ALine =
       Geom : MANDATORY Line;
     END ALine;
+    CLASS AMultiLine =
+      Geom : MANDATORY MultiLine;
+    END AMultiLine;
     CLASS APoly =
       Geom : MANDATORY Poly;
     END APoly;
+    CLASS APolyArc =
+      Geom : MANDATORY PolyArc;
+    END APolyArc;
+    CLASS AMultiPolyArc =
+      Geom : MANDATORY MultiPolyArc;
+    END AMultiPolyArc;
     CLASS ANoCrs =
       Geom : MANDATORY NoCrsCoord;
     END ANoCrs;
@@ -286,7 +304,8 @@ def test_surface_attribute_becomes_place_polygon_outer_ring_first():
     assert rings[1][0] == [1.0, 1.0]
 
 
-def test_arc_segment_falls_back_to_unsupported_property():
+def test_polyline_pure_arc_becomes_bare_circular_string():
+    """A POLYLINE = COORD then a single ARC, no other straight segment -> a bare `CircularString`, not wrapped in `CompoundCurve`."""
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ALine")
     arc = _wrap("ARC", _node("C1", "2600100.0"), _node("C2", "1200100.0"), _node("A1", "2600050.0"), _node("A2", "1200050.0"))
@@ -295,8 +314,148 @@ def test_arc_segment_falls_back_to_unsupported_property():
         attributes={"Geom": [_wrap("Geom", _wrap("POLYLINE", _coord("2600000.0", "1200000.0"), arc))]},
     )
     feature = object_to_feature(obj, cls)
+    assert "Geom" not in feature["properties"]
+    assert feature["place"] == {
+        "type": "CircularString",
+        "coordinates": [[2600000.0, 1200000.0], [2600050.0, 1200050.0], [2600100.0, 1200100.0]],
+    }
+    assert CONF_CIRCULAR_ARCS in feature["conformsTo"]
+
+
+def test_polyline_straight_then_arc_then_straight_becomes_compound_curve():
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ALine")
+    arc = _wrap("ARC", _node("C1", "2600100.0"), _node("C2", "1200100.0"), _node("A1", "2600050.0"), _node("A2", "1200050.0"))
+    obj = XtfObject(
+        tid="l-4", qualified_class="Foo.T.ALine",
+        attributes={"Geom": [_wrap("Geom", _wrap(
+            "POLYLINE", _coord("2600000.0", "1200000.0"), arc, _coord("2600200.0", "1200200.0"),
+        ))]},
+    )
+    feature = object_to_feature(obj, cls)
+    place = feature["place"]
+    assert place["type"] == "CompoundCurve"
+    assert place["geometries"] == [
+        {"type": "CircularString", "coordinates": [[2600000.0, 1200000.0], [2600050.0, 1200050.0], [2600100.0, 1200100.0]]},
+        {"type": "LineString", "coordinates": [[2600100.0, 1200100.0], [2600200.0, 1200200.0]]},
+    ]
+    assert CONF_CIRCULAR_ARCS in feature["conformsTo"]
+
+
+def test_custom_line_form_segment_falls_back_to_unsupported_property():
+    """A POLYLINE segment that's neither COORD nor ARC (a custom LINE FORM) stays out of scope - RULE #5, never guessed."""
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ALine")
+    custom = _wrap("CustomForm", _node("X", "1"))
+    obj = XtfObject(
+        tid="l-5", qualified_class="Foo.T.ALine",
+        attributes={"Geom": [_wrap("Geom", _wrap("POLYLINE", _coord("2600000.0", "1200000.0"), custom))]},
+    )
+    feature = object_to_feature(obj, cls)
     assert "place" not in feature
     assert feature["properties"]["Geom"] == {"x-unsupported": "LineType"}
+
+
+def test_polyline_two_chained_arcs_become_one_circular_string():
+    """Two consecutive ARC segments share their common endpoint - one 5-position `CircularString`, JSON-FG SS7.5.1."""
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ALine")
+    arc1 = _wrap("ARC", _node("C1", "2.0"), _node("C2", "0.0"), _node("A1", "1.0"), _node("A2", "1.0"))
+    arc2 = _wrap("ARC", _node("C1", "4.0"), _node("C2", "0.0"), _node("A1", "3.0"), _node("A2", "1.0"))
+    obj = XtfObject(
+        tid="l-6", qualified_class="Foo.T.ALine",
+        attributes={"Geom": [_wrap("Geom", _wrap("POLYLINE", _coord("0.0", "0.0"), arc1, arc2))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "CircularString",
+        "coordinates": [[0.0, 0.0], [1.0, 1.0], [2.0, 0.0], [3.0, 1.0], [4.0, 0.0]],
+    }
+
+
+def test_surface_arc_boundary_becomes_curve_polygon():
+    """A SURFACE whose (sole) boundary mixes an ARC with straight segments -> a `CurvePolygon` wrapping a `CompoundCurve` ring."""
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "APolyArc")
+    arc = _wrap("ARC", _node("C1", "10.0"), _node("C2", "0.0"), _node("A1", "5.0"), _node("A2", "5.0"))
+    boundary = _wrap("BOUNDARY", _wrap("POLYLINE", _coord("0.0", "0.0"), arc, _coord("0.0", "0.0")))
+    obj = XtfObject(
+        tid="s-2", qualified_class="Foo.T.APolyArc",
+        attributes={"Geom": [_wrap("Geom", _wrap("SURFACE", boundary))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "CurvePolygon",
+        "geometries": [
+            {
+                "type": "CompoundCurve",
+                "geometries": [
+                    {"type": "CircularString", "coordinates": [[0.0, 0.0], [5.0, 5.0], [10.0, 0.0]]},
+                    {"type": "LineString", "coordinates": [[10.0, 0.0], [0.0, 0.0]]},
+                ],
+            },
+        ],
+    }
+    assert CONF_CIRCULAR_ARCS in feature["conformsTo"]
+
+
+def test_multipolyline_with_one_arc_part_becomes_multi_curve():
+    """One straight + one curved part in a MULTIPOLYLINE -> `MultiCurve`, every part a full geometry object (SS7.5.4)."""
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "AMultiLine")
+    straight = _wrap("POLYLINE", _coord("0.0", "0.0"), _coord("1.0", "0.0"))
+    arc = _wrap("ARC", _node("C1", "12.0"), _node("C2", "10.0"), _node("A1", "11.0"), _node("A2", "11.0"))
+    curved = _wrap("POLYLINE", _coord("10.0", "10.0"), arc)
+    obj = XtfObject(
+        tid="ml-1", qualified_class="Foo.T.AMultiLine",
+        attributes={"Geom": [_wrap("Geom", _wrap("MULTIPOLYLINE", straight, curved))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "MultiCurve",
+        "geometries": [
+            {"type": "LineString", "coordinates": [[0.0, 0.0], [1.0, 0.0]]},
+            {"type": "CircularString", "coordinates": [[10.0, 10.0], [11.0, 11.0], [12.0, 10.0]]},
+        ],
+    }
+    assert CONF_CIRCULAR_ARCS in feature["conformsTo"]
+
+
+def test_multisurface_with_one_curved_part_becomes_multi_surface():
+    """One straight `Polygon` + one curved `CurvePolygon` part in a MULTISURFACE -> `MultiSurface` (SS7.5.5)."""
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "AMultiPolyArc")
+    straight_boundary = _wrap("BOUNDARY", _wrap(
+        "POLYLINE", _coord("0.0", "0.0"), _coord("1.0", "0.0"), _coord("1.0", "1.0"), _coord("0.0", "0.0"),
+    ))
+    arc = _wrap("ARC", _node("C1", "20.0"), _node("C2", "10.0"), _node("A1", "15.0"), _node("A2", "15.0"))
+    curved_boundary = _wrap("BOUNDARY", _wrap("POLYLINE", _coord("10.0", "10.0"), arc, _coord("10.0", "10.0")))
+    straight_surface = _wrap("SURFACE", straight_boundary)
+    curved_surface = _wrap("SURFACE", curved_boundary)
+    obj = XtfObject(
+        tid="ms-1", qualified_class="Foo.T.AMultiPolyArc",
+        attributes={"Geom": [_wrap("Geom", _wrap("MULTISURFACE", straight_surface, curved_surface))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "MultiSurface",
+        "geometries": [
+            {"type": "Polygon", "coordinates": [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]},
+            {
+                "type": "CurvePolygon",
+                "geometries": [
+                    {
+                        "type": "CompoundCurve",
+                        "geometries": [
+                            {"type": "CircularString", "coordinates": [[10.0, 10.0], [15.0, 15.0], [20.0, 10.0]]},
+                            {"type": "LineString", "coordinates": [[20.0, 10.0], [10.0, 10.0]]},
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    assert CONF_CIRCULAR_ARCS in feature["conformsTo"]
 
 
 def test_missing_crs_meta_falls_back_to_unsupported_property():
