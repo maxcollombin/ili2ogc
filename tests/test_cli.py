@@ -64,7 +64,4 @@ def test_convert_sql_resolves_crs_declared_locally_not_via_import(tmp_path, caps
     ddl = capsys.readouterr().out
     assert "CREATE TABLE a (" in ddl
     assert "ogc_fid text PRIMARY KEY" in ddl
-    # Not "... NOT NULL": MANDATORY on a NAMED domain reference (Coord2D)
-    # doesn't reach resolve_attribute's mandatory flag - a known,
-    # orthogonal gap, see docs/sql-conversion-strategy.md.
-    assert "geom geometry(Point, 2056)" in ddl
+    assert "geom geometry(Point, 2056) NOT NULL" in ddl

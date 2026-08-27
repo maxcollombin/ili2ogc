@@ -70,6 +70,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
         # file's own comments aren't captured yet, see build()'s docstring).
         self._pending_meta_attributes: list[tuple[int, str, str]] = []
         self._meta_attribute_index = 0
+        # `MANDATORY <named domain>;` (e.g. "Geom: MANDATORY Coord2D;") -
+        # see _apply_pending_mandatory_overrides. AttrOrParam instances
+        # whose own MANDATORY couldn't attach directly because their Type
+        # was still an unresolved ForwardRef to a (possibly SHARED) named
+        # domain at construction time - resolved AFTER
+        # forward_refs.resolve_all(), same "record during construction,
+        # apply after resolution" pattern as _pending_view_all_of below.
+        self._pending_mandatory_overrides: list[MetaInstance] = []
         # "ATTRIBUTE ALL OF <Name>;" (see _expand_view_all_of) needs
         # RenamedBaseView.BaseView already resolved to a real Class -
         # still a ForwardRef at construction time whenever the base is
@@ -113,9 +121,48 @@ class InterlisModelBuilder(InterlisParserVisitor):
         self._meta_attribute_index = 0
         result = self.visit(tree)
         self.forward_refs.resolve_all(repository=self.repository)
+        self._apply_pending_mandatory_overrides()
         self._apply_pending_view_all_of()
         self._apply_pending_view_bare_attr_types()
         return result
+
+    def _apply_pending_mandatory_overrides(self) -> None:
+        """Give each attribute queued in `_pending_mandatory_overrides` its OWN, Mandatory=True `Type` clone.
+
+        `DomainType.Mandatory` (own attribute) is the ONLY place
+        `MANDATORY` can attach in this metamodel (`AttrOrParam` itself has
+        none - confirmed against `ilismeta16-classes.yml`) - correct for
+        an INLINE type (a fresh instance already built just for that one
+        attribute) but wrong for a NAMED domain reference: every attribute
+        referencing that domain resolves to the SAME registered instance
+        (confirmed empirically), so setting `Mandatory` directly on it
+        would incorrectly mark every OTHER use of the same domain as
+        mandatory too - eCH-0031 SS3.6 confirms `MANDATORY <DomainRef>` is
+        real, legal syntax (`AttrTypeDef = 'MANDATORY' [ AttrType ] | ...`,
+        `AttrType` includes `DomainRef`), and real corpus-wide (292 raw
+        occurrences, `ili_corpus/`), not a rare edge case.
+
+        Runs AFTER `forward_refs.resolve_all()`, so `instance.Type` (still
+        a `ForwardRef` at the point `_attach_unclaimed_results` queued this
+        instance) now holds the actual resolved instance - a plain shallow
+        clone of it (own+inherited fields, no need to deep-copy any
+        composite association like `MetaAttribute`: nothing mutates a
+        built DomainType instance further after this point) with
+        `Mandatory` forced `True` replaces `instance.Type`, leaving the
+        original SHARED instance completely untouched for every other
+        attribute still referencing it. A domain already declared
+        `Mandatory=True` itself needs no clone (already correct).
+        """
+        for instance in self._pending_mandatory_overrides:
+            resolved = getattr(instance, "Type", None)
+            if not isinstance(resolved, MetaInstance) or bool(getattr(resolved, "Mandatory", False)):
+                continue
+            fields = {
+                k: v for k, v in {**resolved.__dict__, **(resolved.model_extra or {})}.items()
+                if not k.startswith("_")
+            }
+            fields["Mandatory"] = True
+            instance.Type = self.registry.new_instance(resolved._qualified_class, **fields)
 
     @staticmethod
     def _ctx_line(ctx: Any) -> int | None:
@@ -2278,54 +2325,68 @@ class InterlisModelBuilder(InterlisParserVisitor):
                                     attached_field = role
                                     break
                         if attached_on is None:
-                            if not isinstance(sub_value, ForwardRef) and (has_unresolved_sibling or not siblings):
-                                # Best-effort (see this method's docstring): a
-                                # sibling bag key (e.g. attrTypeDef.Mandatory,
-                                # meant for the Type built alongside it) has
-                                # nowhere to attach to. Two distinct cases,
-                                # both non-critical (never a `sub_value` that
-                                # IS ITSELF the broken reference - see the
-                                # `raise` below, unchanged for that case):
-                                # 1. has_unresolved_sibling: this Type is
-                                #    still an unresolved ForwardRef (e.g. a
-                                #    reference to an existing named DOMAIN,
-                                #    potentially SHARED across several uses of
-                                #    the attribute - e.g. "Owner: MANDATORY
-                                #    Owner;", domain and attribute sharing a
-                                #    name). Applying Mandatory on the SHARED
-                                #    instance once resolved would be
-                                #    uncertain (which use would be right if
-                                #    several differ?).
-                                # 2. not siblings: NO sibling
-                                #    MetaInstance/ForwardRef exists in this
-                                #    bag AT ALL to even attempt an attach -
-                                #    confirmed real on `HAli: MANDATORY
-                                #    HALIGNMENT;`
-                                #    (CHBase_Part6_GRAPHICANNOTATIONS_V1/V2.ili):
-                                #    `alignmentType()` (grammar - "HALIGNMENT"/
-                                #    "VALIGNMENT" are RESERVED tokens,
-                                #    grammatically impossible to declare via
-                                #    domainDef - confirmed, `DOMAIN HALIGNMENT
-                                #    = ...` is a syntax rejection, not a
-                                #    missing binding) deliberately builds NO
-                                #    instance at all (target: null, same
-                                #    category as booleanType/oIDType for
-                                #    BOOLEAN/ANYOID/UUIDOID) - so its bag only
-                                #    contains an opaque TEXT value
-                                #    ("resolved_type"), never an instance for
-                                #    Mandatory to land on. Before this fix,
-                                #    `has_unresolved_sibling` stayed FALSE (no
-                                #    ForwardRef, just an inert dict) and the
-                                #    code fell into the `raise` -
-                                #    `interlis build`/`validate` crashed
-                                #    entirely as soon as an attribute typed
-                                #    HALIGNMENT/VALIGNMENT MANDATORY, even
-                                #    though this type otherwise stays
-                                #    deliberately uninterpreted (same
-                                #    documented limitation as BOOLEAN) -
-                                #    silently dropping Mandatory (secondary
-                                #    info) rather than a total crash for an
-                                #    otherwise valid attribute.
+                            # `key`'s own attach failed (e.g. "Mandatory",
+                            # not a real AttrOrParam attribute) - a sibling
+                            # bag key (e.g. attrTypeDef.Type, meant to be
+                            # built alongside it) has nowhere for THIS key
+                            # to land. Two distinct, non-critical cases
+                            # (never a `sub_value` that IS ITSELF the broken
+                            # reference - see the `raise` below, unchanged
+                            # for that case):
+                            if not isinstance(sub_value, ForwardRef) and has_unresolved_sibling:
+                                # Case 1: this bag's Type is still an
+                                # unresolved ForwardRef (e.g. a reference to
+                                # an existing, possibly SHARED, named DOMAIN
+                                # - "Geom: MANDATORY Coord2D;"). `Mandatory`
+                                # specifically (2026-08-27, backlog item 14):
+                                # queued in `_pending_mandatory_overrides`,
+                                # resolved by
+                                # `_apply_pending_mandatory_overrides` AFTER
+                                # `forward_refs.resolve_all()` - a private,
+                                # Mandatory=True clone of the resolved Type
+                                # replaces `instance.Type`, never mutating
+                                # the shared domain instance every OTHER
+                                # attribute referencing it might also
+                                # resolve to (applying it directly on the
+                                # shared instance here, before resolution,
+                                # would be wrong regardless of timing - which
+                                # use would be right if several differ?).
+                                # Anything else in this situation still has
+                                # nowhere principled to land - silently
+                                # skipped, same as before this fix.
+                                if key == "Mandatory" and sub_value is True:
+                                    self._pending_mandatory_overrides.append(instance)
+                                continue
+                            if not isinstance(sub_value, ForwardRef) and not siblings:
+                                # Case 2: NO sibling MetaInstance/ForwardRef
+                                # exists in this bag AT ALL to even attempt
+                                # an attach - confirmed real on `HAli:
+                                # MANDATORY HALIGNMENT;`
+                                # (CHBase_Part6_GRAPHICANNOTATIONS_V1/V2.ili):
+                                # `alignmentType()` (grammar - "HALIGNMENT"/
+                                # "VALIGNMENT" are RESERVED tokens,
+                                # grammatically impossible to declare via
+                                # domainDef - confirmed, `DOMAIN HALIGNMENT
+                                # = ...` is a syntax rejection, not a
+                                # missing binding) deliberately builds NO
+                                # instance at all (target: null, same
+                                # category as booleanType/oIDType for
+                                # BOOLEAN/ANYOID/UUIDOID) - so its bag only
+                                # contains an opaque TEXT value
+                                # ("resolved_type"), never an instance for
+                                # Mandatory to land on. Before the original
+                                # fix for this case, `has_unresolved_sibling`
+                                # stayed FALSE (no ForwardRef, just an inert
+                                # dict) and the code fell into the `raise` -
+                                # `interlis build`/`validate` crashed
+                                # entirely as soon as an attribute typed
+                                # HALIGNMENT/VALIGNMENT MANDATORY, even
+                                # though this type otherwise stays
+                                # deliberately uninterpreted (same
+                                # documented limitation as BOOLEAN) -
+                                # silently dropping Mandatory (secondary
+                                # info) rather than a total crash for an
+                                # otherwise valid attribute.
                                 continue
                             raise
                     if attached_on is not None and isinstance(sub_value, ForwardRef):

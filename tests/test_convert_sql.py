@@ -86,24 +86,13 @@ def test_geometry_column_uses_sfa_type_and_resolved_srid():
     table = _table(tables, "parcel")
     geom = next(c for c in table.columns if c.name == "geom")
     assert geom.sql_type == "geometry(Point, 2056)"
-    # NOT `assert not geom.nullable`: a pre-existing, orthogonal metamodel
-    # gap (found 2026-08-27 while writing this test, confirmed also
-    # affecting the JSON Schema pipeline's "required" array, not something
-    # this Lot introduced) - `MANDATORY <named domain>` (e.g. `Geom :
-    # MANDATORY Coord2D;`) never reaches `resolve_attribute`'s `mandatory`
-    # flag: `attrTypeDef.Mandatory` is bound onto the concrete DomainType
-    # INSTANCE produced by the Type dispatch (own+inherited own AttrOrParam
-    # has no Mandatory attribute at all, confirmed against
-    # ilismeta16-classes.yml - by metamodel design) - which for an INLINE
-    # type (`MANDATORY TEXT*50;`, `MANDATORY 0..999999;`) is a FRESH
-    # instance built just for that one attribute (fine), but for a NAMED
-    # domain reference (`MANDATORY Coord2D;`) is the SAME SHARED instance
-    # every other attribute using that domain also resolves to - there is
-    # nowhere correct to attach a per-USE Mandatory flag today. Fails safe
-    # (an under-constrained `nullable` column, never a wrong/dangerous
-    # NOT NULL), but real - flagged here rather than silently asserted
-    # around. Not fixed in this lot (orthogonal to backlog item 14).
-    assert geom.nullable
+    # `MANDATORY <named domain>` (e.g. `Geom : MANDATORY Coord2D;`) is a
+    # reference to a domain SHARED by every attribute using it - fixed
+    # 2026-08-27 (InterlisModelBuilder._apply_pending_mandatory_overrides,
+    # see docs/sql-conversion-strategy.md): this attribute gets its OWN
+    # private, Mandatory=True clone of Coord2D, never mutating the shared
+    # domain instance any OTHER attribute might still reference.
+    assert not geom.nullable
 
 
 def test_structure_attribute_flattened_one_level():
