@@ -85,6 +85,26 @@ END Foo.
     assert schema["properties"]["Note"] == {"type": "string"}
 
 
+def test_texttype_name_and_uri_kinds():
+    """`NAME`/`URI` (eCH-0031 SS3.2.2/SS3.8.1) - exact `pattern`/`format`+`maxLength`, not the plain string fallback."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Ident : NAME;
+      Link : URI;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = _resolved_class(builder, "A")
+    schema = class_to_json_schema(cls)
+    assert schema["properties"]["Ident"] == {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,254}$", "maxLength": 255}
+    assert schema["properties"]["Link"] == {"type": "string", "format": "uri", "maxLength": 1023}
+
+
 def test_enumtype_flat_and_nested_sorted_others_excluded():
     builder = _build(
         """INTERLIS 2.4;

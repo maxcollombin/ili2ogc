@@ -35,9 +35,26 @@ TextType:
       value: string
     maxLength:
       source: {field: MaxLength}
-      note: "absent (0..1) -> maxLength omitted, unbounded string"
-  not_mapped:
-    Kind: "NAME/plain/... text-kind distinction - status: backlog, no pattern/format decided yet"
+      note: >
+        absent (0..1) -> maxLength omitted, unbounded string. Only applies
+        to Kind in {Text, MText} - Kind Name/Uri get their maxLength from
+        the fixed bound below instead, since MaxLength is never populated
+        for those two grammar alternatives (see Kind entry).
+    Kind:
+      source: {field: Kind}
+      note: >
+        Kind=Name -> pattern "^[A-Za-z][A-Za-z0-9_]{0,254}$" + maxLength
+        255 (eCH-0031 refhb SS3.2.2 "Namen": Name = Letter {Letter|Digit|
+        '_'}; SS3.8.1: NAME (FINAL) = TEXT*255 - exact bound, not a
+        heuristic). Kind=Uri -> format "uri" + maxLength 1023 (SS3.8.1:
+        URI (FINAL) = TEXT*1023 per RFC 2396). Kind in {Text, MText}:
+        no distinguishing JSON Schema keyword applied (both stay a plain
+        "string" with the ordinary MaxLength-sourced bound above) - the
+        only semantic difference between the two (MTEXT permits CR/LF/tab,
+        TEXT does not, SS3.8.1) has no standard JSON Schema equivalent
+        worth a bespoke pattern for a single-line-vs-multi-line
+        distinction, unlike Name/Uri which have unambiguous, spec-defined
+        value ranges.
 
 EnumType:
   qualified_name: IlisMeta16.ModelData.EnumType

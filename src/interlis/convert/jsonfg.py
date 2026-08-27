@@ -17,8 +17,12 @@ object, `BAG`/`LIST OF X` -> a JSON array, both recursively (same
 xtf/validate.py's own `_validate_attrs` recursion). CoordType/LineType
 NESTED inside a structure/list element still stays unsupported (no real
 corpus DATA evidence for it - the top-level Feature's own "place" is the
-only geometry shape built so far). Multi-geometry classes stay out of
-scope too (each a separate future lot). Reuses the schema resolution
+only geometry shape built so far). A class with 2+ own+inherited
+geometry-typed attributes gets a single "place" of type
+`GeometryCollection` bundling every one of them (JSON-FG issue #134 added
+`GeometryCollection` to `place.json`'s allowed types - no separate
+conformance class needed, unlike circular-arcs/polyhedra) - see
+docs/interlis-geometry-sfa-mapping.md. Reuses the schema resolution
 already proven by
 xtf/validate.py (resolve_attribute/attributes_of/coord_axes/
 line_coord_type) AND its wire-tag helpers (_geom_tag/_find_child/
@@ -539,18 +543,25 @@ def object_to_feature(
     ever built when the caller supplies where the companion
     `model_to_json_schema` document will be reachable.
 
-    Geometry ("place"/"coordRefSys"): only when `cls` has EXACTLY ONE
-    own+inherited attribute whose type resolves directly to CoordType/
-    LineType (never via a BAG/LIST wrapper - out of scope, no real corpus
-    evidence, see docs/jsonfg-conversion-strategy.md) AND that attribute's
-    actual wire value converts cleanly (see `_place_and_crs` - a `None`
-    result, e.g. a custom LINE FORM segment or an unresolved CRS, leaves
-    the attribute in "properties" instead, marked `x-unsupported`
-    like any other out-of-scope attribute - never a silent loss). A class
-    with zero or multiple geometry-typed attributes gets no "place"
-    either (multi-geometry real cases exist - e.g. a point + an area on
-    the same class - but picking one over the other needs a policy this
-    Lot deliberately doesn't invent). "geometry" (the WGS84 GeoJSON
+    Geometry ("place"/"coordRefSys"): every own+inherited attribute whose
+    type resolves directly to CoordType/LineType (never via a BAG/LIST
+    wrapper - out of scope, no real corpus evidence, see
+    docs/jsonfg-conversion-strategy.md) AND whose actual wire value
+    converts cleanly (see `_place_and_crs` - a `None` result, e.g. a
+    custom LINE FORM segment or an unresolved CRS, leaves that one
+    attribute in "properties" instead, marked `x-unsupported` like any
+    other out-of-scope attribute - never a silent loss) is collected.
+    Exactly one such attribute becomes "place" directly (unchanged
+    behaviour); two or more become a single "place" of type
+    `GeometryCollection` bundling all of them, in declaration order - no
+    "primary" geometry is picked (real corpus evidence, e.g. `Station` in
+    `ElektrischeAnlagenNennspannungUeber36kV_V1.ili`: a mandatory point +
+    an optional area, both meaningful, neither disposable) - all members
+    of the collection must share the exact same `coordRefSys` (they
+    always do in every real case found; a class whose geometry attributes
+    disagree on CRS gets no "place" at all instead of guessing which one
+    wins). A class with zero resolvable geometry attributes still gets no
+    "place" (nothing to build it from). "geometry" (the WGS84 GeoJSON
     fallback) always stays `null` here - reprojecting LV95/LV03 to WGS84
     would need a real coordinate-transform dependency, out of scope for
     this pure-Python runtime; JSON-FG core explicitly allows this
@@ -563,19 +574,32 @@ def object_to_feature(
     place: dict[str, Any] | None = None
     crs_uri: str | None = None
     geometry_names = [name for name, r in resolved_attrs.items() if r.type_kind in _GEOMETRY_KINDS]
-    if len(geometry_names) == 1:
-        geom_name = geometry_names[0]
+    resolved_geometries: list[tuple[str, dict[str, Any], str]] = []
+    for geom_name in geometry_names:
         raw_nodes = obj.attributes.get(geom_name)
-        if raw_nodes:
-            result = _place_and_crs(resolved_attrs[geom_name], raw_nodes[0])
-            if result is not None:
-                place, crs_uri = result
+        if not raw_nodes:
+            continue
+        result = _place_and_crs(resolved_attrs[geom_name], raw_nodes[0])
+        if result is not None:
+            resolved_geometries.append((geom_name, *result))
+    if len(resolved_geometries) == 1:
+        geom_name, place, crs_uri = resolved_geometries[0]
+        properties.pop(geom_name, None)
+    elif len(resolved_geometries) >= 2:
+        crs_values = {crs for _, _, crs in resolved_geometries}
+        if len(crs_values) == 1:
+            place = {"type": "GeometryCollection", "geometries": [g for _, g, _ in resolved_geometries]}
+            crs_uri = crs_values.pop()
+            for geom_name, _, _ in resolved_geometries:
                 properties.pop(geom_name, None)
 
     feature: dict[str, Any] = {"type": "Feature"}
     if standalone:
         conforms_to = [CONF_CORE, CONF_TYPES_SCHEMAS]
-        if place is not None and place.get("type") in _CIRCULAR_ARC_TYPES:
+        place_types = {place.get("type")} if place is not None else set()
+        if place is not None and place.get("type") == "GeometryCollection":
+            place_types = {g.get("type") for g in place.get("geometries", [])}
+        if place_types & _CIRCULAR_ARC_TYPES:
             conforms_to.append(CONF_CIRCULAR_ARCS)
         feature["conformsTo"] = conforms_to
     if obj.tid is not None:

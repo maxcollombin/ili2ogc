@@ -105,8 +105,26 @@ def _num_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     return schema
 
 
+# eCH-0031 SS3.2.2 "Namen": Name = Letter {Letter|Digit|'_'} (255 chars max) -
+# and SS3.8.1: `NAME (FINAL) = TEXT*255` / `URI (FINAL) = TEXT*1023` (RFC 2396).
+# Both bounds are exact per the grammar's own alternative (`TextType = ...
+# | 'NAME' | 'URI'` - neither carries a `MaxLength-PosNumber`, so
+# `TextType.MaxLength` is never populated for them and is supplied here
+# instead), so `pattern`/`format`/`maxLength` are faithful, not approximated.
+_INTERLIS_NAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{0,254}$"
+
+
 def _text_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     schema: dict[str, Any] = {"type": "string"}
+    kind = getattr(type_instance, "Kind", None)
+    if kind == "Name":
+        schema["pattern"] = _INTERLIS_NAME_PATTERN
+        schema["maxLength"] = 255
+        return schema
+    if kind == "Uri":
+        schema["format"] = "uri"
+        schema["maxLength"] = 1023
+        return schema
     max_length = getattr(type_instance, "MaxLength", None)
     if max_length is not None:
         try:

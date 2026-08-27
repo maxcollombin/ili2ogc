@@ -127,6 +127,8 @@ MODEL Foo AT "http://x" VERSION "1" =
     !!@CRS=EPSG:2056
     MultiCoord2D = MULTICOORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000;
     NoCrsCoord = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+    !!@CRS=EPSG:21781
+    Coord2DOther = COORD 400000.000 .. 900000.000, 0.000 .. 400000.000;
     Line = POLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2D;
     MultiLine = MULTIPOLYLINE WITH (STRAIGHTS, ARCS) VERTEX Coord2D;
     Poly = SURFACE WITH (STRAIGHTS) VERTEX Coord2D WITHOUT OVERLAPS > 0.001;
@@ -161,6 +163,10 @@ MODEL Foo AT "http://x" VERSION "1" =
       Point : MANDATORY Coord2D;
       Area : Poly;
     END ATwoGeoms;
+    CLASS ATwoGeomsDiffCrs =
+      PointA : MANDATORY Coord2D;
+      PointB : MANDATORY Coord2DOther;
+    END ATwoGeomsDiffCrs;
   END T;
 END Foo.
 """
@@ -470,17 +476,62 @@ def test_missing_crs_meta_falls_back_to_unsupported_property():
     assert feature["properties"]["Geom"] == {"x-unsupported": "CoordType"}
 
 
-def test_multi_geometry_class_gets_no_place():
+def test_multi_geometry_class_gets_geometry_collection_place():
+    """A class with 2 resolvable geometry attributes (real corpus shape: `Station`, point + area) bundles both into one `GeometryCollection` - no "primary" is picked."""
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ATwoGeoms")
+    outer = _wrap("BOUNDARY", _wrap(
+        "POLYLINE", _coord("0.0", "0.0"), _coord("10.0", "0.0"), _coord("10.0", "10.0"), _coord("0.0", "0.0"),
+    ))
+    obj = XtfObject(
+        tid="tg-1", qualified_class="Foo.T.ATwoGeoms",
+        attributes={
+            "Point": [_wrap("Point", _coord("2600000.0", "1200000.0"))],
+            "Area": [_wrap("Area", _wrap("SURFACE", outer))],
+        },
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "GeometryCollection",
+        "geometries": [
+            {"type": "Point", "coordinates": [2600000.0, 1200000.0]},
+            {"type": "Polygon", "coordinates": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]]]},
+        ],
+    }
+    assert feature["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+    assert "Point" not in feature["properties"]
+    assert "Area" not in feature["properties"]
+
+
+def test_multi_geometry_class_with_only_one_attribute_populated():
+    """Only one of the two geometry-typed attributes has a wire value - unchanged single-geometry behaviour, no collection wrapping."""
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ATwoGeoms")
     obj = XtfObject(
-        tid="tg-1", qualified_class="Foo.T.ATwoGeoms",
+        tid="tg-2", qualified_class="Foo.T.ATwoGeoms",
         attributes={"Point": [_wrap("Point", _coord("2600000.0", "1200000.0"))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {"type": "Point", "coordinates": [2600000.0, 1200000.0]}
+    assert "Area" not in feature["properties"]
+
+
+def test_multi_geometry_class_with_mismatched_crs_gets_no_place():
+    """No real corpus evidence of this ever occurring - defensive coverage only (RULE #5: never guess which CRS wins)."""
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ATwoGeomsDiffCrs")
+    obj = XtfObject(
+        tid="tg-3", qualified_class="Foo.T.ATwoGeomsDiffCrs",
+        attributes={
+            "PointA": [_wrap("PointA", _coord("2600000.0", "1200000.0"))],
+            "PointB": [_wrap("PointB", _coord("600000.0", "200000.0"))],
+        },
     )
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
     assert "coordRefSys" not in feature
-    assert feature["properties"]["Point"] == {"x-unsupported": "CoordType"}
+    assert feature["properties"]["PointA"] == {"x-unsupported": "CoordType"}
+    assert feature["properties"]["PointB"] == {"x-unsupported": "CoordType"}
 
 
 def test_without_meta_capture_crs_is_unresolved():
