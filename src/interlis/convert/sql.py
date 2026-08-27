@@ -30,7 +30,12 @@ simple (Kind=GlobalU, no `->` navigation) constraint form, `BAG`/`LIST OF`
 -> a related child table with its own `UNIQUE (LOCAL)` support
 (`_local_unique_constraints_for_class` - scoped to that child table via
 its `<parent>_fk` column, e.g. `UNIQUE (LOCAL) Entries: Code;` ->
-`UNIQUE (parent_fk, code)` on the `entries` child table), and CHECK from a
+`UNIQUE (parent_fk, code)` on the `entries` child table; also reached when
+the `BAG`/`LIST OF` AND its `UNIQUE (LOCAL)` are declared on a STRUCTURE
+embedded one level down in the Class, the dominant real corpus idiom, e.g.
+`LocalisationCH_V1.MultilingualText` - `_columns_for_class` qualifies the
+child table's label with the STRUCTURE attribute's own name in that case,
+e.g. `<class>_<struct_attr>_entries`), and CHECK from a
 row-local `MANDATORY CONSTRAINT` (`_expression_to_sql`, same supported
 `Expression` subset as `constraint_eval.py`'s `evaluate_expression` -
 relational/logical operators, `DEFINED(...)`, plain attribute paths up to
@@ -256,8 +261,8 @@ def _scalar_sql_type(resolved: ResolvedAttribute) -> str | None:
 
 def _columns_for_class(
     cls: MetaInstance, symbol_table: SymbolTable | None, *, prefix: str = "",
-) -> tuple[list[Column], list[ForeignKey], list[str], list[tuple[str, MetaInstance]]]:
-    """Return `(columns, foreign_keys, notes, child_specs)` for `cls`'s own+inherited members, flattening one level of STRUCTURE nesting inline.
+) -> tuple[list[Column], list[ForeignKey], list[str], list[tuple[str, MetaInstance]], dict[str, list[list[str]]]]:
+    """Return `(columns, foreign_keys, notes, child_specs, local_unique)` for `cls`'s own+inherited members, flattening one level of STRUCTURE nesting inline.
 
     `prefix` is only ever non-empty on the recursive call flattening a
     STRUCTURE attribute (`"<attr>_"`) - used both to build flattened column
@@ -266,18 +271,31 @@ def _columns_for_class(
     mappings/ilismeta16-to-sql-rules.yml's StructureNesting entry).
 
     `child_specs` is `[(label, MultiValue instance), ...]` for every
-    `BAG`/`LIST OF` member found at the TOP level (`prefix == ""`) - built
-    into a related child table by `_build_child_table` (called from
-    `build_tables`, which alone knows the already-used table names to
-    disambiguate against). A `BAG`/`LIST OF` NESTED inside a flattened
-    STRUCTURE (`prefix` non-empty) stays a plain `-- NOTE` - the SAME
-    "one level only" scope limit as STRUCTURE nesting itself, not
-    attempted here.
+    `BAG`/`LIST OF` member found either at the TOP level OR while
+    flattening a STRUCTURE one level deep (`label` already carries the
+    `"<struct_attr>_"` prefix in the latter case, e.g.
+    `"zustaendige_behoerde_entries"`) - built into a related child table by
+    `_build_child_table` (called from `build_tables`, which alone knows the
+    already-used table names to disambiguate against). A `BAG`/`LIST OF`
+    found NESTED TWO levels deep (inside a STRUCTURE reached from another
+    flattened STRUCTURE) can't occur here: STRUCTURE-in-STRUCTURE is itself
+    refused one check below, so `prefix` is never more than one hop by the
+    time a `MultiValue` is seen.
+
+    `local_unique` is the SAME shape `_local_unique_constraints_for_class`
+    returns, merged up from any nested STRUCTURE's OWN `Kind=LocalU`
+    `UniqueConstraint` (the real corpus idiom, e.g. `LocalisationCH_V1.
+    MultilingualText` wraps a `BAG`/`LIST` AND declares `UNIQUE (LOCAL)` on
+    itself, not on the embedding Class) - keys qualified with the SAME
+    `"<struct_attr>_"` prefix as the matching `child_specs` label, so
+    `build_tables` can look them up together without knowing they came
+    from a nested STRUCTURE at all.
     """
     columns: list[Column] = []
     foreign_keys: list[ForeignKey] = []
     notes: list[str] = []
     child_specs: list[tuple[str, MetaInstance]] = []
+    local_unique: dict[str, list[list[str]]] = {}
     members = schema_members_of(cls, symbol_table) if symbol_table is not None else attributes_of(cls)
     for name, attr in members.items():
         resolved = resolve_attribute(attr)
@@ -285,8 +303,8 @@ def _columns_for_class(
         col_name = _sql_identifier(label)
 
         if resolved.type_kind == "MultiValue":
-            if prefix or not isinstance(resolved.type_instance, MetaInstance):
-                notes.append(f"{label}: BAG/LIST OF nested inside a flattened STRUCTURE - not supported (Lot 1)")
+            if not isinstance(resolved.type_instance, MetaInstance):
+                notes.append(f"{label}: BAG/LIST OF element type not resolved")
                 continue
             child_specs.append((label, resolved.type_instance))
             continue
@@ -298,12 +316,17 @@ def _columns_for_class(
             if bool(getattr(resolved.type_instance, "Abstract", False)):
                 notes.append(f"{label}: ABSTRACT structure - polymorphism not supported (Lot 1)")
                 continue
-            sub_columns, sub_fks, sub_notes, _sub_child_specs = _columns_for_class(
+            sub_columns, sub_fks, sub_notes, sub_child_specs, _sub_local_unique = _columns_for_class(
                 resolved.type_instance, symbol_table, prefix=f"{label}_",
             )
             columns.extend(sub_columns)
             foreign_keys.extend(sub_fks)
             notes.extend(sub_notes)
+            child_specs.extend(sub_child_specs)
+            struct_local_unique, struct_local_unique_notes = _local_unique_constraints_for_class(resolved.type_instance)
+            for role_attr, groups in struct_local_unique.items():
+                local_unique.setdefault(f"{label}_{role_attr}", []).extend(groups)
+            notes.extend(f"{label}: {note}" for note in struct_local_unique_notes)
             continue
 
         if resolved.type_kind in ("Class", "ReferenceType") and resolved.type_instance is not None:
@@ -333,7 +356,7 @@ def _columns_for_class(
             continue
 
         notes.append(f"{label}: unsupported type {resolved.type_kind!r}")
-    return columns, foreign_keys, notes, child_specs
+    return columns, foreign_keys, notes, child_specs, local_unique
 
 
 def _build_child_table(
@@ -386,7 +409,7 @@ def _build_child_table(
     if base_kind == "Class" and _is_structure(base_type):
         if bool(getattr(base_type, "Abstract", False)):
             return None, {}, "BAG/LIST OF an ABSTRACT structure - polymorphism not supported (Lot 1)"
-        sub_columns, sub_fks, sub_notes, _sub_child_specs = _columns_for_class(base_type, symbol_table)
+        sub_columns, sub_fks, sub_notes, _sub_child_specs, _sub_local_unique = _columns_for_class(base_type, symbol_table)
         columns.extend(sub_columns)
         foreign_keys.extend(sub_fks)
         notes.extend(sub_notes)
@@ -717,7 +740,7 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
             suffix += 1
         used_table_names.add(table_name)
 
-        columns, foreign_keys, notes, child_specs = _columns_for_class(cls, symbol_table)
+        columns, foreign_keys, notes, child_specs, nested_local_unique = _columns_for_class(cls, symbol_table)
         renamed = _avoid_identity_collision(columns)
         unique_constraints, unique_notes = _unique_constraints_for_class(cls, table_name)
         for unique in unique_constraints:
@@ -732,6 +755,8 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
             valid_unique_constraints.append(unique)
         check_constraints, check_notes = _check_constraints_for_class(cls, table_name, column_names, renamed)
         local_unique, local_unique_notes = _local_unique_constraints_for_class(cls)
+        for attr_name, groups in nested_local_unique.items():
+            local_unique.setdefault(attr_name, []).extend(groups)
 
         parent_table = Table(
             name=table_name, columns=columns, unique_constraints=valid_unique_constraints,

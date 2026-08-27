@@ -641,8 +641,8 @@ def test_unique_local_executes_against_real_sqlite_and_enforces_per_parent_scope
         )
 
 
-def test_unique_local_nested_inside_a_flattened_structure_stays_out_of_scope():
-    """Dominant real corpus idiom (`ili_corpus/KbS_V1_5.ili`'s MultilingualUri/MultilingualText pattern - UNIQUE (LOCAL) declared on a STRUCTURE wrapping the BAG/LIST, itself embedded one level into a Class): still out of scope, since the BAG/LIST is nested inside a flattened STRUCTURE (a separate, pre-existing limit, RULE #5 note already covers it) - the UNIQUE (LOCAL) itself is silently absorbed by the SAME note, not a second, confusing one."""
+def test_unique_local_on_a_structure_nested_one_level_into_a_class():
+    """Dominant real corpus idiom (`ili_corpus/KbS_V1_5.ili`'s MultilingualUri/MultilingualText pattern): a STRUCTURE wraps the BAG/LIST AND declares UNIQUE (LOCAL) on itself, embedded one level into a Class as an ordinary attribute - the child table is qualified with the STRUCTURE attribute's own name (`parcel_name_entries`, not `parcel_entries`), with its UNIQUE (LOCAL) applied exactly like the direct-on-Class case."""
     builder = _build(
         """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
@@ -664,6 +664,50 @@ END Foo.
     )
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     tables = build_tables([parcel])
-    table = _table(tables, "parcel")
-    assert not any(t.name == "parcel_entries" for t in tables)  # no child table - the BAG/LIST never left the flattened STRUCTURE
-    assert any("nested inside a flattened STRUCTURE" in note for note in table.notes)
+    child = _table(tables, "parcel_name_entries")
+    assert {c.name for c in child.columns} == {"parcel_fk", "language", "text"}
+    assert any(u.columns == ["parcel_fk", "language"] for u in child.unique_constraints)
+    assert child.foreign_keys[0].columns == ["parcel_fk"]
+    assert child.foreign_keys[0].ref_table == "parcel"
+
+
+def test_unique_local_on_a_nested_structure_executes_against_real_sqlite_and_enforces_per_parent_scope():
+    """Not just text assembly - same live-engine discipline as the direct-on-Class case above."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE LocalisedText =
+      Language : TEXT*2;
+      Text : MANDATORY TEXT*50;
+    END LocalisedText;
+    STRUCTURE MultilingualText =
+      Entries : BAG {1..*} OF LocalisedText;
+      UNIQUE (LOCAL) Entries: Language;
+    END MultilingualText;
+    CLASS Parcel =
+      Name : MANDATORY MultilingualText;
+    END Parcel;
+  END T;
+END Foo.
+"""
+    )
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    ddl = render_gpkg(build_tables([parcel]))
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(ddl.split("INSERT INTO gpkg_contents")[0])
+    conn.execute("INSERT INTO parcel (id) VALUES (?)", ("p1",))
+    conn.execute("INSERT INTO parcel (id) VALUES (?)", ("p2",))
+    conn.execute(
+        "INSERT INTO parcel_name_entries (id, parcel_fk, language, text) VALUES (?,?,?,?)",
+        ("e1", "p1", "de", "Parzelle"),
+    )
+    conn.execute(  # same language, DIFFERENT parent - must be allowed (that's the whole point of "LOCAL")
+        "INSERT INTO parcel_name_entries (id, parcel_fk, language, text) VALUES (?,?,?,?)",
+        ("e2", "p2", "de", "Parzelle"),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(  # same language, SAME parent - must be rejected
+            "INSERT INTO parcel_name_entries (id, parcel_fk, language, text) VALUES (?,?,?,?)",
+            ("e3", "p1", "de", "Parcelle"),
+        )

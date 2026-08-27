@@ -147,10 +147,11 @@ UniqueConstraint:
         position, path length is the real signal) and stays backlog.
         Kind=LocalU maps too: each UniqueDef path [role_hop, sub_attr]
         becomes a compound UNIQUE (<parent>_fk, sub_attr, ...) on the
-        matching BAG/LIST OF child table - see
+        matching BAG/LIST OF child table, including the dominant real
+        idiom where the BAG/LIST AND its UNIQUE (LOCAL) are declared on a
+        STRUCTURE embedded one level into the Class - see
         mappings/ilismeta16-to-sql-rules.yml's UniqueConstraint entry for
-        the real-corpus coverage caveat (blocked for the dominant idiom by
-        a separate, pre-existing STRUCTURE-nesting limit).
+        the qualified child-table naming this case uses.
 
 Constraint:
   qualified_name: IlisMeta16.ModelData.SimpleConstraint

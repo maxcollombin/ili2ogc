@@ -218,13 +218,15 @@ concepts:
       spec/grammar/mapping/07_constraints.yml's `localUniqueness` entry)
       into a compound `UNIQUE (<parent>_fk, <sub_attr>, ...)` on the
       matching `BAG`/`LIST OF` child table - scoped per parent, not the
-      whole table. Real corpus coverage is narrower than the raw
-      percentage suggests: the dominant real idiom wraps the `BAG`/`LIST`
-      in its own small STRUCTURE (`UNIQUE (LOCAL)` declared on THAT
-      structure), then embeds it one level into a Class - still blocked
-      by the separate, pre-existing "`BAG`/`LIST OF` nested inside a
-      flattened `STRUCTURE`" limit (see docs/sql-conversion-strategy.md
-      for the full breakdown and why lifting it is a separate decision).
+      whole table. The dominant real idiom - a small STRUCTURE wrapping the
+      `BAG`/`LIST` AND declaring `UNIQUE (LOCAL)` on itself, then embedded
+      one level into a Class - is mapped too: `_columns_for_class` merges
+      the STRUCTURE's own `UniqueDef`s into the SAME lookup, qualified with
+      the STRUCTURE attribute's own name (e.g. `UNIQUE (LOCAL) LocalisedText:
+      Language;` on `MultilingualUri`, embedded as `URL_Behoerde`, becomes
+      `UNIQUE (<parent>_fk, language)` on the `<parent>_url_behoerde_localisedtext`
+      child table) - see docs/sql-conversion-strategy.md for the full
+      derivation and real-corpus verification.
 
       Any `->` cross-reference path (~10% - not expressible as a plain
       SQL table constraint at all, a constraint can't reference ANOTHER
