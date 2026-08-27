@@ -445,7 +445,7 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
 
     collection = transfer_to_feature_collection(
         transfer, symbol_table=builder.symbol_table, repository=repository, views=views,
-        schema_url=args.feature_schema_url,
+        schema_url=args.feature_schema_url, include_child_rows=args.include_child_rows,
     )
     text = json.dumps(collection, indent=2, ensure_ascii=False)
     if args.output:
@@ -544,6 +544,13 @@ def main(argv: list[str] | None = None) -> int:
         "--feature-schema-url", default=None, metavar="URL",
         help="URL/path of the companion 'interlis convert' JSON Schema output for the same .ili model - "
         "when given, populates the JSON-FG 'featureSchema' member (clause 13). Omitted: 'featureSchema' is not emitted.",
+    )
+    convert_jsonfg_parser.add_argument(
+        "--include-child-rows", action="store_true",
+        help="Also emit one Feature per BAG/LIST OF occurrence, with its own 'featureType' matching a "
+        "'interlis convert-sql' child table name (see docs/sql-conversion-strategy.md) - loaded into that same "
+        "table by GDAL's own featureType-based table splitting, in the SAME 'ogr2ogr -append' as the main data. "
+        "Omitted (default): BAG/LIST occurrences stay inlined as a plain JSON array property, as before.",
     )
     convert_jsonfg_parser.set_defaults(func=cmd_convert_jsonfg)
 

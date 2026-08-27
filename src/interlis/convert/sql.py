@@ -5,29 +5,31 @@ mappings/ilismeta16-to-sql-rules.yml / spec/conversion/sql-mapping.yml for
 the concept/field contract this module implements.
 
 Division of labor (docs/interlis-ogc-architecture.md): this module
-generates the SCHEMA only (`CREATE TABLE` + inline `UNIQUE` +
-`ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`) - GDAL (`ogr2ogr
--append`) still does the actual DATA LOADING from this project's own `.xtf
--> JSON-FG` output into the tables this module creates. `build_tables()`
-produces a dialect-neutral intermediate representation (`Table`/`Column`/
-`UniqueConstraint`/`ForeignKey`) from already-built `IlisMeta16` instances,
-walked once via the SAME `resolve_attribute`/`attributes_of`/
-`schema_members_of` helpers `convert/jsonschema.py` already uses (no
-parallel resolution logic) - `render_postgresql` is the first, complete
-renderer over that IR; a future GeoPackage/SQLite renderer would consume
-the SAME IR (see docs/sql-conversion-strategy.md's SQLite ALTER TABLE
-finding for why it needs its own renderer, not just different
-identifier-quoting rules).
+generates the SCHEMA only (`CREATE TABLE` + `UNIQUE` + `FOREIGN KEY`) -
+GDAL (`ogr2ogr -append`) still does the actual DATA LOADING, including
+into `BAG`/`LIST OF` child tables: `convert/jsonfg.py`'s
+`child_feature_collections` emits a companion FeatureCollection per
+`BAG`/`LIST` attribute (one Feature per element, `<parent>_fk` carrying
+the parent's OID) that GDAL loads with its own SEPARATE `ogr2ogr -append`
+call, exactly like the main data - see docs/sql-conversion-strategy.md
+for why this keeps the "this project transforms, GDAL loads" division
+intact rather than adding a live-database-write dependency.
+`build_tables()` produces a dialect-neutral intermediate representation
+(`Table`/`Column`/`UniqueConstraint`/`ForeignKey`) from already-built
+`IlisMeta16` instances, walked once via the SAME `resolve_attribute`/
+`attributes_of`/`schema_members_of` helpers `convert/jsonschema.py`
+already uses (no parallel resolution logic) - `render_postgresql`/
+`render_gpkg` are the two renderers over that IR.
 
 Lot 1 scope (see mappings/ilismeta16-to-sql-rules.yml for the full,
 per-concept rationale): scalar/geometry columns, one level of flattened
-STRUCTURE nesting, FOREIGN KEY from REFERENCE TO/embedded roles, and
-UNIQUE from the simple (Kind=GlobalU, no `->` navigation) constraint form
-only. `BAG`/`LIST OF` attributes, ABSTRACT structure polymorphism,
-`(LOCAL)`/cross-reference UNIQUE, and CHECK from CONSTRAINT are all
-deliberately out of scope - never silently dropped, each unsupported
-construct is collected into `Table.notes` and rendered as a `-- NOTE`
-SQL comment (RULE #5).
+STRUCTURE nesting, FOREIGN KEY from REFERENCE TO/embedded roles, UNIQUE
+from the simple (Kind=GlobalU, no `->` navigation) constraint form, and
+`BAG`/`LIST OF` -> a related child table. ABSTRACT structure
+polymorphism, `(LOCAL)`/cross-reference UNIQUE, and CHECK from CONSTRAINT
+are all deliberately out of scope - never silently dropped, each
+unsupported construct is collected into `Table.notes` and rendered as a
+`-- NOTE` SQL comment (RULE #5).
 """
 from dataclasses import dataclass, field
 
@@ -45,8 +47,8 @@ from interlis.xtf.schema import (
     schema_members_of,
 )
 
-OID_COLUMN = "ogc_fid"
-"""Matches GDAL's PostgreSQL driver's own default FID column name (verified 2026-08-27, `pg.html`) - `ogr2ogr -append` needs no extra `-lco FID=...`."""
+OID_COLUMN = "id"
+"""Deliberately NOT `PRIMARY KEY`/GDAL's own default FID column name (`ogc_fid`) - verified empirically (2026-08-27, a real `ogr2ogr -append` against a live PostgreSQL AND GeoPackage) that GDAL treats WHATEVER column it detects as the table's `PRIMARY KEY` as an auto-managed FID slot, excluded from the INSERT column list entirely (expects the database to fill it in, e.g. `SERIAL`) - a Feature's `"id"` is NEVER written into it, `PRIMARY KEY "ogc_fid" text` silently stayed NULL and violated its own NOT NULL constraint. `"id"` matches EXACTLY what the JSON-FG reader (`ogrinfo`, confirmed) exposes as a plain STRING FIELD in its own right, separate from OGR's internal FID concept - declared `UNIQUE NOT NULL` (never `PRIMARY KEY`) so GDAL treats it as a normal field to WRITE, not a slot to manage. See docs/sql-conversion-strategy.md for the full investigation."""
 
 _GEOMETRY_KINDS = {"CoordType", "LineType"}
 _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL's own identifier length limit - a real ceiling, not an arbitrary one.
@@ -68,6 +70,39 @@ def _sql_identifier(name: str) -> str:
 
 def _truncate_identifier(name: str) -> str:
     return name if len(name) <= _MAX_IDENTIFIER_LENGTH else name[:_MAX_IDENTIFIER_LENGTH]
+
+
+def _avoid_identity_collision(columns: list[Column]) -> dict[str, str]:
+    """Rename any column literally named `OID_COLUMN` ("id") to `"id_attr"` (or `"id_attr_2"`, ... on a further collision), IN PLACE - returns the `{old_name: new_name}` rename map.
+
+    Real corpus case (found 2026-08-27 via a live SQLite run,
+    `ili_corpus/WasserBase_V1_1.ili`: `ID : MANDATORY TEXT*25;` -
+    "duplicate column name: id"): a genuine INTERLIS attribute literally
+    named `Id`/`ID` lowercases to the SAME name this module reserves for
+    the synthetic identity column (`OID_COLUMN`) - renaming the ATTRIBUTE's
+    own column here rather than the reserved one, which every FOREIGN KEY
+    and every GDAL `-append` already depends on matching exactly. The
+    caller MUST also apply the returned rename map to any `UniqueConstraint`
+    built from the SAME attribute set (its own column list is computed
+    independently, straight from `PathEl.Ref`, and would otherwise still
+    reference the OLD, no-longer-existing name).
+    """
+    used = {c.name for c in columns}
+    renamed: dict[str, str] = {}
+    for column in columns:
+        if column.name != OID_COLUMN:
+            continue
+        base_name = f"{OID_COLUMN}_attr"
+        new_name = base_name
+        suffix = 2
+        while new_name in used:
+            new_name = f"{base_name}_{suffix}"
+            suffix += 1
+        used.discard(OID_COLUMN)
+        used.add(new_name)
+        column.name = new_name
+        renamed[OID_COLUMN] = new_name
+    return renamed
 
 
 def _quote(name: str) -> str:
@@ -201,18 +236,28 @@ def _scalar_sql_type(resolved: ResolvedAttribute) -> str | None:
 
 def _columns_for_class(
     cls: MetaInstance, symbol_table: SymbolTable | None, *, prefix: str = "",
-) -> tuple[list[Column], list[ForeignKey], list[str]]:
-    """Return `(columns, foreign_keys, notes)` for `cls`'s own+inherited members, flattening one level of STRUCTURE nesting inline.
+) -> tuple[list[Column], list[ForeignKey], list[str], list[tuple[str, MetaInstance]]]:
+    """Return `(columns, foreign_keys, notes, child_specs)` for `cls`'s own+inherited members, flattening one level of STRUCTURE nesting inline.
 
     `prefix` is only ever non-empty on the recursive call flattening a
     STRUCTURE attribute (`"<attr>_"`) - used both to build flattened column
     names AND to detect/refuse a second level of nesting (RULE #7: not
     attempted without a policy for it, see
     mappings/ilismeta16-to-sql-rules.yml's StructureNesting entry).
+
+    `child_specs` is `[(label, MultiValue instance), ...]` for every
+    `BAG`/`LIST OF` member found at the TOP level (`prefix == ""`) - built
+    into a related child table by `_build_child_table` (called from
+    `build_tables`, which alone knows the already-used table names to
+    disambiguate against). A `BAG`/`LIST OF` NESTED inside a flattened
+    STRUCTURE (`prefix` non-empty) stays a plain `-- NOTE` - the SAME
+    "one level only" scope limit as STRUCTURE nesting itself, not
+    attempted here.
     """
     columns: list[Column] = []
     foreign_keys: list[ForeignKey] = []
     notes: list[str] = []
+    child_specs: list[tuple[str, MetaInstance]] = []
     members = schema_members_of(cls, symbol_table) if symbol_table is not None else attributes_of(cls)
     for name, attr in members.items():
         resolved = resolve_attribute(attr)
@@ -220,7 +265,10 @@ def _columns_for_class(
         col_name = _sql_identifier(label)
 
         if resolved.type_kind == "MultiValue":
-            notes.append(f"{label}: BAG/LIST OF - needs a related child table, not supported yet (Lot 1)")
+            if prefix or not isinstance(resolved.type_instance, MetaInstance):
+                notes.append(f"{label}: BAG/LIST OF nested inside a flattened STRUCTURE - not supported (Lot 1)")
+                continue
+            child_specs.append((label, resolved.type_instance))
             continue
 
         if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
@@ -230,7 +278,9 @@ def _columns_for_class(
             if bool(getattr(resolved.type_instance, "Abstract", False)):
                 notes.append(f"{label}: ABSTRACT structure - polymorphism not supported (Lot 1)")
                 continue
-            sub_columns, sub_fks, sub_notes = _columns_for_class(resolved.type_instance, symbol_table, prefix=f"{label}_")
+            sub_columns, sub_fks, sub_notes, _sub_child_specs = _columns_for_class(
+                resolved.type_instance, symbol_table, prefix=f"{label}_",
+            )
             columns.extend(sub_columns)
             foreign_keys.extend(sub_fks)
             notes.extend(sub_notes)
@@ -263,7 +313,90 @@ def _columns_for_class(
             continue
 
         notes.append(f"{label}: unsupported type {resolved.type_kind!r}")
-    return columns, foreign_keys, notes
+    return columns, foreign_keys, notes, child_specs
+
+
+def _build_child_table(
+    parent_table: str, attr_name: str, multi_value: MetaInstance, symbol_table: SymbolTable | None,
+) -> tuple[Table | None, str | None]:
+    """Return `(child_table, None)` on success or `(None, reason)` on failure, for one `BAG`/`LIST OF` attribute.
+
+    Companion to `convert/jsonfg.py`'s child feature collections (see
+    docs/sql-conversion-strategy.md) - GDAL loads each via its OWN
+    `ogr2ogr -append` into the table this returns, exactly like the main
+    data (a `BAG`/`LIST` element is never inlined into the parent's own
+    JSON-FG properties for this pipeline, unlike `.xtf -> JSON-FG`'s
+    plain conversion). Schema: a `<parent>_fk` `FOREIGN KEY` back to the
+    parent (own `id` identity column added by the renderer, like every
+    table) +
+    `seq` (only when `Ordered=True` - `LIST` is order-significant, `BAG`
+    is not) + the element's own value column(s), dispatched the SAME way
+    as a plain attribute: scalar/geometry -> one `value` column;
+    `STRUCTURE` -> its own columns (reusing `_columns_for_class` directly
+    with no prefix, since THIS table already represents one structure
+    instance - a NESTED `BAG`/`LIST` inside it still isn't supported, same
+    one-level scope limit as everywhere else in this module). The
+    `ReferenceType`/non-structure `Class` branch below is DEFENSIVE only -
+    verified (2026-08-27, `attrTypeDef`'s real ANTLR bytecode, RULE #2bis)
+    that `BAG`/`LIST OF REFERENCE TO X` is NOT actually constructible by
+    this project's vendored grammar at all (`attrTypeDef`'s `(BAG|LIST)
+    OF` alternative only ever calls `restrictedStructureRef()` - a named
+    `STRUCTURE`, `ANYSTRUCTURE`, or a bare scalar `type_()`, never
+    `referenceAttr()`) - contrary to what the abstract eCH-0031 EBNF
+    alone would suggest, and confirmed absent from the real corpus too.
+    An unmapped `BaseType` kind returns `(None, reason)` - the caller
+    keeps the pre-existing "-- NOTE" on the PARENT table instead of
+    creating an empty/broken child table.
+    """
+    base_type = getattr(multi_value, "BaseType", None)
+    if not isinstance(base_type, MetaInstance):
+        return None, "BaseType not resolved"
+    base_kind = base_type._qualified_class.rsplit(".", 1)[-1]
+
+    child_table_name = _sql_identifier(f"{parent_table}_{attr_name}")
+    fk_column = _sql_identifier(f"{parent_table}_fk")
+    columns: list[Column] = [Column(fk_column, "text", nullable=False)]
+    foreign_keys: list[ForeignKey] = [ForeignKey(
+        _truncate_identifier(_sql_identifier(f"fk_{child_table_name}_{fk_column}")),
+        [fk_column], parent_table, [OID_COLUMN],
+    )]
+    notes: list[str] = []
+
+    if bool(getattr(multi_value, "Ordered", False)):
+        columns.append(Column("seq", "integer", nullable=False))
+
+    if base_kind == "Class" and _is_structure(base_type):
+        if bool(getattr(base_type, "Abstract", False)):
+            return None, "BAG/LIST OF an ABSTRACT structure - polymorphism not supported (Lot 1)"
+        sub_columns, sub_fks, sub_notes, _sub_child_specs = _columns_for_class(base_type, symbol_table)
+        columns.extend(sub_columns)
+        foreign_keys.extend(sub_fks)
+        notes.extend(sub_notes)
+    elif base_kind in ("Class", "ReferenceType"):
+        synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
+        target = reference_target_class(synthetic)
+        if target is None:
+            return None, "reference target not resolved (no --repo, or external)"
+        target_table = _sql_identifier(getattr(target, "Name", None) or "")
+        columns.append(Column("value", "text", nullable=True))
+        foreign_keys.append(ForeignKey(
+            _truncate_identifier(_sql_identifier(f"fk_{child_table_name}_value")), ["value"], target_table, [OID_COLUMN],
+        ))
+    elif base_kind in _GEOMETRY_KINDS:
+        synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
+        sfa_type, srid, reason = _geometry_column_info(synthetic)
+        if sfa_type is None:
+            return None, reason
+        columns.append(Column("value", sql_type="", nullable=False, geometry_type=sfa_type, srid=srid))
+    else:
+        synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
+        scalar_type = _scalar_sql_type(synthetic)
+        if scalar_type is None:
+            return None, f"unsupported element type {base_kind!r}"
+        columns.append(Column("value", scalar_type, nullable=False))
+
+    _avoid_identity_collision(columns)
+    return Table(name=child_table_name, columns=columns, foreign_keys=foreign_keys, notes=notes), None
 
 
 def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[list[UniqueConstraint], list[str]]:
@@ -347,8 +480,11 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
             suffix += 1
         used_table_names.add(table_name)
 
-        columns, foreign_keys, notes = _columns_for_class(cls, symbol_table)
+        columns, foreign_keys, notes, child_specs = _columns_for_class(cls, symbol_table)
+        renamed = _avoid_identity_collision(columns)
         unique_constraints, unique_notes = _unique_constraints_for_class(cls, table_name)
+        for unique in unique_constraints:
+            unique.columns = [renamed.get(c, c) for c in unique.columns]
         column_names = {c.name for c in columns}
         valid_unique_constraints = []
         for unique in unique_constraints:
@@ -362,6 +498,21 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
             name=table_name, columns=columns, unique_constraints=valid_unique_constraints,
             foreign_keys=foreign_keys, notes=notes + unique_notes,
         ))
+
+        for attr_name, multi_value in child_specs:
+            child_table, reason = _build_child_table(table_name, attr_name, multi_value, symbol_table)
+            if child_table is None:
+                tables[-1].notes.append(f"{attr_name}: BAG/LIST OF - {reason}")
+                continue
+            child_base_name = child_table.name
+            child_name = child_base_name
+            suffix = 2
+            while child_name in used_table_names:
+                child_name = f"{child_base_name}_{suffix}"
+                suffix += 1
+            used_table_names.add(child_name)
+            child_table.name = child_name
+            tables.append(child_table)
 
     # 3rd real bug found the same way (PostgreSQL, live `psycopg`-free
     # verification against a real `postgis/postgis` container, 2026-08-27):
@@ -406,7 +557,7 @@ def render_postgresql(tables: list[Table]) -> str:
     """
     statements: list[str] = []
     for table in tables:
-        lines = [f"    {_quote(OID_COLUMN)} text PRIMARY KEY"]
+        lines = [f"    {_quote(OID_COLUMN)} text UNIQUE NOT NULL"]
         for column in table.columns:
             null_clause = "" if column.nullable else " NOT NULL"
             sql_type = f"geometry({column.geometry_type}, {column.srid})" if column.geometry_type else column.sql_type
@@ -461,7 +612,7 @@ def render_gpkg(tables: list[Table]) -> str:
     statements: list[str] = []
     srids: set[int] = set()
     for table in tables:
-        lines = [f"    {_quote(OID_COLUMN)} TEXT PRIMARY KEY"]
+        lines = [f"    {_quote(OID_COLUMN)} TEXT UNIQUE NOT NULL"]
         for column in table.columns:
             null_clause = "" if column.nullable else " NOT NULL"
             if column.geometry_type:

@@ -63,7 +63,7 @@ def test_convert_sql_resolves_crs_declared_locally_not_via_import(tmp_path, caps
     assert main(["convert-sql", str(ili_path)]) == 0
     ddl = capsys.readouterr().out
     assert 'CREATE TABLE "a" (' in ddl
-    assert '"ogc_fid" text PRIMARY KEY' in ddl
+    assert '"id" text UNIQUE NOT NULL' in ddl
     assert '"geom" geometry(Point, 2056) NOT NULL' in ddl
 
 

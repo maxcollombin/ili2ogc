@@ -11,6 +11,7 @@ from interlis.convert.jsonfg import (
     CONF_CIRCULAR_ARCS,
     CONF_CORE,
     CONF_TYPES_SCHEMAS,
+    _child_row_features,
     object_to_feature,
     transfer_to_feature_collection,
 )
@@ -789,6 +790,103 @@ def test_multivalue_of_structures_becomes_array_of_nested_objects():
             {"Language": "fr", "Text": "Bonjour"},
         ],
     }
+
+
+_CHILD_ROWS_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE LocalisedText =
+      Language : TEXT*2;
+      Text : MANDATORY TEXT*100;
+    END LocalisedText;
+    CLASS Parcel =
+      ParcelNr : MANDATORY 0 .. 999999;
+      Tags : BAG {0..*} OF TEXT*5;
+      Names : LIST {0..*} OF LocalisedText;
+    END Parcel;
+  END T;
+END Foo.
+"""
+
+
+def test_child_row_features_scalar_bag_gets_a_value_property_and_parent_fk():
+    """Matches convert/sql.py's parcel_tags child table exactly (see tests/test_convert_sql.py's _CHILD_TABLE_MODEL, same shape)."""
+    builder = _build(_CHILD_ROWS_MODEL)
+    cls = _resolved_class(builder, "Parcel")
+    obj = XtfObject(
+        tid="p-1", qualified_class="Foo.T.Parcel",
+        attributes={
+            "ParcelNr": [_node("ParcelNr", "42")],
+            "Tags": [_wrap("Tags", _node("TEXT", "AA"), _node("TEXT", "BB"))],
+        },
+    )
+    rows = _child_row_features(obj, cls, symbol_table=builder.symbol_table)
+    tags = [r for r in rows if r["featureType"] == "parcel_tags"]
+    assert [r["properties"] for r in tags] == [
+        {"parcel_fk": "p-1", "value": "AA"},
+        {"parcel_fk": "p-1", "value": "BB"},
+    ]
+    assert tags[0]["id"] == "p-1_Tags_0"
+    assert tags[0]["geometry"] is None
+    assert "seq" not in tags[0]["properties"]  # BAG - no ordering
+
+
+def test_child_row_features_list_of_structure_spreads_members_and_gets_seq():
+    builder = _build(_CHILD_ROWS_MODEL)
+    cls = _resolved_class(builder, "Parcel")
+    en = _wrap("LocalisedText", _node("Language", "en"), _node("Text", "Hello"))
+    fr = _wrap("LocalisedText", _node("Language", "fr"), _node("Text", "Bonjour"))
+    obj = XtfObject(
+        tid="p-2", qualified_class="Foo.T.Parcel",
+        attributes={
+            "ParcelNr": [_node("ParcelNr", "1")],
+            "Names": [_wrap("Names", en, fr)],
+        },
+    )
+    rows = _child_row_features(obj, cls, symbol_table=builder.symbol_table)
+    names = [r for r in rows if r["featureType"] == "parcel_names"]
+    assert [r["properties"] for r in names] == [
+        {"parcel_fk": "p-2", "seq": 0, "Language": "en", "Text": "Hello"},
+        {"parcel_fk": "p-2", "seq": 1, "Language": "fr", "Text": "Bonjour"},
+    ]
+
+
+def test_child_row_features_never_produced_by_default():
+    """`include_child_rows` is opt-in - zero behavior change for every existing caller (RULE: additive, not a silent behavior shift)."""
+    builder = _build(_CHILD_ROWS_MODEL)
+    cls = _resolved_class(builder, "Parcel")
+    obj = XtfObject(
+        tid="p-3", qualified_class="Foo.T.Parcel",
+        attributes={
+            "ParcelNr": [_node("ParcelNr", "1")],
+            "Tags": [_wrap("Tags", _node("TEXT", "AA"))],
+        },
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="Foo.T", kind=None, endstate=None, objects=[obj])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
+    assert len(collection["features"]) == 1
+    assert collection["features"][0]["featureType"] == "Parcel"
+
+
+def test_transfer_to_feature_collection_include_child_rows_appends_them():
+    builder = _build(_CHILD_ROWS_MODEL)
+    obj = XtfObject(
+        tid="p-4", qualified_class="Foo.T.Parcel",
+        attributes={
+            "ParcelNr": [_node("ParcelNr", "1")],
+            "Tags": [_wrap("Tags", _node("TEXT", "AA"), _node("TEXT", "BB"))],
+        },
+    )
+    basket = XtfBasket(bid="b1", qualified_topic="Foo.T", kind=None, endstate=None, objects=[obj])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table, include_child_rows=True)
+    feature_types = [f["featureType"] for f in collection["features"]]
+    assert feature_types == ["Parcel", "parcel_tags", "parcel_tags"]
+    # Heterogeneous featureTypes - collection-level "featureType" correctly omitted (matches the pre-existing rule, not a new one).
+    assert "featureType" not in collection
+    # No longer duplicated on the parent too - convert/sql.py's "parcel" table has no "tags" column to receive it anyway.
+    assert "Tags" not in collection["features"][0]["properties"]
 
 
 def test_transfer_to_feature_collection_hoists_uniform_coord_ref_sys():

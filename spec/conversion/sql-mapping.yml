@@ -96,9 +96,17 @@ Class:
 ObjectOID:
   qualified_name: IlisMeta16.ModelData.ObjectOID
   sql:
-    primary_key:
-      value: "ogc_fid text PRIMARY KEY"
-      note: "Synthetic, independent of the Class's own OID clause - see mappings/ilismeta16-to-sql-rules.yml's ObjectOID entry for the full rationale."
+    identity_column:
+      value: "id text UNIQUE NOT NULL"
+      note: >
+        Synthetic, independent of the Class's own OID clause. Deliberately
+        NOT `PRIMARY KEY` (was `ogc_fid text PRIMARY KEY` until 2026-08-27):
+        verified empirically that GDAL excludes whatever it detects as
+        `PRIMARY KEY` from the INSERT column list entirely (expects the
+        database to auto-generate it) - a Feature's `"id"` was NEVER
+        actually written on `ogr2ogr -append`. See
+        mappings/ilismeta16-to-sql-rules.yml's ObjectOID entry for the full
+        rationale.
 
 StructureNesting:
   qualified_name: IlisMeta16.ModelData.Class
@@ -112,9 +120,9 @@ ReferenceType:
   sql:
     fk_column:
       value: text
-      note: "Typed to match the target table's ogc_fid (also text)."
+      note: "Typed to match the target table's id (also text)."
     foreign_key:
-      rule: "FOREIGN KEY (<column>) REFERENCES <target table>(ogc_fid)"
+      rule: "FOREIGN KEY (<column>) REFERENCES <target table>(id)"
       note: "Target class via xtf.schema.reference_target_class, reused directly - not re-derived."
 
 Role:
@@ -124,7 +132,7 @@ Role:
       value: text
       note: "Same treatment as ReferenceType above - both resolve via reference_target_class."
     foreign_key:
-      rule: "FOREIGN KEY (<column>) REFERENCES <target table>(ogc_fid)"
+      rule: "FOREIGN KEY (<column>) REFERENCES <target table>(id)"
 
 UniqueConstraint:
   qualified_name: IlisMeta16.ModelData.UniqueConstraint

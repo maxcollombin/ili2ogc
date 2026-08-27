@@ -6,7 +6,7 @@ import warnings
 from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.convert.sql import Column, build_tables, render_gpkg, render_postgresql
+from interlis.convert.sql import Column, UniqueConstraint, build_tables, render_gpkg, render_postgresql
 from interlis.runtime.parse import meta_attribute_comments, parse_text
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,7 +73,7 @@ def test_primary_key_and_unique_constraint():
     tables = build_tables([owner])
     table = _table(tables, "owner")
     ddl = render_postgresql(tables)
-    assert '"ogc_fid" text PRIMARY KEY' in ddl
+    assert '"id" text UNIQUE NOT NULL' in ddl
     assert len(table.unique_constraints) == 1
     assert table.unique_constraints[0].columns == ["code"]
     assert 'CONSTRAINT uq_owner_code UNIQUE ("code")' in ddl
@@ -119,9 +119,9 @@ def test_reference_becomes_fk_column_and_constraint():
     fk = table.foreign_keys[0]
     assert fk.columns == ["owner"]
     assert fk.ref_table == "owner"
-    assert fk.ref_columns == ["ogc_fid"]
+    assert fk.ref_columns == ["id"]
     ddl = render_postgresql(tables)
-    assert 'ALTER TABLE "parcel" ADD CONSTRAINT fk_parcel_owner FOREIGN KEY ("owner") REFERENCES "owner" ("ogc_fid");' in ddl
+    assert 'ALTER TABLE "parcel" ADD CONSTRAINT fk_parcel_owner FOREIGN KEY ("owner") REFERENCES "owner" ("id");' in ddl
 
 
 def test_foreign_key_dropped_when_target_not_converted():
@@ -135,13 +135,15 @@ def test_foreign_key_dropped_when_target_not_converted():
     assert any("belongs to a" in note and "different model" in note for note in table.notes)
 
 
-def test_multivalue_attribute_gets_a_note_not_a_column():
+def test_multivalue_attribute_never_inlined_becomes_a_child_table():
+    """See test_convert_sql.py's dedicated child-table tests (`_CHILD_TABLE_MODEL`) for the full shape - this just confirms `_MODEL`'s own Parcel.Tags isn't left as a plain column or a note."""
     builder = _build(_MODEL)
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     tables = build_tables([parcel])
     table = _table(tables, "parcel")
     assert not any(c.name == "tags" for c in table.columns)
-    assert any("Tags" in note and "BAG/LIST" in note for note in table.notes)
+    assert not any("BAG/LIST" in note for note in table.notes)
+    assert any(t.name == "parcel_tags" for t in tables)
 
 
 def test_unique_with_reference_navigation_gets_a_note_not_a_wrong_constraint():
@@ -274,7 +276,7 @@ def test_render_gpkg_inline_unique_and_foreign_key():
     ddl = render_gpkg(build_tables([parcel, owner]))
     assert "ALTER TABLE" not in ddl
     assert 'CONSTRAINT uq_owner_code UNIQUE ("code")' in ddl
-    assert 'CONSTRAINT fk_parcel_owner FOREIGN KEY ("owner") REFERENCES "owner" ("ogc_fid")' in ddl
+    assert 'CONSTRAINT fk_parcel_owner FOREIGN KEY ("owner") REFERENCES "owner" ("id")' in ddl
 
 
 def test_render_gpkg_geometry_column_and_metadata_rows():
@@ -384,3 +386,106 @@ END Foo.
     gpkg_ddl = render_gpkg(tables)
     assert 'CREATE TABLE "union" (' in pg_ddl
     assert 'CREATE TABLE "union" (' in gpkg_ddl
+
+
+def test_attribute_literally_named_id_gets_renamed_not_the_identity_column():
+    """Real corpus case (ili_corpus/WasserBase_V1_1.ili): `ID : MANDATORY TEXT*25;` lowercases to the SAME name as the reserved identity column - found via a live SQLite run ("duplicate column name: id"), 2026-08-27."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      ID : MANDATORY TEXT*25;
+      UNIQUE ID;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "Foo.T.A")
+    tables = build_tables([a])
+    table = _table(tables, "a")
+    names = [c.name for c in table.columns]
+    assert names == ["id_attr"]  # never a second "id" - that name is reserved for the identity column
+    assert table.unique_constraints == [UniqueConstraint("uq_a_id", ["id_attr"])]
+    ddl = render_postgresql(tables)
+    assert '"id" text UNIQUE NOT NULL' in ddl
+    assert '"id_attr" varchar(25) NOT NULL' in ddl
+    assert 'CONSTRAINT uq_a_id UNIQUE ("id_attr")' in ddl
+
+
+_CHILD_TABLE_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE LocalisedText =
+      Language : TEXT*2;
+      Text : MANDATORY TEXT*100;
+    END LocalisedText;
+    CLASS Parcel =
+      ParcelNr : MANDATORY 0 .. 999999;
+      Tags : BAG {0..*} OF TEXT*5;
+      Names : LIST {0..*} OF LocalisedText;
+    END Parcel;
+  END T;
+END Foo.
+"""
+
+
+def test_bag_of_scalar_becomes_a_child_table_with_a_value_column():
+    builder = _build(_CHILD_TABLE_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    child = _table(tables, "parcel_tags")
+    names = {c.name: c for c in child.columns}
+    assert names["parcel_fk"].sql_type == "text"
+    assert not names["parcel_fk"].nullable
+    assert names["value"].sql_type == "varchar(5)"
+    assert not names["value"].nullable
+    assert not any(c.name == "seq" for c in child.columns)  # BAG - no ordering column
+    fk = child.foreign_keys[0]
+    assert fk.columns == ["parcel_fk"]
+    assert fk.ref_table == "parcel"
+    assert fk.ref_columns == ["id"]
+    assert not any(c.name == "tags" for c in _table(tables, "parcel").columns)  # never inlined on the parent
+
+
+def test_list_of_structure_child_table_has_seq_and_flattened_columns():
+    builder = _build(_CHILD_TABLE_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    child = _table(tables, "parcel_names")
+    names = {c.name: c for c in child.columns}
+    assert "seq" in names and names["seq"].sql_type == "integer" and not names["seq"].nullable  # LIST - ordering matters
+    assert names["language"].sql_type == "varchar(2)" and names["language"].nullable
+    assert names["text"].sql_type == "varchar(100)" and not names["text"].nullable
+
+
+def test_render_gpkg_child_table_inline_fk_and_no_topological_sort_needed():
+    builder = _build(_CHILD_TABLE_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    ddl = render_gpkg(build_tables([parcel]))
+    assert "ALTER TABLE" not in ddl
+    assert 'CONSTRAINT fk_parcel_tags_parcel_fk FOREIGN KEY ("parcel_fk") REFERENCES "parcel" ("id")' in ddl
+
+
+def test_child_table_name_collision_gets_disambiguated_like_any_other_table():
+    """A real class literally named "<Parent>_<attr>" would collide with the synthesized child table name - defensive coverage, not seen in the real corpus."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Parcel_Tags =
+      X : TEXT*5;
+    END Parcel_Tags;
+    CLASS Parcel =
+      Tags : BAG {0..*} OF TEXT*5;
+    END Parcel;
+  END T;
+END Foo.
+"""
+    )
+    collider = _resolved_class(builder, "Foo.T.Parcel_Tags")
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([collider, parcel])
+    names = [t.name for t in tables]
+    assert names == ["parcel_tags", "parcel", "parcel_tags_2"]

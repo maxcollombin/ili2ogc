@@ -197,6 +197,95 @@ def _multi_value(resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, symbo
     return values
 
 
+def _sql_identifier(name: str) -> str:
+    """Lowercase - matches `convert/sql.py`'s `_sql_identifier` EXACTLY (kept manually in sync, not imported: `convert/sql.py` already imports FROM this module, `_meta_value`, so importing back would be circular).
+
+    Only correct as long as both copies stay identical - see
+    `docs/sql-conversion-strategy.md`'s "BAG/LIST OF child tables" section
+    for the one real, documented limitation this creates: a child table
+    name/FK column here is NOT recomputed with the SAME cross-class
+    disambiguation `convert/sql.py`'s `build_tables` applies on a real
+    `Class.Name` collision (`_2`/`_3` suffix) - this module has no
+    visibility into sibling classes to detect that collision at all. Real
+    corpus prevalence of BOTH a name collision AND a BAG/LIST attribute on
+    the SAME class name: not observed so far.
+    """
+    return name.lower()
+
+
+def _child_row_features(obj: XtfObject, cls: MetaInstance, *, symbol_table: SymbolTable | None) -> list[dict[str, Any]]:
+    """Return one JSON-FG Feature per `BAG`/`LIST OF` occurrence across ALL of `obj`'s own+inherited attributes.
+
+    Companion to `convert/sql.py`'s child tables (`_build_child_table`) -
+    same schema, so GDAL's own `"featureType"`-based table splitting
+    (already relied on for the main data, `docs/interlis-ogc-architecture.md`)
+    routes these into the SAME child tables in the SAME `ogr2ogr -append`
+    call as everything else - no separate file, no separate GDAL
+    invocation, no live-database dependency for this project (see
+    docs/sql-conversion-strategy.md).
+
+    `featureType` = `"<parent_table>_<attr_name>"` (`convert/sql.py`'s own
+    child table name). `properties` always carries `"<parent_table>_fk"`
+    (the parent's own OID, matching the child table's own FK column) and,
+    for `Ordered=True` (`LIST`), a `"seq"` 0-based index (`BAG` has none -
+    order isn't significant). The element's own value: a genuine
+    `STRUCTURE` occurrence spreads its OWN members directly (matching the
+    child table's own flattened columns, one level, same as
+    `_build_child_table`) ; anything else (scalar, or a `REFERENCE TO`
+    target OID - though `BAG`/`LIST OF REFERENCE TO` is not actually
+    constructible by this project's own grammar, verified 2026-08-27,
+    `convert/sql.py`'s own note) lands in a single `"value"` property,
+    matching the child table's own `value` column. `id` is synthesized
+    (`"<parent OID>_<attr name>_<index>"`) - a `STRUCTURE`/scalar
+    occurrence has no OID of its own on the wire. `"geometry"` stays
+    `null` like every other Feature this module produces (no WGS84
+    reprojection) - a geometry-typed `BAG`/`LIST` element has no real data
+    path today regardless (`_attribute_value` doesn't dispatch
+    CoordType/LineType for a nested occurrence at all, a PRE-EXISTING,
+    separately documented gap, RULE #7 - no real corpus evidence for it).
+    """
+    features: list[dict[str, Any]] = []
+    if obj.tid is None:
+        return features
+    schema_attrs = schema_members_of(cls, symbol_table) if symbol_table is not None else attributes_of(cls)
+    parent_table = _sql_identifier(getattr(cls, "Name", None) or "")
+    fk_property = f"{parent_table}_fk"
+    for name, attr in schema_attrs.items():
+        resolved = resolve_attribute(attr)
+        if resolved.type_kind != "MultiValue":
+            continue
+        raw_nodes = obj.attributes.get(name)
+        if not raw_nodes:
+            continue
+        base_type = getattr(resolved.type_instance, "BaseType", None)
+        if not isinstance(base_type, MetaInstance):
+            continue
+        base_kind = base_type._qualified_class.rsplit(".", 1)[-1]
+        ordered = bool(getattr(resolved.type_instance, "Ordered", False))
+        table_name = _sql_identifier(f"{parent_table}_{name}")
+        index = 0
+        for node in raw_nodes:
+            for occurrence in node.children:
+                properties: dict[str, Any] = {fk_property: obj.tid}
+                if ordered:
+                    properties["seq"] = index
+                occ_resolved = ResolvedAttribute(attr=attr, type_instance=base_type, type_kind=base_kind, mandatory=False)
+                value = _attribute_value(occ_resolved, [occurrence], symbol_table=symbol_table, already_unwrapped=True)
+                if base_kind == "Class" and getattr(base_type, "Kind", None) == "Structure" and isinstance(value, dict):
+                    properties.update(value)
+                else:
+                    properties["value"] = value
+                features.append({
+                    "type": "Feature",
+                    "id": f"{obj.tid}_{name}_{index}",
+                    "featureType": table_name,
+                    "geometry": None,
+                    "properties": properties,
+                })
+                index += 1
+    return features
+
+
 def _members_value(cls: MetaInstance, attrs: dict[str, list[RawNode]], *, symbol_table: SymbolTable | None) -> dict[str, Any]:
     """Convert every attribute present in `attrs` against `cls`'s own schema into a plain dict.
 
@@ -500,9 +589,24 @@ def _feature_schema_ref(schema_url: str, feature_type: str) -> str:
 
 def object_to_feature(
     obj: XtfObject, cls: MetaInstance, *, standalone: bool = True, symbol_table: SymbolTable | None = None,
-    schema_url: str | None = None,
+    schema_url: str | None = None, omit_multivalue: bool = False,
 ) -> dict[str, Any]:
     """Convert one XtfObject into a JSON-FG Feature object.
+
+    `omit_multivalue` (opt-in, `False` by default - zero behavior change
+    for every existing caller): drops every top-level `BAG`/`LIST OF`
+    property instead of inlining it as a JSON array - used by
+    `transfer_to_feature_collection`'s `include_child_rows=True`, where
+    that same data is ALREADY represented as separate child-row Features
+    (`_child_row_features`). Left inlined AND duplicated otherwise would
+    be dead weight in practice (GDAL's own `-append` into the pre-created
+    `convert/sql.py` schema has no matching column to receive it, per
+    GDAL's own documented "-append does NOT add missing fields" - it
+    would just be silently discarded on load, never a wrong load, but
+    wasted file size and a confusing thing for a human to read). Does NOT
+    affect a NESTED `BAG`/`LIST` inside a STRUCTURE property - only
+    TOP-LEVEL `BAG`/`LIST` attributes have a child table at all (Lot 1's
+    "one level" scope, `convert/sql.py`).
 
     `cls` is the already-resolved Class/Structure instance for
     `obj.qualified_class` (xtf.schema.resolve_class) - resolution stays
@@ -570,6 +674,10 @@ def object_to_feature(
     schema_attrs = schema_members_of(cls, symbol_table) if symbol_table is not None else attributes_of(cls)
     resolved_attrs = {name: resolve_attribute(attr) for name, attr in schema_attrs.items()}
     properties = _members_value(cls, obj.attributes, symbol_table=symbol_table)
+    if omit_multivalue:
+        for name, resolved in resolved_attrs.items():
+            if resolved.type_kind == "MultiValue":
+                properties.pop(name, None)
 
     place: dict[str, Any] | None = None
     crs_uri: str | None = None
@@ -791,9 +899,18 @@ def _join_members(bases: list[MetaInstance], combo: list[XtfObject | None]) -> l
 
 def transfer_to_feature_collection(
     transfer: XtfTransfer, *, symbol_table: SymbolTable, repository: ModelRepository | None = None,
-    views: list[MetaInstance] | None = None, schema_url: str | None = None,
+    views: list[MetaInstance] | None = None, schema_url: str | None = None, include_child_rows: bool = False,
 ) -> dict[str, Any]:
     """Convert every resolvable object of `transfer` into one JSON-FG FeatureCollection.
+
+    `include_child_rows` (opt-in, `False` by default - zero behavior
+    change for every existing caller): also appends one Feature per
+    `BAG`/`LIST OF` occurrence (`_child_row_features`), each carrying its
+    own `"featureType"` matching a `convert/sql.py` child table name.
+    GDAL's own `"featureType"`-based table splitting (already relied on
+    for the main data) routes them into the SAME child tables in the SAME
+    `ogr2ogr -append` call as everything else - see
+    docs/sql-conversion-strategy.md ("BAG/LIST OF child tables").
 
     Walks all of `transfer`'s baskets (real corpus evidence: 11/12
     xtf_corpus/geoadmin files hold exactly 1 basket, the one exception
@@ -862,7 +979,11 @@ def transfer_to_feature_collection(
             cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
             if cls is None:
                 continue
-            features.append(object_to_feature(obj, cls, standalone=False, symbol_table=symbol_table))
+            features.append(object_to_feature(
+                obj, cls, standalone=False, symbol_table=symbol_table, omit_multivalue=include_child_rows,
+            ))
+            if include_child_rows:
+                features.extend(_child_row_features(obj, cls, symbol_table=symbol_table))
 
     for view in views or []:
         features.extend(evaluate_view(view, transfer, symbol_table=symbol_table, repository=repository, standalone=False))

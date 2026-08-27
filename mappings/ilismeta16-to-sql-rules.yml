@@ -13,9 +13,13 @@
 # PostgreSQL and GeoPackage/SQLite, see convert/sql.py's
 # render_postgresql/render_gpkg): a plain `Class` (`Kind=Class`, never
 # `Kind=Structure`, never `View`) becomes one `CREATE TABLE`, with a
-# synthetic `ogc_fid text PRIMARY KEY` (matching GDAL's own PostgreSQL
-# driver default FID column name - `ogr2ogr -append` needs no extra `-lco`
-# to load .xtf-derived data into a table this pipeline created). GDAL still
+# synthetic `id text UNIQUE NOT NULL` (deliberately NOT `PRIMARY KEY`/GDAL's
+# own default FID column name `ogc_fid` - verified empirically that GDAL
+# excludes whatever it detects as PRIMARY KEY from the INSERT column list
+# entirely, expecting the database to auto-generate it, so a Feature's
+# `"id"` was NEVER actually written on `-append`; `"id"` matches exactly
+# what the JSON-FG reader itself exposes as a plain field - see
+# docs/sql-conversion-strategy.md). GDAL still
 # does the actual DATA LOADING (`ogr2ogr -append`); this pipeline only
 # generates the SCHEMA (table/column declarations + UNIQUE/FOREIGN KEY
 # constraints) - see docs/sql-conversion-strategy.md for why this division
@@ -106,16 +110,25 @@ concepts:
     qualified_name: IlisMeta16.ModelData.ObjectOID
     status: mapped
     note: >
-      Every table gets a synthetic `ogc_fid text PRIMARY KEY` regardless of
+      Every table gets a synthetic `id text UNIQUE NOT NULL` regardless of
       the Class's own OID clause/type (`AnyOIDType`/a named TEXT or NUM
       domain/none at all) - same uniform-string treatment the JSON Schema
       pipeline already gives every reference (`ReferenceType`/`Role` ->
       plain `{"type": "string"}`), and matching how `convert/jsonfg.py`
       already treats `XtfObject.tid` as an opaque string regardless of the
-      declared OID type. `ogc_fid` specifically (not e.g. `oid` or `id`)
-      because it is GDAL's own PostgreSQL driver default FID column name
-      (verified 2026-08-27, `pg.html`) - `ogr2ogr -append` needs zero extra
-      `-lco FID=...` to load data into a table this pipeline created.
+      declared OID type (indeed the SAME `"id"` JSON-FG already puts on
+      every Feature - `object_to_feature`). `id`, and NEVER `PRIMARY KEY`
+      (originally `ogc_fid`, GDAL's own PostgreSQL default FID name -
+      revised 2026-08-27): verified empirically (a real `ogr2ogr -append`
+      against a live PostgreSQL AND GeoPackage) that GDAL treats WHATEVER
+      column it detects as `PRIMARY KEY` as an auto-managed FID slot,
+      excluded from the INSERT column list entirely - a Feature's `"id"`
+      was NEVER actually written into it, silently staying NULL and
+      violating its own NOT NULL constraint. `"id"` matches exactly what
+      the JSON-FG reader itself exposes as a plain STRING FIELD (confirmed
+      via `ogrinfo`) - `UNIQUE NOT NULL` (never `PRIMARY KEY`) so GDAL
+      writes it as a normal field instead of managing it. See
+      docs/sql-conversion-strategy.md for the full investigation.
 
   StructureNesting:
     qualified_name: IlisMeta16.ModelData.Class
@@ -142,7 +155,7 @@ concepts:
     status: mapped
     note: >
       Plain `REFERENCE TO X` -> a `text` column (typed to match the target
-      table's `ogc_fid`) PLUS a real `FOREIGN KEY ... REFERENCES` (Lot 1's
+      table's `id`) PLUS a real `FOREIGN KEY ... REFERENCES` (Lot 1's
       marquee feature - see docs/interlis-ogc-architecture.md's Prevalence
       table: REFERENCE TO touches ~30% of the real corpus). An unresolved
       target class (declared target not reachable, e.g. no `--repo` given)
