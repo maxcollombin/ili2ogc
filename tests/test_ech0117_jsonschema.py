@@ -11,7 +11,7 @@ import warnings
 from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.convert.jsonschema import class_to_json_schema
+from interlis.convert.jsonschema import class_to_json_schema, model_to_json_schema
 from interlis.runtime.parse import meta_attribute_comments, parse_text
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -68,6 +68,50 @@ END Foo.
     schema = class_to_json_schema(cls)
 
     assert schema["x-meta"] == {"IDGeoIV": "219.1"}
+
+
+def test_model_level_meta_attributes_surfaced_on_the_document():
+    """The dominant real-corpus case (technicalContact/furtherInformation/IDGeoIV, ~230/236 occurrences) - model_to_json_schema's `model` parameter."""
+    builder = _build(
+        """INTERLIS 2.4;
+!!@technicalContact=mailto:info@example.ch
+!!@furtherInformation=https://example.ch/docs
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Attr1: TEXT*20;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    model = builder.symbol_table.resolve("Foo")
+    cls = builder.symbol_table.resolve("Foo.T.A")
+    doc = model_to_json_schema([cls], model=model)
+
+    assert doc["x-meta"] == {
+        "technicalContact": "mailto:info@example.ch",
+        "furtherInformation": "https://example.ch/docs",
+    }
+
+
+def test_without_model_argument_document_stays_unmarked():
+    builder = _build(
+        """INTERLIS 2.4;
+!!@technicalContact=mailto:info@example.ch
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Attr1: TEXT*20;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    cls = builder.symbol_table.resolve("Foo.T.A")
+    doc = model_to_json_schema([cls])
+
+    assert "x-meta" not in doc
 
 
 def test_no_meta_attributes_leaves_schema_unmarked():

@@ -20,7 +20,7 @@ from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_file
+from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
 from interlis.xtf.model_resolution import header_completeness, header_model_lookup, root_model_names
 from interlis.xtf.parse import parse_xtf
 from interlis.xtf.validate import validate_transfer
@@ -162,7 +162,16 @@ def cmd_convert(args: argparse.Namespace) -> int:
         builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        builder.build(tree)
+        # eCH-0117 `!!@Name=Value` meta-attributes declared directly in
+        # THIS file (technicalContact/furtherInformation/IDGeoIV at MODEL
+        # level, CRS on a locally-declared CoordType domain, etc.) -
+        # previously never captured here (only an IMPORTED model's own
+        # comments were, via ModelRepository._get_table), so a model that
+        # declares its own geometry domain rather than importing
+        # CHBase_Part1_GEOMETRY_V1 silently lost its CRS, and MODEL-level
+        # metadata had nowhere to attach at all - see
+        # docs/ech-0117-meta-attributes.md.
+        root = builder.build(tree, meta_attributes=meta_attribute_comments_in_file(path))
 
     classes = [
         instance for instance in builder.symbol_table.all_registered()
@@ -173,7 +182,12 @@ def cmd_convert(args: argparse.Namespace) -> int:
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
         and getattr(instance, "FormationKind", None) in _SUPPORTED_VIEW_FORMATION_KINDS
     ]
-    schema = model_to_json_schema(classes + views, symbol_table=builder.symbol_table)
+    # `build()` returns the root Model instance directly for the (real-corpus
+    # dominant) single-MODEL-per-file case - a file declaring more than one
+    # MODEL yields something else here, so `x-meta` is simply omitted rather
+    # than guessing which MODEL the file-level metadata belongs to.
+    root_model = root if isinstance(root, MetaInstance) and root._qualified_class.rsplit(".", 1)[-1] == "Model" else None
+    schema = model_to_json_schema(classes + views, symbol_table=builder.symbol_table, model=root_model)
     text = json.dumps(schema, indent=2, ensure_ascii=False)
     if args.output:
         Path(args.output).write_text(text + "\n", encoding="utf-8")
@@ -355,7 +369,15 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        builder.build(tree)
+        # eCH-0117 `!!@Name=Value` meta-attributes declared directly in the
+        # schema model itself - previously never captured here (only an
+        # IMPORTED model's own comments were, via
+        # ModelRepository._get_table), so a model that declares its own
+        # geometry domain locally (rather than importing
+        # CHBase_Part1_GEOMETRY_V1) would never resolve a CRS, and "place"
+        # would silently stay unsupported - see
+        # docs/ech-0117-meta-attributes.md.
+        builder.build(tree, meta_attributes=meta_attribute_comments_in_file(model_path))
 
     candidate_views = [
         instance for instance in builder.symbol_table.all_registered()

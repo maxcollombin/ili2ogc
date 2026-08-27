@@ -680,7 +680,9 @@ def validate_feature_properties(properties: dict[str, Any], schema: dict[str, An
     return [error.message for error in validator.iter_errors(properties)]
 
 
-def model_to_json_schema(classes: list[MetaInstance], symbol_table: SymbolTable | None = None) -> dict[str, Any]:
+def model_to_json_schema(
+    classes: list[MetaInstance], symbol_table: SymbolTable | None = None, model: MetaInstance | None = None,
+) -> dict[str, Any]:
     """Convert every Class/Structure reachable from `classes` into one JSON Schema document.
 
     `classes` is typically every `Class`-kind instance from a built
@@ -701,6 +703,16 @@ def model_to_json_schema(classes: list[MetaInstance], symbol_table: SymbolTable 
     branches to resolve) - an embedded role itself still contributes no
     new reachable class (a reference, never containment, same as a plain
     `REFERENCE TO` target).
+
+    `model`, when given, is the built root `Model` instance (`builder.build(tree,
+    meta_attributes=...)`'s own return value for a single-MODEL file, or
+    `builder.symbol_table.resolve(<Model-Name>)`) - its eCH-0117
+    meta-attributes (`technicalContact`/`furtherInformation`/`IDGeoIV`,
+    by far the most common real attachment point, see
+    docs/ech-0117-meta-attributes.md) are surfaced as a top-level
+    `"x-meta"`, the same mechanism already used at class/attribute level
+    (`_meta_marker`). `None` (the default): omitted entirely, unchanged
+    from before this parameter existed.
     """
     reachable = _discover_classes(classes, symbol_table)
     ref_keys = _assign_keys(reachable)
@@ -708,4 +720,9 @@ def model_to_json_schema(classes: list[MetaInstance], symbol_table: SymbolTable 
         ref_keys[instance_id]: class_to_json_schema(cls, ref_keys, symbol_table)
         for instance_id, cls in reachable.items()
     }
-    return {"$schema": JSON_SCHEMA_DRAFT, "$defs": defs}
+    document: dict[str, Any] = {"$schema": JSON_SCHEMA_DRAFT}
+    model_meta = _meta_marker(model) if model is not None else {}
+    if model_meta:
+        document["x-meta"] = model_meta
+    document["$defs"] = defs
+    return document
