@@ -70,11 +70,36 @@ def _truncate_identifier(name: str) -> str:
     return name if len(name) <= _MAX_IDENTIFIER_LENGTH else name[:_MAX_IDENTIFIER_LENGTH]
 
 
+def _quote(name: str) -> str:
+    """Double-quote a table/column identifier (ANSI SQL, both PostgreSQL and SQLite accept it).
+
+    Found necessary (2026-08-27) by executing generated DDL against a real
+    SQLite engine, not just eyeballing the text: a real corpus INTERLIS
+    `Class`/attribute can be named after a SQL reserved word (confirmed:
+    `Union`, `Index`) - unquoted, `CREATE TABLE union (...)` is a syntax
+    error in both dialects. Since every identifier this module emits is
+    already lowercase (`_sql_identifier`), quoting changes nothing about
+    the STORED name (PostgreSQL folds unquoted identifiers to lowercase
+    anyway) - it only prevents reserved-word collisions, uniformly, without
+    needing a maintained keyword list for either dialect.
+    """
+    return f'"{name}"'
+
+
+def _quote_list(names: list[str]) -> str:
+    return ", ".join(_quote(n) for n in names)
+
+
 @dataclass
 class Column:
     name: str
     sql_type: str
+    """A dialect-portable scalar type name (e.g. "text"/"integer"/"varchar(20)") - ignored by every renderer when `geometry_type` is set (each renderer formats geometry columns its own way, see `render_postgresql`/`render_gpkg`)."""
     nullable: bool = True
+    geometry_type: str | None = None
+    """SFA type name (e.g. "Point", "MultiPolygonZ") - set ONLY for a geometry column, structured (not pre-formatted) so each renderer can express it its own way."""
+    srid: int | None = None
+    """EPSG numeric code - set ONLY alongside `geometry_type`."""
 
 
 @dataclass
@@ -119,8 +144,8 @@ def _srid(coord_type: MetaInstance | None) -> str | None:
     return code.strip()
 
 
-def _geometry_sql_type(resolved: ResolvedAttribute) -> tuple[str, None] | tuple[None, str]:
-    """Return `(sql_type, None)` on success or `(None, reason)` on failure, for a CoordType/LineType attribute."""
+def _geometry_column_info(resolved: ResolvedAttribute) -> tuple[str, int, None] | tuple[None, None, str]:
+    """Return `(sfa_type, srid, None)` on success or `(None, None, reason)` on failure, for a CoordType/LineType attribute."""
     if resolved.type_kind == "CoordType":
         coord_type = resolved.type_instance
         sfa = "Point"
@@ -130,17 +155,17 @@ def _geometry_sql_type(resolved: ResolvedAttribute) -> tuple[str, None] | tuple[
         kind = getattr(line_type, "Kind", None)
         sfa = "LineString" if kind in ("Polyline", "DirectedPolyline") else "Polygon"
     else:
-        return None, "not a geometry type"
+        return None, None, "not a geometry type"
     if coord_type is None:
-        return None, "vertex CoordType not resolved"
+        return None, None, "vertex CoordType not resolved"
     if len(coord_axes(coord_type)) >= 3:
         sfa += "Z"
     if bool(getattr(resolved.type_instance, "Multi", False)):
         sfa = "Multi" + sfa
     srid = _srid(coord_type)
     if srid is None:
-        return None, "no resolved CRS (!!@CRS meta-attribute)"
-    return f"geometry({sfa}, {srid})", None
+        return None, None, "no resolved CRS (!!@CRS meta-attribute)"
+    return sfa, int(srid), None
 
 
 def _scalar_sql_type(resolved: ResolvedAttribute) -> str | None:
@@ -223,11 +248,13 @@ def _columns_for_class(
             continue
 
         if resolved.type_kind in _GEOMETRY_KINDS:
-            sql_type, reason = _geometry_sql_type(resolved)
-            if sql_type is None:
+            sfa_type, srid, reason = _geometry_column_info(resolved)
+            if sfa_type is None:
                 notes.append(f"{label}: {reason}")
                 continue
-            columns.append(Column(col_name, sql_type, nullable=not resolved.mandatory))
+            columns.append(Column(
+                col_name, sql_type="", nullable=not resolved.mandatory, geometry_type=sfa_type, srid=srid,
+            ))
             continue
 
         scalar_type = _scalar_sql_type(resolved)
@@ -291,18 +318,78 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
     attribute is flattened INLINE (`_columns_for_class`), never a separate
     `Table`, so there is nothing beyond the given roots to discover (Lot 1
     scope - see mappings/ilismeta16-to-sql-rules.yml).
+
+    Two real bugs found and fixed by executing the generated DDL against a
+    real SQLite engine (2026-08-27, not just eyeballing the text) - neither
+    was specific to one renderer, both affect PostgreSQL too:
+    1. A short `Class.Name` collision across TOPICs (real corpus cases,
+       e.g. two different `Item` classes) produced two `CREATE TABLE item`
+       statements - disambiguated the SAME way as
+       `convert/jsonschema.py`'s `_assign_keys` (`_2`/`_3` suffix).
+    2. `UNIQUE <attr>;` on an attribute whose type never resolved to a
+       mapped column (e.g. `INTERLIS.UUIDOID`, real corpus case
+       `ili_corpus/Axis_V1_1.ili`) still built a `UNIQUE` constraint
+       naming that (never-created) column - `CONSTRAINT ... UNIQUE
+       (databaseid)` referencing a column that plain doesn't exist.
+       Filtered out here (RULE #5: a note, not a crash-only-at-DDL-time
+       surprise) by cross-checking against the columns actually built.
     """
     tables = []
+    used_table_names: set[str] = set()
     for cls in classes:
         if getattr(cls, "Kind", None) != "Class":
             continue
-        table_name = _sql_identifier(getattr(cls, "Name", None) or "")
+        base_name = _sql_identifier(getattr(cls, "Name", None) or "")
+        table_name = base_name
+        suffix = 2
+        while table_name in used_table_names:
+            table_name = f"{base_name}_{suffix}"
+            suffix += 1
+        used_table_names.add(table_name)
+
         columns, foreign_keys, notes = _columns_for_class(cls, symbol_table)
         unique_constraints, unique_notes = _unique_constraints_for_class(cls, table_name)
+        column_names = {c.name for c in columns}
+        valid_unique_constraints = []
+        for unique in unique_constraints:
+            missing = [c for c in unique.columns if c not in column_names]
+            if missing:
+                unique_notes.append(f"UNIQUE ({', '.join(unique.columns)}): column(s) {missing} have no mapped SQL type")
+                continue
+            valid_unique_constraints.append(unique)
+
         tables.append(Table(
-            name=table_name, columns=columns, unique_constraints=unique_constraints,
+            name=table_name, columns=columns, unique_constraints=valid_unique_constraints,
             foreign_keys=foreign_keys, notes=notes + unique_notes,
         ))
+
+    # 3rd real bug found the same way (PostgreSQL, live `psycopg`-free
+    # verification against a real `postgis/postgis` container, 2026-08-27):
+    # a `REFERENCE TO`/Role target belonging to a DIFFERENT model (real
+    # corpus case, `ili_corpus/LWB_Bewirtschaftungseinheiten_V3_0.ili`'s
+    # `Zone_Ausland` -> `LWB_Landwirtschaftliche_Zonengrenzen_Kataloge_V2_0.
+    # LZ_Kataloge.LZ_Katalog_TypRef`) resolves to a REAL Class via
+    # `reference_target_class` (repository-loaded, so not caught by the
+    # "unresolved reference" check in `_columns_for_class`) but that class
+    # is NOT among `classes` - Lot 1 deliberately converts ONE model's OWN
+    # classes only (no cross-model reachability discovery, unlike
+    # `convert/jsonschema.py`'s `_discover_classes` - a real, larger scope
+    # decision for a later lot, not made here). The FK column itself
+    # (a valid OID string either way) is kept; only the now-dangling
+    # `FOREIGN KEY` constraint - which would `ALTER TABLE ... REFERENCES` a
+    # table this conversion never creates - is dropped.
+    final_table_names = {t.name for t in tables}
+    for table in tables:
+        kept_fks = []
+        for fk in table.foreign_keys:
+            if fk.ref_table not in final_table_names:
+                table.notes.append(
+                    f"FOREIGN KEY ({', '.join(fk.columns)}): target table {fk.ref_table!r} belongs to a "
+                    "different model, not created by this conversion - constraint dropped, column kept",
+                )
+                continue
+            kept_fks.append(fk)
+        table.foreign_keys = kept_fks
     return tables
 
 
@@ -319,20 +406,112 @@ def render_postgresql(tables: list[Table]) -> str:
     """
     statements: list[str] = []
     for table in tables:
-        lines = [f"    {OID_COLUMN} text PRIMARY KEY"]
+        lines = [f"    {_quote(OID_COLUMN)} text PRIMARY KEY"]
         for column in table.columns:
             null_clause = "" if column.nullable else " NOT NULL"
-            lines.append(f"    {column.name} {column.sql_type}{null_clause}")
+            sql_type = f"geometry({column.geometry_type}, {column.srid})" if column.geometry_type else column.sql_type
+            lines.append(f"    {_quote(column.name)} {sql_type}{null_clause}")
         for unique in table.unique_constraints:
-            lines.append(f"    CONSTRAINT {unique.name} UNIQUE ({', '.join(unique.columns)})")
+            lines.append(f"    CONSTRAINT {unique.name} UNIQUE ({_quote_list(unique.columns)})")
         body = ",\n".join(lines)
-        statements.append(f"CREATE TABLE {table.name} (\n{body}\n);")
+        statements.append(f"CREATE TABLE {_quote(table.name)} (\n{body}\n);")
         for note in table.notes:
             statements.append(f"-- NOTE ({table.name}): {note}")
     for table in tables:
         for fk in table.foreign_keys:
             statements.append(
-                f"ALTER TABLE {table.name} ADD CONSTRAINT {fk.name} "
-                f"FOREIGN KEY ({', '.join(fk.columns)}) REFERENCES {fk.ref_table} ({', '.join(fk.ref_columns)});",
+                f"ALTER TABLE {_quote(table.name)} ADD CONSTRAINT {fk.name} "
+                f"FOREIGN KEY ({_quote_list(fk.columns)}) REFERENCES {_quote(fk.ref_table)} ({_quote_list(fk.ref_columns)});",
             )
+    return "\n".join(statements) + "\n"
+
+
+def render_gpkg(tables: list[Table]) -> str:
+    """Render `tables` as SQLite/GeoPackage DDL text - everything inline at `CREATE TABLE` time, plus the GeoPackage bootstrap rows.
+
+    Assumes the target `.gpkg` file already exists with the standard
+    GeoPackage system tables (`gpkg_contents`/`gpkg_geometry_columns`/
+    `gpkg_spatial_ref_sys`/...) already in place - created by GDAL itself
+    (e.g. `ogr2ogr -f GPKG target.gpkg -dsco VERSION=1.3` with no layers,
+    or any prior GDAL write to the same file) - this function only ADDS
+    rows/tables to it, never creates the container from scratch (same
+    "GDAL owns the mature bootstrapping, this project owns the schema on
+    top" stance as the rest of this module).
+
+    Unlike `render_postgresql`, `FOREIGN KEY` is declared INLINE at
+    `CREATE TABLE` time (SQLite cannot add one to an existing table via
+    `ALTER TABLE` at all - see docs/sql-conversion-strategy.md) - verified
+    empirically that this needs NO topological sort of `tables`: SQLite
+    tolerates a `FOREIGN KEY REFERENCES` naming a table that does not YET
+    exist at `CREATE TABLE` time (only enforced later, at INSERT/UPDATE,
+    and only when `PRAGMA foreign_keys=ON`), unlike PostgreSQL.
+
+    `gpkg_spatial_ref_sys.definition` (the SRS WKT text) is written as an
+    explicit, LOUD placeholder rather than fabricated - this project stays
+    pure Python (no GDAL/PROJ dependency, see docs/sql-conversion-strategy.md),
+    so it has no authoritative source for a real WKT string; `organization`/
+    `organization_coordsys_id` (the EPSG code) are correct and are what
+    `gpkg_geometry_columns.srs_id` actually keys off in practice - the
+    caller should verify/replace `definition` via an authoritative source
+    (e.g. `gdalsrsinfo -o wkt2 EPSG:<code>`) before treating the resulting
+    GeoPackage as fully spec-compliant. EPSG:4326 is skipped (every valid
+    GeoPackage already has it pre-registered per the spec's own mandatory
+    default rows).
+    """
+    statements: list[str] = []
+    srids: set[int] = set()
+    for table in tables:
+        lines = [f"    {_quote(OID_COLUMN)} TEXT PRIMARY KEY"]
+        for column in table.columns:
+            null_clause = "" if column.nullable else " NOT NULL"
+            if column.geometry_type:
+                base_type = column.geometry_type[:-1] if column.geometry_type.endswith("Z") else column.geometry_type
+                sql_type = base_type.upper()
+                srids.add(column.srid)
+            else:
+                sql_type = column.sql_type
+            lines.append(f"    {_quote(column.name)} {sql_type}{null_clause}")
+        for unique in table.unique_constraints:
+            lines.append(f"    CONSTRAINT {unique.name} UNIQUE ({_quote_list(unique.columns)})")
+        for fk in table.foreign_keys:
+            lines.append(
+                f"    CONSTRAINT {fk.name} FOREIGN KEY ({_quote_list(fk.columns)}) "
+                f"REFERENCES {_quote(fk.ref_table)} ({_quote_list(fk.ref_columns)})",
+            )
+        body = ",\n".join(lines)
+        statements.append(f"CREATE TABLE {_quote(table.name)} (\n{body}\n);")
+        for note in table.notes:
+            statements.append(f"-- NOTE ({table.name}): {note}")
+
+    for table in tables:
+        geometry_columns = [c for c in table.columns if c.geometry_type]
+        if geometry_columns:
+            geom = geometry_columns[0]
+            statements.append(
+                f"INSERT INTO gpkg_contents (table_name, data_type, identifier, srs_id) "
+                f"VALUES ('{table.name}', 'features', '{table.name}', {geom.srid});",
+            )
+            for column in geometry_columns:
+                base_type = column.geometry_type[:-1] if column.geometry_type.endswith("Z") else column.geometry_type
+                z = 1 if column.geometry_type.endswith("Z") else 0
+                statements.append(
+                    f"INSERT INTO gpkg_geometry_columns (table_name, column_name, geometry_type_name, srs_id, z, m) "
+                    f"VALUES ('{table.name}', '{column.name}', '{base_type.upper()}', {column.srid}, {z}, 0);",
+                )
+        else:
+            statements.append(
+                f"INSERT INTO gpkg_contents (table_name, data_type, identifier) "
+                f"VALUES ('{table.name}', 'attributes', '{table.name}');",
+            )
+
+    for srid in sorted(srids - {4326}):
+        statements.append(
+            f"-- TODO: verify/replace this placeholder with the authoritative EPSG:{srid} WKT "
+            f"(e.g. `gdalsrsinfo -o wkt2 EPSG:{srid}`) before treating this GeoPackage as fully spec-compliant.",
+        )
+        statements.append(
+            f"INSERT OR IGNORE INTO gpkg_spatial_ref_sys "
+            f"(srs_name, srs_id, organization, organization_coordsys_id, definition) "
+            f"VALUES ('EPSG:{srid}', {srid}, 'EPSG', {srid}, 'undefined');",
+        )
     return "\n".join(statements) + "\n"

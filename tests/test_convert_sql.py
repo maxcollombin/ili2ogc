@@ -1,4 +1,4 @@
-"""Backlog item 14, Lot 1 - .ili -> SQL DDL (PostgreSQL): tables, columns, UNIQUE/FOREIGN KEY constraints.
+"""Backlog item 14, Lot 1 - .ili -> SQL DDL (PostgreSQL + GeoPackage/SQLite): tables, columns, UNIQUE/FOREIGN KEY constraints.
 
 See docs/sql-conversion-strategy.md for the design decision and scope.
 """
@@ -6,7 +6,7 @@ import warnings
 from pathlib import Path
 
 from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.convert.sql import Column, build_tables, render_postgresql
+from interlis.convert.sql import Column, build_tables, render_gpkg, render_postgresql
 from interlis.runtime.parse import meta_attribute_comments, parse_text
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,10 +73,10 @@ def test_primary_key_and_unique_constraint():
     tables = build_tables([owner])
     table = _table(tables, "owner")
     ddl = render_postgresql(tables)
-    assert "ogc_fid text PRIMARY KEY" in ddl
+    assert '"ogc_fid" text PRIMARY KEY' in ddl
     assert len(table.unique_constraints) == 1
     assert table.unique_constraints[0].columns == ["code"]
-    assert "CONSTRAINT uq_owner_code UNIQUE (code)" in ddl
+    assert 'CONSTRAINT uq_owner_code UNIQUE ("code")' in ddl
 
 
 def test_geometry_column_uses_sfa_type_and_resolved_srid():
@@ -85,7 +85,8 @@ def test_geometry_column_uses_sfa_type_and_resolved_srid():
     tables = build_tables([parcel])
     table = _table(tables, "parcel")
     geom = next(c for c in table.columns if c.name == "geom")
-    assert geom.sql_type == "geometry(Point, 2056)"
+    assert geom.geometry_type == "Point"
+    assert geom.srid == 2056
     # `MANDATORY <named domain>` (e.g. `Geom : MANDATORY Coord2D;`) is a
     # reference to a domain SHARED by every attribute using it - fixed
     # 2026-08-27 (InterlisModelBuilder._apply_pending_mandatory_overrides,
@@ -107,8 +108,9 @@ def test_structure_attribute_flattened_one_level():
 
 def test_reference_becomes_fk_column_and_constraint():
     builder = _build(_MODEL)
+    owner = _resolved_class(builder, "Foo.T.Owner")
     parcel = _resolved_class(builder, "Foo.T.Parcel")
-    tables = build_tables([parcel])
+    tables = build_tables([parcel, owner])  # owner must ALSO be converted, or the FK gets dropped (see test_foreign_key_dropped_when_target_not_converted)
     table = _table(tables, "parcel")
     owner_col = next(c for c in table.columns if c.name == "owner")
     assert owner_col.sql_type == "text"
@@ -119,7 +121,18 @@ def test_reference_becomes_fk_column_and_constraint():
     assert fk.ref_table == "owner"
     assert fk.ref_columns == ["ogc_fid"]
     ddl = render_postgresql(tables)
-    assert "ALTER TABLE parcel ADD CONSTRAINT fk_parcel_owner FOREIGN KEY (owner) REFERENCES owner (ogc_fid);" in ddl
+    assert 'ALTER TABLE "parcel" ADD CONSTRAINT fk_parcel_owner FOREIGN KEY ("owner") REFERENCES "owner" ("ogc_fid");' in ddl
+
+
+def test_foreign_key_dropped_when_target_not_converted():
+    """A REFERENCE TO target NOT in `classes` (real corpus case: a cross-model reference) keeps its column but drops the FK - never a dangling `REFERENCES` (found via a live PostGIS run, 2026-08-27)."""
+    builder = _build(_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])  # owner deliberately NOT included
+    table = _table(tables, "parcel")
+    assert table.foreign_keys == []
+    assert any(c.name == "owner" for c in table.columns)  # column itself is kept
+    assert any("belongs to a" in note and "different model" in note for note in table.notes)
 
 
 def test_multivalue_attribute_gets_a_note_not_a_column():
@@ -189,7 +202,8 @@ END Foo.
 """
     )
     item = _resolved_class(builder, "Foo.T.Item")
-    tables = build_tables([item], symbol_table=builder.symbol_table)
+    holder = _resolved_class(builder, "Foo.T.Holder")
+    tables = build_tables([item, holder], symbol_table=builder.symbol_table)
     table = _table(tables, "item")
     fk = next(c for c in table.foreign_keys if c.ref_table == "holder")
     assert fk.columns == ["rholder"]
@@ -248,5 +262,125 @@ def test_render_postgresql_foreign_keys_come_after_every_create_table():
     owner = _resolved_class(builder, "Foo.T.Owner")
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     ddl = render_postgresql(build_tables([parcel, owner]))
-    assert ddl.index("CREATE TABLE parcel") < ddl.index("ALTER TABLE parcel")
-    assert ddl.index("CREATE TABLE owner") < ddl.index("ALTER TABLE parcel")
+    assert ddl.index('CREATE TABLE "parcel"') < ddl.index('ALTER TABLE "parcel"')
+    assert ddl.index('CREATE TABLE "owner"') < ddl.index('ALTER TABLE "parcel"')
+
+
+def test_render_gpkg_inline_unique_and_foreign_key():
+    """Unlike PostgreSQL, GPKG/SQLite declares everything inline - no ALTER TABLE at all (see docs/sql-conversion-strategy.md, SQLite can't add constraints post-hoc)."""
+    builder = _build(_MODEL)
+    owner = _resolved_class(builder, "Foo.T.Owner")
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    ddl = render_gpkg(build_tables([parcel, owner]))
+    assert "ALTER TABLE" not in ddl
+    assert 'CONSTRAINT uq_owner_code UNIQUE ("code")' in ddl
+    assert 'CONSTRAINT fk_parcel_owner FOREIGN KEY ("owner") REFERENCES "owner" ("ogc_fid")' in ddl
+
+
+def test_render_gpkg_geometry_column_and_metadata_rows():
+    builder = _build(_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    ddl = render_gpkg(build_tables([parcel]))
+    assert '"geom" POINT NOT NULL' in ddl
+    assert "INSERT INTO gpkg_contents (table_name, data_type, identifier, srs_id) VALUES ('parcel', 'features', 'parcel', 2056);" in ddl
+    assert (
+        "INSERT INTO gpkg_geometry_columns (table_name, column_name, geometry_type_name, srs_id, z, m) "
+        "VALUES ('parcel', 'geom', 'POINT', 2056, 0, 0);"
+    ) in ddl
+    assert "INSERT OR IGNORE INTO gpkg_spatial_ref_sys" in ddl
+    assert "EPSG:2056" in ddl
+
+
+def test_render_gpkg_epsg_4326_skipped_as_pre_registered():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    !!@CRS=EPSG:4326
+    Coord2D = COORD -180.0 .. 180.0, -90.0 .. 90.0;
+  TOPIC T =
+    CLASS A =
+      Geom : MANDATORY Coord2D;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "Foo.T.A")
+    ddl = render_gpkg(build_tables([a]))
+    assert "gpkg_spatial_ref_sys" not in ddl
+
+
+def test_render_gpkg_non_spatial_table_registered_as_attributes():
+    builder = _build(_MODEL)
+    owner = _resolved_class(builder, "Foo.T.Owner")
+    ddl = render_gpkg(build_tables([owner]))
+    assert "INSERT INTO gpkg_contents (table_name, data_type, identifier) VALUES ('owner', 'attributes', 'owner');" in ddl
+
+
+def test_duplicate_class_name_across_topics_gets_disambiguated():
+    """Real corpus case (multiple files): two different classes named "Item" in different TOPICs - found via a live SQLite/PostgreSQL run, 2026-08-27 ("table already exists")."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T1 =
+    CLASS Item =
+      Code1 : TEXT*10;
+    END Item;
+  END T1;
+  TOPIC T2 =
+    CLASS Item =
+      Code2 : TEXT*10;
+    END Item;
+  END T2;
+END Foo.
+"""
+    )
+    item1 = _resolved_class(builder, "Foo.T1.Item")
+    item2 = _resolved_class(builder, "Foo.T2.Item")
+    tables = build_tables([item1, item2])
+    names = [t.name for t in tables]
+    assert names == ["item", "item_2"]
+    assert len(names) == len(set(names))
+
+
+def test_unique_constraint_referencing_an_unmapped_column_gets_dropped():
+    """`UNIQUE <attr>;` on a type Lot 1 never mapped to a column (e.g. INTERLIS.UUIDOID) - real corpus case ili_corpus/Axis_V1_1.ili, found via a live SQLite run ("no such column")."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      DatabaseId : MANDATORY INTERLIS.UUIDOID;
+      UNIQUE DatabaseId;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "Foo.T.A")
+    tables = build_tables([a])
+    table = _table(tables, "a")
+    assert table.unique_constraints == []
+    assert any("no mapped SQL type" in note for note in table.notes)
+
+
+def test_reserved_keyword_class_name_gets_quoted():
+    """A real class named after a SQL reserved word (real corpus cases: "Union", "Index") - unquoted, both PostgreSQL and SQLite reject `CREATE TABLE union (...)`."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Union =
+      Code : TEXT*10;
+    END Union;
+  END T;
+END Foo.
+"""
+    )
+    union = _resolved_class(builder, "Foo.T.Union")
+    tables = build_tables([union])
+    pg_ddl = render_postgresql(tables)
+    gpkg_ddl = render_gpkg(tables)
+    assert 'CREATE TABLE "union" (' in pg_ddl
+    assert 'CREATE TABLE "union" (' in gpkg_ddl

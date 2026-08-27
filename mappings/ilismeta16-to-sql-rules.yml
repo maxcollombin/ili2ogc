@@ -9,7 +9,9 @@
 # scope for Lot 1, with a reason - RULE #7). Checked by
 # scripts/validate_sql_conversion_spec.py.
 #
-# Lot 1 scope (PostgreSQL renderer): a plain `Class` (`Kind=Class`, never
+# Lot 1 scope (concept mapping is dialect-neutral; two renderers exist -
+# PostgreSQL and GeoPackage/SQLite, see convert/sql.py's
+# render_postgresql/render_gpkg): a plain `Class` (`Kind=Class`, never
 # `Kind=Structure`, never `View`) becomes one `CREATE TABLE`, with a
 # synthetic `ogc_fid text PRIMARY KEY` (matching GDAL's own PostgreSQL
 # driver default FID column name - `ogr2ogr -append` needs no extra `-lco`
@@ -18,7 +20,11 @@
 # generates the SCHEMA (table/column declarations + UNIQUE/FOREIGN KEY
 # constraints) - see docs/sql-conversion-strategy.md for why this division
 # of labor was chosen over "GDAL creates, we patch after" (SQLite/GPKG
-# cannot add constraints to an existing table via ALTER TABLE at all).
+# cannot add constraints to an existing table via ALTER TABLE at all - the
+# gpkg dialect declares UNIQUE/FOREIGN KEY inline at CREATE TABLE time
+# instead, plus bootstraps gpkg_contents/gpkg_geometry_columns/
+# gpkg_spatial_ref_sys, since a table this pipeline creates by plain SQL
+# is otherwise invisible to GDAL's own `-append`).
 
 concepts:
   NumType:

@@ -19,7 +19,7 @@ from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
-from interlis.convert.sql import build_tables, render_postgresql
+from interlis.convert.sql import build_tables, render_gpkg, render_postgresql
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
 from interlis.xtf.model_resolution import header_completeness, header_model_lookup, root_model_names
@@ -198,17 +198,22 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
 
 def cmd_convert_sql(args: argparse.Namespace) -> int:
-    """Convert an .ili model to PostgreSQL DDL (backlog item 14, Lot 1).
+    """Convert an .ili model to SQL DDL, PostgreSQL or GeoPackage/SQLite (backlog item 14, Lot 1).
 
     See docs/sql-conversion-strategy.md for the design decision and scope
-    - this project generates the full schema (`CREATE TABLE` + inline
-    `UNIQUE` + `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`); GDAL
-    (`ogr2ogr -append`) is expected to load the actual .xtf-derived data
-    into the tables this command creates, never the other way around.
-    Only `Kind=Class` roots become a table (no `View`, unlike `cmd_convert`
-    - `CREATE VIEW` generation is a later lot). An attribute/constraint
-    outside Lot 1's mapped set never disappears silently - it becomes a
-    `-- NOTE` SQL comment instead (RULE #5).
+    - this project generates the full schema (`CREATE TABLE` + `UNIQUE` +
+    `FOREIGN KEY`); GDAL (`ogr2ogr -append`) is expected to load the
+    actual .xtf-derived data into the tables this command creates, never
+    the other way around. `--dialect gpkg` assumes the target `.gpkg`
+    file already has the standard GeoPackage system tables (created by
+    GDAL beforehand) and declares every constraint INLINE, at `CREATE
+    TABLE` time (SQLite cannot add one to an existing table at all,
+    unlike `--dialect postgresql`'s default, which uses a separate
+    `ALTER TABLE ... ADD CONSTRAINT` pass). Only `Kind=Class` roots become
+    a table (no `View`, unlike `cmd_convert` - `CREATE VIEW` generation is
+    a later lot). An attribute/constraint outside Lot 1's mapped set never
+    disappears silently - it becomes a `-- NOTE` SQL comment instead
+    (RULE #5).
     """
     path = Path(args.file)
     if not path.exists():
@@ -234,7 +239,7 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
     ]
     tables = build_tables(classes, symbol_table=builder.symbol_table)
-    ddl = render_postgresql(tables)
+    ddl = render_gpkg(tables) if args.dialect == "gpkg" else render_postgresql(tables)
     if args.output:
         Path(args.output).write_text(ddl, encoding="utf-8")
     else:
@@ -476,9 +481,17 @@ def main(argv: list[str] | None = None) -> int:
     convert_parser.set_defaults(func=cmd_convert)
 
     convert_sql_parser = subparsers.add_parser(
-        "convert-sql", help="Convert an .ili model to PostgreSQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY constraints).",
+        "convert-sql", help="Convert an .ili model to SQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY constraints).",
     )
     convert_sql_parser.add_argument("file", help="Path to the .ili file to convert.")
+    convert_sql_parser.add_argument(
+        "--dialect", choices=("postgresql", "gpkg"), default="postgresql",
+        help="Target SQL dialect. 'postgresql' (default): CREATE TABLE + a separate ALTER TABLE ... ADD CONSTRAINT "
+             "pass for FOREIGN KEY. 'gpkg': GeoPackage/SQLite - everything declared INLINE at CREATE TABLE time "
+             "(SQLite can't add a constraint to an existing table), plus gpkg_contents/gpkg_geometry_columns/"
+             "gpkg_spatial_ref_sys bootstrap rows - assumes the target .gpkg already has the standard GeoPackage "
+             "system tables (created by GDAL beforehand).",
+    )
     convert_sql_parser.add_argument(
         "--repo", action="append", default=[], metavar="DIR",
         help="Directory of .ili models used to resolve references to imported models (IMPORTS) - repeatable.",

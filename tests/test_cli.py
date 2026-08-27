@@ -62,6 +62,18 @@ def test_convert_sql_resolves_crs_declared_locally_not_via_import(tmp_path, caps
 
     assert main(["convert-sql", str(ili_path)]) == 0
     ddl = capsys.readouterr().out
-    assert "CREATE TABLE a (" in ddl
-    assert "ogc_fid text PRIMARY KEY" in ddl
-    assert "geom geometry(Point, 2056) NOT NULL" in ddl
+    assert 'CREATE TABLE "a" (' in ddl
+    assert '"ogc_fid" text PRIMARY KEY' in ddl
+    assert '"geom" geometry(Point, 2056) NOT NULL' in ddl
+
+
+def test_convert_sql_dialect_gpkg_declares_everything_inline(tmp_path, capsys):
+    ili_path = tmp_path / "Foo.ili"
+    ili_path.write_text(_MODEL_WITH_META, encoding="utf-8")
+
+    assert main(["convert-sql", str(ili_path), "--dialect", "gpkg"]) == 0
+    ddl = capsys.readouterr().out
+    assert 'CREATE TABLE "a" (' in ddl
+    assert '"geom" POINT NOT NULL' in ddl
+    assert "ALTER TABLE" not in ddl
+    assert "gpkg_geometry_columns" in ddl
