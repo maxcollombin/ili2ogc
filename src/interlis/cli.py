@@ -216,6 +216,20 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     lot). An attribute/constraint outside this module's mapped set never
     disappears silently - it becomes a `-- NOTE` SQL comment instead
     (RULE #5).
+
+    `--catalog FILE.ili` (repeatable): each is built with its OWN
+    `InterlisModelBuilder` (sharing `repository` so cross-references
+    between `file` and a catalogue, or between two catalogues, still
+    resolve) and its classes are appended to the SAME `classes` list
+    `build_tables` receives - closes `build_tables`'s own documented
+    cross-model FK-drop (see its "3rd real bug" comment): a `REFERENCE TO`
+    a class NOT among `classes` gets its `FOREIGN KEY` constraint dropped,
+    column kept, because that target table doesn't exist in THIS
+    conversion's output. A catalogue model (e.g. a value-list Class
+    hierarchy extending `CatalogueObjects_V1.Catalogues.Item`) is the
+    single most common real case (docs/sql-conversion-strategy.md) - but
+    this flag is generic, not catalogue-specific: any additional model
+    works the same way.
     """
     path = Path(args.file)
     if not path.exists():
@@ -240,6 +254,33 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         instance for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
     ]
+
+    seen_catalog_paths: set[Path] = set()
+    for catalog_arg in args.catalog:
+        catalog_path = Path(catalog_arg)
+        if not catalog_path.exists():
+            print(f"--catalog file not found: {catalog_path}", file=sys.stderr)
+            return 1
+        catalog_path = catalog_path.resolve()
+        if catalog_path == path.resolve() or catalog_path in seen_catalog_paths:
+            continue  # the same file given twice (as `file` or across --catalog) would otherwise duplicate its table
+        seen_catalog_paths.add(catalog_path)
+        catalog_tree, catalog_syntax_errors = parse_file(catalog_path)
+        if catalog_syntax_errors:
+            print(f"{len(catalog_syntax_errors)} syntax error(s) in {catalog_path}:", file=sys.stderr)
+            for e in catalog_syntax_errors:
+                print(f"  {e}", file=sys.stderr)
+            return 1
+        with _resource_dirs() as (mappings_dir, spec_dir):
+            catalog_builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            catalog_builder.build(catalog_tree, meta_attributes=meta_attribute_comments_in_file(catalog_path))
+        classes.extend(
+            instance for instance in catalog_builder.symbol_table.all_registered()
+            if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
+        )
+
     tables = build_tables(classes, symbol_table=builder.symbol_table)
     ddl = render_gpkg(tables) if args.dialect == "gpkg" else render_postgresql(tables)
     if args.output:
@@ -497,6 +538,14 @@ def main(argv: list[str] | None = None) -> int:
     convert_sql_parser.add_argument(
         "--repo", action="append", default=[], metavar="DIR",
         help="Directory of .ili models used to resolve references to imported models (IMPORTS) - repeatable.",
+    )
+    convert_sql_parser.add_argument(
+        "--catalog", action="append", default=[], metavar="FILE.ili",
+        help="Additional .ili model whose own classes also become tables in this SAME conversion (repeatable) - "
+             "typically a catalogue/reference model (e.g. a value-list Class hierarchy) that another Class in "
+             "'file' points to via REFERENCE TO. Without this, a REFERENCE TO a class from a model not converted "
+             "in the SAME run keeps its column but drops the FOREIGN KEY constraint (the target table doesn't "
+             "exist in this conversion's own output) - see docs/sql-conversion-strategy.md.",
     )
     convert_sql_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
     convert_sql_parser.set_defaults(func=cmd_convert_sql)

@@ -77,3 +77,65 @@ def test_convert_sql_dialect_gpkg_declares_everything_inline(tmp_path, capsys):
     assert '"geom" POINT NOT NULL' in ddl
     assert "ALTER TABLE" not in ddl
     assert "gpkg_geometry_columns" in ddl
+
+
+_MAIN_MODEL_WITH_CATALOG_REF = """INTERLIS 2.4;
+MODEL Main AT "http://x" VERSION "1" =
+  IMPORTS Catalog;
+  TOPIC T =
+    CLASS Parcel =
+      Zone : REFERENCE TO Catalog.CatTopic.ZoneCatalog;
+    END Parcel;
+  END T;
+END Main.
+"""
+
+_CATALOG_MODEL = """INTERLIS 2.4;
+MODEL Catalog AT "http://y" VERSION "1" =
+  TOPIC CatTopic =
+    CLASS ZoneCatalog =
+      Code : MANDATORY TEXT*10;
+    END ZoneCatalog;
+  END CatTopic;
+END Catalog.
+"""
+
+
+def test_convert_sql_catalog_flag_keeps_cross_model_foreign_key(tmp_path, capsys):
+    """`--catalog` closes build_tables()'s own documented cross-model FK-drop: without it, `zone` keeps its column but loses its FOREIGN KEY (target table not in this conversion's own output)."""
+    main_path = tmp_path / "Main.ili"
+    main_path.write_text(_MAIN_MODEL_WITH_CATALOG_REF, encoding="utf-8")
+    catalog_path = tmp_path / "Catalog.ili"
+    catalog_path.write_text(_CATALOG_MODEL, encoding="utf-8")
+
+    # Without --catalog: column kept, FK dropped with a note.
+    assert main(["convert-sql", str(main_path), "--repo", str(tmp_path)]) == 0
+    ddl_without = capsys.readouterr().out
+    assert '"zone" text' in ddl_without
+    assert "ADD CONSTRAINT" not in ddl_without  # the actual FK constraint statement, not the "-- NOTE" mentioning it
+    assert "different model" in ddl_without
+
+    # With --catalog: the catalogue's own table is created in the SAME
+    # conversion, so the FK constraint is kept too.
+    assert main([
+        "convert-sql", str(main_path), "--repo", str(tmp_path), "--catalog", str(catalog_path),
+    ]) == 0
+    ddl_with = capsys.readouterr().out
+    assert 'CREATE TABLE "zonecatalog" (' in ddl_with
+    assert 'FOREIGN KEY ("zone") REFERENCES "zonecatalog" ("id")' in ddl_with
+
+
+def test_convert_sql_catalog_flag_ignores_the_same_file_given_twice(tmp_path, capsys):
+    """Passing the same --catalog file twice (or the same as the main file) must not duplicate its table."""
+    main_path = tmp_path / "Main.ili"
+    main_path.write_text(_MAIN_MODEL_WITH_CATALOG_REF, encoding="utf-8")
+    catalog_path = tmp_path / "Catalog.ili"
+    catalog_path.write_text(_CATALOG_MODEL, encoding="utf-8")
+
+    assert main([
+        "convert-sql", str(main_path), "--repo", str(tmp_path),
+        "--catalog", str(catalog_path), "--catalog", str(catalog_path),
+    ]) == 0
+    ddl = capsys.readouterr().out
+    assert ddl.count('CREATE TABLE "zonecatalog"') == 1
+    assert 'CREATE TABLE "zonecatalog_2"' not in ddl
