@@ -943,6 +943,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     self._apply_bindings(instance, ctx, rule_name, entry.attribute_bindings, construction_ctx, consumed)
                 if rule_name == "predicate" and token_or_rule == "DEFINED":
                     self._set_defined_subexpression(instance, ctx)
+                if rule_name == "factor" and token_or_rule == "INTERLIS":
+                    self._set_predefined_function_call(instance, ctx)
             finally:
                 self._parent_stack.pop()
                 self._pop_construction_context()
@@ -1825,6 +1827,33 @@ class InterlisModelBuilder(InterlisParserVisitor):
         value = self.visit(factor_node)
         if value is not None:
             instance.SubExpression = value
+
+    def _set_predefined_function_call(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Set `FunctionCall.Function`/`.Arguments` from `factor`'s alt4 (predefined functions, e.g. `INTERLIS.len(...)`).
+
+        See spec/grammar/mapping/07_constraints.yml's `factor` entry (the
+        `INTERLIS` `when_present` branch) for why this needs a dedicated
+        hook: `Function` needs 2 tokens joined (`INTERLIS` + the matched
+        `Name`/`URI`/`UUIDOID`), and `Arguments` needs each bare
+        `expression()` wrapped in a synthetic `ActualArgument` - this alt
+        never goes through the `argument()` rule (unlike `functionCall`'s
+        own `Arguments`), so neither has a matching direct accessor.
+        """
+        names = ctx.Name()
+        name_token = names[0] if names else (ctx.URI() or ctx.UUIDOID())
+        if name_token is None:
+            return
+        instance.Function = f"INTERLIS.{name_token.getText()}"
+        arguments = []
+        for expr_ctx in ctx.expression():
+            value = self.visit(expr_ctx)
+            if value is None:
+                continue
+            argument = self.registry.new_instance("IlisMeta16.ModelData.ActualArgument")
+            argument.Kind = "Expression"
+            argument.Expression = value
+            arguments.append(argument)
+        instance.Arguments = arguments
 
     def _expand_view_all_of(self, view: MetaInstance, ctx: ParserRuleContext) -> None:
         """Record a View's `ATTRIBUTE ALL OF <Name>;` for deferred expansion.

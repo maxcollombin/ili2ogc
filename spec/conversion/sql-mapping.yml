@@ -147,3 +147,18 @@ UniqueConstraint:
         real signal). Kind=LocalU and any multi-hop path are backlog
         within this same concept - see
         mappings/ilismeta16-to-sql-rules.yml's UniqueConstraint entry.
+
+Constraint:
+  qualified_name: IlisMeta16.ModelData.SimpleConstraint
+  sql:
+    check:
+      source: {field: LogicalExpression}
+      note: >
+        Only Kind=MandC (source: {field: Kind}) with no Percentage
+        (source: {field: Percentage}) - a row-local MANDATORY CONSTRAINT.
+        LogicalExpression walked by convert/sql.py's _expression_to_sql,
+        same supported Expression subset as convert/constraint_eval.py's
+        evaluate_expression. Kind=LowPercC/HighPercC (plausibility) and
+        any node needing THIS/PARENT/aggregate/function-call context are
+        backlog within this same concept - see
+        mappings/ilismeta16-to-sql-rules.yml's Constraint entry.

@@ -1,4 +1,4 @@
-"""IlisMeta16 -> SQL DDL conversion: tables, columns, UNIQUE/FOREIGN KEY constraints (backlog item 14, Lot 1).
+"""IlisMeta16 -> SQL DDL conversion: tables, columns, UNIQUE/FOREIGN KEY/CHECK constraints (backlog item 14).
 
 See docs/sql-conversion-strategy.md for the design decision and scope, and
 mappings/ilismeta16-to-sql-rules.yml / spec/conversion/sql-mapping.yml for
@@ -8,12 +8,14 @@ Division of labor (docs/interlis-ogc-architecture.md): this module
 generates the SCHEMA only (`CREATE TABLE` + `UNIQUE` + `FOREIGN KEY`) -
 GDAL (`ogr2ogr -append`) still does the actual DATA LOADING, including
 into `BAG`/`LIST OF` child tables: `convert/jsonfg.py`'s
-`child_feature_collections` emits a companion FeatureCollection per
-`BAG`/`LIST` attribute (one Feature per element, `<parent>_fk` carrying
-the parent's OID) that GDAL loads with its own SEPARATE `ogr2ogr -append`
-call, exactly like the main data - see docs/sql-conversion-strategy.md
-for why this keeps the "this project transforms, GDAL loads" division
-intact rather than adding a live-database-write dependency.
+`transfer_to_feature_collection(..., include_child_rows=True)` appends
+one synthetic Feature per `BAG`/`LIST` occurrence to the SAME
+FeatureCollection, each with its own `"featureType"` matching the child
+table name here - GDAL's JSONFG driver already splits a collection by
+`featureType` on `-append`, so ONE call loads parent and child rows both.
+See docs/sql-conversion-strategy.md for why this keeps the "this project
+transforms, GDAL loads" division intact rather than adding a
+live-database-write dependency.
 `build_tables()` produces a dialect-neutral intermediate representation
 (`Table`/`Column`/`UniqueConstraint`/`ForeignKey`) from already-built
 `IlisMeta16` instances, walked once via the SAME `resolve_attribute`/
@@ -21,19 +23,25 @@ intact rather than adding a live-database-write dependency.
 already uses (no parallel resolution logic) - `render_postgresql`/
 `render_gpkg` are the two renderers over that IR.
 
-Lot 1 scope (see mappings/ilismeta16-to-sql-rules.yml for the full,
-per-concept rationale): scalar/geometry columns, one level of flattened
-STRUCTURE nesting, FOREIGN KEY from REFERENCE TO/embedded roles, UNIQUE
-from the simple (Kind=GlobalU, no `->` navigation) constraint form, and
-`BAG`/`LIST OF` -> a related child table. ABSTRACT structure
-polymorphism, `(LOCAL)`/cross-reference UNIQUE, and CHECK from CONSTRAINT
-are all deliberately out of scope - never silently dropped, each
-unsupported construct is collected into `Table.notes` and rendered as a
-`-- NOTE` SQL comment (RULE #5).
+Scope (see mappings/ilismeta16-to-sql-rules.yml for the full, per-concept
+rationale): scalar/geometry columns, one level of flattened STRUCTURE
+nesting, FOREIGN KEY from REFERENCE TO/embedded roles, UNIQUE from the
+simple (Kind=GlobalU, no `->` navigation) constraint form, `BAG`/`LIST OF`
+-> a related child table, and CHECK from a row-local `MANDATORY
+CONSTRAINT` (`_expression_to_sql`, same supported `Expression` subset as
+`constraint_eval.py`'s `evaluate_expression` - relational/logical
+operators, `DEFINED(...)`, plain attribute paths up to one STRUCTURE hop).
+ABSTRACT structure polymorphism, `(LOCAL)`/cross-reference UNIQUE, the
+percentage-based plausibility form, and any `CONSTRAINT` needing
+`THIS`/`PARENT`/aggregate/function-call/arithmetic context are all
+deliberately out of scope - never silently dropped, each unsupported
+construct is collected into `Table.notes` and rendered as a `-- NOTE` SQL
+comment (RULE #5).
 """
 from dataclasses import dataclass, field
 
 from interlis.builder.forward_refs import SymbolTable
+from interlis.convert.constraint_eval import _unquote_text
 from interlis.convert.jsonfg import _meta_value
 from interlis.convert.jsonschema import _is_integer_range, _is_structure
 from interlis.metamodel.instance import MetaInstance
@@ -152,11 +160,19 @@ class UniqueConstraint:
 
 
 @dataclass
+class CheckConstraint:
+    name: str
+    expression: str
+    """A complete SQL boolean expression, already portable across PostgreSQL and SQLite (no dialect-specific syntax) - see `_expression_to_sql`."""
+
+
+@dataclass
 class Table:
     name: str
     columns: list[Column] = field(default_factory=list)
     unique_constraints: list[UniqueConstraint] = field(default_factory=list)
     foreign_keys: list[ForeignKey] = field(default_factory=list)
+    check_constraints: list[CheckConstraint] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     """Human-readable reasons an attribute/constraint was skipped (RULE #5) - never a silent drop."""
 
@@ -321,12 +337,10 @@ def _build_child_table(
 ) -> tuple[Table | None, str | None]:
     """Return `(child_table, None)` on success or `(None, reason)` on failure, for one `BAG`/`LIST OF` attribute.
 
-    Companion to `convert/jsonfg.py`'s child feature collections (see
-    docs/sql-conversion-strategy.md) - GDAL loads each via its OWN
-    `ogr2ogr -append` into the table this returns, exactly like the main
-    data (a `BAG`/`LIST` element is never inlined into the parent's own
-    JSON-FG properties for this pipeline, unlike `.xtf -> JSON-FG`'s
-    plain conversion). Schema: a `<parent>_fk` `FOREIGN KEY` back to the
+    Companion to `convert/jsonfg.py`'s `include_child_rows` synthetic
+    Features (see docs/sql-conversion-strategy.md) - GDAL loads them into
+    the table this returns via the SAME `ogr2ogr -append` call that loads
+    the parent data, routed by `"featureType"`. Schema: a `<parent>_fk` `FOREIGN KEY` back to the
     parent (own `id` identity column added by the renderer, like every
     table) +
     `seq` (only when `Ordered=True` - `LIST` is order-significant, `BAG`
@@ -397,6 +411,169 @@ def _build_child_table(
 
     _avoid_identity_collision(columns)
     return Table(name=child_table_name, columns=columns, foreign_keys=foreign_keys, notes=notes), None
+
+
+class _UnsupportedCheckExpression(Exception):
+    """Raised when an `Expression` node needs context a single-row SQL `CHECK` cannot express - caught by the caller, never propagated (RULE #5: a `-- NOTE`, not a crash)."""
+
+
+_SQL_RELATIONAL_OPERATORS = {
+    "Equal": "=",
+    "NotEqual": "<>",
+    "Less": "<",
+    "Greater": ">",
+    "LessOrEqual": "<=",
+    "GreaterOrEqual": ">=",
+}
+
+
+def _path_to_column(path_els: list[MetaInstance]) -> str:
+    """Resolve a `CONSTRAINT` path (`PathOrInspFactor.PathEls`) to the flattened SQL column name it maps to.
+
+    Same scope as `constraint_eval.py`'s own `_resolve_path`: a `CONSTRAINT`
+    never navigates beyond one nested `STRUCTURE` in the SAME object (never
+    through a `REFERENCE TO`/role - confirmed empirically there, docstring
+    "STRUCTURE nesting" only) - so 1 hop is a plain own column, 2 hops is
+    the SAME `<attr>_<subattr>` flattened name `_columns_for_class` already
+    builds for one level of STRUCTURE nesting (RULE #1: same join, not a
+    parallel convention). 3+ hops would need a second nesting level, out of
+    Lot 1 scope everywhere else in this module - rejected the same way.
+    """
+    if len(path_els) not in (1, 2):
+        raise _UnsupportedCheckExpression(f"path with {len(path_els)} hops needs more than one level of STRUCTURE nesting")
+    refs = []
+    for path_el in path_els:
+        kind = getattr(path_el, "Kind", None)
+        if kind not in ("ReferenceAttr", "Attribute"):
+            raise _UnsupportedCheckExpression(f"path element kind {kind!r} needs object-graph context beyond one row")
+        if getattr(path_el, "NumIndex", None) is not None or getattr(path_el, "SpecIndex", None) is not None:
+            raise _UnsupportedCheckExpression("indexed path elements ([FIRST]/[LAST]/[n]) are not supported")
+        ref = getattr(path_el, "Ref", None)
+        if not ref:
+            raise _UnsupportedCheckExpression("path element with no attribute name")
+        refs.append(ref)
+    return _sql_identifier("_".join(refs))
+
+
+def _text_sql_literal(quoted_value: str) -> str:
+    r"""Turn a `Constant.Value` STRING token (still INTERLIS-quoted, e.g. `'"a\\"b"'`) into a SQL string literal."""
+    unescaped = _unquote_text(quoted_value)
+    return "'" + unescaped.replace("'", "''") + "'"
+
+
+def _numeric_sql_literal(raw: str) -> str:
+    """Strip a leading `+` (not standard SQL numeric-literal syntax, unlike `-`) from a `Constant.Value` numeric token."""
+    return raw[1:] if raw.startswith("+") else raw
+
+
+def _expression_to_sql(expr: MetaInstance, column_names: set[str], renamed: dict[str, str]) -> str:
+    """Serialize `expr` (an already-built `Expression` node) into a SQL boolean expression for `CHECK (...)`.
+
+    Same supported subset as `constraint_eval.py`'s `evaluate_expression`
+    (relational operators, `And`/`Or`/`Not`/`Implication`, `DEFINED(...)`,
+    plain attribute paths, `Numeric`/`Text`/`Enumeration` constants) -
+    walks the SAME `Expression` tree, but emits SQL text instead of
+    evaluating against a Python dict. `THIS`/`PARENT`/aggregate paths/
+    `FunctionCall`/arithmetic raise `_UnsupportedCheckExpression`, same as
+    that module's `UnsupportedExpressionError` for the same nodes.
+
+    `renamed` is `_avoid_identity_collision`'s `{old_name: new_name}` map -
+    a path whose single hop is a real attribute literally named `id` must
+    resolve to the column it was actually renamed to (`id_attr`), the same
+    remap already applied to `UniqueConstraint.columns` in `build_tables`.
+    """
+    qualified = expr._qualified_class
+    if qualified.endswith("CompoundExpr"):
+        op = expr.Operation
+        subs = expr.SubExpressions
+        if op in _SQL_RELATIONAL_OPERATORS:
+            if len(subs) != 2:
+                raise _UnsupportedCheckExpression(f"relational operator {op!r} needs exactly 2 operands, got {len(subs)}")
+            left = _expression_to_sql(subs[0], column_names, renamed)
+            right = _expression_to_sql(subs[1], column_names, renamed)
+            return f"({left} {_SQL_RELATIONAL_OPERATORS[op]} {right})"
+        if op == "And":
+            return "(" + " AND ".join(_expression_to_sql(sub, column_names, renamed) for sub in subs) + ")"
+        if op == "Or":
+            return "(" + " OR ".join(_expression_to_sql(sub, column_names, renamed) for sub in subs) + ")"
+        if op == "Implication":
+            if len(subs) != 2:
+                raise _UnsupportedCheckExpression("implication needs exactly 2 operands")
+            left = _expression_to_sql(subs[0], column_names, renamed)
+            right = _expression_to_sql(subs[1], column_names, renamed)
+            return f"(NOT {left} OR {right})"
+        raise _UnsupportedCheckExpression(f"operator {op!r} needs numeric-domain context beyond boolean CHECK evaluation")
+    if qualified.endswith("UnaryExpr"):
+        op = expr.Operation
+        if op == "Not":
+            return f"(NOT {_expression_to_sql(expr.SubExpression, column_names, renamed)})"
+        if op == "Defined":
+            sub = expr.SubExpression
+            if sub is None or not sub._qualified_class.endswith("PathOrInspFactor"):
+                raise _UnsupportedCheckExpression("DEFINED(...) is only supported for a plain attribute path")
+            raw_column = _path_to_column(sub.PathEls)
+            column = renamed.get(raw_column, raw_column)
+            if column not in column_names:
+                raise _UnsupportedCheckExpression(f"DEFINED({column}): no such column")
+            return f"({_quote(column)} IS NOT NULL)"
+        raise _UnsupportedCheckExpression(f"unary operator {op!r} is not supported")
+    if qualified.endswith("PathOrInspFactor"):
+        if getattr(expr, "Inspection", None):
+            raise _UnsupportedCheckExpression("INSPECTION-based path factors are not supported")
+        raw_column = _path_to_column(expr.PathEls)
+        column = renamed.get(raw_column, raw_column)
+        if column not in column_names:
+            raise _UnsupportedCheckExpression(f"attribute path resolves to column {column!r}, which has no mapped SQL type")
+        return _quote(column)
+    if qualified.endswith("Constant"):
+        value, type_ = expr.Value, expr.Type
+        if type_ == "Numeric":
+            return _numeric_sql_literal(value)
+        if type_ == "Text":
+            return _text_sql_literal(value)
+        if type_ == "Enumeration":
+            return "'" + value.replace("'", "''") + "'"  # a plain dotted-path string (`_normalize_enumeration_const_value`), never quoted to begin with - matches EnumType's own `text` SQL column type
+        raise _UnsupportedCheckExpression(f"constant of type {type_!r} is not supported")
+    raise _UnsupportedCheckExpression(
+        f"expression node {qualified} needs THIS/PARENT/aggregate/function-call context beyond one row",
+    )
+
+
+def _check_constraints_for_class(
+    cls: MetaInstance, table_name: str, column_names: set[str], renamed: dict[str, str],
+) -> tuple[list[CheckConstraint], list[str]]:
+    """Return `(constraints, notes)` for `cls`'s own row-local `MANDATORY CONSTRAINT`s - same scope as `constraint_eval.py`'s `check_feature_constraints`.
+
+    `UniqueConstraint`/`SetConstraint`/`ExistenceConstraint` and the
+    percentage-based plausibility form (`Kind` `LowPercC`/`HighPercC`) are
+    population/basket-level checks a single-row `CHECK` cannot express -
+    same exclusion as `check_feature_constraints`, not attempted here
+    either.
+    """
+    result: list[CheckConstraint] = []
+    notes: list[str] = []
+    counter = 0
+    for constraint in getattr(cls, "Constraint", None) or []:
+        if not constraint._qualified_class.endswith("SimpleConstraint"):
+            continue
+        if getattr(constraint, "Kind", None) not in (None, "MandC"):
+            continue
+        if getattr(constraint, "Percentage", None) is not None:
+            continue
+        expr = getattr(constraint, "LogicalExpression", None)
+        if expr is None:
+            continue
+        counter += 1
+        name = getattr(constraint, "Name", None)
+        label = name or f"CONSTRAINT #{counter}"
+        try:
+            sql_expr = _expression_to_sql(expr, column_names, renamed)
+        except _UnsupportedCheckExpression as exc:
+            notes.append(f"MANDATORY CONSTRAINT {label!r}: {exc} - CHECK not generated (Lot 2)")
+            continue
+        constraint_name = _truncate_identifier(_sql_identifier(f"chk_{table_name}_{name}" if name else f"chk_{table_name}_{counter}"))
+        result.append(CheckConstraint(constraint_name, sql_expr))
+    return result, notes
 
 
 def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[list[UniqueConstraint], list[str]]:
@@ -493,10 +670,12 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
                 unique_notes.append(f"UNIQUE ({', '.join(unique.columns)}): column(s) {missing} have no mapped SQL type")
                 continue
             valid_unique_constraints.append(unique)
+        check_constraints, check_notes = _check_constraints_for_class(cls, table_name, column_names, renamed)
 
         tables.append(Table(
             name=table_name, columns=columns, unique_constraints=valid_unique_constraints,
-            foreign_keys=foreign_keys, notes=notes + unique_notes,
+            foreign_keys=foreign_keys, check_constraints=check_constraints,
+            notes=notes + unique_notes + check_notes,
         ))
 
         for attr_name, multi_value in child_specs:
@@ -564,6 +743,8 @@ def render_postgresql(tables: list[Table]) -> str:
             lines.append(f"    {_quote(column.name)} {sql_type}{null_clause}")
         for unique in table.unique_constraints:
             lines.append(f"    CONSTRAINT {unique.name} UNIQUE ({_quote_list(unique.columns)})")
+        for check in table.check_constraints:
+            lines.append(f"    CONSTRAINT {check.name} CHECK ({check.expression})")
         body = ",\n".join(lines)
         statements.append(f"CREATE TABLE {_quote(table.name)} (\n{body}\n);")
         for note in table.notes:
@@ -629,6 +810,8 @@ def render_gpkg(tables: list[Table]) -> str:
                 f"    CONSTRAINT {fk.name} FOREIGN KEY ({_quote_list(fk.columns)}) "
                 f"REFERENCES {_quote(fk.ref_table)} ({_quote_list(fk.ref_columns)})",
             )
+        for check in table.check_constraints:
+            lines.append(f"    CONSTRAINT {check.name} CHECK ({check.expression})")
         body = ",\n".join(lines)
         statements.append(f"CREATE TABLE {_quote(table.name)} (\n{body}\n);")
         for note in table.notes:

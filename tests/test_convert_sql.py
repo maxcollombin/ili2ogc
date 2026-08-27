@@ -2,8 +2,11 @@
 
 See docs/sql-conversion-strategy.md for the design decision and scope.
 """
+import sqlite3
 import warnings
 from pathlib import Path
+
+import pytest
 
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.sql import Column, UniqueConstraint, build_tables, render_gpkg, render_postgresql
@@ -489,3 +492,94 @@ END Foo.
     tables = build_tables([collider, parcel])
     names = [t.name for t in tables]
     assert names == ["parcel_tags", "parcel", "parcel_tags_2"]
+
+
+_CHECK_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Addr =
+      Street : TEXT*50;
+      Number : TEXT*10;
+    END Addr;
+    CLASS Parcel =
+      ParcelNr : MANDATORY 0 .. 999999;
+      Status : MANDATORY TEXT*10;
+      Loc : Addr;
+      MANDATORY CONSTRAINT ParcelNr >= 0;
+      MANDATORY CONSTRAINT NamedCheck: (Status == "Active" OR Status == "Closed") AND DEFINED(Loc->Street);
+      MANDATORY CONSTRAINT Impl: Status == "Closed" => DEFINED(Loc->Number);
+      MANDATORY CONSTRAINT NotClosed: NOT (Status == "Closed");
+    END Parcel;
+  END T;
+END Foo.
+"""
+
+
+def test_mandatory_constraint_becomes_an_inline_check_constraint():
+    builder = _build(_CHECK_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    pg_ddl = render_postgresql(tables)
+    gpkg_ddl = render_gpkg(tables)
+    assert 'CONSTRAINT chk_parcel_1 CHECK (("parcelnr" >= 0))' in pg_ddl
+    assert 'CONSTRAINT chk_parcel_1 CHECK (("parcelnr" >= 0))' in gpkg_ddl  # inline in BOTH dialects - CHECK has no forward-reference ordering issue, unlike FOREIGN KEY
+    assert "ALTER TABLE" not in pg_ddl.split("CREATE TABLE")[0]  # CHECK never needs the FK's separate ALTER TABLE pass
+
+
+def test_check_constraint_and_or_defined_over_a_flattened_struct_path():
+    builder = _build(_CHECK_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    ddl = render_postgresql(build_tables([parcel]))
+    assert (
+        'CONSTRAINT chk_parcel_namedcheck CHECK '
+        '(((("status" = \'Active\') OR ("status" = \'Closed\')) AND ("loc_street" IS NOT NULL)))'
+    ) in ddl
+
+
+def test_check_constraint_implication_and_not():
+    builder = _build(_CHECK_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    ddl = render_postgresql(build_tables([parcel]))
+    assert 'CONSTRAINT chk_parcel_impl CHECK ((NOT ("status" = \'Closed\') OR ("loc_number" IS NOT NULL)))' in ddl
+    assert 'CONSTRAINT chk_parcel_notclosed CHECK ((NOT ("status" = \'Closed\')))' in ddl
+
+
+def test_check_constraint_executes_against_real_sqlite_and_enforces_the_rule():
+    """Not just text assembly - the generated CHECK must actually be enforceable SQL (same discipline as the UNIQUE/FOREIGN KEY live-engine checks elsewhere in this file)."""
+    builder = _build(_CHECK_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    ddl = render_gpkg(build_tables([parcel]))
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(ddl.split("INSERT INTO gpkg_contents")[0])
+    conn.execute(
+        'INSERT INTO parcel (id, parcelnr, status, loc_street, loc_number) VALUES (?,?,?,?,?)',
+        ("1", 5, "Active", "Main St", None),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            'INSERT INTO parcel (id, parcelnr, status, loc_street, loc_number) VALUES (?,?,?,?,?)',
+            ("2", -1, "Active", "Main St", None),
+        )
+
+
+def test_unsupported_constraint_expression_becomes_a_note_not_a_wrong_check():
+    """Real corpus bug (2026-08-27, `ili_corpus/Naturereigniskataster_MGDM_V1.ili`): a `factor` alt this project's grammar mapping used to lose entirely (`INTERLIS.len(...)`, see spec/grammar/mapping/07_constraints.yml's `factor.INTERLIS` entry) collapsed to a bare attribute path - `INTERLIS.len(ParcelNr) == 3` would have silently built (and rendered a CHECK for) the wrong condition `ParcelNr == 3`. Fixed at construction (a real `FunctionCall` node now), so this must surface as an unsupported note - never a column comparison."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Parcel =
+      Code : MANDATORY TEXT*20;
+      MANDATORY CONSTRAINT (INTERLIS.len(Code)) == 3;
+    END Parcel;
+  END T;
+END Foo.
+"""
+    )
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    table = _table(tables, "parcel")
+    assert table.check_constraints == []
+    assert any("CHECK not generated" in note for note in table.notes)
+    ddl = render_postgresql(tables)
+    assert '"code" = ' not in ddl  # never a wrong CHECK comparing the raw column instead of len(...)

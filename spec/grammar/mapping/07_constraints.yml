@@ -201,6 +201,30 @@ factor:
   when_present:
     objectOrAttributePath:
       target: IlisMeta16.ModelData.PathOrInspFactor
+    INTERLIS:
+      target: IlisMeta16.ModelData.FunctionCall
+      note: >
+        Alt4 (`INTERLIS DOT (Name|URI|UUIDOID) (LPAR expression (COMMA
+        expression)* RPAR)?` - predefined functions, e.g.
+        `INTERLIS.len(...)`) is grammatically distinct from `functionCall`
+        (used for user-defined `FUNCTION`s) but denotes the same concept -
+        reuses the SAME `FunctionCall` target rather than a parallel class.
+        Without a `when_present` branch here, the generic "no branch
+        matched" fallback swept this alt's only real child (the single
+        argument `expression()`) and returned ITS value in place of the
+        whole call - `INTERLIS.len(Foo) == 15` built identically to plain
+        `Foo == 15`, a silent semantic substitution, not just a missing
+        feature: every consumer walking this tree (`convert/
+        constraint_eval.py`, `convert/sql.py`) would evaluate/serialize the
+        WRONG condition with no error raised anywhere. `Function`/
+        `Arguments` have no direct accessor to bind against here (`Function`
+        needs 2 tokens joined; `Arguments` needs each bare `expression()`
+        wrapped in a synthetic `ActualArgument`, since alt4 does not go
+        through the `argument()` rule) - set by
+        `InterlisModelBuilder._set_predefined_function_call`. Every
+        consumer's existing "unrecognized Expression node -> unsupported"
+        fallback now correctly rejects this construct instead of
+        misreading it.
   attribute_bindings:
     _dispatch:
       source:

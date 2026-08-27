@@ -198,20 +198,22 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
 
 def cmd_convert_sql(args: argparse.Namespace) -> int:
-    """Convert an .ili model to SQL DDL, PostgreSQL or GeoPackage/SQLite (backlog item 14, Lot 1).
+    """Convert an .ili model to SQL DDL, PostgreSQL or GeoPackage/SQLite (backlog item 14).
 
     See docs/sql-conversion-strategy.md for the design decision and scope
     - this project generates the full schema (`CREATE TABLE` + `UNIQUE` +
-    `FOREIGN KEY`); GDAL (`ogr2ogr -append`) is expected to load the
-    actual .xtf-derived data into the tables this command creates, never
-    the other way around. `--dialect gpkg` assumes the target `.gpkg`
-    file already has the standard GeoPackage system tables (created by
-    GDAL beforehand) and declares every constraint INLINE, at `CREATE
-    TABLE` time (SQLite cannot add one to an existing table at all,
-    unlike `--dialect postgresql`'s default, which uses a separate
-    `ALTER TABLE ... ADD CONSTRAINT` pass). Only `Kind=Class` roots become
-    a table (no `View`, unlike `cmd_convert` - `CREATE VIEW` generation is
-    a later lot). An attribute/constraint outside Lot 1's mapped set never
+    `FOREIGN KEY` + `CHECK`, the latter from a row-local `MANDATORY
+    CONSTRAINT`); GDAL (`ogr2ogr -append`) is expected to load the actual
+    .xtf-derived data into the tables this command creates, never the
+    other way around. `--dialect gpkg` assumes the target `.gpkg` file
+    already has the standard GeoPackage system tables (created by GDAL
+    beforehand) and declares every constraint INLINE, at `CREATE TABLE`
+    time (SQLite cannot add one to an existing table at all, unlike
+    `--dialect postgresql`'s default, which uses a separate `ALTER TABLE
+    ... ADD CONSTRAINT` pass for `FOREIGN KEY` only - `UNIQUE`/`CHECK` are
+    inline in both dialects). Only `Kind=Class` roots become a table (no
+    `View`, unlike `cmd_convert` - `CREATE VIEW` generation is a later
+    lot). An attribute/constraint outside this module's mapped set never
     disappears silently - it becomes a `-- NOTE` SQL comment instead
     (RULE #5).
     """

@@ -218,19 +218,31 @@ concepts:
 
   Constraint:
     qualified_name: IlisMeta16.ModelData.Constraint
-    status: backlog
+    status: mapped
     note: >
-      `CONSTRAINT`/`MANDATORY CONSTRAINT` (arbitrary boolean `Expression`
-      trees, already correctly built and evaluated in Python by
-      `convert/constraint_eval.py`) -> SQL `CHECK (...)` is deliberately
-      OUT of Lot 1's scope entirely, not attempted even for the simplest
-      cases. Verified (2026-08-27) that even ili2db (the mature reference
-      INTERLIS-to-database tool) does not attempt this either - its own
-      `--createNumChecks`/`--createTextChecks`/`--createDateTimeChecks`/
-      `--createMandatoryChecks`/`--createTypeConstraint` flags only cover
-      narrower PER-DATATYPE validation (range/length/NOT NULL), never an
-      arbitrary Expression tree - a real signal this is genuinely harder
-      than UNIQUE/FOREIGN KEY, not just deprioritized. A dedicated later
-      lot (a SQL expression serializer walking the SAME `Expression` tree
-      `constraint_eval.py` already evaluates in Python) is the natural
-      path, not attempted here.
+      A row-local `MANDATORY CONSTRAINT` (`SimpleConstraint`, `Kind=MandC`,
+      no `Percentage`) -> SQL `CHECK (...)`, via `convert/sql.py`'s
+      `_expression_to_sql` - walks the SAME `Expression` tree
+      `convert/constraint_eval.py`'s `evaluate_expression` already
+      evaluates in Python, same supported subset (relational/logical
+      operators, `DEFINED(...)`, plain attribute paths up to one STRUCTURE
+      hop, `Numeric`/`Text`/`Enumeration` constants). `UniqueConstraint`/
+      `SetConstraint`/`ExistenceConstraint` and the percentage-based
+      plausibility form (`Kind` `LowPercC`/`HighPercC`) stay `status:
+      backlog` within this same concept entry - population/basket-level
+      checks a single-row `CHECK` cannot express. Verified that even
+      ili2db (the mature reference INTERLIS-to-database tool) does not
+      attempt an arbitrary-`Expression`-to-`CHECK` translation either -
+      its own `--createNumChecks`/`--createTextChecks`/
+      `--createDateTimeChecks`/`--createMandatoryChecks`/
+      `--createTypeConstraint` flags only cover narrower PER-DATATYPE
+      validation (range/length/NOT NULL). `THIS`/`PARENT`/aggregate paths/
+      `FunctionCall`/arithmetic surface as a `-- NOTE`, never a wrong or
+      partial `CHECK` (RULE #5) - found a real, separate construction bug
+      the hard way: `factor`'s `INTERLIS DOT (Name|URI|UUIDOID) (LPAR ...
+      RPAR)?` alternative (predefined functions, e.g. `INTERLIS.len(...)`)
+      had no `when_present` branch and silently collapsed to its own
+      first argument (`spec/grammar/mapping/07_constraints.yml`'s
+      `factor.INTERLIS` entry) - fixed at construction, not papered over
+      here, since it also corrupted `constraint_eval.py`'s runtime
+      evaluation of the same real corpus constraints.

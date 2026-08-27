@@ -176,3 +176,16 @@ def test_others_enumeration_constant_value():
     cls = _class_with_constraint("MANDATORY CONSTRAINT KBfrei == #OTHERS;")
     const = cls.Constraint[0].LogicalExpression.SubExpressions[1]
     assert const.Value == "OTHERS"
+
+
+def test_predefined_function_call_builds_a_real_functioncall_not_its_bare_argument():
+    """Real corpus bug (2026-08-27, `ili_corpus/Naturereigniskataster_MGDM_V1.ili`): `factor`'s `INTERLIS DOT (Name|URI|UUIDOID) (LPAR ... RPAR)?` alternative had no `when_present` branch, so the generic pass-through swept past the `INTERLIS.len` wrapper and returned the single argument's OWN built value - `INTERLIS.len(ASV) == 3` built identically to plain `ASV == 3`, silently evaluating/serializing the wrong condition downstream (see spec/grammar/mapping/07_constraints.yml's `factor.INTERLIS` entry)."""
+    cls = _class_with_constraint("MANDATORY CONSTRAINT (INTERLIS.len(ASV)) == 3;")
+    call = cls.Constraint[0].LogicalExpression.SubExpressions[0]
+    assert call._qualified_class.endswith("FunctionCall")
+    assert call.Function == "INTERLIS.len"
+    assert len(call.Arguments) == 1
+    argument = call.Arguments[0]
+    assert argument.Kind == "Expression"
+    assert argument.Expression._qualified_class.endswith("PathOrInspFactor")
+    assert argument.Expression.PathEls[0].Ref == "ASV"
