@@ -97,6 +97,28 @@ def test_set_constraint_attaches_to_its_class():
     assert cls.Constraint[0]._qualified_class.endswith("SetConstraint")
 
 
+def test_local_uniqueness_builds_kind_and_uniquedef_from_the_real_corpus_shape():
+    """Real corpus shape (`ili_corpus/CHBase_Part4_ADMINISTRATIVEUNITS_V2.ili`): `UNIQUE (LOCAL) Entries: Code;` - `Entries` the BAG/LIST OF STRUCTURE attribute, `Code` a member of its element structure. Confirmed via `ParserATNSimulator.adaptivePredict` instrumentation that ANTLR's own grammar ambiguity resolves the WRONG way for this exact shape (greedily consumes `Entries:` as the rule's optional, unused leading label) - `_build_local_uniqueness_def` re-derives the correct split from the raw children instead, ignoring that internal choice entirely."""
+    cls = _class_with_constraint(
+        "UNIQUE (LOCAL) ASV: Datum;",  # reuses this fixture's own ASV/Datum attributes as stand-ins for a role hop + struct member
+    )
+    constraint = cls.Constraint[0]
+    assert constraint._qualified_class.endswith("UniqueConstraint")
+    assert constraint.Kind == "LocalU"
+    assert len(constraint.UniqueDef) == 1
+    path_els = constraint.UniqueDef[0].PathEls
+    assert [(pe.Kind, pe.Ref) for pe in path_els] == [("ReferenceAttr", "ASV"), ("ReferenceAttr", "Datum")]
+
+
+def test_local_uniqueness_multiple_trailing_attributes_become_separate_uniquedef_entries():
+    cls = _class_with_constraint("UNIQUE (LOCAL) ASV: Datum, KBfrei;")
+    constraint = cls.Constraint[0]
+    assert [ [(pe.Kind, pe.Ref) for pe in p.PathEls] for p in constraint.UniqueDef ] == [
+        [("ReferenceAttr", "ASV"), ("ReferenceAttr", "Datum")],
+        [("ReferenceAttr", "ASV"), ("ReferenceAttr", "KBfrei")],
+    ]
+
+
 def test_simple_relation_produces_no_phantom_wrapper():
     cls = _class_with_constraint("MANDATORY CONSTRAINT KBfrei == #false;")
     expr = cls.Constraint[0].LogicalExpression

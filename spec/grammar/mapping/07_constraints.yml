@@ -349,38 +349,39 @@ localUniqueness:
         LOCAL_present: LocalU
         LOCAL_absent: LocalU
       note: >
-        Same 2 fixes as globalUniqueness (2026-08-27, found alongside it):
-        (1) missing `feeds_into:` - this rule's single-key bag (`{Kind:
-        ...}`) was being unwrapped to a bare value by `_relay`'s own
-        single-key rule (discarding the "Kind" label entirely, so nothing
-        ever reached `UniqueConstraint.Kind`) exactly like
-        globalUniqueness.UniqueDef was. (2) wrong `mapping` key format -
-        `presence: true` resolves to `f"{field}_present"`/
-        `f"{field}_absent"` (source_resolver.py), never the bare token
-        name `"LOCAL"` this binding used before - confirmed empirically
-        (Kind stayed the enclosing default `GlobalU` even with `(LOCAL)`
-        present). `LOCAL_absent: LocalU` too (not just `_present`): this
-        rule is only ever VISITED when a `localUniqueness` alternative
-        was actually taken (LOCAL is grammatically MANDATORY within it,
-        `LPAR LOCAL RPAR` - see this file's own note below) - `LOCAL`
-        itself can only be syntactically absent if ANTLR's own recovery
-        produced a malformed tree, not a real "this is actually global"
-        signal, so both outcomes map to `LocalU` rather than leaving
-        `_absent` unhandled (which would silently fall through to nothing,
-        same class of silent loss this whole fix addresses).
-
-        Feeds the enclosing UniqueConstraint.Kind
-        = LocalU (mandatory GlobalU/BasketU/LocalU, ilismeta16-kind-values.yml) - LOCAL is now
-        the ONLY possible token here (BASKET is no longer an alternative at this level, see
-        uniquenessConstraint.discriminant for the Kind=BasketU mechanism at the enclosing level).
-
-        '
-  note: 'No direct IlisMeta16 instance expected - no "LocalUniqueness" class exists in the metamodel.
-    Carries its own mandatory qualifier "LPAR LOCAL RPAR" (moved out of the enclosing uniquenessConstraint
-    level) and sets Kind=LocalU on the enclosing UniqueConstraint. The role path (Name (MINUS GT Name)*)
-    and the final attribute list (COLON Name (COMMA Name)*)? likely feed UniqueDef (PathOrInspFactor) -
-    exact construction not yet confirmed. Background on the grammar fix:
-    docs/dev-notes/uniqueness-constraint-grammar-fix-investigation.md.'
+        Kept as a record of the former (working, Kind-only) state - this
+        declarative binding is no longer reached in practice.
+        `InterlisModelBuilder._build_local_uniqueness_def` is now a
+        dedicated special case (called directly from `_relay`, same
+        pattern as `controlPoints`/`_build_control_points_ref`), setting
+        BOTH `Kind` (same "LOCAL always present -> always LocalU" logic
+        this binding already had correct) AND `UniqueDef` (see this
+        entry's own `note:` below - the reason a plain declarative
+        binding could never express `UniqueDef` here at all).
+  note: >
+    No direct IlisMeta16 instance expected - no "LocalUniqueness" class
+    exists in the metamodel. Grammar: `LPAR LOCAL RPAR (Name COLON)? Name
+    (MINUS GT Name)* (COLON Name (COMMA Name)*)?` - real corpus usage
+    (every `UNIQUE (LOCAL)` in ili_corpus/) is always the single shape
+    `RoleName: AttrName` (e.g. `UNIQUE (LOCAL) Entries: Code;`, `Entries`
+    the `BAG`/`LIST OF STRUCTURE` attribute, `Code` a member of that
+    structure). `ctx.Name()` returns every `Name` token in the rule
+    (label + role path + trailing attributes all share one accessor, like
+    `pathEl`'s alternatives) - AND, confirmed empirically (ANTLR's own
+    `adaptivePredict` instrumented directly against the real corpus
+    shape), the grammar's optional leading `(Name COLON)?` is genuinely
+    AMBIGUOUS for this exact shape (both "label=Entries, role=[Code], no
+    trailing attrs" and "no label, role=[Entries], trailing=[Code]" are
+    equally valid completions of the rule alone) - ANTLR resolves it to
+    the WRONG one for real usage here (greedily takes the optional
+    branch, discarding `Entries` - the actual `BAG`/`LIST` attribute - as
+    an unused label). `_build_local_uniqueness_def` re-derives the
+    correct split directly from the raw children instead (everything up
+    to the first `COLON` is the role path, everything after is the
+    attribute list) - the parse tree still holds the full token sequence
+    either way, only ANTLR's internal branch CHOICE was wrong, not the
+    tree's content. Background on the grammar fix (together with
+    globalUniqueness): docs/dev-notes/uniqueness-constraint-grammar-fix-investigation.md.
 mandatoryConstraint:
   grammar:
     rule: mandatoryConstraint

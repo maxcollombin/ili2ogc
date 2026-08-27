@@ -140,13 +140,17 @@ UniqueConstraint:
     unique:
       source: {field: UniqueDef}
       note: >
-        Only Kind=GlobalU (source: {field: Kind}) AND every UniqueDef path
-        (PathOrInspFactor.PathEls) a SINGLE PathEl maps to UNIQUE (...) -
-        2+ PathEls means "->" navigation to another table (Kind is always
-        "ReferenceAttr" regardless of hop position, path length is the
-        real signal). Kind=LocalU and any multi-hop path are backlog
-        within this same concept - see
-        mappings/ilismeta16-to-sql-rules.yml's UniqueConstraint entry.
+        Kind=GlobalU (source: {field: Kind}) AND every UniqueDef path
+        (PathOrInspFactor.PathEls) a SINGLE PathEl maps to UNIQUE (...) on
+        the Class's own table - 2+ PathEls means "->" navigation to
+        another table (Kind is always "ReferenceAttr" regardless of hop
+        position, path length is the real signal) and stays backlog.
+        Kind=LocalU maps too: each UniqueDef path [role_hop, sub_attr]
+        becomes a compound UNIQUE (<parent>_fk, sub_attr, ...) on the
+        matching BAG/LIST OF child table - see
+        mappings/ilismeta16-to-sql-rules.yml's UniqueConstraint entry for
+        the real-corpus coverage caveat (blocked for the dominant idiom by
+        a separate, pre-existing STRUCTURE-nesting limit).
 
 Constraint:
   qualified_name: IlisMeta16.ModelData.SimpleConstraint

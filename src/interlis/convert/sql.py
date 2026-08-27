@@ -27,14 +27,18 @@ Scope (see mappings/ilismeta16-to-sql-rules.yml for the full, per-concept
 rationale): scalar/geometry columns, one level of flattened STRUCTURE
 nesting, FOREIGN KEY from REFERENCE TO/embedded roles, UNIQUE from the
 simple (Kind=GlobalU, no `->` navigation) constraint form, `BAG`/`LIST OF`
--> a related child table, and CHECK from a row-local `MANDATORY
-CONSTRAINT` (`_expression_to_sql`, same supported `Expression` subset as
-`constraint_eval.py`'s `evaluate_expression` - relational/logical
-operators, `DEFINED(...)`, plain attribute paths up to one STRUCTURE hop).
-ABSTRACT structure polymorphism, `(LOCAL)`/cross-reference UNIQUE, the
-percentage-based plausibility form, and any `CONSTRAINT` needing
-`THIS`/`PARENT`/aggregate/function-call/arithmetic context are all
-deliberately out of scope - never silently dropped, each unsupported
+-> a related child table with its own `UNIQUE (LOCAL)` support
+(`_local_unique_constraints_for_class` - scoped to that child table via
+its `<parent>_fk` column, e.g. `UNIQUE (LOCAL) Entries: Code;` ->
+`UNIQUE (parent_fk, code)` on the `entries` child table), and CHECK from a
+row-local `MANDATORY CONSTRAINT` (`_expression_to_sql`, same supported
+`Expression` subset as `constraint_eval.py`'s `evaluate_expression` -
+relational/logical operators, `DEFINED(...)`, plain attribute paths up to
+one STRUCTURE hop). ABSTRACT structure polymorphism, cross-reference
+(`->`) and basket-scoped UNIQUE, the percentage-based plausibility form,
+and any `CONSTRAINT` needing `THIS`/`PARENT`/aggregate/function-call/
+arithmetic context are all deliberately out of scope - never silently
+dropped, each unsupported
 construct is collected into `Table.notes` and rendered as a `-- NOTE` SQL
 comment (RULE #5).
 """
@@ -334,8 +338,8 @@ def _columns_for_class(
 
 def _build_child_table(
     parent_table: str, attr_name: str, multi_value: MetaInstance, symbol_table: SymbolTable | None,
-) -> tuple[Table | None, str | None]:
-    """Return `(child_table, None)` on success or `(None, reason)` on failure, for one `BAG`/`LIST OF` attribute.
+) -> tuple[Table | None, dict[str, str], str | None]:
+    """Return `(child_table, renamed, None)` on success or `(None, {}, reason)` on failure, for one `BAG`/`LIST OF` attribute.
 
     Companion to `convert/jsonfg.py`'s `include_child_rows` synthetic
     Features (see docs/sql-conversion-strategy.md) - GDAL loads them into
@@ -364,7 +368,7 @@ def _build_child_table(
     """
     base_type = getattr(multi_value, "BaseType", None)
     if not isinstance(base_type, MetaInstance):
-        return None, "BaseType not resolved"
+        return None, {}, "BaseType not resolved"
     base_kind = base_type._qualified_class.rsplit(".", 1)[-1]
 
     child_table_name = _sql_identifier(f"{parent_table}_{attr_name}")
@@ -381,7 +385,7 @@ def _build_child_table(
 
     if base_kind == "Class" and _is_structure(base_type):
         if bool(getattr(base_type, "Abstract", False)):
-            return None, "BAG/LIST OF an ABSTRACT structure - polymorphism not supported (Lot 1)"
+            return None, {}, "BAG/LIST OF an ABSTRACT structure - polymorphism not supported (Lot 1)"
         sub_columns, sub_fks, sub_notes, _sub_child_specs = _columns_for_class(base_type, symbol_table)
         columns.extend(sub_columns)
         foreign_keys.extend(sub_fks)
@@ -390,7 +394,7 @@ def _build_child_table(
         synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
         target = reference_target_class(synthetic)
         if target is None:
-            return None, "reference target not resolved (no --repo, or external)"
+            return None, {}, "reference target not resolved (no --repo, or external)"
         target_table = _sql_identifier(getattr(target, "Name", None) or "")
         columns.append(Column("value", "text", nullable=True))
         foreign_keys.append(ForeignKey(
@@ -400,17 +404,17 @@ def _build_child_table(
         synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
         sfa_type, srid, reason = _geometry_column_info(synthetic)
         if sfa_type is None:
-            return None, reason
+            return None, {}, reason
         columns.append(Column("value", sql_type="", nullable=False, geometry_type=sfa_type, srid=srid))
     else:
         synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
         scalar_type = _scalar_sql_type(synthetic)
         if scalar_type is None:
-            return None, f"unsupported element type {base_kind!r}"
+            return None, {}, f"unsupported element type {base_kind!r}"
         columns.append(Column("value", scalar_type, nullable=False))
 
-    _avoid_identity_collision(columns)
-    return Table(name=child_table_name, columns=columns, foreign_keys=foreign_keys, notes=notes), None
+    renamed = _avoid_identity_collision(columns)
+    return Table(name=child_table_name, columns=columns, foreign_keys=foreign_keys, notes=notes), renamed, None
 
 
 class _UnsupportedCheckExpression(Exception):
@@ -577,24 +581,23 @@ def _check_constraints_for_class(
 
 
 def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[list[UniqueConstraint], list[str]]:
-    """Return `(constraints, notes)` for `cls`'s own `UniqueConstraint`s - simple `Kind=GlobalU`, no `->` navigation, only."""
+    """Return `(constraints, notes)` for `cls`'s own `UniqueConstraint`s - simple `Kind=GlobalU`, no `->` navigation, only.
+
+    `Kind=LocalU` is handled separately by `_local_unique_constraints_for_class`
+    (a different SQL shape entirely - scoped to a `BAG`/`LIST OF STRUCTURE`
+    child table, not this table) - silently skipped here, never noted twice.
+    """
     result: list[UniqueConstraint] = []
     notes: list[str] = []
     for constraint in getattr(cls, "Constraint", None) or []:
         if not constraint._qualified_class.endswith("UniqueConstraint"):
             continue
         kind = getattr(constraint, "Kind", None)
+        if kind == "LocalU":
+            continue
         path_defs = getattr(constraint, "UniqueDef", None) or []
         if kind != "GlobalU" or not path_defs:
-            # `not path_defs` is its own, separate reason (not just
-            # Kind != GlobalU): a `(LOCAL)` constraint's `UniqueDef` is
-            # currently ALWAYS empty regardless of Kind (a known, deferred
-            # `localUniqueness` construction gap, see
-            # spec/grammar/mapping/07_constraints.yml) - checked
-            # independently so an empty UniqueDef is never silently
-            # skipped with no note just because Kind happened to default
-            # to GlobalU (RULE #5).
-            notes.append(f"UNIQUE ({kind}): (LOCAL)/basket-scoped UNIQUE not supported yet (Lot 1)")
+            notes.append(f"UNIQUE ({kind}): basket-scoped UNIQUE not supported yet (Lot 1)")
             continue
         columns: list[str] = []
         supported = True
@@ -617,6 +620,63 @@ def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[l
         if supported and columns:
             name = _truncate_identifier(_sql_identifier(f"uq_{table_name}_{'_'.join(columns)}"))
             result.append(UniqueConstraint(name, columns))
+    return result, notes
+
+
+def _local_unique_constraints_for_class(cls: MetaInstance) -> tuple[dict[str, list[list[str]]], list[str]]:
+    """Return `({BAG/LIST attr name: [[sub-attr column, ...], ...]}, notes)` for `cls`'s own `Kind=LocalU` `UniqueConstraint`s.
+
+    Each `UniqueDef` entry's `PathEls` is `[role_hop, sub_attr]` (see
+    `InterlisModelBuilder._build_local_uniqueness_def` - real corpus usage
+    is always exactly this shape, e.g. `UNIQUE (LOCAL) Entries: Code;` ->
+    `PathEls=[('ReferenceAttr','Entries'), ('ReferenceAttr','Code')]`): the
+    role path (all but the last hop) must be exactly ONE hop naming the
+    `BAG`/`LIST OF` attribute, and every entry of the SAME `UniqueConstraint`
+    must share that SAME role hop (one `UNIQUE (LOCAL) X: A, B;`-style
+    compound constraint over the SAME `BAG`/`LIST`, matching the grammar's
+    own single-role-path-then-attribute-list shape) - a multi-hop role
+    path or a mix of role hops is grammatically possible but never seen in
+    the real corpus, rejected with a note rather than guessed at (RULE #7).
+    `build_tables` attaches the resulting column list as one compound
+    `UNIQUE` on the matching child table, prefixed with that table's own
+    `<parent>_fk` column (RULE #1: reuses the SAME child-table naming
+    `_build_child_table` already establishes, not a parallel convention).
+    """
+    result: dict[str, list[list[str]]] = {}
+    notes: list[str] = []
+    for constraint in getattr(cls, "Constraint", None) or []:
+        if not constraint._qualified_class.endswith("UniqueConstraint"):
+            continue
+        if getattr(constraint, "Kind", None) != "LocalU":
+            continue
+        path_defs = getattr(constraint, "UniqueDef", None) or []
+        if not path_defs:
+            notes.append("UNIQUE (LOCAL): role path could not be resolved - not supported")
+            continue
+        role_attr: str | None = None
+        columns: list[str] = []
+        supported = True
+        for path in path_defs:
+            path_els = getattr(path, "PathEls", None) or []
+            if len(path_els) < 2 or any(getattr(pe, "Kind", None) not in ("ReferenceAttr", "Attribute") for pe in path_els):
+                notes.append("UNIQUE (LOCAL): path shape not supported")
+                supported = False
+                break
+            *role_hops, sub_attr = path_els
+            if len(role_hops) != 1:
+                notes.append("UNIQUE (LOCAL) across a multi-hop role path - not supported")
+                supported = False
+                break
+            hop_name = getattr(role_hops[0], "Ref", None) or ""
+            if role_attr is None:
+                role_attr = hop_name
+            elif hop_name != role_attr:
+                notes.append("UNIQUE (LOCAL) mixing several BAG/LIST attributes in one constraint - not supported")
+                supported = False
+                break
+            columns.append(_sql_identifier(getattr(sub_attr, "Ref", None) or ""))
+        if supported and role_attr and columns:
+            result.setdefault(role_attr, []).append(columns)
     return result, notes
 
 
@@ -671,15 +731,17 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
                 continue
             valid_unique_constraints.append(unique)
         check_constraints, check_notes = _check_constraints_for_class(cls, table_name, column_names, renamed)
+        local_unique, local_unique_notes = _local_unique_constraints_for_class(cls)
 
-        tables.append(Table(
+        parent_table = Table(
             name=table_name, columns=columns, unique_constraints=valid_unique_constraints,
             foreign_keys=foreign_keys, check_constraints=check_constraints,
-            notes=notes + unique_notes + check_notes,
-        ))
+            notes=notes + unique_notes + check_notes + local_unique_notes,
+        )
+        tables.append(parent_table)
 
         for attr_name, multi_value in child_specs:
-            child_table, reason = _build_child_table(table_name, attr_name, multi_value, symbol_table)
+            child_table, child_renamed, reason = _build_child_table(table_name, attr_name, multi_value, symbol_table)
             if child_table is None:
                 tables[-1].notes.append(f"{attr_name}: BAG/LIST OF - {reason}")
                 continue
@@ -691,7 +753,28 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
                 suffix += 1
             used_table_names.add(child_name)
             child_table.name = child_name
+
+            fk_column = _sql_identifier(f"{table_name}_fk")
+            child_column_names = {c.name for c in child_table.columns}
+            for group_columns in local_unique.pop(attr_name, []):
+                remapped = [child_renamed.get(c, c) for c in group_columns]
+                full_columns = [fk_column, *remapped]
+                missing = [c for c in full_columns if c not in child_column_names]
+                if missing:
+                    child_table.notes.append(
+                        f"UNIQUE (LOCAL) {attr_name}: column(s) {missing} have no mapped SQL type",
+                    )
+                    continue
+                name = _truncate_identifier(_sql_identifier(f"uq_{child_table.name}_{'_'.join(full_columns)}"))
+                child_table.unique_constraints.append(UniqueConstraint(name, full_columns))
+
             tables.append(child_table)
+
+        # Any UNIQUE (LOCAL) whose role hop never matched a real BAG/LIST OF
+        # attribute on this class (typo, or a role path this project's
+        # grammar mapping doesn't reach) - never silently dropped (RULE #5).
+        for attr_name in local_unique:
+            parent_table.notes.append(f"UNIQUE (LOCAL) {attr_name}: no matching BAG/LIST OF attribute")
 
     # 3rd real bug found the same way (PostgreSQL, live `psycopg`-free
     # verification against a real `postgis/postgis` container, 2026-08-27):

@@ -816,6 +816,78 @@ class InterlisModelBuilder(InterlisParserVisitor):
             home_model=self._current_model_name(), topic_extends_hint=self._current_topic_extends_hint(ctx),
         )
 
+    def _build_local_uniqueness_def(self, ctx: ParserRuleContext) -> dict[str, Any]:
+        """Build `{Kind: "LocalU", UniqueDef: [PathOrInspFactor, ...]}` for `localUniqueness()`.
+
+        Grammar: `LPAR LOCAL RPAR (Name COLON)? Name (MINUS GT Name)* (COLON
+        Name (COMMA Name)*)?` - real corpus usage (confirmed against every
+        `UNIQUE (LOCAL)` occurrence in ili_corpus/) is always the single
+        shape `RoleName: AttrName` (e.g. `UNIQUE (LOCAL) Entries: Code;`,
+        `Entries` the `BAG`/`LIST OF STRUCTURE` attribute, `Code` a member
+        of that structure) - never the optional leading `(Name COLON)?`
+        label, never a multi-hop role path, never more than one trailing
+        attribute name.
+
+        This can't be a generic `attribute_bindings` entry: `ctx.Name()`
+        returns EVERY `Name` token in the rule (label + role path + trailing
+        attributes all share the one accessor, like `pathEl`'s alternatives)
+        - AND, confirmed empirically (`ParserATNSimulator.adaptivePredict`
+        instrumented directly against the real corpus shape), ANTLR's own
+        `la_` decision for the leading `(Name COLON)?` is genuinely
+        AMBIGUOUS for `Entries: Code` (both "label=Entries, role=[Code],
+        no trailing attrs" and "no label, role=[Entries], trailing=[Code]"
+        are equally valid completions of the rule alone) and resolves to
+        the WRONG one for this project's real usage (greedily takes the
+        optional branch, discarding `Entries` - the actual `BAG`/`LIST`
+        attribute - as an unused label and misreading `Code` as the role
+        path instead). The parse TREE (raw children) still holds the
+        correct token sequence either way (ANTLR's internal branch choice
+        only decides which `match()` calls fire, not what children get
+        appended) - re-derived here directly, ignoring that internal
+        choice entirely: everything up to the FIRST `COLON` is the role
+        path (`Name`/`MINUS`/`GT` alternation), everything after is the
+        comma-separated attribute list. No real corpus case has a second
+        `COLON` (the label form) to conflict with this reading.
+
+        One `PathOrInspFactor` per trailing attribute name, `PathEls` =
+        the role path's `PathEl`s + that attribute's own `PathEl` (`Kind`
+        always `"ReferenceAttr"`, same permissive convention as
+        `globalUniqueness`'s cross-reference paths and
+        `constraint_eval.py`'s `_resolve_path`) - `convert/sql.py` maps
+        this directly onto the `<attr>_<subattr>`-flattened columns of the
+        `BAG`/`LIST OF STRUCTURE`'s own child table. No trailing attribute
+        at all (not seen in the real corpus either) falls back to a single
+        `PathOrInspFactor` over the role path alone (the element's own
+        scalar value must be locally unique).
+        """
+        children = list(ctx.getChildren())[3:]  # skip LPAR LOCAL RPAR
+        colon_index = next(
+            (i for i, c in enumerate(children) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.COLON),
+            None,
+        )
+        role_tokens = children[:colon_index] if colon_index is not None else children
+        attr_tokens = children[colon_index + 1:] if colon_index is not None else []
+
+        def path_el(name: str) -> MetaInstance:
+            el = self.registry.new_instance("IlisMeta16.ModelData.PathEl")
+            el.Kind = "ReferenceAttr"
+            el.Ref = name
+            return el
+
+        role_names = [t.getText() for t in role_tokens if isinstance(t, TerminalNode) and t.symbol.type == InterlisParser.Name]
+        attr_names = [t.getText() for t in attr_tokens if isinstance(t, TerminalNode) and t.symbol.type == InterlisParser.Name]
+
+        def factor(names: list[str]) -> MetaInstance:
+            instance = self.registry.new_instance("IlisMeta16.ModelData.PathOrInspFactor")
+            instance.PathEls = [path_el(name) for name in names]  # a fresh PathEl per factor - never shared across UniqueDef entries
+            return instance
+
+        if not role_names:
+            return {"Kind": "LocalU"}
+        if not attr_names:
+            return {"Kind": "LocalU", "UniqueDef": [factor(role_names)]}
+        return {"Kind": "LocalU", "UniqueDef": [factor([*role_names, name]) for name in attr_names]}
+
     def _build_enumeration_tree(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry) -> None:
         """Build the EnumNode tree of an `enumeration()` correctly.
 
@@ -1007,6 +1079,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
         # lineType.CoordType).
         if rule_name == "controlPoints":
             return self._build_control_points_ref(ctx, rule_name)
+
+        # localUniqueness(): 6th special case - see _build_local_uniqueness_def
+        # for why UniqueDef needs raw-children handling (a genuine grammar
+        # ambiguity, not just a missing accessor).
+        if rule_name == "localUniqueness":
+            return self._build_local_uniqueness_def(ctx)
 
         # children: multi-visit dispatch (e.g. definitions -> classDef*,
         # topicDef*, ...) - all occurrences count, not a single

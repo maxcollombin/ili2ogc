@@ -583,3 +583,87 @@ END Foo.
     assert any("CHECK not generated" in note for note in table.notes)
     ddl = render_postgresql(tables)
     assert '"code" = ' not in ddl  # never a wrong CHECK comparing the raw column instead of len(...)
+
+
+_LOCAL_UNIQUE_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE CountryName =
+      Code : MANDATORY TEXT*10;
+    END CountryName;
+    CLASS CountryNamesTranslation =
+      Entries : LIST {0..*} OF CountryName;
+      UNIQUE (LOCAL) Entries: Code;
+    END CountryNamesTranslation;
+  END T;
+END Foo.
+"""
+
+
+def test_unique_local_becomes_a_compound_unique_on_the_child_table():
+    """Real corpus shape (`ili_corpus/CHBase_Part4_ADMINISTRATIVEUNITS_V2.ili`): `UNIQUE (LOCAL) Entries: Code;` scopes uniqueness to Code WITHIN one parent's own Entries list, not across the whole table - UNIQUE (parent_fk, code) on the child table, never a plain UNIQUE (code)."""
+    builder = _build(_LOCAL_UNIQUE_MODEL)
+    cls = _resolved_class(builder, "Foo.T.CountryNamesTranslation")
+    tables = build_tables([cls])
+    parent = _table(tables, "countrynamestranslation")
+    child = _table(tables, "countrynamestranslation_entries")
+    assert parent.unique_constraints == []  # the constraint belongs to the CHILD table, not the parent
+    assert parent.notes == []
+    assert child.unique_constraints == [
+        UniqueConstraint(
+            "uq_countrynamestranslation_entries_countrynamestranslation_fk_c",  # truncated to 63 chars, same as every other identifier in this module
+            ["countrynamestranslation_fk", "code"],
+        )
+    ]
+
+
+def test_unique_local_executes_against_real_sqlite_and_enforces_per_parent_scope():
+    """Not just text assembly - same live-engine discipline as every other constraint in this file."""
+    builder = _build(_LOCAL_UNIQUE_MODEL)
+    cls = _resolved_class(builder, "Foo.T.CountryNamesTranslation")
+    ddl = render_gpkg(build_tables([cls]))
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(ddl.split("INSERT INTO gpkg_contents")[0])
+    conn.execute('INSERT INTO countrynamestranslation (id) VALUES (?)', ("p1",))
+    conn.execute('INSERT INTO countrynamestranslation (id) VALUES (?)', ("p2",))
+    conn.execute(
+        'INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)',
+        ("e1", "p1", 0, "CH"),
+    )
+    conn.execute(  # same code, DIFFERENT parent - must be allowed (that's the whole point of "LOCAL")
+        'INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)',
+        ("e2", "p2", 0, "CH"),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(  # same code, SAME parent - must be rejected
+            'INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)',
+            ("e3", "p1", 1, "CH"),
+        )
+
+
+def test_unique_local_nested_inside_a_flattened_structure_stays_out_of_scope():
+    """Dominant real corpus idiom (`ili_corpus/KbS_V1_5.ili`'s MultilingualUri/MultilingualText pattern - UNIQUE (LOCAL) declared on a STRUCTURE wrapping the BAG/LIST, itself embedded one level into a Class): still out of scope, since the BAG/LIST is nested inside a flattened STRUCTURE (a separate, pre-existing limit, RULE #5 note already covers it) - the UNIQUE (LOCAL) itself is silently absorbed by the SAME note, not a second, confusing one."""
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE LocalisedText =
+      Language : TEXT*2;
+      Text : MANDATORY TEXT*50;
+    END LocalisedText;
+    STRUCTURE MultilingualText =
+      Entries : BAG {1..*} OF LocalisedText;
+      UNIQUE (LOCAL) Entries: Language;
+    END MultilingualText;
+    CLASS Parcel =
+      Name : MANDATORY MultilingualText;
+    END Parcel;
+  END T;
+END Foo.
+"""
+    )
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    table = _table(tables, "parcel")
+    assert not any(t.name == "parcel_entries" for t in tables)  # no child table - the BAG/LIST never left the flattened STRUCTURE
+    assert any("nested inside a flattened STRUCTURE" in note for note in table.notes)

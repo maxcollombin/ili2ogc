@@ -196,23 +196,39 @@ concepts:
     qualified_name: IlisMeta16.ModelData.UniqueConstraint
     status: mapped
     note: >
-      Only `Kind=GlobalU` (own `UniqueConstraint.Kind` enumeration -
+      `Kind=GlobalU` (own `UniqueConstraint.Kind` enumeration -
       GlobalU/BasketU/LocalU) AND every `UniqueDef` path a SINGLE `PathEl`
       (a plain own-column reference) maps to a real `UNIQUE (...)`
-      constraint - 2+ `PathEl`s means the path crossed a role/reference
-      (e.g. `Owner->Code`) to ANOTHER table's attribute. `PathEl.Kind` is
-      ALWAYS `"ReferenceAttr"` regardless of hop position (confirmed
-      empirically, 2026-08-27: `Owner->Code` produces
-      `[('ReferenceAttr','Owner'), ('ReferenceAttr','Code')]`, no distinct
-      Kind for the intermediate role step) - path LENGTH, not `Kind`, is
-      the real signal (same permissive Kind set as
+      constraint on the Class's own table - 2+ `PathEl`s means the path
+      crossed a role/reference (e.g. `Owner->Code`) to ANOTHER table's
+      attribute. `PathEl.Kind` is ALWAYS `"ReferenceAttr"` regardless of
+      hop position (confirmed empirically, 2026-08-27: `Owner->Code`
+      produces `[('ReferenceAttr','Owner'), ('ReferenceAttr','Code')]`, no
+      distinct Kind for the intermediate role step) - path LENGTH, not
+      `Kind`, is the real signal (same permissive Kind set as
       `constraint_eval.py`'s own `_resolve_path`). Real corpus breakdown
-      (123 declarations,
-      see docs/interlis-ogc-architecture.md): ~70% are this simple form.
-      `Kind=LocalU` (scoped inside a `BAG`/`LIST OF STRUCTURE`, ~20%) and
-      any `->` cross-reference path (~10% - not expressible as a plain SQL
-      table constraint at all, a constraint can't reference ANOTHER
-      table's column) are both `status: backlog` within this SAME concept
+      (123 declarations, see docs/interlis-ogc-architecture.md): ~70% are
+      this simple form.
+
+      `Kind=LocalU` (~20%, e.g. `UNIQUE (LOCAL) Entries: Code;`) also
+      mapped - `_local_unique_constraints_for_class` (`convert/sql.py`)
+      turns each `UniqueDef` path (`[role_hop, sub_attr]`, built by
+      `InterlisModelBuilder._build_local_uniqueness_def` - a genuine
+      grammar-ambiguity fix, not just a missing binding, see
+      spec/grammar/mapping/07_constraints.yml's `localUniqueness` entry)
+      into a compound `UNIQUE (<parent>_fk, <sub_attr>, ...)` on the
+      matching `BAG`/`LIST OF` child table - scoped per parent, not the
+      whole table. Real corpus coverage is narrower than the raw
+      percentage suggests: the dominant real idiom wraps the `BAG`/`LIST`
+      in its own small STRUCTURE (`UNIQUE (LOCAL)` declared on THAT
+      structure), then embeds it one level into a Class - still blocked
+      by the separate, pre-existing "`BAG`/`LIST OF` nested inside a
+      flattened `STRUCTURE`" limit (see docs/sql-conversion-strategy.md
+      for the full breakdown and why lifting it is a separate decision).
+
+      Any `->` cross-reference path (~10% - not expressible as a plain
+      SQL table constraint at all, a constraint can't reference ANOTHER
+      table's column) stays `status: backlog` within this SAME concept
       entry (not separately mapped) - surfaced as a `-- NOTE` comment,
       never silently dropped nor forced into a wrong/partial constraint.
 
