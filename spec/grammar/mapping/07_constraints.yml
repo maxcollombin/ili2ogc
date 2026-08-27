@@ -315,14 +315,37 @@ localUniqueness:
   grammar:
     rule: localUniqueness
   kind: Container
+  feeds_into: IlisMeta16.ModelData.UniqueConstraint
   attribute_bindings:
     Kind:
       source:
         field: LOCAL
         presence: true
       mapping:
-        LOCAL: LocalU
-      note: 'Feeds the enclosing UniqueConstraint.Kind
+        LOCAL_present: LocalU
+        LOCAL_absent: LocalU
+      note: >
+        Same 2 fixes as globalUniqueness (2026-08-27, found alongside it):
+        (1) missing `feeds_into:` - this rule's single-key bag (`{Kind:
+        ...}`) was being unwrapped to a bare value by `_relay`'s own
+        single-key rule (discarding the "Kind" label entirely, so nothing
+        ever reached `UniqueConstraint.Kind`) exactly like
+        globalUniqueness.UniqueDef was. (2) wrong `mapping` key format -
+        `presence: true` resolves to `f"{field}_present"`/
+        `f"{field}_absent"` (source_resolver.py), never the bare token
+        name `"LOCAL"` this binding used before - confirmed empirically
+        (Kind stayed the enclosing default `GlobalU` even with `(LOCAL)`
+        present). `LOCAL_absent: LocalU` too (not just `_present`): this
+        rule is only ever VISITED when a `localUniqueness` alternative
+        was actually taken (LOCAL is grammatically MANDATORY within it,
+        `LPAR LOCAL RPAR` - see this file's own note below) - `LOCAL`
+        itself can only be syntactically absent if ANTLR's own recovery
+        produced a malformed tree, not a real "this is actually global"
+        signal, so both outcomes map to `LocalU` rather than leaving
+        `_absent` unhandled (which would silently fall through to nothing,
+        same class of silent loss this whole fix addresses).
+
+        Feeds the enclosing UniqueConstraint.Kind
         = LocalU (mandatory GlobalU/BasketU/LocalU, ilismeta16-kind-values.yml) - LOCAL is now
         the ONLY possible token here (BASKET is no longer an alternative at this level, see
         uniquenessConstraint.discriminant for the Kind=BasketU mechanism at the enclosing level).
