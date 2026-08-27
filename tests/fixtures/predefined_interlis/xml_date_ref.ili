@@ -1,0 +1,14 @@
+INTERLIS 2.4;
+
+MODEL XmlDateRef AT "https://example.org/xml-date-ref" VERSION "2026-08-27" =
+
+  TOPIC T =
+    CLASS Thing =
+      Ident: INTERLIS.I32OID;
+      Erstellungsdatum: INTERLIS.XMLDate;
+      Uhrzeit: INTERLIS.XMLTime;
+      Zeitstempel: INTERLIS.XMLDateTime;
+    END Thing;
+  END T;
+
+END XmlDateRef.

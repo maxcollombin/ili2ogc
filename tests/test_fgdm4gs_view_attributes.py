@@ -86,7 +86,7 @@ def test_view_structure_builds_correctly(fname, view_name, base_count, kind):
             "Planungszonen_V2_d_A.ili", "view_pz",
             {
                 "wkb_geometry": "LineType",
-                "publiziert_ab": None, "gueltig_bis": None,  # external INTERLIS.XMLDate - same external-import gap
+                "publiziert_ab": "FormattedType", "gueltig_bis": "FormattedType",  # INTERLIS.XMLDate, now resolved via the predefined namespace
                 "rechtsstatus": "EnumType", "bemerkungen": "TextType", "code_typ": "TextType",
                 "bezeichnung_typ": "TextType", "abkuerzung_typ": "TextType",
                 "festlegung_stufe_typ": "EnumType", "bemerkung_typ": "TextType",
@@ -101,7 +101,7 @@ def test_view_structure_builds_correctly(fname, view_name, base_count, kind):
             "Planungszonen_V2_d_B.ili", "view_pz",
             {
                 "wkb_geometry": "LineType",
-                "publiziert_ab": None, "gueltig_bis": None,
+                "publiziert_ab": "FormattedType", "gueltig_bis": "FormattedType",
                 "rechtsstatus": "EnumType", "bemerkungen": "TextType", "code_typ": "TextType",
                 "bezeichnung_typ": "TextType", "abkuerzung_typ": "TextType",
                 "festlegung_stufe_typ": "EnumType", "bemerkung_typ": "TextType",
@@ -112,13 +112,15 @@ def test_view_structure_builds_correctly(fname, view_name, base_count, kind):
 def test_name_assign_expression_view_attributes_are_built_with_resolved_types(fname, view_name, expected):
     """`Name := expression` view attributes now build one `AttrOrParam` each, `Final=True`, `Type` resolved when possible.
 
-    `Type` stays unset for the 2 attributes referencing a domain from a
-    model this hermetic test's `ModelRepository` doesn't load
-    (`INTERLIS.XMLDate`/`CHAdminCodes_V2.CHCantonCode`) - a pre-existing
-    external-import resolution characteristic, unrelated to this feature
-    (confirmed: the SAME attributes are already `UnresolvedNamedReference`
-    directly on the base `Planungszone`/`ivs_kantone` class, before any
-    VIEW machinery is involved).
+    `Type` stays unset for `ivs_kanton` only - the ONE attribute referencing
+    a domain from a real external model this hermetic test's
+    `ModelRepository` doesn't load (`CHAdminCodes_V2.CHCantonCode`), a
+    pre-existing external-import resolution characteristic unrelated to
+    this feature (confirmed: the SAME attribute is already an
+    `UnresolvedNamedReference` directly on the base `ivs_kantone` class,
+    before any VIEW machinery is involved). `INTERLIS.XMLDate` used to be
+    unresolved too, but now resolves via the predefined `INTERLIS`
+    namespace (`builder/repository.py`'s `_PREDEFINED_INTERLIS_SOURCE`).
     """
     builder = _build(fname)
     [view] = [v for v in _views(builder) if v.Name == view_name]

@@ -29,8 +29,8 @@ _MODEL_NAME_RE = re.compile(r"\bMODEL\s+([A-Za-z_][A-Za-z0-9_]*)")
 
 # The predefined "INTERLIS" namespace model, built via the real parse+build
 # pipeline rather than hand-crafted Python instances. Design rationale
-# (why ANYOID/UUIDOID/BOOLEAN are deliberately absent, why GregorianYear
-# was added): docs/dev-notes/predefined-interlis-namespace.md.
+# (why ANYOID/UUIDOID/BOOLEAN are deliberately absent, why GregorianYear/
+# XMLDate/XMLTime/XMLDateTime were added): docs/dev-notes/predefined-interlis-namespace.md.
 _PREDEFINED_MODEL_INTERNAL_NAME = "PredefinedInterlisNamespace"
 _PREDEFINED_INTERLIS_SOURCE = f"""\
 INTERLIS 2.4;
@@ -42,6 +42,9 @@ MODEL {_PREDEFINED_MODEL_INTERNAL_NAME} AT "http://www.interlis.ch" VERSION "202
     I32OID = OID 0..2147483647;
     STANDARDOID = OID TEXT*16;
     GregorianYear = 1582..2999;
+    XMLDate = FORMAT INTERLIS.XMLDate "0001-01-01" .. "9999-12-31";
+    XMLTime = FORMAT INTERLIS.XMLTime "00:00:00" .. "23:59:59";
+    XMLDateTime = FORMAT INTERLIS.XMLDateTime "0001-01-01T00:00:00" .. "9999-12-31T23:59:59";
 
 END {_PREDEFINED_MODEL_INTERNAL_NAME}.
 """

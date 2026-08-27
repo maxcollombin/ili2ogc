@@ -93,6 +93,37 @@ def test_qualified_gregorian_year_resolves_to_numtype_with_manual_range():
     assert type_value.Max == "2999"
 
 
+def test_qualified_xml_date_time_resolve_to_formattedtype():
+    """`INTERLIS.XMLDate`/`XMLTime`/`XMLDateTime` (eCH-0031 V2.1.0 §3.8.7 "Datum und Zeit") must resolve to a real FormattedType, not type_kind=None.
+
+    Confirmed a real, corpus-wide gap (2026-08-27, distinct from the
+    ANYOID/UUIDOID/BOOLEAN grammar-level exclusions documented in
+    docs/dev-notes/predefined-interlis-namespace.md): 30 real `ili_corpus/`
+    files declare an attribute directly as `INTERLIS.XMLDate`, all of which
+    resolved to `type_kind=None` ("-- NOTE: unsupported type None" in
+    `convert-sql`, `"x-unsupported": "unknown"` in `convert`) before this
+    fix - unlike `GregorianYear`, XMLDate/XMLTime/XMLDateTime were simply
+    never added to `_PREDEFINED_INTERLIS_SOURCE`, not a deliberate
+    exclusion. Modeled via the grammar's existing `FORMAT INTERLIS.<Name>
+    STRING..STRING` form (`formattedType`'s alternative 1, already
+    exercised directly by attributes per the manual's own example) rather
+    than the manual's literal `FORMAT BASED ON GregorianDate(...)` citation
+    - reduced scope, same "faithful enough, no functional loss" precedent
+    as `GregorianYear`'s own omitted `[Y]`/`{GregorianCalendar}` (Min/Max
+    aren't consumed by any range check today, see `xtf/validate.py`
+    - only `Format` drives the SQL/JSON Schema type mapping)."""
+    _, model = _build("xml_date_ref.ili", repository=None)
+    topic = model.Element[0]
+    thing = topic.Element[0]
+    expected_format = {"Erstellungsdatum": "XMLDate", "Uhrzeit": "XMLTime", "Zeitstempel": "XMLDateTime"}
+    for attr_name, expected in expected_format.items():
+        attr = next(a for a in thing.ClassAttribute if a.Name == attr_name)
+        type_value = attr.Type
+        assert not isinstance(type_value, UnresolvedNamedReference)
+        assert type_value._qualified_class == "IlisMeta16.ModelData.FormattedType"
+        assert type_value.Format == expected
+
+
 def test_unqualified_reference_without_imports_unqualified_still_raises():
     # Regression guard : le bug corrige (has_prefix toujours True pour un nom
     # non qualifie) masquait TOUTE reference locale non resolue derriere un
