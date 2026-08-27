@@ -266,13 +266,42 @@ globalUniqueness:
   grammar:
     rule: globalUniqueness
   kind: Container
+  feeds_into: IlisMeta16.ModelData.UniqueConstraint
   attribute_bindings:
-    Elements:
+    UniqueDef:
       source:
         field: uniqueEl
         multi: true
-      note: each uniqueEl -> one PathOrInspFactor entry, appended to the enclosing UniqueConstraint.UniqueDef
-        list (no intermediate class instance)
+      wrap:
+        uniqueEl: IlisMeta16.ModelData.PathOrInspFactor
+      note: >
+        `wrap:` (same mechanism as coordinateType.Axis, 06_types.yml -
+        "missing from the engine's multi: true branch" note there is the
+        SAME class of bug, found independently here): without it, each
+        `uniqueEl` in the list resolves to a raw bag dict
+        (`{'PathEls': [...]}`), never a real `PathOrInspFactor` instance -
+        confirmed empirically (sweep result before this fix:
+        `[('globalUniqueness', [{'PathEls': [...]}])]`, a bare dict, not
+        `[IlisMeta16.ModelData.PathOrInspFactor(...)]`) - silently
+        unusable by `attach()` (which requires a MetaInstance or a list of
+        them to find/set a real association role), compounding the key
+        rename above.
+        Each uniqueEl -> one PathOrInspFactor entry, appended to the
+        enclosing UniqueConstraint.UniqueDef list (no intermediate class
+        instance). Key renamed from "Elements" to "UniqueDef" (2026-08-27,
+        found while building the SQL DDL pipeline, backlog item 14): the
+        bag key IS the literal attribute/role name `_attach_unclaimed_results`
+        attaches onto the enclosing instance (`self.attachment.attach(instance,
+        key, sub_value, ...)`) - "Elements" is not a real UniqueConstraint
+        attribute, and the class-based fallback that recovers a WRONG key
+        name elsewhere in this codebase only applies to a single
+        MetaInstance value, never a list (`multi: true` always produces a
+        list here) - so `UniqueConstraint.UniqueDef` silently stayed `[]`
+        for every real `UNIQUE` declaration, corpus-wide, until this fix
+        (confirmed empirically before/after on a synthetic `UNIQUE Code;`
+        fixture - nobody had read `UniqueConstraint.UniqueDef` before this
+        lot, `constraint_eval.py`/`convert/jsonschema.py` both deliberately
+        leave UniqueConstraint unmapped).
   note: 'No direct IlisMeta16 instance expected. Comma-separated list of uniqueEl, feeding the enclosing
     UniqueConstraint''s UniqueDef (PathOrInspFactor list) directly - no own class instance. Grammar
     (globalUniqueness()): uniqueEl (COMMA uniqueEl)*. No "GlobalUniqueness" class exists in the metamodel.
@@ -812,6 +841,39 @@ uniquenessConstraint:
         from the "WHERE expression" clause - same pattern as setConstraint.Where.
 
         '
+    Kind:
+      source:
+        field: BASKET
+        presence: true
+      mapping:
+        BASKET_present: BasketU
+        BASKET_absent: GlobalU
+      note: >
+        Default for the common case (own top-level BASKET presence,
+        checked directly on UniquenessConstraintContext.BASKET() - a real
+        accessor, confirmed via mappings/antlr-rule-index.yml). Found
+        empirically (2026-08-27, backlog item 14/SQL DDL pipeline) that
+        `Kind` was NEVER set at all before this binding - even the
+        overwhelmingly common bare `UNIQUE Code;` form (no LOCAL/BASKET
+        qualifier anywhere) built Kind=None, contradicting this file's own
+        note below (kept for its remaining LocalU background) and
+        confirmed to be nobody's bug until now: no prior consumer
+        (`convert/jsonschema.py`/`convert/constraint_eval.py`) ever read
+        `UniqueConstraint.Kind`. `_apply_bindings` for THIS rule (Instance
+        kind) runs before its nested `localUniqueness` Container children
+        are swept (`_build_instance`'s own order) - a genuine `(LOCAL)`
+        qualifier's own Kind=LocalU binding (localUniqueness below) still
+        gets the chance to override this default afterward IF that
+        mechanism itself works; independently confirmed
+        (2026-08-27) that it currently does NOT (`localUniqueness`'s
+        UniqueDef construction is empty even with `(LOCAL)` present, "exact
+        construction not yet confirmed" per its own note below) - left
+        `status: backlog` deliberately (RULE #7, out of this lot's scope,
+        see docs/sql-conversion-strategy.md) rather than guessed at
+        alongside this fix. A downstream consumer MUST still treat an
+        empty `UniqueDef` as unsupported regardless of `Kind` (this
+        default alone does not make a `(LOCAL)`-qualified constraint
+        correctly classified) - see convert/sql.py's own defensive check.
   note: 'Kind is not carried by a (LOCAL|BASKET) qualifier on uniquenessConstraint itself - that
     qualifier is consumed before the (globalUniqueness|localUniqueness)+ loop, at the enclosing level.
     Kind=GlobalU by default (body containing only globalUniqueness); Kind=LocalU/BasketU if the body

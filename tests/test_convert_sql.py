@@ -1,0 +1,263 @@
+"""Backlog item 14, Lot 1 - .ili -> SQL DDL (PostgreSQL): tables, columns, UNIQUE/FOREIGN KEY constraints.
+
+See docs/sql-conversion-strategy.md for the design decision and scope.
+"""
+import warnings
+from pathlib import Path
+
+from interlis.builder.model_builder import InterlisModelBuilder
+from interlis.convert.sql import Column, build_tables, render_postgresql
+from interlis.runtime.parse import meta_attribute_comments, parse_text
+
+ROOT = Path(__file__).resolve().parent.parent
+MAPPINGS_DIR = ROOT / "mappings"
+SPEC_DIR = ROOT / "spec/grammar/mapping"
+
+
+def _build(src: str):
+    tree, errors = parse_text(src)
+    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree, meta_attributes=meta_attribute_comments(src))
+    return builder
+
+
+def _resolved_class(builder, name: str):
+    return builder.symbol_table.resolve(name)
+
+
+def _table(tables, name: str):
+    return next(t for t in tables if t.name == name)
+
+
+_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    !!@CRS=EPSG:2056
+    Coord2D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000;
+  TOPIC T =
+    STRUCTURE Addr =
+      Street : TEXT*50;
+      Number : TEXT*10;
+    END Addr;
+    CLASS Owner =
+      Code : MANDATORY TEXT*20;
+      UNIQUE Code;
+    END Owner;
+    CLASS Parcel =
+      ParcelNr : MANDATORY 0 .. 999999;
+      Geom : MANDATORY Coord2D;
+      Location : Addr;
+      Owner : MANDATORY REFERENCE TO Owner;
+      Tags : BAG {0..*} OF TEXT*5;
+      UNIQUE ParcelNr, Owner->Code;
+    END Parcel;
+  END T;
+END Foo.
+"""
+
+
+def test_scalar_and_mandatory_columns():
+    builder = _build(_MODEL)
+    owner = _resolved_class(builder, "Foo.T.Owner")
+    tables = build_tables([owner])
+    table = _table(tables, "owner")
+    assert table.columns == [Column("code", "varchar(20)", nullable=False)]
+
+
+def test_primary_key_and_unique_constraint():
+    builder = _build(_MODEL)
+    owner = _resolved_class(builder, "Foo.T.Owner")
+    tables = build_tables([owner])
+    table = _table(tables, "owner")
+    ddl = render_postgresql(tables)
+    assert "ogc_fid text PRIMARY KEY" in ddl
+    assert len(table.unique_constraints) == 1
+    assert table.unique_constraints[0].columns == ["code"]
+    assert "CONSTRAINT uq_owner_code UNIQUE (code)" in ddl
+
+
+def test_geometry_column_uses_sfa_type_and_resolved_srid():
+    builder = _build(_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    table = _table(tables, "parcel")
+    geom = next(c for c in table.columns if c.name == "geom")
+    assert geom.sql_type == "geometry(Point, 2056)"
+    # NOT `assert not geom.nullable`: a pre-existing, orthogonal metamodel
+    # gap (found 2026-08-27 while writing this test, confirmed also
+    # affecting the JSON Schema pipeline's "required" array, not something
+    # this Lot introduced) - `MANDATORY <named domain>` (e.g. `Geom :
+    # MANDATORY Coord2D;`) never reaches `resolve_attribute`'s `mandatory`
+    # flag: `attrTypeDef.Mandatory` is bound onto the concrete DomainType
+    # INSTANCE produced by the Type dispatch (own+inherited own AttrOrParam
+    # has no Mandatory attribute at all, confirmed against
+    # ilismeta16-classes.yml - by metamodel design) - which for an INLINE
+    # type (`MANDATORY TEXT*50;`, `MANDATORY 0..999999;`) is a FRESH
+    # instance built just for that one attribute (fine), but for a NAMED
+    # domain reference (`MANDATORY Coord2D;`) is the SAME SHARED instance
+    # every other attribute using that domain also resolves to - there is
+    # nowhere correct to attach a per-USE Mandatory flag today. Fails safe
+    # (an under-constrained `nullable` column, never a wrong/dangerous
+    # NOT NULL), but real - flagged here rather than silently asserted
+    # around. Not fixed in this lot (orthogonal to backlog item 14).
+    assert geom.nullable
+
+
+def test_structure_attribute_flattened_one_level():
+    builder = _build(_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    table = _table(tables, "parcel")
+    names = {c.name for c in table.columns}
+    assert {"location_street", "location_number"} <= names
+    assert "location" not in names
+
+
+def test_reference_becomes_fk_column_and_constraint():
+    builder = _build(_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    table = _table(tables, "parcel")
+    owner_col = next(c for c in table.columns if c.name == "owner")
+    assert owner_col.sql_type == "text"
+    assert not owner_col.nullable
+    assert len(table.foreign_keys) == 1
+    fk = table.foreign_keys[0]
+    assert fk.columns == ["owner"]
+    assert fk.ref_table == "owner"
+    assert fk.ref_columns == ["ogc_fid"]
+    ddl = render_postgresql(tables)
+    assert "ALTER TABLE parcel ADD CONSTRAINT fk_parcel_owner FOREIGN KEY (owner) REFERENCES owner (ogc_fid);" in ddl
+
+
+def test_multivalue_attribute_gets_a_note_not_a_column():
+    builder = _build(_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    table = _table(tables, "parcel")
+    assert not any(c.name == "tags" for c in table.columns)
+    assert any("Tags" in note and "BAG/LIST" in note for note in table.notes)
+
+
+def test_unique_with_reference_navigation_gets_a_note_not_a_wrong_constraint():
+    """`UNIQUE ParcelNr, Owner->Code;` - the WHOLE constraint is unsupported (RULE #5), not silently reduced to just ParcelNr."""
+    builder = _build(_MODEL)
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    tables = build_tables([parcel])
+    table = _table(tables, "parcel")
+    assert table.unique_constraints == []
+    assert any("->" in note for note in table.notes)
+
+
+def test_structure_class_itself_is_not_a_table():
+    builder = _build(_MODEL)
+    addr = _resolved_class(builder, "Foo.T.Addr")
+    tables = build_tables([addr])
+    assert tables == []
+
+
+def test_missing_crs_produces_a_note_not_an_untyped_column():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    NoCrsCoord = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
+  TOPIC T =
+    CLASS A =
+      Geom : MANDATORY NoCrsCoord;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "Foo.T.A")
+    tables = build_tables([a])
+    table = _table(tables, "a")
+    assert not any(c.name == "geom" for c in table.columns)
+    assert any("no resolved CRS" in note for note in table.notes)
+
+
+def test_role_becomes_fk_when_symbol_table_given():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Item =
+      Code : TEXT*10;
+    END Item;
+    CLASS Holder =
+      Name : TEXT*10;
+    END Holder;
+    ASSOCIATION Holder_Item =
+      rHolder (EXTERNAL) -<#> Holder;
+      rItem -- {0..*} Item;
+    END Holder_Item;
+  END T;
+END Foo.
+"""
+    )
+    item = _resolved_class(builder, "Foo.T.Item")
+    tables = build_tables([item], symbol_table=builder.symbol_table)
+    table = _table(tables, "item")
+    fk = next(c for c in table.foreign_keys if c.ref_table == "holder")
+    assert fk.columns == ["rholder"]
+
+
+def test_enum_boolean_formatted_blackbox_column_types():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    MyDate = FORMAT INTERLIS.XMLDate "1900-01-01" .. "2999-12-31";
+  TOPIC T =
+    CLASS A =
+      Kategorie : (a, b, c);
+      Active : BOOLEAN;
+      Created : MyDate;
+      Blob : BLACKBOX BINARY;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "Foo.T.A")
+    tables = build_tables([a])
+    table = _table(tables, "a")
+    types = {c.name: c.sql_type for c in table.columns}
+    assert types["kategorie"] == "text"
+    assert types["active"] == "boolean"
+    assert types["created"] == "date"
+    assert types["blob"] == "text"
+
+
+def test_name_and_uri_text_kinds_get_exact_bounds():
+    builder = _build(
+        """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Ident : NAME;
+      Link : URI;
+    END A;
+  END T;
+END Foo.
+"""
+    )
+    a = _resolved_class(builder, "Foo.T.A")
+    tables = build_tables([a])
+    table = _table(tables, "a")
+    types = {c.name: c.sql_type for c in table.columns}
+    assert types["ident"] == "varchar(255)"
+    assert types["link"] == "varchar(1023)"
+
+
+def test_render_postgresql_foreign_keys_come_after_every_create_table():
+    builder = _build(_MODEL)
+    owner = _resolved_class(builder, "Foo.T.Owner")
+    parcel = _resolved_class(builder, "Foo.T.Parcel")
+    ddl = render_postgresql(build_tables([parcel, owner]))
+    assert ddl.index("CREATE TABLE parcel") < ddl.index("ALTER TABLE parcel")
+    assert ddl.index("CREATE TABLE owner") < ddl.index("ALTER TABLE parcel")

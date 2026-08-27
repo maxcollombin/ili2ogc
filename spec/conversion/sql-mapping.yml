@@ -1,0 +1,141 @@
+# Declarative field bindings for the `.ili` -> SQL DDL conversion
+# (see docs/sql-conversion-strategy.md and
+# mappings/ilismeta16-to-sql-rules.yml for the contract this spec fills
+# in). Checked by scripts/validate_sql_conversion_spec.py.
+#
+# Style mirrors spec/conversion/jsonschema-mapping.yml: each `source` names
+# a real own/inherited IlisMeta16 attribute (verified against
+# mappings/ilismeta16-classes.yml by the validator), each `target` names
+# the SQL construct it produces. Implemented by src/interlis/convert/sql.py -
+# this file documents the mapping decision, it is not executed directly.
+
+NumType:
+  qualified_name: IlisMeta16.ModelData.NumType
+  sql:
+    column_type:
+      rule: "integer if Min and Max both parse as decimal-point-free integers, else numeric"
+      note: "Same heuristic as convert/jsonschema.py's _num_type_schema (reused via _is_integer_range), not duplicated."
+    nullable:
+      source: {field: Mandatory}
+      note: "Read via ResolvedAttribute.mandatory (xtf.schema.resolve_attribute), not this attribute directly."
+
+TextType:
+  qualified_name: IlisMeta16.ModelData.TextType
+  sql:
+    column_type:
+      source: {field: Kind}
+      note: >
+        Kind=Name -> varchar(255), Kind=Uri -> varchar(1023) (eCH-0031
+        SS3.2.2/SS3.8.1 exact bounds, same as the JSON Schema pipeline's
+        pattern/format). Kind in {Text, MText}: varchar(MaxLength) when set
+        (source: {field: MaxLength}), else plain text.
+
+EnumType:
+  qualified_name: IlisMeta16.ModelData.EnumType
+  sql:
+    column_type:
+      value: text
+      note: "No CHECK(...IN(...)) in Lot 1 - deliberately deferred, see mappings/ilismeta16-to-sql-rules.yml."
+
+BooleanType:
+  qualified_name: IlisMeta16.ModelData.BooleanType
+  sql:
+    column_type:
+      value: boolean
+
+FormattedType:
+  qualified_name: IlisMeta16.ModelData.FormattedType
+  sql:
+    column_type:
+      source: {field: Format}
+      note: >
+        XMLDate/XMLTime/XMLDateTime -> date/time/timestamp (same 3
+        well-known names as convert/jsonschema.py's
+        _KNOWN_FORMAT_TO_JSON_FORMAT). Any other Format value -> plain text.
+
+BlackboxType:
+  qualified_name: IlisMeta16.ModelData.BlackboxType
+  sql:
+    column_type:
+      value: text
+
+CoordType:
+  qualified_name: IlisMeta16.ModelData.CoordType
+  sql:
+    column_type:
+      rule: "geometry(<SFA type>, <SRID>) - see docs/interlis-geometry-sfa-mapping.md"
+      note: >
+        SFA type from Multi (own BOOLEAN): Point (Multi=false) /
+        MultiPoint (Multi=true). SRID from the !!@CRS meta-attribute
+        (source: {field: MetaAttribute}), same resolution as
+        convert/jsonfg.py's _crs_uri - reused directly (a small local SRID
+        variant extracting just the numeric EPSG code instead of building
+        the full coordRefSys URI).
+
+LineType:
+  qualified_name: IlisMeta16.ModelData.LineType
+  sql:
+    column_type:
+      source: {field: Kind}
+      note: >
+        Kind in {Polyline, DirectedPolyline} -> LineString/MultiLineString;
+        Kind in {Surface, Area} -> Polygon/MultiPolygon (source: {field:
+        Multi} selects the Multi* variant). SRID resolved the same way as
+        CoordType, via xtf.schema.line_coord_type's vertex CoordType.
+
+Class:
+  qualified_name: IlisMeta16.ModelData.Class
+  sql:
+    table_name:
+      source: {field: Name}
+      note: "Lowercased (see mappings/ilismeta16-to-sql-rules.yml's ObjectOID entry for why - PostgreSQL unquoted-identifier folding, matched deliberately)."
+    discriminant:
+      source: {field: Kind}
+      note: "Only Kind=Class becomes a table - Kind=Structure/View excluded here (see StructureNesting entry, and View is out of Lot 1 scope entirely)."
+
+ObjectOID:
+  qualified_name: IlisMeta16.ModelData.ObjectOID
+  sql:
+    primary_key:
+      value: "ogc_fid text PRIMARY KEY"
+      note: "Synthetic, independent of the Class's own OID clause - see mappings/ilismeta16-to-sql-rules.yml's ObjectOID entry for the full rationale."
+
+StructureNesting:
+  qualified_name: IlisMeta16.ModelData.Class
+  sql:
+    flattened_columns:
+      rule: "<attr>_<subattr> columns on the SAME table, one level only"
+      note: "See mappings/ilismeta16-to-sql-rules.yml's StructureNesting entry for the one-level limit and the inherited MANDATORY-not-captured gap."
+
+ReferenceType:
+  qualified_name: IlisMeta16.ModelData.ReferenceType
+  sql:
+    fk_column:
+      value: text
+      note: "Typed to match the target table's ogc_fid (also text)."
+    foreign_key:
+      rule: "FOREIGN KEY (<column>) REFERENCES <target table>(ogc_fid)"
+      note: "Target class via xtf.schema.reference_target_class, reused directly - not re-derived."
+
+Role:
+  qualified_name: IlisMeta16.ModelData.Role
+  sql:
+    fk_column:
+      value: text
+      note: "Same treatment as ReferenceType above - both resolve via reference_target_class."
+    foreign_key:
+      rule: "FOREIGN KEY (<column>) REFERENCES <target table>(ogc_fid)"
+
+UniqueConstraint:
+  qualified_name: IlisMeta16.ModelData.UniqueConstraint
+  sql:
+    unique:
+      source: {field: UniqueDef}
+      note: >
+        Only Kind=GlobalU (source: {field: Kind}) AND every UniqueDef path
+        (PathOrInspFactor.PathEls) a SINGLE PathEl maps to UNIQUE (...) -
+        2+ PathEls means "->" navigation to another table (Kind is always
+        "ReferenceAttr" regardless of hop position, path length is the
+        real signal). Kind=LocalU and any multi-hop path are backlog
+        within this same concept - see
+        mappings/ilismeta16-to-sql-rules.yml's UniqueConstraint entry.

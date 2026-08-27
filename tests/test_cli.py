@@ -53,3 +53,18 @@ def test_convert_jsonfg_resolves_crs_declared_locally_not_via_import(tmp_path, c
     # Hoisted to the collection (transfer_to_feature_collection): the only
     # Feature here has exactly one "coordRefSys" value.
     assert collection["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+
+
+def test_convert_sql_resolves_crs_declared_locally_not_via_import(tmp_path, capsys):
+    """Same CLI wiring gap as convert/convert-jsonfg, SQL side: a CoordType declared IN the root .ili must resolve a real geometry column."""
+    ili_path = tmp_path / "Foo.ili"
+    ili_path.write_text(_MODEL_WITH_META, encoding="utf-8")
+
+    assert main(["convert-sql", str(ili_path)]) == 0
+    ddl = capsys.readouterr().out
+    assert "CREATE TABLE a (" in ddl
+    assert "ogc_fid text PRIMARY KEY" in ddl
+    # Not "... NOT NULL": MANDATORY on a NAMED domain reference (Coord2D)
+    # doesn't reach resolve_attribute's mandatory flag - a known,
+    # orthogonal gap, see docs/sql-conversion-strategy.md.
+    assert "geom geometry(Point, 2056)" in ddl

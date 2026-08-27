@@ -19,6 +19,7 @@ from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
+from interlis.convert.sql import build_tables, render_postgresql
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
 from interlis.xtf.model_resolution import header_completeness, header_model_lookup, root_model_names
@@ -193,6 +194,51 @@ def cmd_convert(args: argparse.Namespace) -> int:
         Path(args.output).write_text(text + "\n", encoding="utf-8")
     else:
         print(text)
+    return 0
+
+
+def cmd_convert_sql(args: argparse.Namespace) -> int:
+    """Convert an .ili model to PostgreSQL DDL (backlog item 14, Lot 1).
+
+    See docs/sql-conversion-strategy.md for the design decision and scope
+    - this project generates the full schema (`CREATE TABLE` + inline
+    `UNIQUE` + `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`); GDAL
+    (`ogr2ogr -append`) is expected to load the actual .xtf-derived data
+    into the tables this command creates, never the other way around.
+    Only `Kind=Class` roots become a table (no `View`, unlike `cmd_convert`
+    - `CREATE VIEW` generation is a later lot). An attribute/constraint
+    outside Lot 1's mapped set never disappears silently - it becomes a
+    `-- NOTE` SQL comment instead (RULE #5).
+    """
+    path = Path(args.file)
+    if not path.exists():
+        print(f"file not found: {path}", file=sys.stderr)
+        return 1
+
+    tree, syntax_errors = parse_file(path)
+    if syntax_errors:
+        print(f"{len(syntax_errors)} syntax error(s):", file=sys.stderr)
+        for e in syntax_errors:
+            print(f"  {e}", file=sys.stderr)
+        return 1
+
+    repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+    with _resource_dirs() as (mappings_dir, spec_dir):
+        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree, meta_attributes=meta_attribute_comments_in_file(path))
+
+    classes = [
+        instance for instance in builder.symbol_table.all_registered()
+        if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
+    ]
+    tables = build_tables(classes, symbol_table=builder.symbol_table)
+    ddl = render_postgresql(tables)
+    if args.output:
+        Path(args.output).write_text(ddl, encoding="utf-8")
+    else:
+        print(ddl, end="")
     return 0
 
 
@@ -428,6 +474,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     convert_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
     convert_parser.set_defaults(func=cmd_convert)
+
+    convert_sql_parser = subparsers.add_parser(
+        "convert-sql", help="Convert an .ili model to PostgreSQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY constraints).",
+    )
+    convert_sql_parser.add_argument("file", help="Path to the .ili file to convert.")
+    convert_sql_parser.add_argument(
+        "--repo", action="append", default=[], metavar="DIR",
+        help="Directory of .ili models used to resolve references to imported models (IMPORTS) - repeatable.",
+    )
+    convert_sql_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
+    convert_sql_parser.set_defaults(func=cmd_convert_sql)
 
     validate_parser = subparsers.add_parser(
         "validate", help="Validate an .xtf file against an .ili file's schema.",

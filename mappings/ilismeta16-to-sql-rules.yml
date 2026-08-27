@@ -1,0 +1,217 @@
+# Contract for the `.ili` -> SQL DDL conversion pipeline (backlog item 14 -
+# see docs/sql-conversion-strategy.md and docs/interlis-ogc-architecture.md).
+#
+# Mirrors mappings/ilismeta16-to-jsonschema-rules.yml's role for the JSON
+# Schema pipeline: one entry per IlisMeta16 concept a converter needs a
+# decision for. Every concept relevant to table/column/constraint shape must
+# appear here, either `status: mapped` (field bindings live in
+# spec/conversion/sql-mapping.yml) or `status: backlog` (deliberately out of
+# scope for Lot 1, with a reason - RULE #7). Checked by
+# scripts/validate_sql_conversion_spec.py.
+#
+# Lot 1 scope (PostgreSQL renderer): a plain `Class` (`Kind=Class`, never
+# `Kind=Structure`, never `View`) becomes one `CREATE TABLE`, with a
+# synthetic `ogc_fid text PRIMARY KEY` (matching GDAL's own PostgreSQL
+# driver default FID column name - `ogr2ogr -append` needs no extra `-lco`
+# to load .xtf-derived data into a table this pipeline created). GDAL still
+# does the actual DATA LOADING (`ogr2ogr -append`); this pipeline only
+# generates the SCHEMA (table/column declarations + UNIQUE/FOREIGN KEY
+# constraints) - see docs/sql-conversion-strategy.md for why this division
+# of labor was chosen over "GDAL creates, we patch after" (SQLite/GPKG
+# cannot add constraints to an existing table via ALTER TABLE at all).
+
+concepts:
+  NumType:
+    qualified_name: IlisMeta16.ModelData.NumType
+    status: mapped
+    note: "integer if Min/Max both parse as decimal-point-free integers (reuses convert/jsonschema.py's _is_integer_range), else numeric."
+
+  TextType:
+    qualified_name: IlisMeta16.ModelData.TextType
+    status: mapped
+    note: >
+      Kind=Name -> varchar(255), Kind=Uri -> varchar(1023) (same exact
+      bounds as the JSON Schema pipeline's pattern/format+maxLength -
+      eCH-0031 SS3.2.2/SS3.8.1). Kind in {Text, MText}: varchar(MaxLength)
+      when MaxLength is set, else plain text.
+
+  EnumType:
+    qualified_name: IlisMeta16.ModelData.EnumType
+    status: mapped
+    note: >
+      Plain `text` column - no CHECK(... IN (...)) in Lot 1 (deliberately
+      deferred, see Constraint entry below: Lot 1 scope is UNIQUE/FOREIGN
+      KEY only, not CHECK of any kind, even though an enum's value set is
+      static and CHECK(IN(...)) would be dialect-neutral and easy - kept
+      out to respect the agreed Lot 1 boundary, not a technical limit).
+
+  BooleanType:
+    qualified_name: IlisMeta16.ModelData.BooleanType
+    status: mapped
+    note: "boolean column."
+
+  FormattedType:
+    qualified_name: IlisMeta16.ModelData.FormattedType
+    status: mapped
+    note: >
+      Same 3 well-known format names as the JSON Schema pipeline
+      (XMLDate/XMLTime/XMLDateTime -> date/time/timestamp) - any other
+      Format value falls back to plain text, same conservative stance as
+      convert/jsonschema.py's _formatted_type_schema.
+
+  BlackboxType:
+    qualified_name: IlisMeta16.ModelData.BlackboxType
+    status: mapped
+    note: "Plain text column (same conservative choice as the JSON Schema pipeline)."
+
+  CoordType:
+    qualified_name: IlisMeta16.ModelData.CoordType
+    status: mapped
+    note: >
+      PostGIS `geometry(<SFA type>, <SRID>)` column
+      (docs/interlis-geometry-sfa-mapping.md: Point/MultiPoint). SRID from
+      the eCH-0117 `!!@CRS=EPSG:<code>` meta-attribute (same resolution as
+      convert/jsonfg.py's `_crs_uri`, reused directly) - an attribute whose
+      CRS can't be resolved gets no column at all (surfaced as a `-- NOTE`
+      comment in the generated DDL, RULE #5) rather than an untyped/wrong
+      SRID geometry column.
+
+  LineType:
+    qualified_name: IlisMeta16.ModelData.LineType
+    status: mapped
+    note: >
+      Same SFA table as CoordType (docs/interlis-geometry-sfa-mapping.md):
+      Kind in {Polyline, DirectedPolyline} -> LineString/MultiLineString,
+      Kind in {Surface, Area} -> Polygon/MultiPolygon. ARC segments
+      (circular-arcs) have no SFA-native column type (SFA is strictly
+      linear) - out of scope for Lot 1's column typing, same as the JSON
+      Schema pipeline's own straight-line-only position-array limit.
+
+  Class:
+    qualified_name: IlisMeta16.ModelData.Class
+    status: mapped
+    note: >
+      Only `Kind=Class` roots become a `CREATE TABLE` (never `Kind=Structure`
+      directly - see StructureNesting below for how a STRUCTURE-typed
+      ATTRIBUTE is handled, and never `View` - Lot 1 does not generate
+      `CREATE VIEW`, left for a later lot alongside backlog item 13).
+
+  ObjectOID:
+    qualified_name: IlisMeta16.ModelData.ObjectOID
+    status: mapped
+    note: >
+      Every table gets a synthetic `ogc_fid text PRIMARY KEY` regardless of
+      the Class's own OID clause/type (`AnyOIDType`/a named TEXT or NUM
+      domain/none at all) - same uniform-string treatment the JSON Schema
+      pipeline already gives every reference (`ReferenceType`/`Role` ->
+      plain `{"type": "string"}`), and matching how `convert/jsonfg.py`
+      already treats `XtfObject.tid` as an opaque string regardless of the
+      declared OID type. `ogc_fid` specifically (not e.g. `oid` or `id`)
+      because it is GDAL's own PostgreSQL driver default FID column name
+      (verified 2026-08-27, `pg.html`) - `ogr2ogr -append` needs zero extra
+      `-lco FID=...` to load data into a table this pipeline created.
+
+  StructureNesting:
+    qualified_name: IlisMeta16.ModelData.Class
+    status: mapped
+    note: >
+      A `Class(Kind=Structure)`-typed attribute is flattened INLINE onto
+      the SAME table, ONE level only (`<attr>_<subattr>` columns) - not a
+      separate related table (unlike a `BAG`/`LIST OF STRUCTURE`, see
+      MultiValue below, which genuinely needs one for cardinality reasons).
+      A structure nested a SECOND level deep (a flattened sub-attribute
+      that is itself a STRUCTURE) is NOT further flattened in Lot 1 -
+      surfaced as a `-- NOTE` comment (RULE #5) rather than silently
+      dropped or produced with an ambiguous column name. Same known
+      metamodel limitation as the JSON Schema pipeline
+      (mappings/ilismeta16-to-jsonschema-rules.yml's StructureNesting
+      entry): `MANDATORY` on a structure-typed attribute is never captured
+      by `resolve_attribute` (`Class` extends `Type`, not `DomainType`), so
+      every flattened sub-column is nullable regardless of the source
+      attribute's own MANDATORY declaration - not fixed here, a
+      builder-layer gap.
+
+  ReferenceType:
+    qualified_name: IlisMeta16.ModelData.ReferenceType
+    status: mapped
+    note: >
+      Plain `REFERENCE TO X` -> a `text` column (typed to match the target
+      table's `ogc_fid`) PLUS a real `FOREIGN KEY ... REFERENCES` (Lot 1's
+      marquee feature - see docs/interlis-ogc-architecture.md's Prevalence
+      table: REFERENCE TO touches ~30% of the real corpus). An unresolved
+      target class (declared target not reachable, e.g. no `--repo` given)
+      gets a `-- NOTE` comment instead of a column - never a dangling FK.
+
+  Role:
+    qualified_name: IlisMeta16.ModelData.Role
+    status: mapped
+    note: >
+      Embedded association roles - same FOREIGN KEY treatment as
+      ReferenceType above (both resolve via `xtf.schema.reference_target_class`,
+      reused directly). Opt-in via a `symbol_table` parameter, same
+      precondition as `convert/jsonschema.py`'s `class_to_json_schema`.
+
+  MultiValue:
+    qualified_name: IlisMeta16.ModelData.MultiValue
+    status: backlog
+    note: >
+      `BAG {m..n} OF X` / `LIST {m..n} OF X` - needs a related CHILD TABLE
+      (1:N), not a column on the parent table (real precedent: ili2db
+      creates one, linked via a `D_<attributename>`-style FOREIGN KEY back
+      to the parent plus an ordering column for LIST - see
+      docs/sql-conversion-strategy.md). Deliberately deferred to a later
+      lot rather than guessed at - the attribute is surfaced as a `-- NOTE`
+      comment (RULE #5), never silently dropped.
+
+  Inheritance:
+    qualified_name: IlisMeta16.ModelData.Class
+    status: backlog
+    note: >
+      ABSTRACT structure polymorphism (the JSON Schema pipeline's `anyOf`
+      case) has no natural single-table SQL equivalent (table-per-hierarchy
+      vs. table-per-subtype are both real, materially different design
+      choices) - deferred, not attempted in Lot 1. An attribute whose
+      STRUCTURE target is ABSTRACT is surfaced as a `-- NOTE` comment.
+
+  UniqueConstraint:
+    qualified_name: IlisMeta16.ModelData.UniqueConstraint
+    status: mapped
+    note: >
+      Only `Kind=GlobalU` (own `UniqueConstraint.Kind` enumeration -
+      GlobalU/BasketU/LocalU) AND every `UniqueDef` path a SINGLE `PathEl`
+      (a plain own-column reference) maps to a real `UNIQUE (...)`
+      constraint - 2+ `PathEl`s means the path crossed a role/reference
+      (e.g. `Owner->Code`) to ANOTHER table's attribute. `PathEl.Kind` is
+      ALWAYS `"ReferenceAttr"` regardless of hop position (confirmed
+      empirically, 2026-08-27: `Owner->Code` produces
+      `[('ReferenceAttr','Owner'), ('ReferenceAttr','Code')]`, no distinct
+      Kind for the intermediate role step) - path LENGTH, not `Kind`, is
+      the real signal (same permissive Kind set as
+      `constraint_eval.py`'s own `_resolve_path`). Real corpus breakdown
+      (123 declarations,
+      see docs/interlis-ogc-architecture.md): ~70% are this simple form.
+      `Kind=LocalU` (scoped inside a `BAG`/`LIST OF STRUCTURE`, ~20%) and
+      any `->` cross-reference path (~10% - not expressible as a plain SQL
+      table constraint at all, a constraint can't reference ANOTHER
+      table's column) are both `status: backlog` within this SAME concept
+      entry (not separately mapped) - surfaced as a `-- NOTE` comment,
+      never silently dropped nor forced into a wrong/partial constraint.
+
+  Constraint:
+    qualified_name: IlisMeta16.ModelData.Constraint
+    status: backlog
+    note: >
+      `CONSTRAINT`/`MANDATORY CONSTRAINT` (arbitrary boolean `Expression`
+      trees, already correctly built and evaluated in Python by
+      `convert/constraint_eval.py`) -> SQL `CHECK (...)` is deliberately
+      OUT of Lot 1's scope entirely, not attempted even for the simplest
+      cases. Verified (2026-08-27) that even ili2db (the mature reference
+      INTERLIS-to-database tool) does not attempt this either - its own
+      `--createNumChecks`/`--createTextChecks`/`--createDateTimeChecks`/
+      `--createMandatoryChecks`/`--createTypeConstraint` flags only cover
+      narrower PER-DATATYPE validation (range/length/NOT NULL), never an
+      arbitrary Expression tree - a real signal this is genuinely harder
+      than UNIQUE/FOREIGN KEY, not just deprioritized. A dedicated later
+      lot (a SQL expression serializer walking the SAME `Expression` tree
+      `constraint_eval.py` already evaluates in Python) is the natural
+      path, not attempted here.
