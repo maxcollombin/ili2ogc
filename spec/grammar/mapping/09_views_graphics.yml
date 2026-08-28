@@ -12,10 +12,13 @@ aggregation:
     FormationParameter:
       source:
         field: uniqueEl
-        index: null
+        optional: true
       note: 'EQUAL(uniqueEl) alternative only (ALL has no parameter
-        - per the Metamodel PDF, "only indicated... provided EQUAL is requested"). uniqueEl (target:
-        PathOrInspFactor) feeds View.FormationParameter (LIST OF Expression,
+        - per the Metamodel PDF, "only indicated... provided EQUAL is requested"). `optional: true`
+        because the ALL alternative reaches `aggregation()` with no `uniqueEl()` child at all - without
+        it source_resolver treats the field as MANDATORY and raises a BuildError on every `AGGREGATION OF
+        ... ;` (ALL form), aborting the whole model build (same class of fix as `inspection.AREA` above).
+        uniqueEl (target: PathOrInspFactor) feeds View.FormationParameter (LIST OF Expression,
         restricted to PathOrInspFactor) directly - exact IDL citation: "Aggr.Equal: UniqueEl". See
         viewDef.FormationParameter above for the full citation.
 

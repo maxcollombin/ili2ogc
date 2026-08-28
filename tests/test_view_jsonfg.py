@@ -62,9 +62,17 @@ MODEL Test AT "http://x" VERSION "1" =
         ALL OF B;
         ALL OF C;
     END VW;
-    VIEW VU
+    VIEW VN
       JOIN OF B ~ Test.Base.B, C ~ Test.Base.C;
       WHERE NOT (B->Attr1 == C->Attr2);
+      =
+      ATTRIBUTE
+        ALL OF B;
+        ALL OF C;
+    END VN;
+    VIEW VU
+      JOIN OF B ~ Test.Base.B, C ~ Test.Base.C;
+      WHERE INTERLIS.len(B->Attr1) == C->Attr2;
       =
       ATTRIBUTE
         ALL OF B;
@@ -251,9 +259,20 @@ def test_where_reference_join_keeps_only_matching_rows():
     assert got == [(1, "Main St"), (2, "Main St"), (3, "Side St")]
 
 
-def test_where_view_outside_the_translatable_subset_is_still_skipped_with_a_reason():
+def test_where_not_is_evaluated():
     builder = _build(_VIEW_MODEL)
-    view = _view(builder, "VU")  # WHERE NOT (...) - a UnaryExpr, not in the subset
+    view = _view(builder, "VN")  # WHERE NOT (B->Attr1 == C->Attr2)
+    transfer = _transfer(_b("b1", "x"), _b("b2", "y"), _c("c1", "x"))
+
+    features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert unsupported_view_reason(view) is None
+    assert {f["id"] for f in features} == {"b2_c1"}  # b1/c1 both "x" is excluded by NOT
+
+
+def test_where_with_a_function_call_is_still_skipped_with_a_reason():
+    builder = _build(_VIEW_MODEL)
+    view = _view(builder, "VU")  # WHERE INTERLIS.len(...) - a FunctionCall, outside evaluate_expression's scope
 
     reason = unsupported_view_reason(view)
     assert reason is not None
@@ -265,7 +284,7 @@ def test_where_view_outside_the_translatable_subset_is_still_skipped_with_a_reas
     except ValueError as exc:
         assert "WHERE" in str(exc)
     else:
-        raise AssertionError("expected ValueError for an un-translatable WHERE-clause view")
+        raise AssertionError("expected ValueError for a WHERE with a function call")
 
 
 def test_projection_view_supported_by_unsupported_view_reason():
@@ -294,3 +313,78 @@ def test_transfer_to_feature_collection_without_views_param_is_unchanged():
 
     assert len(collection["features"]) == 1
     assert collection["features"][0]["featureType"] == "B"
+
+
+_KINDS_MODEL = """INTERLIS 2.4;
+MODEL Kinds AT "http://x" VERSION "1" =
+  TOPIC Base =
+    CLASS X = A : TEXT*10; END X;
+    CLASS Y = A : TEXT*10; END Y;
+    CLASS Owner =
+      Name : MANDATORY TEXT*10;
+      Items : BAG {0..*} OF Kinds.Base.Item;
+    END Owner;
+    STRUCTURE Item = Label : MANDATORY TEXT*10; END Item;
+  END Base;
+  TOPIC V =
+    DEPENDS ON Kinds.Base;
+    VIEW U UNION OF X ~ Kinds.Base.X, Y ~ Kinds.Base.Y; = ATTRIBUTE ALL OF X; END U;
+    VIEW G AGGREGATION OF Kinds.Base.X ALL; = ATTRIBUTE ALL OF X; END G;
+    VIEW Insp INSPECTION OF Kinds.Base.Owner -> Items; = ATTRIBUTE ALL OF It; END Insp;
+  END V;
+END Kinds.
+"""
+
+
+def test_union_concatenates_every_base_extension():
+    builder = _build(_KINDS_MODEL)
+    view = _view(builder, "U")
+    x1 = XtfObject(tid="x1", qualified_class="Kinds.Base.X", attributes={"A": [_node("A", "p")]})
+    y1 = XtfObject(tid="y1", qualified_class="Kinds.Base.Y", attributes={"A": [_node("A", "q")]})
+    basket = XtfBasket(bid="b", qualified_topic="Kinds.Base", kind=None, endstate=None, objects=[x1, y1])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+
+    features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert unsupported_view_reason(view) is None
+    assert sorted(f["properties"]["A"] for f in features) == ["p", "q"]
+    assert all(f["featureType"] == "U" for f in features)
+
+
+def test_aggregation_keeps_one_feature_per_distinct_row():
+    builder = _build(_KINDS_MODEL)
+    view = _view(builder, "G")
+    objs = [
+        XtfObject(tid=f"x{i}", qualified_class="Kinds.Base.X", attributes={"A": [_node("A", v)]})
+        for i, v in enumerate(("p", "p", "q"))
+    ]
+    basket = XtfBasket(bid="b", qualified_topic="Kinds.Base", kind=None, endstate=None, objects=objs)
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+
+    features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert unsupported_view_reason(view) is None
+    assert sorted(f["properties"]["A"] for f in features) == ["p", "q"]  # the duplicate "p" row collapsed
+
+
+def test_inspection_yields_one_feature_per_bag_element():
+    builder = _build(_KINDS_MODEL)
+    view = _view(builder, "Insp")
+    owner = XtfObject(
+        tid="o1", qualified_class="Kinds.Base.Owner",
+        attributes={
+            "Name": [_node("Name", "Alice")],
+            # real wire form: ONE wrapper named after the attribute, each occurrence a direct child
+            "Items": [RawNode("Items", None, {}, [
+                RawNode("Kinds.Base.Item", None, {}, [RawNode("Label", "one", {}, [])]),
+                RawNode("Kinds.Base.Item", None, {}, [RawNode("Label", "two", {}, [])]),
+            ])],
+        },
+    )
+    basket = XtfBasket(bid="b", qualified_topic="Kinds.Base", kind=None, endstate=None, objects=[owner])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+
+    features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert unsupported_view_reason(view) is None
+    assert sorted(f["properties"]["Label"] for f in features) == ["one", "two"]

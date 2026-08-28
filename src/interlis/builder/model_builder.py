@@ -1751,7 +1751,26 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 instance.FormationKind = value
                 if subrule == "join":
                     self._set_join_or_null(instance, ca.call(formation, subrule))
+                elif subrule == "inspection":
+                    self._stash_inspection_path(instance, ca.call(formation, subrule))
                 return
+
+    @staticmethod
+    def _stash_inspection_path(view: MetaInstance, inspection_ctx: ParserRuleContext) -> None:
+        """Record the `-> Name (-> Name)*` chain of an `INSPECTION OF base -> attr` view.
+
+        The spec's `inspection.FormationParameter` binding (a
+        `PathOrInspFactor` from the `Name` chain) is not yet materialized
+        by the generic `Container` machinery - stash the raw attribute
+        names on `view._inspection_path` so `convert/jsonfg.evaluate_view`
+        can iterate the inspected attribute. `ctx.Name()` returns every
+        `Name` token of the rule (`(MINUS GT Name)+`), in order.
+        """
+        names = ca.call(inspection_ctx, "Name")
+        if names is None:
+            return
+        tokens = names if isinstance(names, list) else [names]
+        view._inspection_path = [t.getText() for t in tokens if t is not None]
 
     def _set_join_or_null(self, view: MetaInstance, join_ctx: ParserRuleContext) -> None:
         """Set `RenamedBaseView.OrNull` for every base of a `JOIN OF` carrying a trailing `(OR NULL)`.

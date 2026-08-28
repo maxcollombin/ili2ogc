@@ -528,16 +528,16 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     `_resolve_schema_model_path` (same `--model`/`--repo` rule as
     `interlis validate`).
 
-    Backlog item 8 Lot C: `VIEW`s are ALSO evaluated into Features, same
-    root selection as `cmd_convert`'s JSON Schema path
-    (`_SUPPORTED_VIEW_FORMATION_KINDS` - `Union`/`Aggregation`/`Inspection`
-    excluded silently, a pre-existing deliberate scope decision, not
-    repeated here as a diagnostic). A `WHERE` clause narrows the cartesian
-    product when it is in the translatable subset (`And`/`Or`-joined
-    relational comparisons of two plain paths - see
-    `convert/jsonfg._evaluate_view_where`); a `WHERE` outside that subset
-    still excludes the whole VIEW here, with a clear stderr diagnostic
-    (`unsupported_view_reason`), rather than emit a wrongly-filtered result.
+    Backlog item 8: every `VIEW` is evaluated into Features -
+    `PROJECTION`/`JOIN`/`UNION`/`AGGREGATION`/`INSPECTION`
+    (`convert/jsonfg.evaluate_view`). A `WHERE` clause narrows a
+    `JOIN`/`PROJECTION` and is evaluated by the CONSTRAINT evaluator
+    (`And`/`Or`/`Not`/`Defined`/`Implication`/relational, constants,
+    nested-STRUCTURE paths). The only VIEWs skipped, each with a clear
+    stderr diagnostic (`unsupported_view_reason`): one whose base model
+    isn't on `--repo` (provide it), and one whose `WHERE` needs a
+    construct the CONSTRAINT evaluator itself doesn't support (arithmetic,
+    a function call).
 
     `--feature-schema-url`, when given, wires "featureSchema" (JSON-FG
     clause 13) to the companion JSON Schema `interlis convert` would
@@ -582,7 +582,6 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     candidate_views = [
         instance for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
-        and getattr(instance, "FormationKind", None) in _SUPPORTED_VIEW_FORMATION_KINDS
     ]
     views = []
     for view in candidate_views:

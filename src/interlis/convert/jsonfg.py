@@ -31,15 +31,15 @@ second parallel implementation of the same COORD/POLYLINE/SURFACE/AREA/
 MULTI* wire conventions - convert() stays a decoupled stage from
 validate(), same split already established by convert/jsonschema.py.
 """
+import json
 from typing import Any
 
 from interlis.builder.forward_refs import SymbolTable
 from interlis.builder.repository import ModelRepository
 from interlis.convert.constraint_eval import (
-    _RELATIONAL_SYMBOLS,
-    _compare,
-    _evaluate_constant,
     UnsupportedExpressionError,
+    _try_number,
+    evaluate_expression,
 )
 from interlis.convert.jsonschema import _is_integer_range
 from interlis.metamodel.instance import MetaInstance
@@ -730,98 +730,124 @@ def object_to_feature(
     return feature
 
 
-# --- VIEW evaluation (backlog item 8, Lot C) --------------------------------
+# --- VIEW evaluation (backlog item 8) --------------------------------------
 #
-# PROJECTION OF/JOIN OF Views evaluated in memory against an already-parsed
+# Every FormationKind is evaluated in memory against an already-parsed
 # XtfTransfer, producing JSON-FG Features shaped like the VIEW rather than
 # its raw base class(es) - the FGDM4GS report's central equivalence (a VIEW
-# = the FeatureType projection instruction, docs/... item 8/.claude/PROGRESS.md).
+# = the FeatureType projection instruction, docs/... item 8/.claude/PROGRESS.md):
 #
-# A `JOIN OF` is a cartesian product; a `WHERE` clause narrows it. The
-# translatable `WHERE` subset (`_evaluate_view_where`) mirrors
-# `convert/sql.py`'s own view-WHERE translation: `And`/`Or`-joined
-# relational comparisons of two plain paths, where a path is either a bare
-# base alias (denoting that combination's object - its OID) or one hop to
-# an attribute/reference/role on it. That covers the real FGDM4GS idiom
-# (`Segment->OfRoad == Road`, i.e. join on the reference). Anything else -
-# a deeper path, a non-relational operator, an aggregate/function node -
-# leaves the whole VIEW skipped with a clear diagnostic (RULE #5), never a
-# silently wrong result.
+#   PROJECTION OF   one base           re-tag each matching object
+#   JOIN OF         N bases            cartesian product (`_join_combinations`)
+#   UNION OF        N bases            concatenate every base's objects
+#   AGGREGATION OF  one base, ALL/EQUAL  group + one representative per group
+#   INSPECTION OF   one base -> attr   one Feature per element of the attr
+#
+# A `WHERE` clause narrows a JOIN/PROJECTION per combination. It is
+# evaluated by `convert/constraint_eval.evaluate_expression` over a
+# properties dict where each base alias maps to an `_ObjView` (navigable
+# like the object's own attribute values, AND `==` its OID so a bare alias
+# in the WHERE denotes "this object"). That reuses the CONSTRAINT
+# evaluator's full node coverage (`And`/`Or`/`Not`/`Defined`/`Implication`/
+# relational, constants, nested-STRUCTURE paths). Only a construct that
+# evaluator itself doesn't support (arithmetic, `THIS`/`PARENT`, a
+# function call - `_view_where_unsupported`) leaves the VIEW skipped with a
+# clear diagnostic (RULE #5), never a silently wrong result.
 
 _UNSET = object()
 
+_ARITHMETIC_OPS = {"Mult", "Div", "Plus", "Minus"}
 
-class _UnsupportedViewWhere(Exception):
-    """A WHERE clause shape `_evaluate_view_where` can't evaluate - caught, turned into a skip diagnostic."""
+
+class _ObjView(dict):
+    """A base object's value inside a view-WHERE properties dict.
+
+    Behaves as a dict of the object's own attribute values (for path
+    navigation, `constraint_eval._resolve_path`) but compares `==` to the
+    object's OID string, so a bare base alias in the `WHERE` (`... == Road`)
+    denotes that object's identity.
+    """
+
+    def __init__(self, tid: str | None, attrs: dict[str, Any]) -> None:
+        super().__init__(attrs)
+        self._tid = tid
+
+    def __eq__(self, other: Any) -> bool:
+        return self._tid == (other._tid if isinstance(other, _ObjView) else other)
+
+    def __ne__(self, other: Any) -> bool:
+        return not self.__eq__(other)
+
+    __hash__ = None  # type: ignore[assignment]
 
 
 def _view_alias(base: MetaInstance) -> str | None:
     return getattr(base, "Name", None) or getattr(getattr(base, "BaseView", None), "Name", None)
 
 
-def _view_where_side(factor: MetaInstance, alias_to_obj: dict[str, XtfObject | None]) -> Any:
-    """Resolve one operand of a view-WHERE comparison to a comparable Python value."""
-    qname = factor._qualified_class.rsplit(".", 1)[-1]
-    if qname == "Constant":
-        return _evaluate_constant(factor)
-    if qname != "PathOrInspFactor" or getattr(factor, "Inspection", None):
-        raise _UnsupportedViewWhere("a WHERE operand is not a plain attribute path or constant")
-    refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
-    if not refs or refs[0] is None:
-        raise _UnsupportedViewWhere("empty attribute path")
-    if refs[0] not in alias_to_obj:
-        raise _UnsupportedViewWhere(f"WHERE path root {refs[0]!r} is not a base of this view")
-    if len(refs) > 2:
-        raise _UnsupportedViewWhere(f"WHERE path {'->'.join(str(r) for r in refs)} navigates more than one hop")
-    obj = alias_to_obj[refs[0]]
-    if obj is None:  # an (OR NULL) base with no object in this combination
-        return None
-    if len(refs) == 1:
-        return obj.tid  # a bare base reference denotes the object itself - compared by identity
-    nodes = obj.attributes.get(refs[1])
-    if not nodes:
-        return None
-    ref_tid = _extract_reference(nodes[0])
-    return ref_tid if ref_tid is not None else nodes[0].text
+def _raw_node_value(node: RawNode) -> Any:
+    """One attribute occurrence -> a comparable value: a referenced OID, a nested dict, or a (numeric-coerced) scalar."""
+    ref_tid = _extract_reference(node)
+    if ref_tid is not None:
+        return ref_tid
+    if node.children:  # a STRUCTURE occurrence - navigable one more hop
+        nested: dict[str, Any] = {}
+        for child in node.children:
+            nested.setdefault(child.tag, _raw_node_value(child))
+        return nested
+    return _try_number(node.text, node.text) if node.text is not None else None
 
 
-def _evaluate_view_where(where: MetaInstance, alias_to_obj: dict[str, XtfObject | None]) -> bool:
-    """Evaluate a view's `Where` `Expression` tree against one JOIN combination. Raises `_UnsupportedViewWhere`."""
-    qname = where._qualified_class.rsplit(".", 1)[-1]
-    op = getattr(where, "Operation", None)
-    subs = list(getattr(where, "SubExpressions", None) or [])
-    if qname == "CompoundExpr" and op == "And":
-        return all(_evaluate_view_where(sub, alias_to_obj) for sub in subs)
-    if qname == "CompoundExpr" and op == "Or":
-        return any(_evaluate_view_where(sub, alias_to_obj) for sub in subs)
-    if qname == "CompoundExpr" and op in _RELATIONAL_SYMBOLS and len(subs) == 2:
-        left = _view_where_side(subs[0], alias_to_obj)
-        right = _view_where_side(subs[1], alias_to_obj)
-        if left is None or right is None:
-            return False  # a missing value on either side - the row is not part of the (inner) join
-        return _compare(op, left, right)
-    raise _UnsupportedViewWhere(f"WHERE operation {op!r} ({qname}) is not evaluable")
+def _combo_properties(aliases: list[str | None], combo: list[XtfObject | None]) -> dict[str, _ObjView]:
+    properties: dict[str, _ObjView] = {}
+    for alias, obj in zip(aliases, combo):
+        if alias is None:
+            continue
+        if obj is None:  # an (OR NULL) base with no object in this combination
+            properties[alias] = _ObjView(None, {})
+            continue
+        attrs = {name: _raw_node_value(nodes[0]) for name, nodes in obj.attributes.items() if nodes}
+        properties[alias] = _ObjView(obj.tid, attrs)
+    return properties
+
+
+def _view_where_unsupported(expr: MetaInstance) -> str | None:
+    """Return a reason `evaluate_expression` can't evaluate `expr`'s SHAPE (data-independent), or `None`."""
+    qname = expr._qualified_class.rsplit(".", 1)[-1]
+    if qname == "CompoundExpr":
+        if getattr(expr, "Operation", None) in _ARITHMETIC_OPS:
+            return f"arithmetic operator {expr.Operation!r}"
+        return next((r for sub in (getattr(expr, "SubExpressions", None) or []) if (r := _view_where_unsupported(sub))), None)
+    if qname == "UnaryExpr":
+        if getattr(expr, "Operation", None) not in ("Not", "Defined"):
+            return f"unary operator {getattr(expr, 'Operation', None)!r}"
+        sub = getattr(expr, "SubExpression", None)
+        return _view_where_unsupported(sub) if isinstance(sub, MetaInstance) else None
+    if qname in ("PathOrInspFactor", "Constant"):
+        return None
+    return f"{qname} node (needs THIS/PARENT/aggregate/function-call context)"
 
 
 def unsupported_view_reason(view: MetaInstance) -> str | None:
     """Return why `evaluate_view` can't evaluate `view`, or `None` if it can.
 
     Reused by `cli.cmd_convert_jsonfg` to print a clear diagnostic for
-    every VIEW it skips instead of a silent omission.
+    every VIEW it skips instead of a silent omission. The only remaining
+    reasons are a genuinely unavailable base model (RULE #9 - provide it
+    via `--repo`) and a `WHERE` construct outside the CONSTRAINT
+    evaluator's scope (arithmetic / function call).
     """
     kind = getattr(view, "FormationKind", None)
-    if kind not in ("Projection", "Join"):
-        return f"FormationKind {kind!r} not evaluated (only Projection/Join)"
+    if kind not in ("Projection", "Join", "Union", "Aggregation", "Inspection"):
+        return f"unknown FormationKind {kind!r}"
     bases = [b for b in getattr(view, "RenamedBaseView", None) or [] if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
     if not bases:
-        return "no resolvable base (RenamedBaseView.BaseView unresolved)"
+        return "base model not resolvable - pass it via --repo (see docs/model-resolution-strategy.md)"
+    if kind == "Inspection" and not _inspection_path(view):
+        return "INSPECTION path (the '-> attribute' chain) was not built - InterlisModelBuilder gap"
     where = getattr(view, "Where", None)
-    if where is not None:
-        alias_probe = {alias: None for b in bases if (alias := _view_alias(b)) is not None}
-        try:
-            _evaluate_view_where(where, alias_probe)  # a shape-only probe: every base has a None object, so no real value is read
-        except _UnsupportedViewWhere as exc:
-            return f"WHERE clause: {exc}"
+    if where is not None and (reason := _view_where_unsupported(where)) is not None:
+        return f"WHERE clause: {reason}"
     return None
 
 
@@ -876,43 +902,32 @@ def _merge_join_combo(combo: list[XtfObject | None], view_name: str) -> XtfObjec
     return XtfObject(tid="_".join(tid_parts) or None, qualified_class=view_name, attributes=attributes)
 
 
-def evaluate_view(
-    view: MetaInstance, transfer: XtfTransfer, *,
-    symbol_table: SymbolTable, repository: ModelRepository | None = None, standalone: bool = False,
-) -> list[dict[str, Any]]:
-    """Evaluate one PROJECTION OF/JOIN OF `view` against `transfer` into JSON-FG Features.
+def _inspection_path(view: MetaInstance) -> list[str]:
+    """Return the `-> attr (-> attr)*` chain of an `INSPECTION OF base -> attr` view, as attribute names.
 
-    Raises `ValueError` if `unsupported_view_reason(view)` isn't `None` -
-    callers (e.g. `cmd_convert_jsonfg`) are expected to check that first
-    and skip with a diagnostic, never call this blind.
-
-    `PROJECTION OF` (single base): each matching base object is re-tagged
-    with `view` as its `cls` directly, no data transformation at all - the
-    View's `ClassAttribute` list (backlog item 8 Lot A2's `ALL OF`
-    expansion) already carries the SAME attribute names as the base
-    Class's own wire encoding, so `object_to_feature` naturally emits only
-    the View's declared properties, exactly like Lot B's `View -> JSON
-    Schema` needed no View-specific code either.
-
-    `JOIN OF` (N bases): the full cartesian product of each base's
-    matching objects (`_join_combinations`), each combination merged into
-    one synthetic `XtfObject` (`_merge_join_combo`) then fed through the
-    same `object_to_feature(obj, view, ...)` path.
-
-    Base matching (`is_class_compatible`, same mechanism already used by
-    `_extract_reference`'s embedded-role/reference resolution elsewhere in
-    this module): an XtfObject's resolved Class must BE, or be a SUBCLASS
-    of, a `RenamedBaseView.BaseView` - real corpus data can transfer a
-    concrete subclass where the VIEW's base names an abstract superclass.
+    `View.FormationParameter` (a `PathOrInspFactor` per the spec) is where
+    the builder should put it; until that binding actually populates
+    (`spec/grammar/mapping/09_views_graphics.yml`'s `inspection` entry),
+    `_inspection_path_from_ctx` in `InterlisModelBuilder` stashes the raw
+    `Name` tokens on `view._inspection_path` instead.
     """
-    reason = unsupported_view_reason(view)
-    if reason is not None:
-        raise ValueError(f"cannot evaluate view {getattr(view, 'Name', None)!r}: {reason}")
+    stashed = getattr(view, "_inspection_path", None)
+    if isinstance(stashed, list) and stashed:
+        return [str(n) for n in stashed]
+    names: list[str] = []
+    for factor in getattr(view, "FormationParameter", None) or []:
+        for el in getattr(factor, "PathEls", None) or []:
+            ref = getattr(el, "Ref", None)
+            if ref:
+                names.append(ref)
+    return names
 
-    bases = [b for b in view.RenamedBaseView if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
 
+def _resolved_objects_of(
+    transfer: XtfTransfer, symbol_table: SymbolTable, repository: ModelRepository | None,
+) -> list[tuple[XtfObject, MetaInstance]]:
     resolved_by_qualified_class: dict[str, MetaInstance | None] = {}
-    resolved_objects: list[tuple[XtfObject, MetaInstance]] = []
+    out: list[tuple[XtfObject, MetaInstance]] = []
     for basket in transfer.baskets:
         for obj in basket.objects:
             cls = resolved_by_qualified_class.get(obj.qualified_class, _UNSET)
@@ -920,9 +935,60 @@ def evaluate_view(
                 cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
                 resolved_by_qualified_class[obj.qualified_class] = cls
             if cls is not None:
-                resolved_objects.append((obj, cls))
+                out.append((obj, cls))
+    return out
 
+
+def evaluate_view(
+    view: MetaInstance, transfer: XtfTransfer, *,
+    symbol_table: SymbolTable, repository: ModelRepository | None = None, standalone: bool = False,
+) -> list[dict[str, Any]]:
+    """Evaluate `view` against `transfer` into JSON-FG Features - every FormationKind.
+
+    Raises `ValueError` if `unsupported_view_reason(view)` isn't `None` -
+    callers (e.g. `cmd_convert_jsonfg`) are expected to check that first
+    and skip with a diagnostic, never call this blind.
+
+    - `PROJECTION OF` (1 base): each matching base object re-tagged with
+      `view` as its `cls` - the View's `ClassAttribute` list already
+      carries the base's own wire attribute names (`ALL OF`), so
+      `object_to_feature` emits exactly the View's declared properties.
+    - `JOIN OF` (N bases): the cartesian product of each base's matching
+      objects (`_join_combinations`), each combination merged
+      (`_merge_join_combo`).
+    - `UNION OF` (N bases): every base's matching objects, concatenated,
+      each re-tagged with `view` (compatible base viewables - the union of
+      their extensions).
+    - `AGGREGATION OF` (1 base): one representative Feature per group of
+      base objects equal on the result attributes (the conservative `ALL`
+      reading - `EQUAL (key)` grouping needs `View.FormationParameter`,
+      still a builder gap, and collapses to this when unavailable).
+    - `INSPECTION OF base -> attr` (1 base): one Feature per element of the
+      inspected `BAG`/`LIST`/reference attribute on each base object.
+
+    A `WHERE` clause narrows `JOIN`/`PROJECTION` per combination, evaluated
+    by `constraint_eval.evaluate_expression` over `_combo_properties`.
+    """
+    reason = unsupported_view_reason(view)
+    if reason is not None:
+        raise ValueError(f"cannot evaluate view {getattr(view, 'Name', None)!r}: {reason}")
+
+    kind = view.FormationKind
+    view_name = getattr(view, "Name", None) or "View"
+    bases = [b for b in view.RenamedBaseView if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
+    resolved_objects = _resolved_objects_of(transfer, symbol_table, repository)
     objects_by_base = [[obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases]
+
+    if kind == "Inspection":
+        return _evaluate_inspection(
+            view, bases[0].BaseView, objects_by_base[0], _inspection_path(view), standalone, symbol_table,
+        )
+
+    if kind == "Union":
+        return [
+            object_to_feature(obj, view, standalone=standalone, symbol_table=symbol_table)
+            for objs in objects_by_base for obj in objs
+        ]
 
     where = getattr(view, "Where", None)
     aliases = [_view_alias(base) for base in bases]
@@ -931,21 +997,18 @@ def evaluate_view(
         if where is None:
             return True
         try:
-            return _evaluate_view_where(where, {a: o for a, o in zip(aliases, combo)})
-        except (_UnsupportedViewWhere, UnsupportedExpressionError) as exc:
-            # Shape was probed OK by unsupported_view_reason; a value-level
-            # failure here (e.g. `<` on non-orderable values) still means
-            # the whole VIEW can't be filtered faithfully - RULE #5.
-            raise ValueError(f"cannot evaluate view {getattr(view, 'Name', None)!r}: WHERE clause: {exc}") from exc
+            return bool(evaluate_expression(where, _combo_properties(aliases, combo)))
+        except UnsupportedExpressionError as exc:
+            raise ValueError(f"cannot evaluate view {view_name!r}: WHERE clause: {exc}") from exc
 
-    if view.FormationKind == "Projection":
-        return [
+    if kind in ("Projection", "Aggregation"):
+        kept = [
             object_to_feature(obj, view, standalone=standalone, symbol_table=symbol_table)
             for obj in objects_by_base[0]
             if _passes_where([obj])
         ]
+        return _dedup_features(kept) if kind == "Aggregation" else kept
 
-    view_name = getattr(view, "Name", None) or "View"
     combos = _join_combinations(bases, objects_by_base)
     features = []
     for combo in combos:
@@ -956,6 +1019,80 @@ def evaluate_view(
         if members:
             feature["x-join-members"] = members
         features.append(feature)
+    return features
+
+
+def _dedup_features(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep one Feature per distinct `properties`/`place` - AGGREGATION's `ALL` reading."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for feature in features:
+        key = json.dumps(
+            {"properties": feature.get("properties"), "place": feature.get("place")},
+            sort_keys=True, ensure_ascii=False, default=str,
+        )
+        if key not in seen:
+            seen.add(key)
+            out.append(feature)
+    return out
+
+
+def _inspection_target(
+    base_view: MetaInstance, path: list[str], symbol_table: SymbolTable | None,
+) -> tuple[MetaInstance | None, bool]:
+    """Return `(element type, is_multi)` for the `INSPECTION OF base -> a -> b` path's final hop."""
+    current: MetaInstance | None = base_view
+    is_multi = False
+    for hop in path:
+        if not isinstance(current, MetaInstance):
+            return None, False
+        members = schema_members_of(current, symbol_table) if symbol_table is not None else attributes_of(current)
+        attr = members.get(hop)
+        if attr is None:
+            return None, False
+        resolved = resolve_attribute(attr)
+        nxt = resolved.type_instance
+        is_multi = resolved.type_kind == "MultiValue"
+        if is_multi and isinstance(nxt, MetaInstance):
+            nxt = getattr(nxt, "BaseType", None)  # BAG/LIST OF <element type>
+        current = nxt if isinstance(nxt, MetaInstance) else None
+    ok = isinstance(current, MetaInstance) and getattr(current, "Kind", None) in ("Class", "Structure")
+    return (current if ok else None), is_multi
+
+
+def _evaluate_inspection(
+    view: MetaInstance, base_view: MetaInstance, base_objects: list[XtfObject], path: list[str],
+    standalone: bool, symbol_table: SymbolTable,
+) -> list[dict[str, Any]]:
+    """One Feature per element of the inspected attribute (`INSPECTION OF base -> attr`) on each base object.
+
+    The element type is resolved from the path (`_inspection_target`) so
+    `object_to_feature` emits the ELEMENT's own attributes, not the base's;
+    `View` still supplies `featureType`. A `BAG`/`LIST OF` attribute
+    transfers its occurrences as DIRECT CHILDREN of one wrapper element
+    (the same wire convention `_multi_value` relies on) - those children
+    are the elements; a single reference/structure attribute is itself the
+    element.
+    """
+    element_type, is_multi = _inspection_target(base_view, path, symbol_table)
+    features: list[dict[str, Any]] = []
+    for base_obj in base_objects:
+        nodes: list[RawNode] = list(base_obj.attributes.get(path[0], []))
+        for hop in path[1:]:
+            nodes = [gc for node in nodes for gc in node.children if gc.tag == hop]
+        occurrences = [c for node in nodes for c in node.children] if is_multi else nodes
+        for i, node in enumerate(occurrences):
+            element_attrs: dict[str, list[RawNode]] = {}
+            for child in node.children:
+                element_attrs.setdefault(child.tag, []).append(child)
+            tid = node.attrib.get("TID") or (f"{base_obj.tid}_{path[-1]}_{i}" if base_obj.tid else None)
+            element = XtfObject(tid=tid, qualified_class=getattr(view, "Name", None) or "View", attributes=element_attrs)
+            feature = object_to_feature(
+                element, element_type if element_type is not None else view,
+                standalone=standalone, symbol_table=symbol_table,
+            )
+            feature["featureType"] = getattr(view, "Name", None) or feature["featureType"]
+            features.append(feature)
     return features
 
 
