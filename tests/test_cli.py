@@ -139,3 +139,41 @@ def test_convert_sql_catalog_flag_ignores_the_same_file_given_twice(tmp_path, ca
     ddl = capsys.readouterr().out
     assert ddl.count('CREATE TABLE "zonecatalog"') == 1
     assert 'CREATE TABLE "zonecatalog_2"' not in ddl
+
+
+_CATALOG_MODEL_WITH_EMBEDDED_ROLE = """INTERLIS 2.4;
+MODEL Catalog AT "http://y" VERSION "1" =
+  TOPIC CatTopic =
+    CLASS Parent =
+      Name : MANDATORY TEXT*10;
+    END Parent;
+    CLASS Child =
+      Name : MANDATORY TEXT*10;
+    END Child;
+    ASSOCIATION Parent_Child =
+      Children -- {0..*} Child;
+      Parent -<#> {1} Parent;
+    END Parent_Child;
+  END CatTopic;
+END Catalog.
+"""
+
+
+def test_convert_sql_catalog_flag_resolves_embedded_role_in_the_catalogues_own_model(tmp_path, capsys):
+    """`_columns_for_class` must resolve a `--catalog` class's embedded association role against THAT model's own symbol table, not the root file's (docs/sql-conversion-strategy.md's "known, separate, pre-existing limitation")."""
+    main_path = tmp_path / "Main.ili"
+    main_path.write_text(_MAIN_MODEL_WITH_CATALOG_REF, encoding="utf-8")
+    catalog_path = tmp_path / "Catalog.ili"
+    catalog_path.write_text(_CATALOG_MODEL_WITH_EMBEDDED_ROLE, encoding="utf-8")
+
+    assert main([
+        "convert-sql", str(main_path), "--repo", str(tmp_path), "--catalog", str(catalog_path),
+    ]) == 0
+    ddl = capsys.readouterr().out
+    # `Parent_Child` embeds role `Parent` (the {1} end) onto `Child` (the
+    # {0..*} end) - entirely declared inside Catalog.ili, invisible from
+    # Main.ili's own symbol table. A `"parent"` FK column on `child`
+    # proves it was resolved against the catalogue's OWN table.
+    assert 'CREATE TABLE "child" (' in ddl
+    assert '"parent" text' in ddl
+    assert 'FOREIGN KEY ("parent") REFERENCES "parent" ("id")' in ddl

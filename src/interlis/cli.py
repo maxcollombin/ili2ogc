@@ -15,6 +15,7 @@ import warnings
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
+from interlis.builder.forward_refs import SymbolTable
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
@@ -255,6 +256,12 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
     ]
 
+    # `id(cls) -> its OWN symbol table`, for every `--catalog` class - see
+    # `build_tables`'s `class_symbol_tables` docstring: a catalogue class's
+    # embedding association (if any) is declared in ITS OWN model's table,
+    # never in `builder.symbol_table` (the root file being converted).
+    class_symbol_tables: dict[int, SymbolTable] = {}
+
     seen_catalog_paths: set[Path] = set()
     for catalog_arg in args.catalog:
         catalog_path = Path(catalog_arg)
@@ -276,12 +283,14 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             catalog_builder.build(catalog_tree, meta_attributes=meta_attribute_comments_in_file(catalog_path))
-        classes.extend(
+        catalog_classes = [
             instance for instance in catalog_builder.symbol_table.all_registered()
             if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
-        )
+        ]
+        classes.extend(catalog_classes)
+        class_symbol_tables.update({id(instance): catalog_builder.symbol_table for instance in catalog_classes})
 
-    tables = build_tables(classes, symbol_table=builder.symbol_table)
+    tables = build_tables(classes, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables)
     ddl = render_gpkg(tables) if args.dialect == "gpkg" else render_postgresql(tables)
     if args.output:
         Path(args.output).write_text(ddl, encoding="utf-8")

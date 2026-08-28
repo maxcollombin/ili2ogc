@@ -703,7 +703,10 @@ def _local_unique_constraints_for_class(cls: MetaInstance) -> tuple[dict[str, li
     return result, notes
 
 
-def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None = None) -> list[Table]:
+def build_tables(
+    classes: list[MetaInstance], symbol_table: SymbolTable | None = None,
+    *, class_symbol_tables: dict[int, SymbolTable] | None = None,
+) -> list[Table]:
     """Convert every `Class(Kind=Class)` in `classes` into a `Table` - the dialect-neutral IR every renderer consumes.
 
     Unlike `convert/jsonschema.py`'s `model_to_json_schema`, this performs
@@ -711,6 +714,25 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
     attribute is flattened INLINE (`_columns_for_class`), never a separate
     `Table`, so there is nothing beyond the given roots to discover (Lot 1
     scope - see mappings/ilismeta16-to-sql-rules.yml).
+
+    `class_symbol_tables` (`id(cls) -> SymbolTable`, optional) overrides
+    `symbol_table` for one specific class when looking up its embedded
+    association roles (`_columns_for_class` -> `schema_members_of` ->
+    `embedded_roles_of`) - needed for a class that belongs to a DIFFERENT
+    model than `symbol_table` (e.g. `cli.cmd_convert_sql`'s `--catalog`
+    classes), whose embedding association may be declared in that OTHER
+    model's own table, never in `symbol_table`. Deliberately NOT
+    `xtf/schema.py`'s `home_symbol_table` (used by `xtf/validate.py` for
+    the analogous problem): that helper DISCOVERS the right table from a
+    bare qualified-name string via `ModelRepository`, which here would
+    return a table built by a SEPARATE parse of the same model file - a
+    different Python object graph than the one `cls` itself belongs to,
+    breaking `is_class_compatible`'s identity comparison
+    (`embedded_roles_of`'s `Super`-chain walk). The caller (`cli.py`)
+    already knows, by construction, the exact `SymbolTable` each class
+    came from (one `InterlisModelBuilder` per `--catalog` file) - passing
+    it directly keeps the class and the table it's queried against in the
+    SAME identity graph, which discovery-via-repository cannot guarantee.
 
     Two real bugs found and fixed by executing the generated DDL against a
     real SQLite engine (2026-08-27, not just eyeballing the text) - neither
@@ -740,7 +762,8 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
             suffix += 1
         used_table_names.add(table_name)
 
-        columns, foreign_keys, notes, child_specs, nested_local_unique = _columns_for_class(cls, symbol_table)
+        home_table = (class_symbol_tables or {}).get(id(cls), symbol_table)
+        columns, foreign_keys, notes, child_specs, nested_local_unique = _columns_for_class(cls, home_table)
         renamed = _avoid_identity_collision(columns)
         unique_constraints, unique_notes = _unique_constraints_for_class(cls, table_name)
         for unique in unique_constraints:
@@ -766,7 +789,7 @@ def build_tables(classes: list[MetaInstance], symbol_table: SymbolTable | None =
         tables.append(parent_table)
 
         for attr_name, multi_value in child_specs:
-            child_table, child_renamed, reason = _build_child_table(table_name, attr_name, multi_value, symbol_table)
+            child_table, child_renamed, reason = _build_child_table(table_name, attr_name, multi_value, home_table)
             if child_table is None:
                 tables[-1].notes.append(f"{attr_name}: BAG/LIST OF - {reason}")
                 continue
