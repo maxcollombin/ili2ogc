@@ -186,6 +186,14 @@ class Table:
     """Human-readable reasons an attribute/constraint was skipped (RULE #5) - never a silent drop."""
 
 
+@dataclass
+class SqlView:
+    name: str
+    body: str | None
+    """A complete, dialect-portable `SELECT ... FROM ... [WHERE ...]` (comma-join, no dialect-specific syntax), or `None` when the View could not be translated - `notes` then says why (RULE #5)."""
+    notes: list[str] = field(default_factory=list)
+
+
 def _srid(coord_type: MetaInstance | None) -> str | None:
     """Return the bare numeric EPSG code (e.g. `"2056"`) from a CoordType's `!!@CRS=EPSG:<code>` meta-attribute, or `None`.
 
@@ -571,32 +579,54 @@ def _check_constraints_for_class(
 ) -> tuple[list[CheckConstraint], list[str]]:
     """Return `(constraints, notes)` for `cls`'s own row-local `MANDATORY CONSTRAINT`s - same scope as `constraint_eval.py`'s `check_feature_constraints`.
 
-    `UniqueConstraint`/`SetConstraint`/`ExistenceConstraint` and the
-    percentage-based plausibility form (`Kind` `LowPercC`/`HighPercC`) are
-    population/basket-level checks a single-row `CHECK` cannot express -
+    `UniqueConstraint` is handled by `_unique_constraints_for_class`/
+    `_local_unique_constraints_for_class`. `SetConstraint`/
+    `ExistenceConstraint` and the percentage-based plausibility form
+    (`SimpleConstraint` with `Percentage`, or `Kind` `LowPercC`/`HighPercC`)
+    are population/basket-level checks a single-row `CHECK` cannot express -
     same exclusion as `check_feature_constraints`, not attempted here
-    either.
+    either, but each is surfaced as a `-- NOTE` rather than dropped
+    silently (RULE #5 - `SET`/`EXISTENCE` touch ~3%/~8% of the real
+    corpus).
     """
     result: list[CheckConstraint] = []
     notes: list[str] = []
     counter = 0
     for constraint in getattr(cls, "Constraint", None) or []:
-        if not constraint._qualified_class.endswith("SimpleConstraint"):
+        qname = constraint._qualified_class.rsplit(".", 1)[-1]
+        label = repr(getattr(constraint, "Name", None)) if getattr(constraint, "Name", None) else "<unnamed>"
+        if qname == "UniqueConstraint":
+            continue  # handled by _unique_constraints_for_class / _local_unique_constraints_for_class
+        if qname == "ExistenceConstraint":
+            notes.append(
+                f"EXISTENCE CONSTRAINT {label}: a check that a value also occurs in another class - "
+                "no single-row SQL CHECK can express it (Lot 2)",
+            )
             continue
-        if getattr(constraint, "Kind", None) not in (None, "MandC"):
+        if qname == "SetConstraint":
+            notes.append(
+                f"SET CONSTRAINT {label}: a whole-population check - no single-row SQL CHECK can express it "
+                "(Lot 2)",
+            )
             continue
-        if getattr(constraint, "Percentage", None) is not None:
+        if qname != "SimpleConstraint":
+            notes.append(f"CONSTRAINT {label} ({qname}): not a row-local MANDATORY CONSTRAINT - no CHECK generated")
+            continue
+        if getattr(constraint, "Kind", None) not in (None, "MandC") or getattr(constraint, "Percentage", None) is not None:
+            notes.append(
+                f"CONSTRAINT {label}: percentage-based plausibility form (Kind="
+                f"{getattr(constraint, 'Kind', None)!r}) - a population ratio no single-row SQL CHECK can express",
+            )
             continue
         expr = getattr(constraint, "LogicalExpression", None)
         if expr is None:
             continue
         counter += 1
         name = getattr(constraint, "Name", None)
-        label = name or f"CONSTRAINT #{counter}"
         try:
             sql_expr = _expression_to_sql(expr, column_names, renamed)
         except _UnsupportedCheckExpression as exc:
-            notes.append(f"MANDATORY CONSTRAINT {label!r}: {exc} - CHECK not generated (Lot 2)")
+            notes.append(f"MANDATORY CONSTRAINT {name or f'#{counter}'!r}: {exc} - CHECK not generated (Lot 2)")
             continue
         constraint_name = _truncate_identifier(_sql_identifier(f"chk_{table_name}_{name}" if name else f"chk_{table_name}_{counter}"))
         result.append(CheckConstraint(constraint_name, sql_expr))
@@ -706,6 +736,7 @@ def _local_unique_constraints_for_class(cls: MetaInstance) -> tuple[dict[str, li
 def build_tables(
     classes: list[MetaInstance], symbol_table: SymbolTable | None = None,
     *, class_symbol_tables: dict[int, SymbolTable] | None = None,
+    class_table_names: dict[int, str] | None = None,
 ) -> list[Table]:
     """Convert every `Class(Kind=Class)` in `classes` into a `Table` - the dialect-neutral IR every renderer consumes.
 
@@ -714,6 +745,11 @@ def build_tables(
     attribute is flattened INLINE (`_columns_for_class`), never a separate
     `Table`, so there is nothing beyond the given roots to discover (Lot 1
     scope - see mappings/ilismeta16-to-sql-rules.yml).
+
+    `class_table_names` (`id(cls) -> str`, optional out-param) is filled
+    with the final table name chosen for every class - `build_views` uses
+    it to map a View's base classes to their tables by identity rather
+    than by re-deriving a possibly-disambiguated name.
 
     `class_symbol_tables` (`id(cls) -> SymbolTable`, optional) overrides
     `symbol_table` for one specific class when looking up its embedded
@@ -761,6 +797,8 @@ def build_tables(
             table_name = f"{base_name}_{suffix}"
             suffix += 1
         used_table_names.add(table_name)
+        if class_table_names is not None:
+            class_table_names[id(cls)] = table_name
 
         home_table = (class_symbol_tables or {}).get(id(cls), symbol_table)
         columns, foreign_keys, notes, child_specs, nested_local_unique = _columns_for_class(cls, home_table)
@@ -854,7 +892,209 @@ def build_tables(
     return tables
 
 
-def render_postgresql(tables: list[Table]) -> str:
+class _UnsupportedView(Exception):
+    """A View shape this module cannot faithfully turn into a `CREATE VIEW` - caught per-View, surfaced as a `-- NOTE` (RULE #5), never a crash."""
+
+
+class _ViewResolver:
+    """Resolves a View's `RenamedBaseView`/`ClassAttribute`/`Where` paths against the already-built `Table`s.
+
+    A View's bases live in an IMPORTED model, so the base `Table`s must be
+    part of the SAME conversion (via `interlis convert-sql --catalog
+    <base>.ili`) - a missing base table raises `_UnsupportedView` rather
+    than emitting a `CREATE VIEW` that would not compile.
+
+    `symbol_for(cls)` returns the `SymbolTable` `cls` was built with (its
+    OWN model's, for a `--catalog` class - same `class_symbol_tables` map
+    `build_tables` uses), needed to see `cls`'s embedded association roles.
+    """
+
+    def __init__(
+        self, bases: list[tuple[str, MetaInstance, str]], tables_by_name: dict[str, Table],
+        symbol_for,
+    ) -> None:
+        self.by_alias = {alias: (cls, table) for alias, cls, table in bases}
+        self.tables_by_name = tables_by_name
+        self.symbol_for = symbol_for
+        self.extra_joins: list[tuple[str, str, str]] = []  # (table, alias, ON-condition SQL)
+        self._counter = 0
+
+    def _members(self, cls: MetaInstance) -> dict[str, MetaInstance]:
+        st = self.symbol_for(cls)
+        return schema_members_of(cls, st) if st is not None else attributes_of(cls)
+
+    def _columns(self, table_name: str) -> set[str]:
+        return {c.name for c in self.tables_by_name[table_name].columns}
+
+    def scalar_ref(self, factor: MetaInstance) -> str:
+        """Return `"alias"."column"` for a `PathOrInspFactor`, registering any JOINs its intermediate reference hops need."""
+        if factor._qualified_class.endswith("Constant"):
+            return _view_constant_literal(factor)
+        if not factor._qualified_class.endswith("PathOrInspFactor") or getattr(factor, "Inspection", None):
+            raise _UnsupportedView("an expression is not a plain attribute path or constant")
+        refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
+        if not refs or refs[0] is None:
+            raise _UnsupportedView("empty attribute path")
+        alias = refs[0].lower()
+        if alias not in self.by_alias:
+            raise _UnsupportedView(f"path root {refs[0]!r} is not a base of this view")
+        cls, table = self.by_alias[alias]
+        cur_alias = alias
+        if len(refs) == 1:
+            return f'"{cur_alias}"."{OID_COLUMN}"'  # a bare base reference denotes the object itself -> its identity column
+        for i, hop in enumerate(refs[1:], start=1):
+            if hop is None:
+                raise _UnsupportedView("path element with no name")
+            is_last = i == len(refs) - 1
+            attr = self._members(cls).get(hop)
+            if attr is None:
+                raise _UnsupportedView(f"{hop!r} is not an attribute/role of {getattr(cls, 'Name', None)!r}")
+            resolved = resolve_attribute(attr)
+            col = _sql_identifier(hop)
+            if is_last:
+                if col not in self._columns(table):
+                    raise _UnsupportedView(f"{hop!r} has no mapped column on table {table!r}")
+                return f'"{cur_alias}"."{col}"'
+            target = reference_target_class(resolved) if resolved.type_kind in ("Class", "ReferenceType") else None
+            if target is None:
+                raise _UnsupportedView(f"cannot navigate through {hop!r} - not a resolvable reference/role")
+            target_table = _sql_identifier(getattr(target, "Name", None) or "")
+            if target_table not in self.tables_by_name:
+                raise _UnsupportedView(f"join target table {target_table!r} not built - pass --catalog for its model")
+            if col not in self._columns(table):
+                raise _UnsupportedView(f"reference {hop!r} has no FK column on table {table!r}")
+            self._counter += 1
+            new_alias = _truncate_identifier(f"j{self._counter}_{target_table}")
+            self.extra_joins.append(
+                (target_table, new_alias, f'"{cur_alias}"."{col}" = "{new_alias}"."{OID_COLUMN}"'),
+            )
+            cls, table, cur_alias = target, target_table, new_alias
+        raise _UnsupportedView("unreachable")  # pragma: no cover
+
+
+def _view_constant_literal(node: MetaInstance) -> str:
+    value, type_ = getattr(node, "Value", None), getattr(node, "Type", None)
+    if type_ == "Numeric":
+        return _numeric_sql_literal(value)
+    if type_ == "Text":
+        return _text_sql_literal(value)
+    if type_ == "Enumeration":
+        return "'" + value.replace("'", "''") + "'"
+    raise _UnsupportedView(f"constant of type {type_!r} is not supported in a view expression")
+
+
+def _view_where_conjuncts(expr: MetaInstance | None, resolver: _ViewResolver) -> list[str]:
+    """Flatten a View's `Where` `Expression` tree into a list of SQL boolean strings (implicitly AND-ed)."""
+    if expr is None:
+        return []
+    qname = expr._qualified_class.rsplit(".", 1)[-1]
+    op = getattr(expr, "Operation", None)
+    subs = list(getattr(expr, "SubExpressions", None) or [])
+    if qname == "CompoundExpr" and op == "And":
+        out: list[str] = []
+        for sub in subs:
+            out.extend(_view_where_conjuncts(sub, resolver))
+        return out
+    if qname == "CompoundExpr" and op in _SQL_RELATIONAL_OPERATORS and len(subs) == 2:
+        left = resolver.scalar_ref(subs[0])
+        right = resolver.scalar_ref(subs[1])
+        return [f"({left} {_SQL_RELATIONAL_OPERATORS[op]} {right})"]
+    raise _UnsupportedView(f"WHERE operation {op!r} ({qname}) is not translatable to a SQL view predicate")
+
+
+def build_views(
+    views: list[MetaInstance], tables: list[Table],
+    *, symbol_table: SymbolTable | None = None, class_symbol_tables: dict[int, SymbolTable] | None = None,
+    class_table_names: dict[int, str] | None = None,
+) -> list[SqlView]:
+    """Translate each `View` (`FormationKind` Projection/Join only) into a `CREATE VIEW` body, or a `-- NOTE` when it can't be done faithfully.
+
+    A View becomes `SELECT <attr := path> ... FROM <base tables + navigated
+    join tables, comma-joined> WHERE <translated Where predicates>`. Its
+    base classes must be among `tables` (pass their model via
+    `interlis convert-sql --catalog`). Anything outside the translatable
+    subset - a `Where` predicate that isn't a relational comparison of two
+    plain paths, an attribute path that navigates through something other
+    than a resolvable reference/role, a base table that wasn't built -
+    demotes the WHOLE view to `body=None` with an explanatory note (RULE #5),
+    never a half-built `CREATE VIEW`.
+    """
+    tables_by_name = {t.name: t for t in tables}
+    table_name_by_class_id = class_table_names or {}
+
+    def symbol_for(cls: MetaInstance) -> SymbolTable | None:
+        return (class_symbol_tables or {}).get(id(cls), symbol_table)
+
+    result: list[SqlView] = []
+    used_names: set[str] = {t.name for t in tables}
+    for view in views:
+        vname = _truncate_identifier(_sql_identifier(getattr(view, "Name", None) or ""))
+        while vname in used_names:
+            vname = _truncate_identifier(f"{vname}_v")
+        used_names.add(vname)
+        try:
+            bases = _resolve_view_bases(view, tables_by_name, table_name_by_class_id)
+            resolver = _ViewResolver(bases, tables_by_name, symbol_for)
+            select_items: list[str] = []
+            for attr in getattr(view, "ClassAttribute", None) or []:
+                derivates = getattr(attr, "Derivates", None) or []
+                if not derivates:
+                    raise _UnsupportedView(f"view attribute {getattr(attr, 'Name', None)!r} has no assigned expression")
+                out_col = _sql_identifier(getattr(attr, "Name", None) or "")
+                select_items.append(f'{resolver.scalar_ref(derivates[0])} AS "{out_col}"')
+            if not select_items:
+                raise _UnsupportedView("view has no ATTRIBUTE definitions")
+            where = _view_where_conjuncts(getattr(view, "Where", None), resolver)
+            from_parts = [f'"{table}" "{alias}"' for alias, _cls, table in bases]
+            from_parts += [f'"{table}" "{alias}"' for table, alias, _on in resolver.extra_joins]
+            where += [on for _t, _a, on in resolver.extra_joins]
+            body = "SELECT\n    " + ",\n    ".join(select_items) + "\nFROM " + ", ".join(from_parts)
+            if where:
+                body += "\nWHERE " + "\n  AND ".join(where)
+            result.append(SqlView(vname, body))
+        except _UnsupportedView as exc:
+            result.append(SqlView(vname, None, [str(exc)]))
+    return result
+
+
+def _resolve_view_bases(
+    view: MetaInstance, tables_by_name: dict[str, Table], table_name_by_class_id: dict[int, str],
+) -> list[tuple[str, MetaInstance, str]]:
+    bases: list[tuple[str, MetaInstance, str]] = []
+    used_aliases: set[str] = set()
+    for rbv in getattr(view, "RenamedBaseView", None) or []:
+        base_cls = getattr(rbv, "BaseView", None)
+        if not isinstance(base_cls, MetaInstance):
+            raise _UnsupportedView("a base class did not resolve (pass --repo for the base model's own imports)")
+        table = table_name_by_class_id.get(id(base_cls)) or _sql_identifier(getattr(base_cls, "Name", None) or "")
+        if table not in tables_by_name:
+            raise _UnsupportedView(f"base table {table!r} not built - pass --catalog {getattr(base_cls, 'Name', '?')}'s model")
+        alias = (getattr(rbv, "Name", None) or getattr(base_cls, "Name", None) or "").lower()
+        base_alias = alias
+        suffix = 2
+        while alias in used_aliases:
+            alias = f"{base_alias}_{suffix}"
+            suffix += 1
+        used_aliases.add(alias)
+        bases.append((alias, base_cls, table))
+    if not bases:
+        raise _UnsupportedView("no resolved base classes")
+    return bases
+
+
+def _render_views(views: tuple[SqlView, ...]) -> list[str]:
+    statements: list[str] = []
+    for view in views:
+        if view.body is None:
+            for note in view.notes:
+                statements.append(f"-- NOTE (view {view.name}): {note}")
+            continue
+        indented = view.body.replace("\n", "\n    ")
+        statements.append(f'CREATE VIEW "{view.name}" AS\n    {indented};')
+    return statements
+
+
+def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
     """Render `tables` as PostgreSQL DDL text - `CREATE TABLE` (with inline `UNIQUE`) then `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`.
 
     Foreign keys are added via a SEPARATE `ALTER TABLE` pass after every
@@ -886,10 +1126,11 @@ def render_postgresql(tables: list[Table]) -> str:
                 f"ALTER TABLE {_quote(table.name)} ADD CONSTRAINT {fk.name} "
                 f"FOREIGN KEY ({_quote_list(fk.columns)}) REFERENCES {_quote(fk.ref_table)} ({_quote_list(fk.ref_columns)});",
             )
+    statements += _render_views(views)
     return "\n".join(statements) + "\n"
 
 
-def render_gpkg(tables: list[Table]) -> str:
+def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
     """Render `tables` as SQLite/GeoPackage DDL text - everything inline at `CREATE TABLE` time, plus the GeoPackage bootstrap rows.
 
     Assumes the target `.gpkg` file already exists with the standard
@@ -979,4 +1220,5 @@ def render_gpkg(tables: list[Table]) -> str:
             f"(srs_name, srs_id, organization, organization_coordsys_id, definition) "
             f"VALUES ('EPSG:{srid}', {srid}, 'EPSG', {srid}, 'undefined');",
         )
+    statements += _render_views(views)
     return "\n".join(statements) + "\n"

@@ -20,7 +20,7 @@ from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
-from interlis.convert.sql import build_tables, render_gpkg, render_postgresql
+from interlis.convert.sql import build_tables, build_views, render_gpkg, render_postgresql
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
 from interlis.xtf.model_resolution import header_completeness, header_model_lookup, root_model_names
@@ -212,9 +212,15 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     time (SQLite cannot add one to an existing table at all, unlike
     `--dialect postgresql`'s default, which uses a separate `ALTER TABLE
     ... ADD CONSTRAINT` pass for `FOREIGN KEY` only - `UNIQUE`/`CHECK` are
-    inline in both dialects). Only `Kind=Class` roots become a table (no
-    `View`, unlike `cmd_convert` - `CREATE VIEW` generation is a later
-    lot). An attribute/constraint outside this module's mapped set never
+    inline in both dialects). `Kind=Class` roots become a `CREATE TABLE`;
+    `Projection`/`Join` `View`s become a `CREATE VIEW` (same
+    `_SUPPORTED_VIEW_FORMATION_KINDS` filter as `cmd_convert` -
+    `Union`/`Aggregation`/`Inspection` are noted, not translated). A View's
+    base classes live in an IMPORTED model, so pass that model via
+    `--catalog` too - a View whose base table isn't in this conversion, or
+    whose `Where`/`ATTRIBUTE` expressions fall outside the translatable
+    subset, is emitted as a `-- NOTE` rather than a half-built `CREATE
+    VIEW`. An attribute/constraint outside this module's mapped set never
     disappears silently - it becomes a `-- NOTE` SQL comment instead
     (RULE #5).
 
@@ -255,6 +261,21 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         instance for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
     ]
+    views = [
+        instance for instance in builder.symbol_table.all_registered()
+        if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
+        and getattr(instance, "FormationKind", None) in _SUPPORTED_VIEW_FORMATION_KINDS
+    ]
+    for instance in builder.symbol_table.all_registered():
+        if (
+            isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
+            and getattr(instance, "FormationKind", None) not in _SUPPORTED_VIEW_FORMATION_KINDS
+        ):
+            print(
+                f"note: VIEW {getattr(instance, 'Name', '?')} (FormationKind="
+                f"{getattr(instance, 'FormationKind', None)}) is not translated to CREATE VIEW",
+                file=sys.stderr,
+            )
 
     # `id(cls) -> its OWN symbol table`, for every `--catalog` class - see
     # `build_tables`'s `class_symbol_tables` docstring: a catalogue class's
@@ -290,8 +311,16 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         classes.extend(catalog_classes)
         class_symbol_tables.update({id(instance): catalog_builder.symbol_table for instance in catalog_classes})
 
-    tables = build_tables(classes, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables)
-    ddl = render_gpkg(tables) if args.dialect == "gpkg" else render_postgresql(tables)
+    class_table_names: dict[int, str] = {}
+    tables = build_tables(
+        classes, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables,
+        class_table_names=class_table_names,
+    )
+    sql_views = tuple(build_views(
+        views, tables, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables,
+        class_table_names=class_table_names,
+    ))
+    ddl = render_gpkg(tables, sql_views) if args.dialect == "gpkg" else render_postgresql(tables, sql_views)
     if args.output:
         Path(args.output).write_text(ddl, encoding="utf-8")
     else:
@@ -533,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
     convert_parser.set_defaults(func=cmd_convert)
 
     convert_sql_parser = subparsers.add_parser(
-        "convert-sql", help="Convert an .ili model to SQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY constraints).",
+        "convert-sql", help="Convert an .ili model to SQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY/CHECK, and CREATE VIEW for Projection/Join VIEWs).",
     )
     convert_sql_parser.add_argument("file", help="Path to the .ili file to convert.")
     convert_sql_parser.add_argument(
@@ -554,7 +583,9 @@ def main(argv: list[str] | None = None) -> int:
              "typically a catalogue/reference model (e.g. a value-list Class hierarchy) that another Class in "
              "'file' points to via REFERENCE TO. Without this, a REFERENCE TO a class from a model not converted "
              "in the SAME run keeps its column but drops the FOREIGN KEY constraint (the target table doesn't "
-             "exist in this conversion's own output) - see docs/sql-conversion-strategy.md.",
+             "exist in this conversion's own output). Also required to turn a VIEW into a CREATE VIEW: pass the "
+             "base model(s) the VIEW's JOIN OF/PROJECTION OF classes come from, else the VIEW is emitted as a "
+             "-- NOTE - see docs/sql-conversion-strategy.md.",
     )
     convert_sql_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
     convert_sql_parser.set_defaults(func=cmd_convert_sql)

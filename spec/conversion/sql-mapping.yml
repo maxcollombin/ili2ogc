@@ -91,7 +91,30 @@ Class:
       note: "Lowercased (see mappings/ilismeta16-to-sql-rules.yml's ObjectOID entry for why - PostgreSQL unquoted-identifier folding, matched deliberately)."
     discriminant:
       source: {field: Kind}
-      note: "Only Kind=Class becomes a table - Kind=Structure/View excluded here (see StructureNesting entry, and View is out of Lot 1 scope entirely)."
+      note: "Only Kind=Class becomes a table - Kind=Structure excluded here (see StructureNesting entry); Kind=View is handled by the View entry."
+
+View:
+  qualified_name: IlisMeta16.ModelData.View
+  sql:
+    formation_kind:
+      source: {field: FormationKind}
+      note: "Projection/Join -> CREATE VIEW; Union/Aggregation/Inspection -> a diagnostic note, not translated (same _SUPPORTED_VIEW_FORMATION_KINDS filter as the JSON Schema/JSON-FG pipelines)."
+    select_list:
+      rule: "one SELECT item per ClassAttribute (via the ClassAttr association, shared with Class)"
+      note: >
+        Each ClassAttribute's assigned expression (Derivates[0], a
+        PathOrInspFactor) resolves to "<base alias>"."<column>", AS its own
+        Name. An intermediate hop through a REFERENCE TO/embedded role adds
+        a comma-joined table.
+    where:
+      source: {field: Where}
+      note: >
+        And-joined relational comparisons of two plain paths become the
+        view's FROM comma-join predicates + WHERE clause. Anything else
+        demotes the whole View to a -- NOTE (RULE #5).
+  not_mapped:
+    Transient:
+      note: "A transient view (never transferred) has no SQL representation - not emitted."
 
 ObjectOID:
   qualified_name: IlisMeta16.ModelData.ObjectOID

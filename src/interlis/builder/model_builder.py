@@ -2058,7 +2058,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
         unset).
         """
         for base in getattr(view, "RenamedBaseView", None) or []:
-            candidate = base.Name or (base.BaseView.Name if base.BaseView else None)
+            base_view = base.BaseView if isinstance(base.BaseView, MetaInstance) else None
+            candidate = base.Name or (base_view.Name if base_view is not None else None)
             if candidate == name:
                 return base
         return None
