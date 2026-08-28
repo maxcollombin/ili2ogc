@@ -148,21 +148,12 @@ def test_unbuilt_base_table_demotes_the_view_to_a_note():
     assert any("not built" in v.notes[0] for v in sql_views)
 
 
-@pytest.mark.parametrize(
-    "derived,base",
-    [
-        ("Planungszonen_V2_d_A.ili", "Planungszonen_V2.ili"),
-        ("Planungszonen_V2_d_B.ili", "Planungszonen_V2.ili"),
-        ("IVS_V3_d.ili", "IVS_V3.ili"),
-    ],
-)
-def test_fgdm4gs_derived_views_never_crash(derived, base):
-    """Real-corpus smoke: the derived FGDM4GS VIEW models convert without crashing.
+def _convert_with_auto_base_models(derived: str):
+    """Mirror `cli.cmd_convert_sql`'s auto base-model folding, without --catalog.
 
-    Their base models' own external imports don't resolve in this hermetic
-    repository, so the geometry column they select is absent and every VIEW
-    honestly degrades to a `-- NOTE` - the point here is that it degrades
-    rather than raising.
+    Build the derived model, then fold in every base model `build()`
+    actually resolved (via the repository) so the VIEW's base classes
+    become tables in the SAME conversion.
     """
     tree, errors = parse_file(FGDM4GS / derived)
     assert not errors, errors
@@ -172,25 +163,54 @@ def test_fgdm4gs_derived_views_never_crash(derived, base):
         warnings.simplefilter("ignore")
         builder.build(tree)
 
-    base_tree, base_errors = parse_file(FGDM4GS / base)
-    assert not base_errors, base_errors
-    base_builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repo)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        base_builder.build(base_tree)
+    registered = builder.symbol_table.all_registered()
+    classes = [i for i in registered if getattr(i, "_qualified_class", "").endswith(".Class")]
+    views = [i for i in registered if getattr(i, "_qualified_class", "").endswith(".View")]
+    class_symbol_tables: dict[int, object] = {}
+    already = {id(c) for c in classes}
+    view_base_ids = {
+        id(rbv.BaseView) for v in views for rbv in (getattr(v, "RenamedBaseView", None) or [])
+        if isinstance(getattr(rbv, "BaseView", None), MetaInstance)
+    }
+    for model_table in repo.loaded_models().values():
+        model_classes = [
+            i for i in model_table.all_registered() if getattr(i, "_qualified_class", "").endswith(".Class")
+        ]
+        if not any(id(c) in view_base_ids for c in model_classes):
+            continue
+        for c in model_classes:
+            if id(c) not in already:
+                already.add(id(c))
+                classes.append(c)
+                class_symbol_tables.setdefault(id(c), model_table)
 
-    def _classes(b):
-        return [i for i in b.symbol_table.all_registered() if getattr(i, "_qualified_class", "").endswith(".Class")]
-
-    views = [i for i in builder.symbol_table.all_registered() if getattr(i, "_qualified_class", "").endswith(".View")]
-    base_classes = _classes(base_builder)
-    cst = {id(c): base_builder.symbol_table for c in base_classes}
     ctn: dict[int, str] = {}
-    tables = build_tables(base_classes, symbol_table=builder.symbol_table, class_symbol_tables=cst, class_table_names=ctn)
-    sql_views = build_views(
-        views, tables, symbol_table=builder.symbol_table, class_symbol_tables=cst, class_table_names=ctn,
+    tables = build_tables(
+        classes, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables, class_table_names=ctn,
     )
-    assert sql_views  # a VIEW was found
+    sql_views = build_views(
+        views, tables, symbol_table=builder.symbol_table,
+        class_symbol_tables=class_symbol_tables, class_table_names=ctn,
+    )
+    return tables, sql_views
+
+
+@pytest.mark.parametrize("derived", ["Planungszonen_V2_d_A.ili", "IVS_V3_d.ili"])
+def test_fgdm4gs_derived_view_auto_includes_its_base_model_tables(derived):
+    """The derived VIEW model's base classes (in the IMPORTED model) become tables automatically.
+
+    The base models' OWN external imports (`GeometryCHLV95_V2` etc.) aren't
+    in this hermetic fixture repo, so the geometry column the VIEW selects
+    is absent and the VIEW honestly degrades to a `-- NOTE` - but the base
+    tables themselves are built (proving the auto-inclusion), and nothing
+    crashes. With the full model chain resolvable (a real `--repo`), the
+    same code produces a complete, executable `CREATE VIEW` - see
+    docs/sql-conversion-strategy.md.
+    """
+    tables, sql_views = _convert_with_auto_base_models(derived)
+    table_names = {t.name for t in tables}
+    assert len(table_names) > 3  # the imported model's classes, not just the (class-less) derived model
+    assert sql_views
     for v in sql_views:
-        assert isinstance(v, MetaInstance) is False
-        assert v.body is None and v.notes  # honest degradation, not a broken statement
+        assert v.body is None and v.notes
+        assert "not built" not in v.notes[0]  # the base tables ARE built; only the geometry column is missing

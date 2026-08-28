@@ -149,6 +149,17 @@ class ModelRepository:
         """
         return self._get_table(model_name)
 
+    def loaded_models(self) -> dict[str, Any]:
+        """Return `{model name: SymbolTable}` for every imported model actually built so far.
+
+        Only models a `build()` really pulled in (a reference resolved
+        through them) - never the whole `--repo` index. Used by
+        `interlis convert-sql` to turn a derived VIEW model's base models
+        into `CREATE TABLE`s in the SAME conversion without the caller
+        having to name each one again via `--catalog`.
+        """
+        return {name: table for name, table in self._cache.items() if table is not None}
+
     def _get_table(self, model_name: str):
         """Build (or return the cached) SymbolTable for `model_name`.
 

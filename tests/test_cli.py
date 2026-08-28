@@ -101,28 +101,32 @@ END Catalog.
 """
 
 
-def test_convert_sql_catalog_flag_keeps_cross_model_foreign_key(tmp_path, capsys):
-    """`--catalog` closes build_tables()'s own documented cross-model FK-drop: without it, `zone` keeps its column but loses its FOREIGN KEY (target table not in this conversion's own output)."""
+def test_convert_sql_cross_model_reference_target_on_repo_keeps_fk_automatically(tmp_path, capsys):
+    """A REFERENCE TO a class in an imported model resolvable via --repo keeps the cross-model FK automatically."""
+    main_path = tmp_path / "Main.ili"
+    main_path.write_text(_MAIN_MODEL_WITH_CATALOG_REF, encoding="utf-8")
+    (tmp_path / "Catalog.ili").write_text(_CATALOG_MODEL, encoding="utf-8")
+
+    assert main(["convert-sql", str(main_path), "--repo", str(tmp_path)]) == 0
+    ddl = capsys.readouterr().out
+    assert 'CREATE TABLE "zonecatalog" (' in ddl
+    assert 'FOREIGN KEY ("zone") REFERENCES "zonecatalog" ("id")' in ddl
+    assert "different model" not in ddl
+
+
+def test_convert_sql_catalog_flag_still_works_when_target_model_is_not_on_repo(tmp_path, capsys):
+    """`--catalog` remains the way in for a model not reachable via --repo (or wanted as tables regardless)."""
+    (tmp_path / "Catalog.ili").write_text(_CATALOG_MODEL, encoding="utf-8")
     main_path = tmp_path / "Main.ili"
     main_path.write_text(_MAIN_MODEL_WITH_CATALOG_REF, encoding="utf-8")
     catalog_path = tmp_path / "Catalog.ili"
-    catalog_path.write_text(_CATALOG_MODEL, encoding="utf-8")
 
-    # Without --catalog: column kept, FK dropped with a note.
-    assert main(["convert-sql", str(main_path), "--repo", str(tmp_path)]) == 0
-    ddl_without = capsys.readouterr().out
-    assert '"zone" text' in ddl_without
-    assert "ADD CONSTRAINT" not in ddl_without  # the actual FK constraint statement, not the "-- NOTE" mentioning it
-    assert "different model" in ddl_without
-
-    # With --catalog: the catalogue's own table is created in the SAME
-    # conversion, so the FK constraint is kept too.
     assert main([
         "convert-sql", str(main_path), "--repo", str(tmp_path), "--catalog", str(catalog_path),
     ]) == 0
-    ddl_with = capsys.readouterr().out
-    assert 'CREATE TABLE "zonecatalog" (' in ddl_with
-    assert 'FOREIGN KEY ("zone") REFERENCES "zonecatalog" ("id")' in ddl_with
+    ddl = capsys.readouterr().out
+    assert 'CREATE TABLE "zonecatalog" (' in ddl
+    assert 'FOREIGN KEY ("zone") REFERENCES "zonecatalog" ("id")' in ddl
 
 
 def test_convert_sql_catalog_flag_ignores_the_same_file_given_twice(tmp_path, capsys):
@@ -177,3 +181,50 @@ def test_convert_sql_catalog_flag_resolves_embedded_role_in_the_catalogues_own_m
     assert 'CREATE TABLE "child" (' in ddl
     assert '"parent" text' in ddl
     assert 'FOREIGN KEY ("parent") REFERENCES "parent" ("id")' in ddl
+
+
+_BASE_MODEL_FOR_VIEW = """INTERLIS 2.4;
+MODEL RoadsBase AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Road =
+      RoadName : MANDATORY TEXT*40;
+    END Road;
+    CLASS Segment =
+      SegNr : MANDATORY 0 .. 999;
+      OfRoad : MANDATORY REFERENCE TO Road;
+    END Segment;
+  END T;
+END RoadsBase.
+"""
+
+_DERIVED_VIEW_MODEL = """INTERLIS 2.4;
+MODEL RoadsView AT "http://x" VERSION "1" =
+  IMPORTS RoadsBase;
+  TOPIC D =
+    DEPENDS ON RoadsBase.T;
+    VIEW v_seg
+      JOIN OF Segment ~ RoadsBase.T.Segment, Road ~ RoadsBase.T.Road;
+      WHERE Segment -> OfRoad == Road;
+      =
+      ATTRIBUTE
+        nr := Segment -> SegNr;
+        name := Road -> RoadName;
+    END v_seg;
+  END D;
+END RoadsView.
+"""
+
+
+def test_convert_sql_auto_includes_a_views_base_model_from_repo(tmp_path, capsys):
+    """A VIEW's base classes come from the imported model - --repo alone builds its tables and the CREATE VIEW."""
+    (tmp_path / "RoadsBase.ili").write_text(_BASE_MODEL_FOR_VIEW, encoding="utf-8")
+    derived = tmp_path / "RoadsView.ili"
+    derived.write_text(_DERIVED_VIEW_MODEL, encoding="utf-8")
+
+    assert main(["convert-sql", str(derived), "--repo", str(tmp_path)]) == 0
+    ddl = capsys.readouterr().out
+    assert 'CREATE TABLE "road" (' in ddl  # the imported base model's tables, auto-included
+    assert 'CREATE TABLE "segment" (' in ddl
+    assert 'CREATE VIEW "v_seg" AS' in ddl
+    assert '"segment"."ofroad" = "road"."id"' in ddl
+    assert "-- NOTE (view v_seg)" not in ddl

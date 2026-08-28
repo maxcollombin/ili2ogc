@@ -198,6 +198,63 @@ def cmd_convert(args: argparse.Namespace) -> int:
     return 0
 
 
+def _fold_in_dependency_models(classes, views, root_table, repository, class_symbol_tables) -> None:
+    """Append every already-resolved imported model's classes this conversion depends on to `classes` (in place).
+
+    "Depends on" = a VIEW base class, or the target of a cross-model
+    REFERENCE TO/embedded role, that lives in an IMPORTED model rather than
+    the root file. Only models `builder.build()` already pulled in via
+    `--repo` (`repository.loaded_models()`) are considered - never the
+    whole `--repo` index, and never a model nothing here references (so a
+    geometry/units helper model imported only for a domain stays out).
+    Mirrors what `--catalog` does, without the caller naming each file.
+    """
+    if repository is None:
+        return
+    from interlis.xtf.schema import reference_target_class, resolve_attribute, schema_members_of
+
+    needed_ids: set[int] = {
+        id(rbv.BaseView)
+        for view in views
+        for rbv in (getattr(view, "RenamedBaseView", None) or [])
+        if isinstance(getattr(rbv, "BaseView", None), MetaInstance)
+    }
+    for cls in list(classes):
+        try:
+            members = schema_members_of(cls, root_table)
+        except Exception:  # noqa: BLE001 - a resolution quirk here must never break the conversion
+            continue
+        for attr in members.values():
+            resolved = resolve_attribute(attr)
+            if resolved.type_kind in ("Class", "ReferenceType"):
+                target = reference_target_class(resolved)
+                if isinstance(target, MetaInstance):
+                    needed_ids.add(id(target))
+    if not needed_ids:
+        return
+
+    already_ids = {id(c) for c in classes}
+    # A model already supplied via --catalog is built by a SEPARATE builder,
+    # so its classes are different instances than repository.loaded_models()'s
+    # - dedup by Name too, so --catalog + this path don't both add it.
+    already_names = {getattr(c, "Name", None) for c in classes}
+    for model_table in repository.loaded_models().values():
+        model_classes = [
+            instance for instance in model_table.all_registered()
+            if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
+        ]
+        if not any(id(c) in needed_ids for c in model_classes):
+            continue
+        if any(getattr(c, "Name", None) in already_names for c in model_classes):
+            continue  # this model is already in the conversion (typically via --catalog)
+        for instance in model_classes:
+            if id(instance) in already_ids:
+                continue
+            already_ids.add(id(instance))
+            classes.append(instance)
+            class_symbol_tables.setdefault(id(instance), model_table)
+
+
 def cmd_convert_sql(args: argparse.Namespace) -> int:
     """Convert an .ili model to SQL DDL, PostgreSQL or GeoPackage/SQLite (backlog item 14).
 
@@ -310,6 +367,16 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         ]
         classes.extend(catalog_classes)
         class_symbol_tables.update({id(instance): catalog_builder.symbol_table for instance in catalog_classes})
+
+    # An imported model this conversion actually depends on - a VIEW's
+    # JOIN OF/PROJECTION OF base classes, or the target of a cross-model
+    # REFERENCE TO/role - must be part of the SAME conversion for its
+    # tables (and the CREATE VIEW / FOREIGN KEY that need them) to exist.
+    # Any such model that `builder.build()` already resolved through
+    # `--repo` is folded in automatically here, so `--catalog` is only
+    # needed for a model NOT reachable via `--repo`. See
+    # docs/sql-conversion-strategy.md.
+    _fold_in_dependency_models(classes, views, builder.symbol_table, repository, class_symbol_tables)
 
     class_table_names: dict[int, str] = {}
     tables = build_tables(
@@ -575,7 +642,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     convert_sql_parser.add_argument(
         "--repo", action="append", default=[], metavar="DIR",
-        help="Directory of .ili models used to resolve references to imported models (IMPORTS) - repeatable.",
+        help="Directory of .ili models used to resolve IMPORTS - repeatable. An imported model this conversion "
+             "actually depends on (a VIEW's JOIN OF/PROJECTION OF base classes, or a cross-model REFERENCE TO "
+             "target) is folded into the output as CREATE TABLEs automatically when found here, so its CREATE "
+             "VIEW / FOREIGN KEY can be generated without also listing it via --catalog.",
     )
     convert_sql_parser.add_argument(
         "--catalog", action="append", default=[], metavar="FILE.ili",
