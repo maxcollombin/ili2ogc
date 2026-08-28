@@ -2,9 +2,12 @@
 
 See `interlis.convert.jsonfg.evaluate_view`/`unsupported_view_reason` and
 .claude/PROGRESS.md (item 8) for scope: an in-memory cartesian-product
-join over already-parsed `XtfObject`s, no `WHERE` support (a VIEW with a
-`WHERE` is explicitly excluded rather than evaluated against the
-currently-broken `Expression` tree, see .claude/HANDOFF.md).
+join over already-parsed `XtfObject`s, narrowed by a translatable `WHERE`
+subset (`And`/`Or`-joined relational comparisons of two plain paths, a
+bare base alias denoting that object's OID, one hop to an
+attribute/reference on it - the FGDM4GS `Seg->OfRoad == Road` idiom). A
+`WHERE` outside that subset still leaves the whole VIEW skipped with a
+clear diagnostic.
 """
 import warnings
 from pathlib import Path
@@ -59,8 +62,41 @@ MODEL Test AT "http://x" VERSION "1" =
         ALL OF B;
         ALL OF C;
     END VW;
+    VIEW VU
+      JOIN OF B ~ Test.Base.B, C ~ Test.Base.C;
+      WHERE NOT (B->Attr1 == C->Attr2);
+      =
+      ATTRIBUTE
+        ALL OF B;
+        ALL OF C;
+    END VU;
   END Views;
 END Test.
+"""
+
+_REFERENCE_JOIN_MODEL = """INTERLIS 2.4;
+MODEL Roads AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Road =
+      RoadName : MANDATORY TEXT*40;
+    END Road;
+    CLASS Segment =
+      SegNr : MANDATORY 0 .. 999;
+      OfRoad : MANDATORY REFERENCE TO Road;
+    END Segment;
+  END T;
+  TOPIC V =
+    DEPENDS ON Roads.T;
+    VIEW RoadSegments
+      JOIN OF Segment ~ Roads.T.Segment, Road ~ Roads.T.Road;
+      WHERE Segment -> OfRoad == Road;
+      =
+      ATTRIBUTE
+        ALL OF Segment;
+        ALL OF Road;
+    END RoadSegments;
+  END V;
+END Roads.
 """
 
 
@@ -176,27 +212,60 @@ def test_join_or_null_keeps_combinations_when_base_has_no_objects():
     assert all(f["properties"] == {"Attr1": v} for f, v in zip(features, ("x", "y")))
 
 
-def test_where_view_is_unsupported_with_clear_reason():
+def test_where_join_filters_the_cartesian_product_on_a_scalar_match():
     builder = _build(_VIEW_MODEL)
-    view = _view(builder, "VW")
+    view = _view(builder, "VW")  # WHERE B->Attr1 == C->Attr2
+    transfer = _transfer(_b("b1", "x"), _b("b2", "y"), _c("c1", "x"), _c("c2", "z"))
+
+    features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    # 2x2 cartesian product, only the b1/c1 pair has Attr1 == Attr2 == "x".
+    assert {f["id"] for f in features} == {"b1_c1"}
+    assert unsupported_view_reason(view) is None
+
+
+def test_where_reference_join_keeps_only_matching_rows():
+    """The real FGDM4GS idiom: JOIN OF ... WHERE Segment->OfRoad == Road (join on the reference)."""
+    builder = _build(_REFERENCE_JOIN_MODEL)
+    view = _view(builder, "RoadSegments")
+
+    def _seg(tid: str, nr: str, of_road: str) -> XtfObject:
+        return XtfObject(
+            tid=tid, qualified_class="Roads.T.Segment",
+            attributes={"SegNr": [_node("SegNr", nr)], "OfRoad": [RawNode("OfRoad", None, {"REF": of_road}, [])]},
+        )
+
+    def _road(tid: str, name: str) -> XtfObject:
+        return XtfObject(tid=tid, qualified_class="Roads.T.Road", attributes={"RoadName": [_node("RoadName", name)]})
+
+    basket = XtfBasket(bid="b", qualified_topic="Roads.T", kind=None, endstate=None, objects=[
+        _road("r1", "Main St"), _road("r2", "Side St"),
+        _seg("s1", "1", "r1"), _seg("s2", "2", "r1"), _seg("s3", "3", "r2"),
+    ])
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+
+    features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert unsupported_view_reason(view) is None
+    got = sorted((f["properties"]["SegNr"], f["properties"]["RoadName"]) for f in features)
+    assert got == [(1, "Main St"), (2, "Main St"), (3, "Side St")]
+
+
+def test_where_view_outside_the_translatable_subset_is_still_skipped_with_a_reason():
+    builder = _build(_VIEW_MODEL)
+    view = _view(builder, "VU")  # WHERE NOT (...) - a UnaryExpr, not in the subset
 
     reason = unsupported_view_reason(view)
-
     assert reason is not None
     assert "WHERE" in reason
 
-
-def test_evaluate_view_raises_for_a_where_view_rather_than_silently_misevaluating():
-    builder = _build(_VIEW_MODEL)
-    view = _view(builder, "VW")
     transfer = _transfer(_b("b1", "x"), _c("c1", "x"))
-
     try:
         evaluate_view(view, transfer, symbol_table=builder.symbol_table)
     except ValueError as exc:
         assert "WHERE" in str(exc)
     else:
-        raise AssertionError("expected ValueError for a WHERE-clause view")
+        raise AssertionError("expected ValueError for an un-translatable WHERE-clause view")
 
 
 def test_projection_view_supported_by_unsupported_view_reason():

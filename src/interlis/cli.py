@@ -532,11 +532,12 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     root selection as `cmd_convert`'s JSON Schema path
     (`_SUPPORTED_VIEW_FORMATION_KINDS` - `Union`/`Aggregation`/`Inspection`
     excluded silently, a pre-existing deliberate scope decision, not
-    repeated here as a diagnostic). Among `Projection`/`Join` Views, one
-    with a `WHERE` clause is additionally excluded HERE, with a clear
-    stderr diagnostic (`unsupported_view_reason`) - Expression tree
-    evaluation isn't supported yet (see .claude/HANDOFF.md), so silently
-    dropping or wrongly evaluating it would misrepresent the data.
+    repeated here as a diagnostic). A `WHERE` clause narrows the cartesian
+    product when it is in the translatable subset (`And`/`Or`-joined
+    relational comparisons of two plain paths - see
+    `convert/jsonfg._evaluate_view_where`); a `WHERE` outside that subset
+    still excludes the whole VIEW here, with a clear stderr diagnostic
+    (`unsupported_view_reason`), rather than emit a wrongly-filtered result.
 
     `--feature-schema-url`, when given, wires "featureSchema" (JSON-FG
     clause 13) to the companion JSON Schema `interlis convert` would

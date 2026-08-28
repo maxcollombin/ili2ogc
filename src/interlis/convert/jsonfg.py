@@ -35,6 +35,12 @@ from typing import Any
 
 from interlis.builder.forward_refs import SymbolTable
 from interlis.builder.repository import ModelRepository
+from interlis.convert.constraint_eval import (
+    _RELATIONAL_SYMBOLS,
+    _compare,
+    _evaluate_constant,
+    UnsupportedExpressionError,
+)
 from interlis.convert.jsonschema import _is_integer_range
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfObject, XtfTransfer
@@ -730,16 +736,71 @@ def object_to_feature(
 # XtfTransfer, producing JSON-FG Features shaped like the VIEW rather than
 # its raw base class(es) - the FGDM4GS report's central equivalence (a VIEW
 # = the FeatureType projection instruction, docs/... item 8/.claude/PROGRESS.md).
-# WHERE-filtered Views are explicitly OUT of scope here (see
-# `unsupported_view_reason`) rather than evaluated against the Expression
-# tree: investigation (2026-08-24) found 4 real bugs in Expression
-# construction (PathOrInspFactor.PathEls empty, CompoundExpr.Operation lost,
-# Constant.Value shape mismatch, DEFINED() losing its target) with zero real
-# corpus WHERE-on-VIEW evidence to justify fixing them blind - a VIEW with a
-# WHERE is skipped with a clear diagnostic (RULE #5: never a silently wrong
-# result) rather than silently dropped or wrongly evaluated.
+#
+# A `JOIN OF` is a cartesian product; a `WHERE` clause narrows it. The
+# translatable `WHERE` subset (`_evaluate_view_where`) mirrors
+# `convert/sql.py`'s own view-WHERE translation: `And`/`Or`-joined
+# relational comparisons of two plain paths, where a path is either a bare
+# base alias (denoting that combination's object - its OID) or one hop to
+# an attribute/reference/role on it. That covers the real FGDM4GS idiom
+# (`Segment->OfRoad == Road`, i.e. join on the reference). Anything else -
+# a deeper path, a non-relational operator, an aggregate/function node -
+# leaves the whole VIEW skipped with a clear diagnostic (RULE #5), never a
+# silently wrong result.
 
 _UNSET = object()
+
+
+class _UnsupportedViewWhere(Exception):
+    """A WHERE clause shape `_evaluate_view_where` can't evaluate - caught, turned into a skip diagnostic."""
+
+
+def _view_alias(base: MetaInstance) -> str | None:
+    return getattr(base, "Name", None) or getattr(getattr(base, "BaseView", None), "Name", None)
+
+
+def _view_where_side(factor: MetaInstance, alias_to_obj: dict[str, XtfObject | None]) -> Any:
+    """Resolve one operand of a view-WHERE comparison to a comparable Python value."""
+    qname = factor._qualified_class.rsplit(".", 1)[-1]
+    if qname == "Constant":
+        return _evaluate_constant(factor)
+    if qname != "PathOrInspFactor" or getattr(factor, "Inspection", None):
+        raise _UnsupportedViewWhere("a WHERE operand is not a plain attribute path or constant")
+    refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
+    if not refs or refs[0] is None:
+        raise _UnsupportedViewWhere("empty attribute path")
+    if refs[0] not in alias_to_obj:
+        raise _UnsupportedViewWhere(f"WHERE path root {refs[0]!r} is not a base of this view")
+    if len(refs) > 2:
+        raise _UnsupportedViewWhere(f"WHERE path {'->'.join(str(r) for r in refs)} navigates more than one hop")
+    obj = alias_to_obj[refs[0]]
+    if obj is None:  # an (OR NULL) base with no object in this combination
+        return None
+    if len(refs) == 1:
+        return obj.tid  # a bare base reference denotes the object itself - compared by identity
+    nodes = obj.attributes.get(refs[1])
+    if not nodes:
+        return None
+    ref_tid = _extract_reference(nodes[0])
+    return ref_tid if ref_tid is not None else nodes[0].text
+
+
+def _evaluate_view_where(where: MetaInstance, alias_to_obj: dict[str, XtfObject | None]) -> bool:
+    """Evaluate a view's `Where` `Expression` tree against one JOIN combination. Raises `_UnsupportedViewWhere`."""
+    qname = where._qualified_class.rsplit(".", 1)[-1]
+    op = getattr(where, "Operation", None)
+    subs = list(getattr(where, "SubExpressions", None) or [])
+    if qname == "CompoundExpr" and op == "And":
+        return all(_evaluate_view_where(sub, alias_to_obj) for sub in subs)
+    if qname == "CompoundExpr" and op == "Or":
+        return any(_evaluate_view_where(sub, alias_to_obj) for sub in subs)
+    if qname == "CompoundExpr" and op in _RELATIONAL_SYMBOLS and len(subs) == 2:
+        left = _view_where_side(subs[0], alias_to_obj)
+        right = _view_where_side(subs[1], alias_to_obj)
+        if left is None or right is None:
+            return False  # a missing value on either side - the row is not part of the (inner) join
+        return _compare(op, left, right)
+    raise _UnsupportedViewWhere(f"WHERE operation {op!r} ({qname}) is not evaluable")
 
 
 def unsupported_view_reason(view: MetaInstance) -> str | None:
@@ -751,11 +812,16 @@ def unsupported_view_reason(view: MetaInstance) -> str | None:
     kind = getattr(view, "FormationKind", None)
     if kind not in ("Projection", "Join"):
         return f"FormationKind {kind!r} not evaluated (only Projection/Join)"
-    if getattr(view, "Where", None) is not None:
-        return "WHERE clause present - Expression evaluation isn't supported yet (see .claude/HANDOFF.md)"
     bases = [b for b in getattr(view, "RenamedBaseView", None) or [] if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
     if not bases:
         return "no resolvable base (RenamedBaseView.BaseView unresolved)"
+    where = getattr(view, "Where", None)
+    if where is not None:
+        alias_probe = {alias: None for b in bases if (alias := _view_alias(b)) is not None}
+        try:
+            _evaluate_view_where(where, alias_probe)  # a shape-only probe: every base has a None object, so no real value is read
+        except _UnsupportedViewWhere as exc:
+            return f"WHERE clause: {exc}"
     return None
 
 
@@ -858,13 +924,33 @@ def evaluate_view(
 
     objects_by_base = [[obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases]
 
+    where = getattr(view, "Where", None)
+    aliases = [_view_alias(base) for base in bases]
+
+    def _passes_where(combo: list[XtfObject | None]) -> bool:
+        if where is None:
+            return True
+        try:
+            return _evaluate_view_where(where, {a: o for a, o in zip(aliases, combo)})
+        except (_UnsupportedViewWhere, UnsupportedExpressionError) as exc:
+            # Shape was probed OK by unsupported_view_reason; a value-level
+            # failure here (e.g. `<` on non-orderable values) still means
+            # the whole VIEW can't be filtered faithfully - RULE #5.
+            raise ValueError(f"cannot evaluate view {getattr(view, 'Name', None)!r}: WHERE clause: {exc}") from exc
+
     if view.FormationKind == "Projection":
-        return [object_to_feature(obj, view, standalone=standalone, symbol_table=symbol_table) for obj in objects_by_base[0]]
+        return [
+            object_to_feature(obj, view, standalone=standalone, symbol_table=symbol_table)
+            for obj in objects_by_base[0]
+            if _passes_where([obj])
+        ]
 
     view_name = getattr(view, "Name", None) or "View"
     combos = _join_combinations(bases, objects_by_base)
     features = []
     for combo in combos:
+        if not _passes_where(combo):
+            continue
         feature = object_to_feature(_merge_join_combo(combo, view_name), view, standalone=standalone, symbol_table=symbol_table)
         members = _join_members(bases, combo)
         if members:
