@@ -4,4 +4,5 @@ __pycache__/
 /xtf_corpus/
 /ili_corpus/
 /jsonfg_corpus/
+/view_corpus_work/
 .env
