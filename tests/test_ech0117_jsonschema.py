@@ -68,7 +68,9 @@ END Foo.
 
 
 def test_model_level_meta_attributes_surfaced_on_the_document():
-    """The dominant real-corpus case (technicalContact/furtherInformation/IDGeoIV, ~230/236 occurrences) - model_to_json_schema's `model` parameter."""
+    """The dominant real-corpus case (technicalContact/furtherInformation/IDGeoIV, ~230/236 occurrences) -
+    model_to_json_schema's `model` parameter.
+    """
     builder = _build("""INTERLIS 2.4;
 !!@technicalContact=mailto:info@example.ch
 !!@furtherInformation=https://example.ch/docs

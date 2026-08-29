@@ -154,10 +154,14 @@ def _quote_list(names: list[str]) -> str:
 class Column:
     name: str
     sql_type: str
-    """A dialect-portable scalar type name (e.g. "text"/"integer"/"varchar(20)") - ignored by every renderer when `geometry_type` is set (each renderer formats geometry columns its own way, see `render_postgresql`/`render_gpkg`)."""
+    """A dialect-portable scalar type name (e.g. "text"/"integer"/"varchar(20)") - ignored by every renderer when
+    `geometry_type` is set (each renderer formats geometry columns its own way, see `render_postgresql`/`render_gpkg`).
+    """
     nullable: bool = True
     geometry_type: str | None = None
-    """SFA type name (e.g. "Point", "MultiPolygonZ") - set ONLY for a geometry column, structured (not pre-formatted) so each renderer can express it its own way."""
+    """SFA type name (e.g. "Point", "MultiPolygonZ") - set ONLY for a geometry column, structured (not pre-formatted) so
+    each renderer can express it its own way.
+    """
     srid: int | None = None
     """EPSG numeric code - set ONLY alongside `geometry_type`."""
 
@@ -423,7 +427,8 @@ def _build_child_table(
     multi_value: MetaInstance,
     symbol_table: SymbolTable | None,
 ) -> tuple[Table | None, dict[str, str], str | None]:
-    """Return `(child_table, renamed, None)` on success or `(None, {}, reason)` on failure, for one `BAG`/`LIST OF` attribute.
+    """Return `(child_table, renamed, None)` on success or `(None, {}, reason)` on failure, for one `BAG`/`LIST OF`
+    attribute.
 
     Companion to `convert/jsonfg.py`'s `include_child_rows` synthetic
     Features (see docs/sql-conversion-strategy.md) - GDAL loads them into
@@ -654,7 +659,8 @@ def _check_constraints_for_class(
     column_names: set[str],
     renamed: dict[str, str],
 ) -> tuple[list[CheckConstraint], list[str]]:
-    """Return `(constraints, notes)` for `cls`'s own row-local `MANDATORY CONSTRAINT`s - same scope as `constraint_eval.py`'s `check_feature_constraints`.
+    """Return `(constraints, notes)` for `cls`'s own row-local `MANDATORY CONSTRAINT`s - same scope as
+    `constraint_eval.py`'s `check_feature_constraints`.
 
     `UniqueConstraint` is handled by `_unique_constraints_for_class`/
     `_local_unique_constraints_for_class`. `SetConstraint`/
@@ -782,7 +788,8 @@ def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[l
 
 
 def _local_unique_constraints_for_class(cls: MetaInstance) -> tuple[dict[str, list[list[str]]], list[str]]:
-    """Return `({BAG/LIST attr name: [[sub-attr column, ...], ...]}, notes)` for `cls`'s own `Kind=LocalU` `UniqueConstraint`s.
+    """Return `({BAG/LIST attr name: [[sub-attr column, ...], ...]}, notes)` for `cls`'s own `Kind=LocalU`
+    `UniqueConstraint`s.
 
     Each `UniqueDef` entry's `PathEls` is `[role_hop, sub_attr]` (see
     `InterlisModelBuilder._build_local_uniqueness_def` - real corpus usage
@@ -1033,7 +1040,8 @@ def build_tables(
 
 
 class _UnsupportedView(Exception):
-    """A View shape this module cannot faithfully turn into a `CREATE VIEW` - caught per-View, surfaced as a `-- NOTE` (RULE #5), never a crash.
+    """A View shape this module cannot faithfully turn into a `CREATE VIEW` - caught per-View, surfaced as a `-- NOTE`
+    (RULE #5), never a crash.
 
     `rule` is the stable diagnostic id (`interlis.diagnostic_ids`) - the
     default covers the "expression outside the translatable subset"
@@ -1170,7 +1178,8 @@ class _ViewResolver:
         return f'EXISTS (SELECT 1 FROM "{target_table}" {v_quoted} WHERE {join}{tail})'
 
     def _resolve_association_hop(self, cls: MetaInstance, hop: str) -> tuple[MetaInstance, str, bool, str]:
-        """Find the 2-role association connecting `cls` to `hop`; return `(target class, target table, fk_on_current, fk_column)`.
+        """Find the 2-role association connecting `cls` to `hop`; return `(target class, target table, fk_on_current,
+        fk_column)`.
 
         FK placement mirrors `xtf.schema.embedded_roles_of` exactly (the
         same `build_tables` used to make the columns): the FK sits on the
@@ -1473,7 +1482,8 @@ def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> s
 
 
 def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
-    """Render `tables` as SQLite/GeoPackage DDL text - everything inline at `CREATE TABLE` time, plus the GeoPackage bootstrap rows.
+    """Render `tables` as SQLite/GeoPackage DDL text - everything inline at `CREATE TABLE` time, plus the GeoPackage
+    bootstrap rows.
 
     Assumes the target `.gpkg` file already exists with the standard
     GeoPackage system tables (`gpkg_contents`/`gpkg_geometry_columns`/

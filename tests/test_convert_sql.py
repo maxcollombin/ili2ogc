@@ -1,4 +1,5 @@
-"""Backlog item 14, Lot 1 - .ili -> SQL DDL (PostgreSQL + GeoPackage/SQLite): tables, columns, UNIQUE/FOREIGN KEY constraints.
+"""Backlog item 14, Lot 1 - .ili -> SQL DDL (PostgreSQL + GeoPackage/SQLite): tables, columns, UNIQUE/FOREIGN KEY
+constraints.
 
 See docs/sql-conversion-strategy.md for the design decision and scope.
 """
@@ -153,7 +154,9 @@ def test_multivalue_attribute_never_inlined_becomes_a_child_table():
 
 
 def test_unique_with_reference_navigation_gets_a_note_not_a_wrong_constraint():
-    """`UNIQUE ParcelNr, Owner->Code;` - the WHOLE constraint is unsupported (RULE #5), not silently reduced to just ParcelNr."""
+    """`UNIQUE ParcelNr, Owner->Code;` - the WHOLE constraint is unsupported (RULE #5), not silently reduced to just
+    ParcelNr.
+    """
     builder = _build(_MODEL)
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     tables = build_tables([parcel])
@@ -267,7 +270,9 @@ def test_render_postgresql_foreign_keys_come_after_every_create_table():
 
 
 def test_render_gpkg_inline_unique_and_foreign_key():
-    """Unlike PostgreSQL, GPKG/SQLite declares everything inline - no ALTER TABLE at all (see docs/sql-conversion-strategy.md, SQLite can't add constraints post-hoc)."""
+    """Unlike PostgreSQL, GPKG/SQLite declares everything inline - no ALTER TABLE at all (see
+    docs/sql-conversion-strategy.md, SQLite can't add constraints post-hoc).
+    """
     builder = _build(_MODEL)
     owner = _resolved_class(builder, "Foo.T.Owner")
     parcel = _resolved_class(builder, "Foo.T.Parcel")
@@ -322,7 +327,9 @@ def test_render_gpkg_non_spatial_table_registered_as_attributes():
 
 
 def test_duplicate_class_name_across_topics_gets_disambiguated():
-    """Real corpus case (multiple files): two different classes named "Item" in different TOPICs - found via a live SQLite/PostgreSQL run, 2026-08-27 ("table already exists")."""
+    """Real corpus case (multiple files): two different classes named "Item" in different TOPICs - found via a live
+    SQLite/PostgreSQL run, 2026-08-27 ("table already exists").
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T1 =
@@ -346,7 +353,9 @@ END Foo.
 
 
 def test_predefined_uuidoid_becomes_a_column_and_keeps_its_unique():
-    """`INTERLIS.UUIDOID` (a reserved-token predefined type) is now materialised as a real TEXT*36 column, so `UNIQUE DatabaseId;` stays a valid constraint instead of being dropped - real corpus case ili_corpus/Axis_V1_1.ili."""
+    """`INTERLIS.UUIDOID` (a reserved-token predefined type) is now materialised as a real TEXT*36 column, so `UNIQUE
+    DatabaseId;` stays a valid constraint instead of being dropped - real corpus case ili_corpus/Axis_V1_1.ili.
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
@@ -394,7 +403,9 @@ END Foo.
 
 
 def test_attribute_literally_named_id_gets_renamed_not_the_identity_column():
-    """Real corpus case (ili_corpus/WasserBase_V1_1.ili): `ID : MANDATORY TEXT*25;` lowercases to the SAME name as the reserved identity column - found via a live SQLite run ("duplicate column name: id"), 2026-08-27."""
+    """Real corpus case (ili_corpus/WasserBase_V1_1.ili): `ID : MANDATORY TEXT*25;` lowercases to the SAME name as the
+    reserved identity column - found via a live SQLite run ("duplicate column name: id"), 2026-08-27.
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
@@ -474,7 +485,9 @@ def test_render_gpkg_child_table_inline_fk_and_no_topological_sort_needed():
 
 
 def test_child_table_name_collision_gets_disambiguated_like_any_other_table():
-    """A real class literally named "<Parent>_<attr>" would collide with the synthesized child table name - defensive coverage, not seen in the real corpus."""
+    """A real class literally named "<Parent>_<attr>" would collide with the synthesized child table name - defensive
+    coverage, not seen in the real corpus.
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
@@ -601,7 +614,10 @@ END Foo.
 
 
 def test_unique_local_becomes_a_compound_unique_on_the_child_table():
-    """Real corpus shape (`ili_corpus/CHBase_Part4_ADMINISTRATIVEUNITS_V2.ili`): `UNIQUE (LOCAL) Entries: Code;` scopes uniqueness to Code WITHIN one parent's own Entries list, not across the whole table - UNIQUE (parent_fk, code) on the child table, never a plain UNIQUE (code)."""
+    """Real corpus shape (`ili_corpus/CHBase_Part4_ADMINISTRATIVEUNITS_V2.ili`): `UNIQUE (LOCAL) Entries: Code;` scopes
+    uniqueness to Code WITHIN one parent's own Entries list, not across the whole table - UNIQUE (parent_fk, code) on
+    the child table, never a plain UNIQUE (code).
+    """
     builder = _build(_LOCAL_UNIQUE_MODEL)
     cls = _resolved_class(builder, "Foo.T.CountryNamesTranslation")
     tables = build_tables([cls])

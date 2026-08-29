@@ -95,7 +95,8 @@ def test_qualified_gregorian_year_resolves_to_numtype_with_manual_range():
 
 
 def test_qualified_xml_date_time_resolve_to_formattedtype():
-    """`INTERLIS.XMLDate`/`XMLTime`/`XMLDateTime` (eCH-0031 V2.1.0 §3.8.7 "Datum und Zeit") must resolve to a real FormattedType, not type_kind=None.
+    """`INTERLIS.XMLDate`/`XMLTime`/`XMLDateTime` (eCH-0031 V2.1.0 §3.8.7 "Datum und Zeit") must resolve to a real
+    FormattedType, not type_kind=None.
 
     Confirmed a real, corpus-wide gap (2026-08-27, distinct from the
     ANYOID/UUIDOID/BOOLEAN grammar-level exclusions documented in

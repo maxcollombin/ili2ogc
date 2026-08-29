@@ -353,7 +353,9 @@ def test_surface_attribute_becomes_place_polygon_outer_ring_first():
 
 
 def test_polyline_pure_arc_becomes_bare_circular_string():
-    """A POLYLINE = COORD then a single ARC, no other straight segment -> a bare `CircularString`, not wrapped in `CompoundCurve`."""
+    """A POLYLINE = COORD then a single ARC, no other straight segment -> a bare `CircularString`, not wrapped in
+    `CompoundCurve`.
+    """
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ALine")
     arc = _wrap(
@@ -551,7 +553,9 @@ def test_missing_crs_meta_falls_back_to_unsupported_property():
 
 
 def test_multi_geometry_class_gets_geometry_collection_place():
-    """A class with 2 resolvable geometry attributes (real corpus shape: `Station`, point + area) bundles both into one `GeometryCollection` - no "primary" is picked."""
+    """A class with 2 resolvable geometry attributes (real corpus shape: `Station`, point + area) bundles both into one
+    `GeometryCollection` - no "primary" is picked.
+    """
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ATwoGeoms")
     outer = _wrap(
@@ -659,7 +663,9 @@ def test_without_schema_url_omits_feature_schema():
 
 
 def test_standalone_false_omits_feature_schema_even_with_schema_url():
-    """The "featureSchema" member stays root-object-only here, same stance as "conformsTo" - never duplicated per nested Feature."""
+    """The "featureSchema" member stays root-object-only here, same stance as "conformsTo" - never duplicated per nested
+    Feature.
+    """
     builder = _build(_MODEL)
     cls = _resolved_class(builder, "A")
     obj = XtfObject(tid="obj-8", qualified_class="Foo.T.A", attributes={})
@@ -958,7 +964,9 @@ def test_child_row_features_list_of_structure_spreads_members_and_gets_seq():
 
 
 def test_child_row_features_never_produced_by_default():
-    """`include_child_rows` is opt-in - zero behavior change for every existing caller (RULE: additive, not a silent behavior shift)."""
+    """`include_child_rows` is opt-in - zero behavior change for every existing caller (RULE: additive, not a silent
+    behavior shift).
+    """
     builder = _build(_CHILD_ROWS_MODEL)
     obj = XtfObject(
         tid="p-3",

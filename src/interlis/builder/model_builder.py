@@ -2589,7 +2589,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
     @staticmethod
     def _role_target_class(role: MetaInstance) -> MetaInstance | None:
-        """Return a `Role`'s target `Class` via `BaseClass` (same association `reference_target_class` uses for a plain REFERENCE TO).
+        """Return a `Role`'s target `Class` via `BaseClass` (same association `reference_target_class` uses for a plain
+        REFERENCE TO).
 
         Duplicated here rather than imported from `xtf.schema` - that
         module imports FROM `interlis.builder`, not the other way around

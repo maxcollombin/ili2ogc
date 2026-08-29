@@ -81,7 +81,9 @@ END Foo.
 
 
 def test_mandatory_named_domain_reference_reaches_required():
-    """`MANDATORY <named domain>` (e.g. `Attr : MANDATORY MyText;`) now correctly lands in "required" - see tests/test_model_builder_mandatory_domain.py for the builder-level fix."""
+    """`MANDATORY <named domain>` (e.g. `Attr : MANDATORY MyText;`) now correctly lands in "required" - see
+    tests/test_model_builder_mandatory_domain.py for the builder-level fix.
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN

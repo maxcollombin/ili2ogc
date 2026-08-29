@@ -1,4 +1,5 @@
-""".ili -> JSON Schema conversion: scalar types, STRUCTURE/BAG/LIST nesting, plain REFERENCE TO, embedded association roles, and ABSTRACT structure polymorphism.
+""".ili -> JSON Schema conversion: scalar types, STRUCTURE/BAG/LIST nesting, plain REFERENCE TO, embedded association
+roles, and ABSTRACT structure polymorphism.
 
 See docs/jsonschema-conversion-strategy.md for the design decision and
 mappings/ilismeta16-to-jsonschema-rules.yml /

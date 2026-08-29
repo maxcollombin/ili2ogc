@@ -34,7 +34,9 @@ _XTF = """<?xml version="1.0" encoding="UTF-8"?><TRANSFER xmlns="http://www.inte
 
 
 def test_convert_surfaces_model_level_meta_attributes_as_x_meta(tmp_path, capsys):
-    """Real CLI wiring, not a direct class_to_json_schema() call - this file's own MODEL-level `!!@` comments must reach the output."""
+    """Real CLI wiring, not a direct class_to_json_schema() call - this file's own MODEL-level `!!@` comments must reach
+    the output.
+    """
     ili_path = tmp_path / "Foo.ili"
     ili_path.write_text(_MODEL_WITH_META, encoding="utf-8")
 
@@ -44,7 +46,9 @@ def test_convert_surfaces_model_level_meta_attributes_as_x_meta(tmp_path, capsys
 
 
 def test_convert_jsonfg_resolves_crs_declared_locally_not_via_import(tmp_path, capsys):
-    """Same CLI wiring gap, .xtf side: a CoordType declared IN the root .ili (not imported) must still resolve a "place"/"coordRefSys"."""
+    """Same CLI wiring gap, .xtf side: a CoordType declared IN the root .ili (not imported) must still resolve a
+    "place"/"coordRefSys".
+    """
     ili_path = tmp_path / "Foo.ili"
     ili_path.write_text(_MODEL_WITH_META, encoding="utf-8")
     xtf_path = tmp_path / "data.xtf"
@@ -189,7 +193,9 @@ END Catalog.
 
 
 def test_convert_sql_catalog_flag_resolves_embedded_role_in_the_catalogues_own_model(tmp_path, capsys):
-    """`_columns_for_class` must resolve a `--catalog` class's embedded association role against THAT model's own symbol table, not the root file's (docs/sql-conversion-strategy.md's "known, separate, pre-existing limitation")."""
+    """`_columns_for_class` must resolve a `--catalog` class's embedded association role against THAT model's own symbol
+    table, not the root file's (docs/sql-conversion-strategy.md's "known, separate, pre-existing limitation").
+    """
     main_path = tmp_path / "Main.ili"
     main_path.write_text(_MAIN_MODEL_WITH_CATALOG_REF, encoding="utf-8")
     catalog_path = tmp_path / "Catalog.ili"

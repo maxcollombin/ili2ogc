@@ -218,7 +218,8 @@ def _multi_value(resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, symbo
 
 
 def _sql_identifier(name: str) -> str:
-    """Lowercase - matches `convert/sql.py`'s `_sql_identifier` EXACTLY (kept manually in sync, not imported: `convert/sql.py` already imports FROM this module, `_meta_value`, so importing back would be circular).
+    """Lowercase - matches `convert/sql.py`'s `_sql_identifier` EXACTLY (kept manually in sync, not imported:
+    `convert/sql.py` already imports FROM this module, `_meta_value`, so importing back would be circular).
 
     Only correct as long as both copies stay identical - see
     `docs/sql-conversion-strategy.md`'s "BAG/LIST OF child tables" section
