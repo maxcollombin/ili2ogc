@@ -1,7 +1,10 @@
 """CLI wiring tests - root-file eCH-0117 meta-attribute capture (technicalContact/CRS)."""
 import json
+from pathlib import Path
 
 from interlis.cli import main
+
+_ROOT_FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 _MODEL_WITH_META = """INTERLIS 2.4;
 !!@technicalContact=mailto:test@example.com
@@ -170,9 +173,13 @@ def test_convert_sql_catalog_flag_resolves_embedded_role_in_the_catalogues_own_m
     catalog_path = tmp_path / "Catalog.ili"
     catalog_path.write_text(_CATALOG_MODEL_WITH_EMBEDDED_ROLE, encoding="utf-8")
 
+    # Exit 2 (completed-with-degradations): this catalogue has no
+    # `ZoneCatalog`, so Main.ili's `Zone` REFERENCE TO stays unresolved
+    # (one SQL-REF-TARGET-UNRESOLVED -- NOTE) - unrelated to the embedded
+    # role under test.
     assert main([
         "convert-sql", str(main_path), "--repo", str(tmp_path), "--catalog", str(catalog_path),
-    ]) == 0
+    ]) == 2
     ddl = capsys.readouterr().out
     # `Parent_Child` embeds role `Parent` (the {1} end) onto `Child` (the
     # {0..*} end) - entirely declared inside Catalog.ili, invisible from
@@ -228,3 +235,79 @@ def test_convert_sql_auto_includes_a_views_base_model_from_repo(tmp_path, capsys
     assert 'CREATE VIEW "v_seg" AS' in ddl
     assert '"segment"."ofroad" = "road"."id"' in ddl
     assert "-- NOTE (view v_seg)" not in ddl
+
+
+# --- shared diagnostics core (Lot 2): --output-format / --report / --strict / exit codes ---
+
+_MODEL_WITH_UNSUPPORTED_CHECK = """INTERLIS 2.4;
+MODEL Deg AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS A =
+      Name : MANDATORY TEXT*40;
+      MANDATORY CONSTRAINT INTERLIS.len(Name) > 2;
+    END A;
+  END T;
+END Deg.
+"""
+
+
+def test_convert_sql_clean_model_exits_0_with_no_diagnostics(tmp_path, capsys):
+    ili_path = tmp_path / "Foo.ili"
+    ili_path.write_text(_MODEL_WITH_META, encoding="utf-8")
+
+    assert main(["convert-sql", str(ili_path)]) == 0
+    err = capsys.readouterr().err
+    assert "diagnostic(s)" not in err
+
+
+def test_convert_sql_degraded_model_exits_2_and_lists_the_rule_id(tmp_path, capsys):
+    ili_path = tmp_path / "Deg.ili"
+    ili_path.write_text(_MODEL_WITH_UNSUPPORTED_CHECK, encoding="utf-8")
+
+    assert main(["convert-sql", str(ili_path)]) == 2
+    out = capsys.readouterr()
+    assert "-- NOTE" in out.out and "[SQL-CHECK-EXPR-UNSUPPORTED]" in out.out
+    assert "note SQL-CHECK-EXPR-UNSUPPORTED" in out.err
+    assert out.err.strip().endswith("1 diagnostic(s): 0 errors, 0 warnings, 1 note")
+
+
+def test_strict_promotes_a_note_to_a_failure(tmp_path, capsys):
+    ili_path = tmp_path / "Deg.ili"
+    ili_path.write_text(_MODEL_WITH_UNSUPPORTED_CHECK, encoding="utf-8")
+
+    assert main(["convert-sql", str(ili_path), "--strict"]) == 1
+
+
+def test_output_format_sarif_writes_a_valid_log_to_stderr(tmp_path, capsys):
+    from jsonschema import Draft4Validator
+
+    schema = json.loads((_ROOT_FIXTURES / "sarif-2.1.0-schema.json").read_text())
+    ili_path = tmp_path / "Deg.ili"
+    ili_path.write_text(_MODEL_WITH_UNSUPPORTED_CHECK, encoding="utf-8")
+
+    assert main(["convert-sql", str(ili_path), "--output-format", "sarif"]) == 2
+    err = capsys.readouterr().err
+    log = json.loads(err)
+    Draft4Validator(schema).validate(log)
+    assert log["runs"][0]["results"][0]["ruleId"] == "SQL-CHECK-EXPR-UNSUPPORTED"
+
+
+def test_report_writes_a_sidecar_regardless_of_output_format(tmp_path, capsys):
+    ili_path = tmp_path / "Deg.ili"
+    ili_path.write_text(_MODEL_WITH_UNSUPPORTED_CHECK, encoding="utf-8")
+    report = tmp_path / "report.sarif"
+
+    assert main(["convert-sql", str(ili_path), "--report", str(report)]) == 2
+    log = json.loads(report.read_text())
+    assert log["version"] == "2.1.0"
+    assert {r["id"] for r in log["runs"][0]["tool"]["driver"]["rules"]} == {"SQL-CHECK-EXPR-UNSUPPORTED"}
+
+
+def test_class_c_message_names_repo_or_catalog_as_the_fix(tmp_path, capsys):
+    main_path = tmp_path / "Main.ili"
+    main_path.write_text(_MAIN_MODEL_WITH_CATALOG_REF, encoding="utf-8")
+
+    assert main(["convert-sql", str(main_path), "--repo", str(tmp_path)]) == 2
+    err = capsys.readouterr().err
+    assert "warning SQL-REF-TARGET-UNRESOLVED" in err
+    assert "--repo" in err and "--catalog" in err

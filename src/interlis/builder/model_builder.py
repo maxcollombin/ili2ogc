@@ -2370,8 +2370,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
             base = self._find_model_by_name(base_name)
             if base is None:
                 warnings.warn(
-                    f"TRANSLATION OF {base_name!r}: base model not resolved (pass its directory to --repo) - "
-                    f"no name map built for {model.Name!r}",
+                    f"[BUILD-TRANSLATION-BASE-MISSING] TRANSLATION OF {base_name!r}: base model not resolved "
+                    f"(pass its directory to --repo) - no name map built for {model.Name!r}",
                     stacklevel=2,
                 )
                 continue
@@ -2438,8 +2438,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
             t_children = [c for c in getattr(translated, collection, None) or [] if isinstance(c, MetaInstance)]
             if len(b_children) != len(t_children):
                 warnings.warn(
-                    f"TRANSLATION OF {base.Name}: {collection} count differs on {base_qname!r} "
-                    f"({len(b_children)} vs {len(t_children)}) - aligning the common prefix only",
+                    f"[BUILD-TRANSLATION-MISMATCH] TRANSLATION OF {base.Name}: {collection} count differs on "
+                    f"{base_qname!r} ({len(b_children)} vs {len(t_children)}) - aligning the common prefix only",
                     stacklevel=2,
                 )
             for b_child, t_child in zip(b_children, t_children):

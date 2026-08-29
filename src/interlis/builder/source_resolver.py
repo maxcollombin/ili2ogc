@@ -263,7 +263,13 @@ def resolve_source(
         # numeric.Clockwise - but the pattern recurs more often than it's
         # convenient to fix one by one) - no real case found where a
         # missing alternative should be a blocking error.
-        warnings.warn(f"[{rule}] no alternative present among {names!r} - treated as absent/None")
+        # Diagnostic id BUILD-SPEC-GAP-ALT-ABSENT (interlis.diagnostic_ids):
+        # a class-A mapping gap, but mostly benign optional-absent noise -
+        # left as a plain warning, not surfaced by the CLI diagnostics bag
+        # by default (see docs/converter-limitations.md).
+        warnings.warn(
+            f"[BUILD-SPEC-GAP-ALT-ABSENT] [{rule}] no alternative present among {names!r} - treated as absent/None",
+        )
         return None
 
     # --- sequence_pattern: recognizes an exact sequence of consecutive

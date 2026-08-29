@@ -50,6 +50,21 @@ class ValidationIssue:
     attribute: str | None
     message: str
 
+    def to_diagnostic(self, *, file: str | None = None):
+        """Return this finding as a shared `Diagnostic` - feeds `interlis validate --output-format sarif`.
+
+        `info` (an unresolved-but-legitimate external reference) maps to
+        the SARIF `note` level; the rule id is the generic
+        `XTF-VALIDATION` (a data finding, not a converter limitation).
+        """
+        from interlis.diagnostics import Diagnostic, Location
+
+        severity = "note" if self.severity == "info" else self.severity
+        return Diagnostic(
+            severity, "XTF-VALIDATION", self.message,
+            Location(file=file, model=self.qualified_class, element_path=self.attribute, tid=self.object_tid),
+        )
+
 
 def _extract_reference(node: RawNode) -> str | None:
     """Find a reference attribute's target TID/OID, in one of 3 known forms.

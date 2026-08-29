@@ -18,9 +18,18 @@ from pathlib import Path
 from interlis.builder.forward_refs import SymbolTable
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
-from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
+from interlis.convert import jsonfg as _jsonfg_mod
+from interlis.convert import jsonschema as _jsonschema_mod
+from interlis.convert import sql as _sql_mod
+from interlis.convert.jsonfg import transfer_to_feature_collection
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.convert.sql import build_tables, build_views, render_gpkg, render_postgresql
+from interlis.diagnostics import (
+    DiagnosticBag,
+    builder_warnings_to_diagnostics,
+    render_sarif,
+    render_text,
+)
 from interlis.convert.translation import (
     load_translation,
     rename_feature_collection,
@@ -54,6 +63,55 @@ def _resource_dirs():
             yield mappings_dir, spec_dir
     else:
         yield _DEV_ROOT / "mappings", _DEV_ROOT / "spec/grammar/mapping"
+
+
+def _tool_version() -> str:
+    try:
+        from importlib.metadata import version
+
+        return version("interlis")
+    except Exception:  # noqa: BLE001 - version metadata is best-effort, never a hard failure
+        return "0"
+
+
+def _add_diagnostic_args(subparser: argparse.ArgumentParser) -> None:
+    """`--output-format` / `--report` / `--strict` - shared by convert/convert-sql/convert-jsonfg/validate."""
+    subparser.add_argument(
+        "--output-format", choices=("text", "sarif"), default="text",
+        help="How diagnostics (NOT the primary output) are rendered on stderr. 'text' (default): "
+             "one line per diagnostic, Ruff-style. 'sarif': a SARIF 2.1.0 log.",
+    )
+    subparser.add_argument(
+        "--report", default=None, metavar="FILE",
+        help="Also write a SARIF 2.1.0 diagnostics log to FILE, regardless of --output-format.",
+    )
+    subparser.add_argument(
+        "--strict", action="store_true",
+        help="Treat any diagnostic (note/warning) as a failure: exit 1 instead of 2.",
+    )
+
+
+def _finish(bag: DiagnosticBag, args: argparse.Namespace, *, extra_exit: int = 0) -> int:
+    """Render `bag` per `args`, write `--report`, and return the process exit code.
+
+    Exit code: 0 clean · 2 completed-with-degradations · 1 failed (an
+    `error`, or `--strict` with any diagnostic). `extra_exit` (a non-zero
+    from an earlier hard failure) always wins.
+    """
+    fmt = getattr(args, "output_format", "text")
+    report = getattr(args, "report", None)
+    strict = getattr(args, "strict", False)
+    if report is not None:
+        Path(report).write_text(
+            json.dumps(render_sarif(bag, tool_version=_tool_version()), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    if len(bag):
+        if fmt == "sarif":
+            print(json.dumps(render_sarif(bag, tool_version=_tool_version()), indent=2, ensure_ascii=False), file=sys.stderr)
+        else:
+            print(render_text(bag, color=sys.stderr.isatty()), file=sys.stderr)
+    return extra_exit or bag.exit_code(strict=strict)
 
 
 def _describe(value, indent: int = 0, seen: set[int] | None = None) -> None:
@@ -166,10 +224,11 @@ def cmd_convert(args: argparse.Namespace) -> int:
         return 1
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+    bag = DiagnosticBag()
     with _resource_dirs() as (mappings_dir, spec_dir):
         builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         # eCH-0117 `!!@Name=Value` meta-attributes declared directly in
         # THIS file (technicalContact/furtherInformation/IDGeoIV at MODEL
         # level, CRS on a locally-declared CoordType domain, etc.) -
@@ -180,6 +239,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         # metadata had nowhere to attach at all - see
         # docs/ech-0117-meta-attributes.md.
         root = builder.build(tree, meta_attributes=meta_attribute_comments_in_file(path))
+    bag.extend(builder_warnings_to_diagnostics(caught, file=str(path)))
 
     classes = [
         instance for instance in builder.symbol_table.all_registered()
@@ -196,6 +256,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
     # than guessing which MODEL the file-level metadata belongs to.
     root_model = root if isinstance(root, MetaInstance) and root._qualified_class.rsplit(".", 1)[-1] == "Model" else None
     schema = model_to_json_schema(classes + views, symbol_table=builder.symbol_table, model=root_model)
+    bag.extend(_jsonschema_mod.collect_diagnostics(schema, file=str(path)))
     if args.lang:
         translation = load_translation(getattr(root_model, "Name", None) or "", args.lang, repository)
         if translation is None:
@@ -207,7 +268,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         Path(args.output).write_text(text + "\n", encoding="utf-8")
     else:
         print(text)
-    return 0
+    return _finish(bag, args)
 
 
 def _fold_in_dependency_models(classes, views, root_table, repository, class_symbol_tables) -> None:
@@ -320,11 +381,13 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         return 1
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+    bag = DiagnosticBag()
     with _resource_dirs() as (mappings_dir, spec_dir):
         builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         builder.build(tree, meta_attributes=meta_attribute_comments_in_file(path))
+    bag.extend(builder_warnings_to_diagnostics(caught, file=str(path)))
 
     classes = [
         instance for instance in builder.symbol_table.all_registered()
@@ -399,6 +462,7 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         views, tables, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables,
         class_table_names=class_table_names,
     ))
+    bag.extend(_sql_mod.collect_diagnostics(tables, sql_views, file=str(path)))
     ddl = render_gpkg(tables, sql_views) if args.dialect == "gpkg" else render_postgresql(tables, sql_views)
     if args.lang:
         root_names = builder.symbol_table.root_model_names() if hasattr(builder.symbol_table, "root_model_names") else []
@@ -412,7 +476,7 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         Path(args.output).write_text(ddl, encoding="utf-8")
     else:
         print(ddl, end="")
-    return 0
+    return _finish(bag, args)
 
 
 def _resolve_schema_model_path(
@@ -533,7 +597,24 @@ def cmd_validate(args: argparse.Namespace) -> int:
         f"{counts.get('info', 0)} info(s){'' if args.verbose else ' (hidden, --verbose to show)'}"
         f"{header_suffix}",
     )
-    return 1 if counts.get("error") else 0
+
+    if getattr(args, "output_format", "text") == "sarif" or getattr(args, "report", None):
+        bag = DiagnosticBag()
+        bag.extend(issue.to_diagnostic(file=str(xtf_path)) for issue in issues)
+        report = getattr(args, "report", None)
+        if report is not None:
+            Path(report).write_text(
+                json.dumps(render_sarif(bag, tool_version=_tool_version()), indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        if getattr(args, "output_format", "text") == "sarif":
+            print(json.dumps(render_sarif(bag, tool_version=_tool_version()), indent=2, ensure_ascii=False), file=sys.stderr)
+
+    if counts.get("error"):
+        return 1
+    if getattr(args, "strict", False) and len(issues):
+        return 1
+    return 0
 
 
 def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
@@ -585,10 +666,11 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
             print(f"  {e}", file=sys.stderr)
         return 1
 
+    bag = DiagnosticBag()
     with _resource_dirs() as (mappings_dir, spec_dir):
         builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         # eCH-0117 `!!@Name=Value` meta-attributes declared directly in the
         # schema model itself - previously never captured here (only an
         # IMPORTED model's own comments were, via
@@ -598,6 +680,7 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         # would silently stay unsupported - see
         # docs/ech-0117-meta-attributes.md.
         builder.build(tree, meta_attributes=meta_attribute_comments_in_file(model_path))
+    bag.extend(builder_warnings_to_diagnostics(caught, file=str(model_path)))
 
     candidate_views = [
         instance for instance in builder.symbol_table.all_registered()
@@ -605,9 +688,9 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     ]
     views = []
     for view in candidate_views:
-        reason = unsupported_view_reason(view)
-        if reason is not None:
-            print(f"skipping VIEW {getattr(view, 'Name', None)!r}: {reason}", file=sys.stderr)
+        skip = _jsonfg_mod.view_skip_diagnostic(view, file=str(model_path))
+        if skip is not None:
+            bag.add(skip)
             continue
         views.append(view)
 
@@ -615,6 +698,7 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         transfer, symbol_table=builder.symbol_table, repository=repository, views=views,
         schema_url=args.feature_schema_url, include_child_rows=args.include_child_rows,
     )
+    bag.extend(_jsonfg_mod.collect_diagnostics(collection, file=str(xtf_path)))
     if args.lang:
         root_names = builder.symbol_table.root_model_names() if hasattr(builder.symbol_table, "root_model_names") else []
         base_name = next(iter(root_names), None) or model_path.stem
@@ -628,7 +712,7 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         Path(args.output).write_text(text + "\n", encoding="utf-8")
     else:
         print(text)
-    return 0
+    return _finish(bag, args)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -659,6 +743,7 @@ def main(argv: list[str] | None = None) -> int:
         "found by name in --repo. The input .ili and the transfer format are unchanged.",
     )
     convert_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
+    _add_diagnostic_args(convert_parser)
     convert_parser.set_defaults(func=cmd_convert)
 
     convert_sql_parser = subparsers.add_parser(
@@ -697,6 +782,7 @@ def main(argv: list[str] | None = None) -> int:
         "across classes is left untranslated.",
     )
     convert_sql_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
+    _add_diagnostic_args(convert_sql_parser)
     convert_sql_parser.set_defaults(func=cmd_convert_sql)
 
     validate_parser = subparsers.add_parser(
@@ -722,6 +808,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser.add_argument(
         "-v", "--verbose", action="store_true", help="Also print 'info'-severity issues (unresolved references).",
     )
+    _add_diagnostic_args(validate_parser)
     validate_parser.set_defaults(func=cmd_validate)
 
     convert_jsonfg_parser = subparsers.add_parser(
@@ -757,6 +844,7 @@ def main(argv: list[str] | None = None) -> int:
         "table by GDAL's own featureType-based table splitting, in the SAME 'ogr2ogr -append' as the main data. "
         "Omitted (default): BAG/LIST occurrences stay inlined as a plain JSON array property, as before.",
     )
+    _add_diagnostic_args(convert_jsonfg_parser)
     convert_jsonfg_parser.set_defaults(func=cmd_convert_jsonfg)
 
     args = parser.parse_args(argv)

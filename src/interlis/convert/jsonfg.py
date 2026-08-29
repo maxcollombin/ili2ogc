@@ -1260,3 +1260,59 @@ def transfer_to_feature_collection(
             f.pop("coordRefSys", None)
 
     return collection
+
+
+def view_skip_diagnostic(view: MetaInstance, *, file: str | None = None):
+    """Return a `Diagnostic` for a VIEW `cmd_convert_jsonfg` has to skip, or `None` if it can be evaluated.
+
+    Same check as `unsupported_view_reason`, classified onto a stable id:
+    a missing base model is class C (`--repo`), a WHERE the CONSTRAINT
+    evaluator can't do is class B, an unbuilt INSPECTION path is a class-A
+    builder gap.
+    """
+    from interlis.diagnostics import Diagnostic, Location
+
+    reason = unsupported_view_reason(view)
+    if reason is None:
+        return None
+    name = getattr(view, "Name", None)
+    if "base model not resolvable" in reason or "base model not resolved" in reason:
+        rule, sev, hlp = "JSONFG-VIEW-BASE-MISSING", "warning", "pass the base model's directory to --repo"
+    elif reason.startswith("WHERE clause"):
+        rule, sev, hlp = "JSONFG-VIEW-WHERE-UNSUPPORTED", "note", None
+    elif "INSPECTION path" in reason:
+        rule, sev, hlp = "JSONFG-VIEW-INSPECTION-GAP", "note", None
+    else:
+        rule, sev, hlp = "JSONFG-VIEW-BASE-MISSING", "warning", "pass the base model's directory to --repo"
+    return Diagnostic(sev, rule, f"VIEW {name!r} skipped: {reason}", Location(file=file, element_path=name), help=hlp)
+
+
+def collect_diagnostics(collection: dict, *, file: str | None = None):
+    """Walk a built FeatureCollection for `x-unsupported` markers and emit a `Diagnostic` per marker.
+
+    The marker stays in the document; this is the parallel machine signal.
+    `"MultiValue"` means a BAG/LIST element type did not resolve (class C);
+    every other value is an unmapped attribute-value type (class A).
+    """
+    from interlis.diagnostics import Diagnostic, Location
+
+    out: list[Diagnostic] = []
+    for feature in collection.get("features", []):
+        ftype = feature.get("featureType", "?")
+        tid = feature.get("id")
+        for key, value in (feature.get("properties") or {}).items():
+            if not isinstance(value, dict) or "x-unsupported" not in value:
+                continue
+            marker = value["x-unsupported"]
+            if marker == "MultiValue":
+                rule, sev = "JSONFG-MULTIVALUE-UNRESOLVED", "warning"
+                msg = f"{ftype}.{key}: a BAG/LIST OF element type did not resolve"
+                hlp = "pass its model's directory to --repo"
+            else:
+                rule, sev = "JSONFG-TYPE-UNSUPPORTED", "note"
+                msg = f"{ftype}.{key}: value type {marker!r} is outside the mapped set (x-unsupported)"
+                hlp = None
+            out.append(Diagnostic(
+                sev, rule, msg, Location(file=file, element_path=f"{ftype}.{key}", tid=tid), help=hlp,
+            ))
+    return out

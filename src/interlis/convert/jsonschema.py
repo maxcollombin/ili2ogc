@@ -726,3 +726,41 @@ def model_to_json_schema(
         document["x-meta"] = model_meta
     document["$defs"] = defs
     return document
+
+
+def collect_diagnostics(document: dict, *, file: str | None = None):
+    """Walk a built JSON Schema for `x-unsupported` markers and emit a `Diagnostic` per marker.
+
+    The marker stays in the document (a downstream reader still sees the
+    gap); this is the parallel machine-readable signal that feeds
+    `--output-format sarif` and the exit code. `{"x-unsupported": "Class"}`
+    is a missing-input case (a nested structure not reachable from the
+    roots - class C); every other value is an unmapped type (class A).
+    """
+    from interlis.diagnostics import Diagnostic, Location
+
+    out: list[Diagnostic] = []
+
+    def _walk(node, path: str) -> None:
+        if isinstance(node, dict):
+            marker = node.get("x-unsupported")
+            if marker is not None:
+                if marker == "Class":
+                    rule, sev = "JSONSCHEMA-CLASS-UNRESOLVED", "warning"
+                    msg = f"{path or '<root>'}: a nested-structure Class is not reachable from the given roots"
+                    hlp = "pass its model's directory to --repo"
+                else:
+                    rule, sev = "JSONSCHEMA-TYPE-UNSUPPORTED", "note"
+                    msg = f"{path or '<root>'}: attribute type {marker!r} is outside the mapped set (x-unsupported)"
+                    hlp = None
+                out.append(Diagnostic(sev, rule, msg, Location(file=file, element_path=path or None), help=hlp))
+            for key, value in node.items():
+                if key.startswith("x-"):
+                    continue
+                _walk(value, f"{path}.{key}" if path else str(key))
+        elif isinstance(node, list):
+            for i, item in enumerate(node):
+                _walk(item, f"{path}[{i}]")
+
+    _walk(document, "")
+    return out

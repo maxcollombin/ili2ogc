@@ -47,13 +47,14 @@ dropped, each unsupported
 construct is collected into `Table.notes` and rendered as a `-- NOTE` SQL
 comment (RULE #5).
 """
+import re
 from dataclasses import dataclass, field
 
 from interlis.builder.forward_refs import SymbolTable
 from interlis.convert.constraint_eval import _unquote_text
-from interlis.diagnostic_ids import note as _diag
 from interlis.convert.jsonfg import _meta_value
 from interlis.convert.jsonschema import _is_integer_range, _is_structure
+from interlis.diagnostic_ids import note as _diag
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.schema import (
     ResolvedAttribute,
@@ -1409,3 +1410,46 @@ def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
         )
     statements += _render_views(views)
     return "\n".join(statements) + "\n"
+
+
+_NOTE_RULE_RE = re.compile(r"^\[([A-Z0-9-]+)\]\s*(.*)$", re.DOTALL)
+
+
+def collect_diagnostics(tables: list[Table], views: tuple[SqlView, ...] = (), *, file: str | None = None):
+    """Turn every `Table`/`SqlView` `-- NOTE` back into a `Diagnostic` - the same objects, a third rendering.
+
+    Each note is already `[RULE-ID] message` (`diagnostic_ids.note`), so
+    the id, the class (A/B/C -> note/warning) and the message come straight
+    back out. The `.sql` keeps its self-describing `-- NOTE` lines; this is
+    what feeds `--output-format sarif` and the exit code.
+    """
+    from interlis.diagnostic_ids import REGISTRY
+    from interlis.diagnostics import Diagnostic, Location, severity_for_class
+
+    out: list[Diagnostic] = []
+
+    def _emit(owner: str, note: str) -> None:
+        m = _NOTE_RULE_RE.match(note)
+        if not m or m.group(1) not in REGISTRY:
+            return
+        rule, message = m.group(1), m.group(2)
+        klass = REGISTRY[rule][0]
+        hlp = None
+        if klass == "C":
+            for marker in (" - pass ", " - provide "):
+                head, sep, tail = message.partition(marker)
+                if sep:
+                    message, hlp = head, marker.strip(" -") + " " + tail
+                    break
+        out.append(Diagnostic(
+            severity_for_class(klass), rule, message,
+            Location(file=file, element_path=owner), help=hlp,
+        ))
+
+    for table in tables:
+        for note in table.notes:
+            _emit(table.name, note)
+    for view in views:
+        for note in view.notes:
+            _emit(f"view {view.name}", note)
+    return out
