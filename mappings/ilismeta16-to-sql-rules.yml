@@ -227,8 +227,9 @@ concepts:
       ABSTRACT structure polymorphism (the JSON Schema pipeline's `anyOf`
       case) has no natural single-table SQL equivalent (table-per-hierarchy
       vs. table-per-subtype are both real, materially different design
-      choices) - deferred, not attempted in Lot 1. An attribute whose
-      STRUCTURE target is ABSTRACT is surfaced as a `-- NOTE` comment.
+      choices) - deferred. An attribute whose STRUCTURE target is ABSTRACT
+      is surfaced as a `-- NOTE` comment carrying the stable diagnostic id
+      `SQL-STRUCT-ABSTRACT` (see docs/converter-limitations.md).
 
   UniqueConstraint:
     qualified_name: IlisMeta16.ModelData.UniqueConstraint
