@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.14"
+      - run: uv sync --locked
+      - run: uv run ruff check src/ tests/
+      - run: uv run black --check src/ tests/
+      # mypy is staged in: the dynamic IlisMeta16 metamodel (extra="allow",
+      # see docs/dev-notes/metamodel-registry-any-typing.md) still yields
+      # ~68 attr-defined / Optional-narrowing findings. Reported, not gating,
+      # until they are burned down.
+      - run: uv run mypy src/interlis/
+        continue-on-error: true
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # floor, middle, ceiling - enough to catch version-specific
+        # breakage without a wide fan-out
+        python-version: ["3.10", "3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --locked
+      - run: uv run pytest
