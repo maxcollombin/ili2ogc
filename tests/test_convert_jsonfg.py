@@ -445,7 +445,9 @@ def test_polyline_two_chained_arcs_become_one_circular_string():
 
 
 def test_surface_arc_boundary_becomes_curve_polygon():
-    """A SURFACE whose (sole) boundary mixes an ARC with straight segments -> a `CurvePolygon` wrapping a `CompoundCurve` ring."""
+    """A SURFACE whose (sole) boundary mixes an ARC with straight segments -> a `CurvePolygon` wrapping a
+    `CompoundCurve` ring.
+    """
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "APolyArc")
     arc = _wrap("ARC", _node("C1", "10.0"), _node("C2", "0.0"), _node("A1", "5.0"), _node("A2", "5.0"))
@@ -590,7 +592,9 @@ def test_multi_geometry_class_gets_geometry_collection_place():
 
 
 def test_multi_geometry_class_with_only_one_attribute_populated():
-    """Only one of the two geometry-typed attributes has a wire value - unchanged single-geometry behaviour, no collection wrapping."""
+    """Only one of the two geometry-typed attributes has a wire value - unchanged single-geometry behaviour, no
+    collection wrapping.
+    """
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ATwoGeoms")
     obj = XtfObject(
@@ -920,7 +924,9 @@ END Foo.
 
 
 def test_child_row_features_scalar_bag_gets_a_value_property_and_parent_fk():
-    """Matches convert/sql.py's parcel_tags child table exactly (see tests/test_convert_sql.py's _CHILD_TABLE_MODEL, same shape)."""
+    """Matches convert/sql.py's parcel_tags child table exactly (see tests/test_convert_sql.py's _CHILD_TABLE_MODEL,
+    same shape).
+    """
     builder = _build(_CHILD_ROWS_MODEL)
     cls = _resolved_class(builder, "Parcel")
     obj = XtfObject(

@@ -2198,7 +2198,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
             instance.SubExpression = value
 
     def _set_predefined_function_call(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
-        """Set `FunctionCall.Function`/`.Arguments` from `factor`'s alt4 (predefined functions, e.g. `INTERLIS.len(...)`).
+        """Set `FunctionCall.Function`/`.Arguments` from `factor`'s alt4 (predefined functions, e.g.
+        `INTERLIS.len(...)`).
 
         See spec/grammar/mapping/07_constraints.yml's `factor` entry (the
         `INTERLIS` `when_present` branch) for why this needs a dedicated

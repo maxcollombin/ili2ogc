@@ -78,7 +78,9 @@ def load_translation(base_model: str, language: str, repository: ModelRepository
 # apply to converter output                                                    #
 # --------------------------------------------------------------------------- #
 def rename_json_schema(schema: dict[str, Any], tr: Translation) -> dict[str, Any]:
-    """Rename `$defs` keys, `$ref` targets, `properties` keys, `required`, and `title` in a `model_to_json_schema` result."""
+    """Rename `$defs` keys, `$ref` targets, `properties` keys, `required`, and `title` in a `model_to_json_schema`
+    result.
+    """
     defs = schema.get("$defs")
     if isinstance(defs, dict):
         schema["$defs"] = {tr.element(k): _rename_schema_node(v, tr, owner=k) for k, v in defs.items()}

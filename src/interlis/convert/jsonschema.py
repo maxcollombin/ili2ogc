@@ -671,7 +671,8 @@ def class_to_json_schema(
 
 
 def validate_feature_properties(properties: dict[str, Any], schema: dict[str, Any], key: str) -> list[str]:
-    """Validate a candidate PUT/PATCH `properties` payload against one `$defs` entry of a `model_to_json_schema` document.
+    """Validate a candidate PUT/PATCH `properties` payload against one `$defs` entry of a `model_to_json_schema`
+    document.
 
     Backlog item 8 Lot D ("CRUD PUT-PATCH-DELETE, validation via le même
     JSON Schema") - the building block a future write-capable OGC API

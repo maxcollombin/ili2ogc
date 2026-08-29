@@ -132,7 +132,9 @@ def test_reference_becomes_fk_column_and_constraint():
 
 
 def test_foreign_key_dropped_when_target_not_converted():
-    """A REFERENCE TO target NOT in `classes` (real corpus case: a cross-model reference) keeps its column but drops the FK - never a dangling `REFERENCES` (found via a live PostGIS run, 2026-08-27)."""
+    """A REFERENCE TO target NOT in `classes` (real corpus case: a cross-model reference) keeps its column but drops the
+    FK - never a dangling `REFERENCES` (found via a live PostGIS run, 2026-08-27).
+    """
     builder = _build(_MODEL)
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     tables = build_tables([parcel])  # owner deliberately NOT included
@@ -143,7 +145,9 @@ def test_foreign_key_dropped_when_target_not_converted():
 
 
 def test_multivalue_attribute_never_inlined_becomes_a_child_table():
-    """See test_convert_sql.py's dedicated child-table tests (`_CHILD_TABLE_MODEL`) for the full shape - this just confirms `_MODEL`'s own Parcel.Tags isn't left as a plain column or a note."""
+    """See test_convert_sql.py's dedicated child-table tests (`_CHILD_TABLE_MODEL`) for the full shape - this just
+    confirms `_MODEL`'s own Parcel.Tags isn't left as a plain column or a note.
+    """
     builder = _build(_MODEL)
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     tables = build_tables([parcel])
@@ -384,7 +388,9 @@ END Foo.
 
 
 def test_reserved_keyword_class_name_gets_quoted():
-    """A real class named after a SQL reserved word (real corpus cases: "Union", "Index") - unquoted, both PostgreSQL and SQLite reject `CREATE TABLE union (...)`."""
+    """A real class named after a SQL reserved word (real corpus cases: "Union", "Index") - unquoted, both PostgreSQL
+    and SQLite reject `CREATE TABLE union (...)`.
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
@@ -560,7 +566,9 @@ def test_check_constraint_implication_and_not():
 
 
 def test_check_constraint_executes_against_real_sqlite_and_enforces_the_rule():
-    """Not just text assembly - the generated CHECK must actually be enforceable SQL (same discipline as the UNIQUE/FOREIGN KEY live-engine checks elsewhere in this file)."""
+    """Not just text assembly - the generated CHECK must actually be enforceable SQL (same discipline as the
+    UNIQUE/FOREIGN KEY live-engine checks elsewhere in this file).
+    """
     builder = _build(_CHECK_MODEL)
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     ddl = render_gpkg(build_tables([parcel]))
@@ -578,7 +586,12 @@ def test_check_constraint_executes_against_real_sqlite_and_enforces_the_rule():
 
 
 def test_unsupported_constraint_expression_becomes_a_note_not_a_wrong_check():
-    """Real corpus bug (2026-08-27, `ili_corpus/Naturereigniskataster_MGDM_V1.ili`): a `factor` alt this project's grammar mapping used to lose entirely (`INTERLIS.len(...)`, see spec/grammar/mapping/07_constraints.yml's `factor.INTERLIS` entry) collapsed to a bare attribute path - `INTERLIS.len(ParcelNr) == 3` would have silently built (and rendered a CHECK for) the wrong condition `ParcelNr == 3`. Fixed at construction (a real `FunctionCall` node now), so this must surface as an unsupported note - never a column comparison."""
+    """Real corpus bug (2026-08-27, `ili_corpus/Naturereigniskataster_MGDM_V1.ili`): a `factor` alt this project's
+    grammar mapping used to lose entirely (`INTERLIS.len(...)`, see spec/grammar/mapping/07_constraints.yml's
+    `factor.INTERLIS` entry) collapsed to a bare attribute path - `INTERLIS.len(ParcelNr) == 3` would have silently
+    built (and rendered a CHECK for) the wrong condition `ParcelNr == 3`. Fixed at construction (a real `FunctionCall`
+    node now), so this must surface as an unsupported note - never a column comparison.
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
@@ -658,7 +671,11 @@ def test_unique_local_executes_against_real_sqlite_and_enforces_per_parent_scope
 
 
 def test_unique_local_on_a_structure_nested_one_level_into_a_class():
-    """Dominant real corpus idiom (`ili_corpus/KbS_V1_5.ili`'s MultilingualUri/MultilingualText pattern): a STRUCTURE wraps the BAG/LIST AND declares UNIQUE (LOCAL) on itself, embedded one level into a Class as an ordinary attribute - the child table is qualified with the STRUCTURE attribute's own name (`parcel_name_entries`, not `parcel_entries`), with its UNIQUE (LOCAL) applied exactly like the direct-on-Class case."""
+    """Dominant real corpus idiom (`ili_corpus/KbS_V1_5.ili`'s MultilingualUri/MultilingualText pattern): a STRUCTURE
+    wraps the BAG/LIST AND declares UNIQUE (LOCAL) on itself, embedded one level into a Class as an ordinary attribute -
+    the child table is qualified with the STRUCTURE attribute's own name (`parcel_name_entries`, not `parcel_entries`),
+    with its UNIQUE (LOCAL) applied exactly like the direct-on-Class case.
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =

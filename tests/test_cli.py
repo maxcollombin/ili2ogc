@@ -64,7 +64,9 @@ def test_convert_jsonfg_resolves_crs_declared_locally_not_via_import(tmp_path, c
 
 
 def test_convert_sql_resolves_crs_declared_locally_not_via_import(tmp_path, capsys):
-    """Same CLI wiring gap as convert/convert-jsonfg, SQL side: a CoordType declared IN the root .ili must resolve a real geometry column."""
+    """Same CLI wiring gap as convert/convert-jsonfg, SQL side: a CoordType declared IN the root .ili must resolve a
+    real geometry column.
+    """
     ili_path = tmp_path / "Foo.ili"
     ili_path.write_text(_MODEL_WITH_META, encoding="utf-8")
 

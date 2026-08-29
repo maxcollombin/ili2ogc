@@ -73,7 +73,15 @@ from interlis.xtf.schema import (
 )
 
 OID_COLUMN = "id"
-"""Deliberately NOT `PRIMARY KEY`/GDAL's own default FID column name (`ogc_fid`) - verified empirically (2026-08-27, a real `ogr2ogr -append` against a live PostgreSQL AND GeoPackage) that GDAL treats WHATEVER column it detects as the table's `PRIMARY KEY` as an auto-managed FID slot, excluded from the INSERT column list entirely (expects the database to fill it in, e.g. `SERIAL`) - a Feature's `"id"` is NEVER written into it, `PRIMARY KEY "ogc_fid" text` silently stayed NULL and violated its own NOT NULL constraint. `"id"` matches EXACTLY what the JSON-FG reader (`ogrinfo`, confirmed) exposes as a plain STRING FIELD in its own right, separate from OGR's internal FID concept - declared `UNIQUE NOT NULL` (never `PRIMARY KEY`) so GDAL treats it as a normal field to WRITE, not a slot to manage. See docs/sql-conversion-strategy.md for the full investigation."""
+"""Deliberately NOT `PRIMARY KEY`/GDAL's own default FID column name (`ogc_fid`) - verified empirically (2026-08-27, a
+real `ogr2ogr -append` against a live PostgreSQL AND GeoPackage) that GDAL treats WHATEVER column it detects as the
+table's `PRIMARY KEY` as an auto-managed FID slot, excluded from the INSERT column list entirely (expects the database
+to fill it in, e.g. `SERIAL`) - a Feature's `"id"` is NEVER written into it, `PRIMARY KEY "ogc_fid" text` silently
+stayed NULL and violated its own NOT NULL constraint. `"id"` matches EXACTLY what the JSON-FG reader (`ogrinfo`,
+confirmed) exposes as a plain STRING FIELD in its own right, separate from OGR's internal FID concept - declared `UNIQUE
+NOT NULL` (never `PRIMARY KEY`) so GDAL treats it as a normal field to WRITE, not a slot to manage. See
+docs/sql-conversion-strategy.md for the full investigation.
+"""
 
 _GEOMETRY_KINDS = {"CoordType", "LineType"}
 _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL's own identifier length limit - a real ceiling, not an arbitrary one.
@@ -98,7 +106,8 @@ def _truncate_identifier(name: str) -> str:
 
 
 def _avoid_identity_collision(columns: list[Column]) -> dict[str, str]:
-    """Rename any column literally named `OID_COLUMN` ("id") to `"id_attr"` (or `"id_attr_2"`, ... on a further collision), IN PLACE - returns the `{old_name: new_name}` rename map.
+    """Rename any column literally named `OID_COLUMN` ("id") to `"id_attr"` (or `"id_attr_2"`, ... on a further
+    collision), IN PLACE - returns the `{old_name: new_name}` rename map.
 
     Real corpus case (found 2026-08-27 via a live SQLite run,
     `ili_corpus/WasserBase_V1_1.ili`: `ID : MANDATORY TEXT*25;` -
@@ -184,7 +193,9 @@ class UniqueConstraint:
 class CheckConstraint:
     name: str
     expression: str
-    """A complete SQL boolean expression, already portable across PostgreSQL and SQLite (no dialect-specific syntax) - see `_expression_to_sql`."""
+    """A complete SQL boolean expression, already portable across PostgreSQL and SQLite (no dialect-specific syntax) -
+    see `_expression_to_sql`.
+    """
 
 
 @dataclass
@@ -202,12 +213,15 @@ class Table:
 class SqlView:
     name: str
     body: str | None
-    """A complete, dialect-portable `SELECT ... FROM ... [WHERE ...]` (comma-join, no dialect-specific syntax), or `None` when the View could not be translated - `notes` then says why (RULE #5)."""
+    """A complete, dialect-portable `SELECT ... FROM ... [WHERE ...]` (comma-join, no dialect-specific syntax), or
+    `None` when the View could not be translated - `notes` then says why (RULE #5).
+    """
     notes: list[str] = field(default_factory=list)
 
 
 def _srid(coord_type: MetaInstance | None) -> str | None:
-    """Return the bare numeric EPSG code (e.g. `"2056"`) from a CoordType's `!!@CRS=EPSG:<code>` meta-attribute, or `None`.
+    """Return the bare numeric EPSG code (e.g. `"2056"`) from a CoordType's `!!@CRS=EPSG:<code>` meta-attribute, or
+    `None`.
 
     Same resolution as `convert/jsonfg.py`'s `_crs_uri` (reused via the
     same `_meta_value` primitive), returning just the numeric code instead
@@ -225,7 +239,9 @@ def _srid(coord_type: MetaInstance | None) -> str | None:
 
 
 def _geometry_column_info(resolved: ResolvedAttribute) -> tuple[str, int, None] | tuple[None, None, str]:
-    """Return `(sfa_type, srid, None)` on success or `(None, None, reason)` on failure, for a CoordType/LineType attribute."""
+    """Return `(sfa_type, srid, None)` on success or `(None, None, reason)` on failure, for a CoordType/LineType
+    attribute.
+    """
     if resolved.type_kind == "CoordType":
         coord_type = resolved.type_instance
         sfa = "Point"
@@ -287,7 +303,8 @@ def _columns_for_class(
     *,
     prefix: str = "",
 ) -> tuple[list[Column], list[ForeignKey], list[str], list[tuple[str, MetaInstance]], dict[str, list[list[str]]]]:
-    """Return `(columns, foreign_keys, notes, child_specs, local_unique)` for `cls`'s own+inherited members, flattening one level of STRUCTURE nesting inline.
+    """Return `(columns, foreign_keys, notes, child_specs, local_unique)` for `cls`'s own+inherited members, flattening
+    one level of STRUCTURE nesting inline.
 
     `prefix` is only ever non-empty on the recursive call flattening a
     STRUCTURE attribute (`"<attr>_"`) - used both to build flattened column
@@ -518,7 +535,9 @@ def _build_child_table(
 
 
 class _UnsupportedCheckExpression(Exception):
-    """Raised when an `Expression` node needs context a single-row SQL `CHECK` cannot express - caught by the caller, never propagated (RULE #5: a `-- NOTE`, not a crash)."""
+    """Raised when an `Expression` node needs context a single-row SQL `CHECK` cannot express - caught by the caller,
+    never propagated (RULE #5: a `-- NOTE`, not a crash).
+    """
 
 
 _SQL_RELATIONAL_OPERATORS = {
@@ -740,7 +759,8 @@ def _check_constraints_for_class(
 
 
 def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[list[UniqueConstraint], list[str]]:
-    """Return `(constraints, notes)` for `cls`'s own `UniqueConstraint`s - simple `Kind=GlobalU`, no `->` navigation, only.
+    """Return `(constraints, notes)` for `cls`'s own `UniqueConstraint`s - simple `Kind=GlobalU`, no `->` navigation,
+    only.
 
     `Kind=LocalU` is handled separately by `_local_unique_constraints_for_class`
     (a different SQL shape entirely - scoped to a `BAG`/`LIST OF STRUCTURE`
@@ -1088,7 +1108,9 @@ class _ViewResolver:
         return {c.name for c in self.tables_by_name[table_name].columns}
 
     def scalar_ref(self, factor: MetaInstance) -> str:
-        """Return `"alias"."column"` for a `PathOrInspFactor`, registering any JOINs its intermediate reference hops need."""
+        """Return `"alias"."column"` for a `PathOrInspFactor`, registering any JOINs its intermediate reference hops
+        need.
+        """
         if factor._qualified_class.endswith("Constant"):
             return _view_constant_literal(factor)
         if not factor._qualified_class.endswith("PathOrInspFactor") or getattr(factor, "Inspection", None):
@@ -1136,7 +1158,8 @@ class _ViewResolver:
         raise _UnsupportedView("unreachable")  # pragma: no cover
 
     def defined_sql(self, factor: MetaInstance) -> str:
-        """Return a SQL boolean for `DEFINED(<base-alias> -> role -> role ...)` - an association-navigation existence test.
+        """Return a SQL boolean for `DEFINED(<base-alias> -> role -> role ...)` - an association-navigation existence
+        test.
 
         This is the DMAV `*_Gueltig` VIEW idiom: a `WHERE` built only from
         nested `DEFINED()` over association-role paths. Each hop is a
@@ -1295,7 +1318,8 @@ def build_views(
     class_symbol_tables: dict[int, SymbolTable] | None = None,
     class_table_names: dict[int, str] | None = None,
 ) -> list[SqlView]:
-    """Translate each `View` (`FormationKind` Projection/Join only) into a `CREATE VIEW` body, or a `-- NOTE` when it can't be done faithfully.
+    """Translate each `View` (`FormationKind` Projection/Join only) into a `CREATE VIEW` body, or a `-- NOTE` when it
+    can't be done faithfully.
 
     A View becomes `SELECT <attr := path> ... FROM <base tables + navigated
     join tables, comma-joined> WHERE <translated Where predicates>`. Its
@@ -1446,7 +1470,8 @@ def _render_views(views: tuple[SqlView, ...]) -> list[str]:
 
 
 def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
-    """Render `tables` as PostgreSQL DDL text - `CREATE TABLE` (with inline `UNIQUE`) then `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`.
+    """Render `tables` as PostgreSQL DDL text - `CREATE TABLE` (with inline `UNIQUE`) then `ALTER TABLE ... ADD
+    CONSTRAINT ... FOREIGN KEY`.
 
     Foreign keys are added via a SEPARATE `ALTER TABLE` pass after every
     `CREATE TABLE` - sidesteps forward-reference ordering entirely (a

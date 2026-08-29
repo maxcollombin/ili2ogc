@@ -1,4 +1,5 @@
-"""`MANDATORY <named domain>` (e.g. `Geom : MANDATORY Coord2D;`) - InterlisModelBuilder._apply_pending_mandatory_overrides.
+"""`MANDATORY <named domain>` (e.g. `Geom : MANDATORY Coord2D;`) -
+InterlisModelBuilder._apply_pending_mandatory_overrides.
 
 See docs/sql-conversion-strategy.md ("One more real gap found") for the
 full investigation: found while building backlog item 14 (SQL DDL). Every
@@ -70,7 +71,9 @@ def test_shared_domain_instance_is_never_mutated():
 
 
 def test_inline_mandatory_type_unaffected_by_this_fix():
-    """A fresh, non-shared instance (inline type, not a named domain) already worked before this fix - must keep working."""
+    """A fresh, non-shared instance (inline type, not a named domain) already worked before this fix - must keep
+    working.
+    """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =

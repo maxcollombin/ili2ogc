@@ -130,7 +130,8 @@ def test_view_structure_builds_correctly(fname, view_name, base_count, kind):
     ],
 )
 def test_name_assign_expression_view_attributes_are_built_with_resolved_types(fname, view_name, expected):
-    """`Name := expression` view attributes now build one `AttrOrParam` each, `Final=True`, `Type` resolved when possible.
+    """`Name := expression` view attributes now build one `AttrOrParam` each, `Final=True`, `Type` resolved when
+    possible.
 
     `Type` stays unset for `ivs_kanton` only - the ONE attribute referencing
     a domain from a real external model this hermetic test's
