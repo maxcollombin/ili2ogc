@@ -7,6 +7,7 @@ Hence a side-effect-free API: resolve()/find_association() raise an
 exception instead of writing to a global list - it's up to the caller to
 decide whether to collect or let it propagate.
 """
+
 import warnings
 from pathlib import Path
 

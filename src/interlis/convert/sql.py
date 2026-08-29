@@ -47,6 +47,7 @@ dropped, each unsupported
 construct is collected into `Table.notes` and rendered as a `-- NOTE` SQL
 comment (RULE #5).
 """
+
 import re
 from dataclasses import dataclass, field
 
@@ -266,14 +267,19 @@ def _scalar_sql_type(resolved: ResolvedAttribute) -> str | None:
     if kind == "BooleanType":
         return "boolean"
     if kind == "FormattedType" and inst is not None:
-        return {"XMLDate": "date", "XMLTime": "time", "XMLDateTime": "timestamp"}.get(getattr(inst, "Format", None), "text")
+        return {"XMLDate": "date", "XMLTime": "time", "XMLDateTime": "timestamp"}.get(
+            getattr(inst, "Format", None), "text"
+        )
     if kind == "BlackboxType":
         return "text"
     return None
 
 
 def _columns_for_class(
-    cls: MetaInstance, symbol_table: SymbolTable | None, *, prefix: str = "",
+    cls: MetaInstance,
+    symbol_table: SymbolTable | None,
+    *,
+    prefix: str = "",
 ) -> tuple[list[Column], list[ForeignKey], list[str], list[tuple[str, MetaInstance]], dict[str, list[list[str]]]]:
     """Return `(columns, foreign_keys, notes, child_specs, local_unique)` for `cls`'s own+inherited members, flattening one level of STRUCTURE nesting inline.
 
@@ -317,20 +323,36 @@ def _columns_for_class(
 
         if resolved.type_kind == "MultiValue":
             if not isinstance(resolved.type_instance, MetaInstance):
-                notes.append(_diag("SQL-BAGLIST-ELEMENT-UNRESOLVED", f"{label}: BAG/LIST OF element type not resolved - provide its model via --repo"))
+                notes.append(
+                    _diag(
+                        "SQL-BAGLIST-ELEMENT-UNRESOLVED",
+                        f"{label}: BAG/LIST OF element type not resolved - provide its model via --repo",
+                    )
+                )
                 continue
             child_specs.append((label, resolved.type_instance))
             continue
 
         if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
             if prefix:
-                notes.append(_diag("SQL-STRUCT-NESTED-DEEP", f"{label}: STRUCTURE nested more than one level deep - not flattened"))
+                notes.append(
+                    _diag(
+                        "SQL-STRUCT-NESTED-DEEP", f"{label}: STRUCTURE nested more than one level deep - not flattened"
+                    )
+                )
                 continue
             if bool(getattr(resolved.type_instance, "Abstract", False)):
-                notes.append(_diag("SQL-STRUCT-ABSTRACT", f"{label}: ABSTRACT structure - subclass polymorphism not mapped to a table"))
+                notes.append(
+                    _diag(
+                        "SQL-STRUCT-ABSTRACT",
+                        f"{label}: ABSTRACT structure - subclass polymorphism not mapped to a table",
+                    )
+                )
                 continue
             sub_columns, sub_fks, sub_notes, sub_child_specs, _sub_local_unique = _columns_for_class(
-                resolved.type_instance, symbol_table, prefix=f"{label}_",
+                resolved.type_instance,
+                symbol_table,
+                prefix=f"{label}_",
             )
             columns.extend(sub_columns)
             foreign_keys.extend(sub_fks)
@@ -345,7 +367,12 @@ def _columns_for_class(
         if resolved.type_kind in ("Class", "ReferenceType") and resolved.type_instance is not None:
             target = reference_target_class(resolved)
             if target is None:
-                notes.append(_diag("SQL-REF-TARGET-UNRESOLVED", f"{label}: reference target not resolved - pass its model's directory to --repo, or the model file to --catalog"))
+                notes.append(
+                    _diag(
+                        "SQL-REF-TARGET-UNRESOLVED",
+                        f"{label}: reference target not resolved - pass its model's directory to --repo, or the model file to --catalog",
+                    )
+                )
                 continue
             target_table = _sql_identifier(getattr(target, "Name", None) or "")
             columns.append(Column(col_name, "text", nullable=not resolved.mandatory))
@@ -356,11 +383,19 @@ def _columns_for_class(
         if resolved.type_kind in _GEOMETRY_KINDS:
             sfa_type, srid, reason = _geometry_column_info(resolved)
             if sfa_type is None:
-                notes.append(_diag("SQL-GEOM-NO-CRS", f"{label}: {reason} - provide the geometry base model via --repo"))
+                notes.append(
+                    _diag("SQL-GEOM-NO-CRS", f"{label}: {reason} - provide the geometry base model via --repo")
+                )
                 continue
-            columns.append(Column(
-                col_name, sql_type="", nullable=not resolved.mandatory, geometry_type=sfa_type, srid=srid,
-            ))
+            columns.append(
+                Column(
+                    col_name,
+                    sql_type="",
+                    nullable=not resolved.mandatory,
+                    geometry_type=sfa_type,
+                    srid=srid,
+                )
+            )
             continue
 
         scalar_type = _scalar_sql_type(resolved)
@@ -369,17 +404,22 @@ def _columns_for_class(
             continue
 
         if resolved.type_kind is None:
-            notes.append(_diag(
-                "BUILD-TYPE-UNRESOLVED",
-                f"{label}: attribute type not resolved by the model builder - provide the imported model via --repo",
-            ))
+            notes.append(
+                _diag(
+                    "BUILD-TYPE-UNRESOLVED",
+                    f"{label}: attribute type not resolved by the model builder - provide the imported model via --repo",
+                )
+            )
         else:
             notes.append(_diag("SQL-ATTR-TYPE-UNMAPPED", f"{label}: unsupported type {resolved.type_kind!r}"))
     return columns, foreign_keys, notes, child_specs, local_unique
 
 
 def _build_child_table(
-    parent_table: str, attr_name: str, multi_value: MetaInstance, symbol_table: SymbolTable | None,
+    parent_table: str,
+    attr_name: str,
+    multi_value: MetaInstance,
+    symbol_table: SymbolTable | None,
 ) -> tuple[Table | None, dict[str, str], str | None]:
     """Return `(child_table, renamed, None)` on success or `(None, {}, reason)` on failure, for one `BAG`/`LIST OF` attribute.
 
@@ -416,10 +456,14 @@ def _build_child_table(
     child_table_name = _sql_identifier(f"{parent_table}_{attr_name}")
     fk_column = _sql_identifier(f"{parent_table}_fk")
     columns: list[Column] = [Column(fk_column, "text", nullable=False)]
-    foreign_keys: list[ForeignKey] = [ForeignKey(
-        _truncate_identifier(_sql_identifier(f"fk_{child_table_name}_{fk_column}")),
-        [fk_column], parent_table, [OID_COLUMN],
-    )]
+    foreign_keys: list[ForeignKey] = [
+        ForeignKey(
+            _truncate_identifier(_sql_identifier(f"fk_{child_table_name}_{fk_column}")),
+            [fk_column],
+            parent_table,
+            [OID_COLUMN],
+        )
+    ]
     notes: list[str] = []
 
     if bool(getattr(multi_value, "Ordered", False)):
@@ -428,7 +472,9 @@ def _build_child_table(
     if base_kind == "Class" and _is_structure(base_type):
         if bool(getattr(base_type, "Abstract", False)):
             return None, {}, "BAG/LIST OF an ABSTRACT structure - subclass polymorphism not mapped to a table"
-        sub_columns, sub_fks, sub_notes, _sub_child_specs, _sub_local_unique = _columns_for_class(base_type, symbol_table)
+        sub_columns, sub_fks, sub_notes, _sub_child_specs, _sub_local_unique = _columns_for_class(
+            base_type, symbol_table
+        )
         columns.extend(sub_columns)
         foreign_keys.extend(sub_fks)
         notes.extend(sub_notes)
@@ -439,9 +485,14 @@ def _build_child_table(
             return None, {}, "reference target not resolved - pass its model to --repo or --catalog"
         target_table = _sql_identifier(getattr(target, "Name", None) or "")
         columns.append(Column("value", "text", nullable=True))
-        foreign_keys.append(ForeignKey(
-            _truncate_identifier(_sql_identifier(f"fk_{child_table_name}_value")), ["value"], target_table, [OID_COLUMN],
-        ))
+        foreign_keys.append(
+            ForeignKey(
+                _truncate_identifier(_sql_identifier(f"fk_{child_table_name}_value")),
+                ["value"],
+                target_table,
+                [OID_COLUMN],
+            )
+        )
     elif base_kind in _GEOMETRY_KINDS:
         synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
         sfa_type, srid, reason = _geometry_column_info(synthetic)
@@ -486,7 +537,9 @@ def _path_to_column(path_els: list[MetaInstance]) -> str:
     Lot 1 scope everywhere else in this module - rejected the same way.
     """
     if len(path_els) not in (1, 2):
-        raise _UnsupportedCheckExpression(f"path with {len(path_els)} hops needs more than one level of STRUCTURE nesting")
+        raise _UnsupportedCheckExpression(
+            f"path with {len(path_els)} hops needs more than one level of STRUCTURE nesting"
+        )
     refs = []
     for path_el in path_els:
         kind = getattr(path_el, "Kind", None)
@@ -534,7 +587,9 @@ def _expression_to_sql(expr: MetaInstance, column_names: set[str], renamed: dict
         subs = expr.SubExpressions
         if op in _SQL_RELATIONAL_OPERATORS:
             if len(subs) != 2:
-                raise _UnsupportedCheckExpression(f"relational operator {op!r} needs exactly 2 operands, got {len(subs)}")
+                raise _UnsupportedCheckExpression(
+                    f"relational operator {op!r} needs exactly 2 operands, got {len(subs)}"
+                )
             left = _expression_to_sql(subs[0], column_names, renamed)
             right = _expression_to_sql(subs[1], column_names, renamed)
             return f"({left} {_SQL_RELATIONAL_OPERATORS[op]} {right})"
@@ -548,7 +603,9 @@ def _expression_to_sql(expr: MetaInstance, column_names: set[str], renamed: dict
             left = _expression_to_sql(subs[0], column_names, renamed)
             right = _expression_to_sql(subs[1], column_names, renamed)
             return f"(NOT {left} OR {right})"
-        raise _UnsupportedCheckExpression(f"operator {op!r} needs numeric-domain context beyond boolean CHECK evaluation")
+        raise _UnsupportedCheckExpression(
+            f"operator {op!r} needs numeric-domain context beyond boolean CHECK evaluation"
+        )
     if qualified.endswith("UnaryExpr"):
         op = expr.Operation
         if op == "Not":
@@ -569,7 +626,9 @@ def _expression_to_sql(expr: MetaInstance, column_names: set[str], renamed: dict
         raw_column = _path_to_column(expr.PathEls)
         column = renamed.get(raw_column, raw_column)
         if column not in column_names:
-            raise _UnsupportedCheckExpression(f"attribute path resolves to column {column!r}, which has no mapped SQL type")
+            raise _UnsupportedCheckExpression(
+                f"attribute path resolves to column {column!r}, which has no mapped SQL type"
+            )
         return _quote(column)
     if qualified.endswith("Constant"):
         value, type_ = expr.Value, expr.Type
@@ -578,7 +637,9 @@ def _expression_to_sql(expr: MetaInstance, column_names: set[str], renamed: dict
         if type_ == "Text":
             return _text_sql_literal(value)
         if type_ == "Enumeration":
-            return "'" + value.replace("'", "''") + "'"  # a plain dotted-path string (`_normalize_enumeration_const_value`), never quoted to begin with - matches EnumType's own `text` SQL column type
+            return (
+                "'" + value.replace("'", "''") + "'"
+            )  # a plain dotted-path string (`_normalize_enumeration_const_value`), never quoted to begin with - matches EnumType's own `text` SQL column type
         raise _UnsupportedCheckExpression(f"constant of type {type_!r} is not supported")
     raise _UnsupportedCheckExpression(
         f"expression node {qualified} needs THIS/PARENT/aggregate/function-call context beyond one row",
@@ -586,7 +647,10 @@ def _expression_to_sql(expr: MetaInstance, column_names: set[str], renamed: dict
 
 
 def _check_constraints_for_class(
-    cls: MetaInstance, table_name: str, column_names: set[str], renamed: dict[str, str],
+    cls: MetaInstance,
+    table_name: str,
+    column_names: set[str],
+    renamed: dict[str, str],
 ) -> tuple[list[CheckConstraint], list[str]]:
     """Return `(constraints, notes)` for `cls`'s own row-local `MANDATORY CONSTRAINT`s - same scope as `constraint_eval.py`'s `check_feature_constraints`.
 
@@ -609,30 +673,41 @@ def _check_constraints_for_class(
         if qname == "UniqueConstraint":
             continue  # handled by _unique_constraints_for_class / _local_unique_constraints_for_class
         if qname == "ExistenceConstraint":
-            notes.append(_diag(
-                "SQL-CONSTRAINT-EXISTENCE",
-                f"EXISTENCE CONSTRAINT {label}: a check that a value also occurs in another class - "
-                "no single-row SQL CHECK can express it",
-            ))
+            notes.append(
+                _diag(
+                    "SQL-CONSTRAINT-EXISTENCE",
+                    f"EXISTENCE CONSTRAINT {label}: a check that a value also occurs in another class - "
+                    "no single-row SQL CHECK can express it",
+                )
+            )
             continue
         if qname == "SetConstraint":
-            notes.append(_diag(
-                "SQL-CONSTRAINT-SET",
-                f"SET CONSTRAINT {label}: a whole-population check - no single-row SQL CHECK can express it",
-            ))
+            notes.append(
+                _diag(
+                    "SQL-CONSTRAINT-SET",
+                    f"SET CONSTRAINT {label}: a whole-population check - no single-row SQL CHECK can express it",
+                )
+            )
             continue
         if qname != "SimpleConstraint":
-            notes.append(_diag(
-                "SQL-CONSTRAINT-NOT-ROWLOCAL",
-                f"CONSTRAINT {label} ({qname}): not a row-local MANDATORY CONSTRAINT - no CHECK generated",
-            ))
+            notes.append(
+                _diag(
+                    "SQL-CONSTRAINT-NOT-ROWLOCAL",
+                    f"CONSTRAINT {label} ({qname}): not a row-local MANDATORY CONSTRAINT - no CHECK generated",
+                )
+            )
             continue
-        if getattr(constraint, "Kind", None) not in (None, "MandC") or getattr(constraint, "Percentage", None) is not None:
-            notes.append(_diag(
-                "SQL-CONSTRAINT-PLAUSIBILITY",
-                f"CONSTRAINT {label}: percentage-based plausibility form (Kind="
-                f"{getattr(constraint, 'Kind', None)!r}) - a population ratio no single-row SQL CHECK can express",
-            ))
+        if (
+            getattr(constraint, "Kind", None) not in (None, "MandC")
+            or getattr(constraint, "Percentage", None) is not None
+        ):
+            notes.append(
+                _diag(
+                    "SQL-CONSTRAINT-PLAUSIBILITY",
+                    f"CONSTRAINT {label}: percentage-based plausibility form (Kind="
+                    f"{getattr(constraint, 'Kind', None)!r}) - a population ratio no single-row SQL CHECK can express",
+                )
+            )
             continue
         expr = getattr(constraint, "LogicalExpression", None)
         if expr is None:
@@ -642,9 +717,16 @@ def _check_constraints_for_class(
         try:
             sql_expr = _expression_to_sql(expr, column_names, renamed)
         except _UnsupportedCheckExpression as exc:
-            notes.append(_diag("SQL-CHECK-EXPR-UNSUPPORTED", f"MANDATORY CONSTRAINT {name or f'#{counter}'!r}: {exc} - CHECK not generated"))
+            notes.append(
+                _diag(
+                    "SQL-CHECK-EXPR-UNSUPPORTED",
+                    f"MANDATORY CONSTRAINT {name or f'#{counter}'!r}: {exc} - CHECK not generated",
+                )
+            )
             continue
-        constraint_name = _truncate_identifier(_sql_identifier(f"chk_{table_name}_{name}" if name else f"chk_{table_name}_{counter}"))
+        constraint_name = _truncate_identifier(
+            _sql_identifier(f"chk_{table_name}_{name}" if name else f"chk_{table_name}_{counter}")
+        )
         result.append(CheckConstraint(constraint_name, sql_expr))
     return result, notes
 
@@ -682,7 +764,12 @@ def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[l
             # real signal here - same permissive Kind set as
             # `constraint_eval.py`'s own `_resolve_path`.
             if len(path_els) != 1 or getattr(path_els[0], "Kind", None) not in ("ReferenceAttr", "Attribute"):
-                notes.append(_diag("SQL-UNIQUE-CROSS-REF", "UNIQUE across a '->' reference - not expressible as a plain SQL table constraint"))
+                notes.append(
+                    _diag(
+                        "SQL-UNIQUE-CROSS-REF",
+                        "UNIQUE across a '->' reference - not expressible as a plain SQL table constraint",
+                    )
+                )
                 supported = False
                 break
             columns.append(_sql_identifier(getattr(path_els[0], "Ref", None) or ""))
@@ -720,27 +807,38 @@ def _local_unique_constraints_for_class(cls: MetaInstance) -> tuple[dict[str, li
             continue
         path_defs = getattr(constraint, "UniqueDef", None) or []
         if not path_defs:
-            notes.append(_diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", "UNIQUE (LOCAL): role path could not be resolved - not supported"))
+            notes.append(
+                _diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", "UNIQUE (LOCAL): role path could not be resolved - not supported")
+            )
             continue
         role_attr: str | None = None
         columns: list[str] = []
         supported = True
         for path in path_defs:
             path_els = getattr(path, "PathEls", None) or []
-            if len(path_els) < 2 or any(getattr(pe, "Kind", None) not in ("ReferenceAttr", "Attribute") for pe in path_els):
+            if len(path_els) < 2 or any(
+                getattr(pe, "Kind", None) not in ("ReferenceAttr", "Attribute") for pe in path_els
+            ):
                 notes.append(_diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", "UNIQUE (LOCAL): path shape not supported"))
                 supported = False
                 break
             *role_hops, sub_attr = path_els
             if len(role_hops) != 1:
-                notes.append(_diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", "UNIQUE (LOCAL) across a multi-hop role path - not supported"))
+                notes.append(
+                    _diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", "UNIQUE (LOCAL) across a multi-hop role path - not supported")
+                )
                 supported = False
                 break
             hop_name = getattr(role_hops[0], "Ref", None) or ""
             if role_attr is None:
                 role_attr = hop_name
             elif hop_name != role_attr:
-                notes.append(_diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", "UNIQUE (LOCAL) mixing several BAG/LIST attributes in one constraint - not supported"))
+                notes.append(
+                    _diag(
+                        "SQL-UNIQUE-LOCAL-UNSUPPORTED",
+                        "UNIQUE (LOCAL) mixing several BAG/LIST attributes in one constraint - not supported",
+                    )
+                )
                 supported = False
                 break
             columns.append(_sql_identifier(getattr(sub_attr, "Ref", None) or ""))
@@ -750,8 +848,10 @@ def _local_unique_constraints_for_class(cls: MetaInstance) -> tuple[dict[str, li
 
 
 def build_tables(
-    classes: list[MetaInstance], symbol_table: SymbolTable | None = None,
-    *, class_symbol_tables: dict[int, SymbolTable] | None = None,
+    classes: list[MetaInstance],
+    symbol_table: SymbolTable | None = None,
+    *,
+    class_symbol_tables: dict[int, SymbolTable] | None = None,
     class_table_names: dict[int, str] | None = None,
 ) -> list[Table]:
     """Convert every `Class(Kind=Class)` in `classes` into a `Table` - the dialect-neutral IR every renderer consumes.
@@ -827,7 +927,12 @@ def build_tables(
         for unique in unique_constraints:
             missing = [c for c in unique.columns if c not in column_names]
             if missing:
-                unique_notes.append(_diag("SQL-UNIQUE-COL-UNMAPPED", f"UNIQUE ({', '.join(unique.columns)}): column(s) {missing} have no mapped SQL type"))
+                unique_notes.append(
+                    _diag(
+                        "SQL-UNIQUE-COL-UNMAPPED",
+                        f"UNIQUE ({', '.join(unique.columns)}): column(s) {missing} have no mapped SQL type",
+                    )
+                )
                 continue
             valid_unique_constraints.append(unique)
         check_constraints, check_notes = _check_constraints_for_class(cls, table_name, column_names, renamed)
@@ -836,8 +941,11 @@ def build_tables(
             local_unique.setdefault(attr_name, []).extend(groups)
 
         parent_table = Table(
-            name=table_name, columns=columns, unique_constraints=valid_unique_constraints,
-            foreign_keys=foreign_keys, check_constraints=check_constraints,
+            name=table_name,
+            columns=columns,
+            unique_constraints=valid_unique_constraints,
+            foreign_keys=foreign_keys,
+            check_constraints=check_constraints,
             notes=notes + unique_notes + check_notes + local_unique_notes,
         )
         tables.append(parent_table)
@@ -845,7 +953,11 @@ def build_tables(
         for attr_name, multi_value in child_specs:
             child_table, child_renamed, reason = _build_child_table(table_name, attr_name, multi_value, home_table)
             if child_table is None:
-                rule = "SQL-BAGLIST-ELEMENT-UNRESOLVED" if reason and "not resolved" in reason else "SQL-BAGLIST-ELEMENT-UNMAPPED"
+                rule = (
+                    "SQL-BAGLIST-ELEMENT-UNRESOLVED"
+                    if reason and "not resolved" in reason
+                    else "SQL-BAGLIST-ELEMENT-UNMAPPED"
+                )
                 tables[-1].notes.append(_diag(rule, f"{attr_name}: BAG/LIST OF - {reason}"))
                 continue
             child_base_name = child_table.name
@@ -864,10 +976,12 @@ def build_tables(
                 full_columns = [fk_column, *remapped]
                 missing = [c for c in full_columns if c not in child_column_names]
                 if missing:
-                    child_table.notes.append(_diag(
-                        "SQL-UNIQUE-COL-UNMAPPED",
-                        f"UNIQUE (LOCAL) {attr_name}: column(s) {missing} have no mapped SQL type",
-                    ))
+                    child_table.notes.append(
+                        _diag(
+                            "SQL-UNIQUE-COL-UNMAPPED",
+                            f"UNIQUE (LOCAL) {attr_name}: column(s) {missing} have no mapped SQL type",
+                        )
+                    )
                     continue
                 name = _truncate_identifier(_sql_identifier(f"uq_{child_table.name}_{'_'.join(full_columns)}"))
                 child_table.unique_constraints.append(UniqueConstraint(name, full_columns))
@@ -878,7 +992,9 @@ def build_tables(
         # attribute on this class (typo, or a role path this project's
         # grammar mapping doesn't reach) - never silently dropped (RULE #5).
         for attr_name in local_unique:
-            parent_table.notes.append(_diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", f"UNIQUE (LOCAL) {attr_name}: no matching BAG/LIST OF attribute"))
+            parent_table.notes.append(
+                _diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", f"UNIQUE (LOCAL) {attr_name}: no matching BAG/LIST OF attribute")
+            )
 
     # 3rd real bug found the same way (PostgreSQL, live `psycopg`-free
     # verification against a real `postgis/postgis` container, 2026-08-27):
@@ -900,12 +1016,14 @@ def build_tables(
         kept_fks = []
         for fk in table.foreign_keys:
             if fk.ref_table not in final_table_names:
-                table.notes.append(_diag(
-                    "SQL-FK-CROSS-MODEL-DROPPED",
-                    f"FOREIGN KEY ({', '.join(fk.columns)}): target table {fk.ref_table!r} belongs to a "
-                    "different model, not created by this conversion - pass that model via --catalog "
-                    "(constraint dropped, column kept)",
-                ))
+                table.notes.append(
+                    _diag(
+                        "SQL-FK-CROSS-MODEL-DROPPED",
+                        f"FOREIGN KEY ({', '.join(fk.columns)}): target table {fk.ref_table!r} belongs to a "
+                        "different model, not created by this conversion - pass that model via --catalog "
+                        "(constraint dropped, column kept)",
+                    )
+                )
                 continue
             kept_fks.append(fk)
         table.foreign_keys = kept_fks
@@ -941,7 +1059,9 @@ class _ViewResolver:
     """
 
     def __init__(
-        self, bases: list[tuple[str, MetaInstance, str]], tables_by_name: dict[str, Table],
+        self,
+        bases: list[tuple[str, MetaInstance, str]],
+        tables_by_name: dict[str, Table],
         symbol_for,
     ) -> None:
         self.by_alias = {alias: (cls, table) for alias, cls, table in bases}
@@ -991,7 +1111,10 @@ class _ViewResolver:
                 raise _UnsupportedView(f"cannot navigate through {hop!r} - not a resolvable reference/role")
             target_table = _sql_identifier(getattr(target, "Name", None) or "")
             if target_table not in self.tables_by_name:
-                raise _UnsupportedView(f"join target table {target_table!r} not built - pass its model via --repo or --catalog", "SQL-VIEW-BASE-MISSING")
+                raise _UnsupportedView(
+                    f"join target table {target_table!r} not built - pass its model via --repo or --catalog",
+                    "SQL-VIEW-BASE-MISSING",
+                )
             if col not in self._columns(table):
                 raise _UnsupportedView(f"reference {hop!r} has no FK column on table {table!r}")
             self._counter += 1
@@ -1090,9 +1213,14 @@ class _ViewResolver:
             fk_col = _sql_identifier((far_role if fk_on_current else near_role).Name or "")
             far_table = _sql_identifier(getattr(far_tgt, "Name", None) or "")
             if far_table not in self.tables_by_name:
-                raise _UnsupportedView(f"navigation target table {far_table!r} not built - pass its model via --repo or --catalog", "SQL-VIEW-BASE-MISSING")
+                raise _UnsupportedView(
+                    f"navigation target table {far_table!r} not built - pass its model via --repo or --catalog",
+                    "SQL-VIEW-BASE-MISSING",
+                )
             return far_tgt, far_table, fk_on_current, fk_col
-        raise _UnsupportedView(f"cannot navigate {hop!r} from {getattr(cls, 'Name', None)!r} - no 2-role association found")
+        raise _UnsupportedView(
+            f"cannot navigate {hop!r} from {getattr(cls, 'Name', None)!r} - no 2-role association found"
+        )
 
 
 def _view_constant_literal(node: MetaInstance) -> str:
@@ -1149,8 +1277,11 @@ def _view_where_sql(expr: MetaInstance, resolver: _ViewResolver) -> str:
 
 
 def build_views(
-    views: list[MetaInstance], tables: list[Table],
-    *, symbol_table: SymbolTable | None = None, class_symbol_tables: dict[int, SymbolTable] | None = None,
+    views: list[MetaInstance],
+    tables: list[Table],
+    *,
+    symbol_table: SymbolTable | None = None,
+    class_symbol_tables: dict[int, SymbolTable] | None = None,
     class_table_names: dict[int, str] | None = None,
 ) -> list[SqlView]:
     """Translate each `View` (`FormationKind` Projection/Join only) into a `CREATE VIEW` body, or a `-- NOTE` when it can't be done faithfully.
@@ -1234,35 +1365,48 @@ def _view_constraint_notes(view: MetaInstance) -> list[str]:
                 for factor in getattr(constraint, "UniqueDef", None) or []
                 for pe in getattr(factor, "PathEls", None) or []
             ]
-            notes.append(_diag(
-                "SQL-VIEW-CONSTRAINT-DROPPED",
-                f"VIEW-level UNIQUE {label} ({', '.join(c for c in cols if c)}) - a CREATE VIEW cannot enforce it",
-            ))
+            notes.append(
+                _diag(
+                    "SQL-VIEW-CONSTRAINT-DROPPED",
+                    f"VIEW-level UNIQUE {label} ({', '.join(c for c in cols if c)}) - a CREATE VIEW cannot enforce it",
+                )
+            )
         elif qname in ("SetConstraint", "ExistenceConstraint"):
-            notes.append(_diag(
-                "SQL-VIEW-CONSTRAINT-DROPPED",
-                f"VIEW-level {qname} {label} - a whole-population check no CREATE VIEW can carry",
-            ))
+            notes.append(
+                _diag(
+                    "SQL-VIEW-CONSTRAINT-DROPPED",
+                    f"VIEW-level {qname} {label} - a whole-population check no CREATE VIEW can carry",
+                )
+            )
         else:
-            notes.append(_diag(
-                "SQL-VIEW-CONSTRAINT-DROPPED",
-                f"VIEW-level CONSTRAINT {label} ({qname}) - not carried onto the CREATE VIEW",
-            ))
+            notes.append(
+                _diag(
+                    "SQL-VIEW-CONSTRAINT-DROPPED",
+                    f"VIEW-level CONSTRAINT {label} ({qname}) - not carried onto the CREATE VIEW",
+                )
+            )
     return notes
 
 
 def _resolve_view_bases(
-    view: MetaInstance, tables_by_name: dict[str, Table], table_name_by_class_id: dict[int, str],
+    view: MetaInstance,
+    tables_by_name: dict[str, Table],
+    table_name_by_class_id: dict[int, str],
 ) -> list[tuple[str, MetaInstance, str]]:
     bases: list[tuple[str, MetaInstance, str]] = []
     used_aliases: set[str] = set()
     for rbv in getattr(view, "RenamedBaseView", None) or []:
         base_cls = getattr(rbv, "BaseView", None)
         if not isinstance(base_cls, MetaInstance):
-            raise _UnsupportedView("a base class did not resolve - pass --repo for the base model's own imports", "SQL-VIEW-BASE-MISSING")
+            raise _UnsupportedView(
+                "a base class did not resolve - pass --repo for the base model's own imports", "SQL-VIEW-BASE-MISSING"
+            )
         table = table_name_by_class_id.get(id(base_cls)) or _sql_identifier(getattr(base_cls, "Name", None) or "")
         if table not in tables_by_name:
-            raise _UnsupportedView(f"base table {table!r} not built - pass {getattr(base_cls, 'Name', '?')}'s model via --repo or --catalog", "SQL-VIEW-BASE-MISSING")
+            raise _UnsupportedView(
+                f"base table {table!r} not built - pass {getattr(base_cls, 'Name', '?')}'s model via --repo or --catalog",
+                "SQL-VIEW-BASE-MISSING",
+            )
         alias = (getattr(rbv, "Name", None) or getattr(base_cls, "Name", None) or "").lower()
         base_alias = alias
         suffix = 2
@@ -1272,7 +1416,9 @@ def _resolve_view_bases(
         used_aliases.add(alias)
         bases.append((alias, base_cls, table))
     if not bases:
-        raise _UnsupportedView("no resolved base classes - pass the base model via --repo or --catalog", "SQL-VIEW-BASE-MISSING")
+        raise _UnsupportedView(
+            "no resolved base classes - pass the base model via --repo or --catalog", "SQL-VIEW-BASE-MISSING"
+        )
     return bases
 
 
@@ -1447,10 +1593,15 @@ def collect_diagnostics(tables: list[Table], views: tuple[SqlView, ...] = (), *,
                 if sep:
                     message, hlp = head, marker.strip(" -") + " " + tail
                     break
-        out.append(Diagnostic(
-            severity_for_class(klass), rule, message,
-            Location(file=file, element_path=owner), help=hlp,
-        ))
+        out.append(
+            Diagnostic(
+                severity_for_class(klass),
+                rule,
+                message,
+                Location(file=file, element_path=owner),
+                help=hlp,
+            )
+        )
 
     for table in tables:
         for note in table.notes:

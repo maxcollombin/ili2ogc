@@ -31,6 +31,7 @@ second parallel implementation of the same COORD/POLYLINE/SURFACE/AREA/
 MULTI* wire conventions - convert() stays a decoupled stage from
 validate(), same split already established by convert/jsonschema.py.
 """
+
 import json
 from typing import Any
 
@@ -100,7 +101,9 @@ def _scalar_value(resolved: ResolvedAttribute, node: RawNode) -> Any:
         # attribute's JSON Schema (convert/jsonschema.py) - keeps a
         # Feature's property values consistent with the type its own
         # $defs entry declares, rather than a second independent guess.
-        as_int = _is_integer_range(getattr(resolved.type_instance, "Min", None), getattr(resolved.type_instance, "Max", None))
+        as_int = _is_integer_range(
+            getattr(resolved.type_instance, "Min", None), getattr(resolved.type_instance, "Max", None)
+        )
         try:
             return int(text) if as_int else float(text)
         except ValueError:
@@ -111,8 +114,11 @@ def _scalar_value(resolved: ResolvedAttribute, node: RawNode) -> Any:
 
 
 def _attribute_value(
-    resolved: ResolvedAttribute, raw_nodes: list[RawNode], *,
-    symbol_table: SymbolTable | None = None, already_unwrapped: bool = False,
+    resolved: ResolvedAttribute,
+    raw_nodes: list[RawNode],
+    *,
+    symbol_table: SymbolTable | None = None,
+    already_unwrapped: bool = False,
 ) -> Any:
     kind = resolved.type_kind
     if kind in _SCALAR_KINDS:
@@ -150,7 +156,11 @@ def _attribute_value(
 
 
 def _structure_value(
-    resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, symbol_table: SymbolTable | None, already_unwrapped: bool,
+    resolved: ResolvedAttribute,
+    raw_nodes: list[RawNode],
+    *,
+    symbol_table: SymbolTable | None,
+    already_unwrapped: bool,
 ) -> dict[str, Any]:
     """Recurse into a genuine STRUCTURE occurrence's own attributes.
 
@@ -198,8 +208,12 @@ def _multi_value(resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, symbo
     values: list[Any] = []
     for node in raw_nodes:
         for occurrence in node.children:
-            occ_resolved = ResolvedAttribute(attr=resolved.attr, type_instance=base_type, type_kind=base_kind, mandatory=False)
-            values.append(_attribute_value(occ_resolved, [occurrence], symbol_table=symbol_table, already_unwrapped=True))
+            occ_resolved = ResolvedAttribute(
+                attr=resolved.attr, type_instance=base_type, type_kind=base_kind, mandatory=False
+            )
+            values.append(
+                _attribute_value(occ_resolved, [occurrence], symbol_table=symbol_table, already_unwrapped=True)
+            )
     return values
 
 
@@ -275,24 +289,30 @@ def _child_row_features(obj: XtfObject, cls: MetaInstance, *, symbol_table: Symb
                 properties: dict[str, Any] = {fk_property: obj.tid}
                 if ordered:
                     properties["seq"] = index
-                occ_resolved = ResolvedAttribute(attr=attr, type_instance=base_type, type_kind=base_kind, mandatory=False)
+                occ_resolved = ResolvedAttribute(
+                    attr=attr, type_instance=base_type, type_kind=base_kind, mandatory=False
+                )
                 value = _attribute_value(occ_resolved, [occurrence], symbol_table=symbol_table, already_unwrapped=True)
                 if base_kind == "Class" and getattr(base_type, "Kind", None) == "Structure" and isinstance(value, dict):
                     properties.update(value)
                 else:
                     properties["value"] = value
-                features.append({
-                    "type": "Feature",
-                    "id": f"{obj.tid}_{name}_{index}",
-                    "featureType": table_name,
-                    "geometry": None,
-                    "properties": properties,
-                })
+                features.append(
+                    {
+                        "type": "Feature",
+                        "id": f"{obj.tid}_{name}_{index}",
+                        "featureType": table_name,
+                        "geometry": None,
+                        "properties": properties,
+                    }
+                )
                 index += 1
     return features
 
 
-def _members_value(cls: MetaInstance, attrs: dict[str, list[RawNode]], *, symbol_table: SymbolTable | None) -> dict[str, Any]:
+def _members_value(
+    cls: MetaInstance, attrs: dict[str, list[RawNode]], *, symbol_table: SymbolTable | None
+) -> dict[str, Any]:
     """Convert every attribute present in `attrs` against `cls`'s own schema into a plain dict.
 
     Shared by `object_to_feature` (the root object) and `_structure_value`
@@ -330,6 +350,7 @@ def _members_value(cls: MetaInstance, attrs: dict[str, list[RawNode]], *, symbol
 # containing at least one ARC returns an already-typed JSON-FG geometry
 # object (CircularString/CompoundCurve/CurvePolygon) instead - the caller
 # (`_line_geometry`) tells the two apart via `isinstance(value, dict)`.
+
 
 def _positions_from(node: RawNode, prefix: str) -> list[float] | None:
     """Read `{prefix}1`, `{prefix}2`, ... as one position - shared by COORD (`C`) and an ARC's intermediate point (`A`)."""
@@ -594,8 +615,13 @@ def _feature_schema_ref(schema_url: str, feature_type: str) -> str:
 
 
 def object_to_feature(
-    obj: XtfObject, cls: MetaInstance, *, standalone: bool = True, symbol_table: SymbolTable | None = None,
-    schema_url: str | None = None, omit_multivalue: bool = False,
+    obj: XtfObject,
+    cls: MetaInstance,
+    *,
+    standalone: bool = True,
+    symbol_table: SymbolTable | None = None,
+    schema_url: str | None = None,
+    omit_multivalue: bool = False,
 ) -> dict[str, Any]:
     """Convert one XtfObject into a JSON-FG Feature object.
 
@@ -824,7 +850,9 @@ def _obj_view(obj: XtfObject, by_tid: dict[str, XtfObject], seen: frozenset[str]
 
 
 def _combo_properties(
-    aliases: list[str | None], combo: list[XtfObject | None], by_tid: dict[str, XtfObject],
+    aliases: list[str | None],
+    combo: list[XtfObject | None],
+    by_tid: dict[str, XtfObject],
 ) -> dict[str, _ObjView]:
     properties: dict[str, _ObjView] = {}
     for alias, obj in zip(aliases, combo):
@@ -840,7 +868,9 @@ def _view_where_unsupported(expr: MetaInstance) -> str | None:
     if qname == "CompoundExpr":
         if getattr(expr, "Operation", None) in _ARITHMETIC_OPS:
             return f"arithmetic operator {expr.Operation!r}"
-        return next((r for sub in (getattr(expr, "SubExpressions", None) or []) if (r := _view_where_unsupported(sub))), None)
+        return next(
+            (r for sub in (getattr(expr, "SubExpressions", None) or []) if (r := _view_where_unsupported(sub))), None
+        )
     if qname == "UnaryExpr":
         if getattr(expr, "Operation", None) not in ("Not", "Defined"):
             return f"unary operator {getattr(expr, 'Operation', None)!r}"
@@ -863,7 +893,11 @@ def unsupported_view_reason(view: MetaInstance) -> str | None:
     kind = getattr(view, "FormationKind", None)
     if kind not in ("Projection", "Join", "Union", "Aggregation", "Inspection"):
         return f"unknown FormationKind {kind!r}"
-    bases = [b for b in getattr(view, "RenamedBaseView", None) or [] if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
+    bases = [
+        b
+        for b in getattr(view, "RenamedBaseView", None) or []
+        if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)
+    ]
     if not bases:
         return "base model not resolvable - pass it via --repo (see docs/model-resolution-strategy.md)"
     if kind == "Inspection" and not _inspection_path(view):
@@ -874,7 +908,9 @@ def unsupported_view_reason(view: MetaInstance) -> str | None:
     return None
 
 
-def _join_combinations(bases: list[MetaInstance], objects_by_base: list[list[XtfObject]]) -> list[list[XtfObject | None]]:
+def _join_combinations(
+    bases: list[MetaInstance], objects_by_base: list[list[XtfObject]]
+) -> list[list[XtfObject | None]]:
     """Cartesian product of `objects_by_base`, one list per base, with `RenamedBaseView.OrNull` outer-join handling.
 
     Reference Manual eCH-0031 V2.1.0 SS3.16 (JOIN OF): "kartesisches Produkt
@@ -947,7 +983,9 @@ def _inspection_path(view: MetaInstance) -> list[str]:
 
 
 def _resolved_objects_of(
-    transfer: XtfTransfer, symbol_table: SymbolTable, repository: ModelRepository | None,
+    transfer: XtfTransfer,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None,
 ) -> list[tuple[XtfObject, MetaInstance]]:
     resolved_by_qualified_class: dict[str, MetaInstance | None] = {}
     out: list[tuple[XtfObject, MetaInstance]] = []
@@ -963,8 +1001,12 @@ def _resolved_objects_of(
 
 
 def evaluate_view(
-    view: MetaInstance, transfer: XtfTransfer, *,
-    symbol_table: SymbolTable, repository: ModelRepository | None = None, standalone: bool = False,
+    view: MetaInstance,
+    transfer: XtfTransfer,
+    *,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None = None,
+    standalone: bool = False,
 ) -> list[dict[str, Any]]:
     """Evaluate `view` against `transfer` into JSON-FG Features - every FormationKind.
 
@@ -1000,17 +1042,25 @@ def evaluate_view(
     view_name = getattr(view, "Name", None) or "View"
     bases = [b for b in view.RenamedBaseView if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
     resolved_objects = _resolved_objects_of(transfer, symbol_table, repository)
-    objects_by_base = [[obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases]
+    objects_by_base = [
+        [obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases
+    ]
 
     if kind == "Inspection":
         return _evaluate_inspection(
-            view, bases[0].BaseView, objects_by_base[0], _inspection_path(view), standalone, symbol_table,
+            view,
+            bases[0].BaseView,
+            objects_by_base[0],
+            _inspection_path(view),
+            standalone,
+            symbol_table,
         )
 
     if kind == "Union":
         return [
             object_to_feature(obj, view, standalone=standalone, symbol_table=symbol_table)
-            for objs in objects_by_base for obj in objs
+            for objs in objects_by_base
+            for obj in objs
         ]
 
     where = getattr(view, "Where", None)
@@ -1038,7 +1088,9 @@ def evaluate_view(
     for combo in combos:
         if not _passes_where(combo):
             continue
-        feature = object_to_feature(_merge_join_combo(combo, view_name), view, standalone=standalone, symbol_table=symbol_table)
+        feature = object_to_feature(
+            _merge_join_combo(combo, view_name), view, standalone=standalone, symbol_table=symbol_table
+        )
         members = _join_members(bases, combo)
         if members:
             feature["x-join-members"] = members
@@ -1053,7 +1105,9 @@ def _dedup_features(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for feature in features:
         key = json.dumps(
             {"properties": feature.get("properties"), "place": feature.get("place")},
-            sort_keys=True, ensure_ascii=False, default=str,
+            sort_keys=True,
+            ensure_ascii=False,
+            default=str,
         )
         if key not in seen:
             seen.add(key)
@@ -1062,7 +1116,9 @@ def _dedup_features(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _inspection_target(
-    base_view: MetaInstance, path: list[str], symbol_table: SymbolTable | None,
+    base_view: MetaInstance,
+    path: list[str],
+    symbol_table: SymbolTable | None,
 ) -> tuple[MetaInstance | None, bool]:
     """Return `(element type, is_multi)` for the `INSPECTION OF base -> a -> b` path's final hop."""
     current: MetaInstance | None = base_view
@@ -1085,8 +1141,12 @@ def _inspection_target(
 
 
 def _evaluate_inspection(
-    view: MetaInstance, base_view: MetaInstance, base_objects: list[XtfObject], path: list[str],
-    standalone: bool, symbol_table: SymbolTable,
+    view: MetaInstance,
+    base_view: MetaInstance,
+    base_objects: list[XtfObject],
+    path: list[str],
+    standalone: bool,
+    symbol_table: SymbolTable,
 ) -> list[dict[str, Any]]:
     """One Feature per element of the inspected attribute (`INSPECTION OF base -> attr`) on each base object.
 
@@ -1110,10 +1170,14 @@ def _evaluate_inspection(
             for child in node.children:
                 element_attrs.setdefault(child.tag, []).append(child)
             tid = node.attrib.get("TID") or (f"{base_obj.tid}_{path[-1]}_{i}" if base_obj.tid else None)
-            element = XtfObject(tid=tid, qualified_class=getattr(view, "Name", None) or "View", attributes=element_attrs)
+            element = XtfObject(
+                tid=tid, qualified_class=getattr(view, "Name", None) or "View", attributes=element_attrs
+            )
             feature = object_to_feature(
-                element, element_type if element_type is not None else view,
-                standalone=standalone, symbol_table=symbol_table,
+                element,
+                element_type if element_type is not None else view,
+                standalone=standalone,
+                symbol_table=symbol_table,
             )
             feature["featureType"] = getattr(view, "Name", None) or feature["featureType"]
             features.append(feature)
@@ -1145,8 +1209,13 @@ def _join_members(bases: list[MetaInstance], combo: list[XtfObject | None]) -> l
 
 
 def transfer_to_feature_collection(
-    transfer: XtfTransfer, *, symbol_table: SymbolTable, repository: ModelRepository | None = None,
-    views: list[MetaInstance] | None = None, schema_url: str | None = None, include_child_rows: bool = False,
+    transfer: XtfTransfer,
+    *,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None = None,
+    views: list[MetaInstance] | None = None,
+    schema_url: str | None = None,
+    include_child_rows: bool = False,
 ) -> dict[str, Any]:
     """Convert every resolvable object of `transfer` into one JSON-FG FeatureCollection.
 
@@ -1226,14 +1295,22 @@ def transfer_to_feature_collection(
             cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
             if cls is None:
                 continue
-            features.append(object_to_feature(
-                obj, cls, standalone=False, symbol_table=symbol_table, omit_multivalue=include_child_rows,
-            ))
+            features.append(
+                object_to_feature(
+                    obj,
+                    cls,
+                    standalone=False,
+                    symbol_table=symbol_table,
+                    omit_multivalue=include_child_rows,
+                )
+            )
             if include_child_rows:
                 features.extend(_child_row_features(obj, cls, symbol_table=symbol_table))
 
     for view in views or []:
-        features.extend(evaluate_view(view, transfer, symbol_table=symbol_table, repository=repository, standalone=False))
+        features.extend(
+            evaluate_view(view, transfer, symbol_table=symbol_table, repository=repository, standalone=False)
+        )
 
     conforms_to = [CONF_CORE, CONF_TYPES_SCHEMAS]
     if any(f.get("place", {}).get("type") in _CIRCULAR_ARC_TYPES for f in features):
@@ -1312,7 +1389,13 @@ def collect_diagnostics(collection: dict, *, file: str | None = None):
                 rule, sev = "JSONFG-TYPE-UNSUPPORTED", "note"
                 msg = f"{ftype}.{key}: value type {marker!r} is outside the mapped set (x-unsupported)"
                 hlp = None
-            out.append(Diagnostic(
-                sev, rule, msg, Location(file=file, element_path=f"{ftype}.{key}", tid=tid), help=hlp,
-            ))
+            out.append(
+                Diagnostic(
+                    sev,
+                    rule,
+                    msg,
+                    Location(file=file, element_path=f"{ftype}.{key}", tid=tid),
+                    help=hlp,
+                )
+            )
     return out

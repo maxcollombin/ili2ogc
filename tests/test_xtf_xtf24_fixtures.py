@@ -9,6 +9,7 @@ Both `interlis.xtf.parse.parse_xtf` (envelope/basket/object structure) and
 `interlis.xtf.validate.validate_transfer` (geometry tag matching) must accept
 this encoding for this file to validate cleanly.
 """
+
 import warnings
 from pathlib import Path
 
@@ -69,8 +70,7 @@ def test_geometry_class_has_no_error(issues):
 def test_area_topology_class_has_no_error(issues):
     """AREA (Kind=Area, wire-encoded as <geom:surface> like Kind=Surface)."""
     errors = [
-        i for i in issues
-        if i.qualified_class == "AllErrors24.MainTopic.AreaTopologyClass" and i.severity == "error"
+        i for i in issues if i.qualified_class == "AllErrors24.MainTopic.AreaTopologyClass" and i.severity == "error"
     ]
     assert not errors, errors
 

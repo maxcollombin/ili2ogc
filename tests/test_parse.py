@@ -2,6 +2,7 @@
 Lot 52 : repli ISO-8859-1 pour les fichiers .ili non-UTF-8 (RULE #1,
 confirme reel sur des variantes obsolete du corpus large models.geo.admin.ch,
 ex. obsolete/CHBase_Part1_GEOMETRY_V1_o0.ili)."""
+
 from pathlib import Path
 
 from interlis.runtime.parse import parse_file

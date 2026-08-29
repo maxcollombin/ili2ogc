@@ -43,6 +43,7 @@ below reproduces the exact real-corpus pattern synthetically (no
 dependency on the gitignored `ili_corpus/` being present) and locks in the
 fixed behavior - both bases' attributes now recoverable, in order.
 """
+
 import warnings
 from pathlib import Path
 

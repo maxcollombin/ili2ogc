@@ -13,6 +13,7 @@ Fixture (tests/fixtures/oid_model.ili) covers, one TOPIC per case:
   reference manual's citation order, eCH-0031 V2.1.0 §3.5.2) - basket and
   class-default resolve independently.
 """
+
 import warnings
 from pathlib import Path
 
@@ -38,7 +39,9 @@ def model():
 
 
 def _topic(model, name):
-    return next(sm for sm in model.Element if sm._qualified_class == "IlisMeta16.ModelData.SubModel" and sm.Name == name)
+    return next(
+        sm for sm in model.Element if sm._qualified_class == "IlisMeta16.ModelData.SubModel" and sm.Name == name
+    )
 
 
 def _class(submodel, name):

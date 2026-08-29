@@ -7,6 +7,7 @@ file) additionally uses a PREFIXED model namespace rather than the default
 one used by tests/fixtures/xtf/xtf24allerrors/AllErrors24-ok.xtf (covered by
 test_xtf_xtf24_fixtures.py, schema-aware end-to-end coverage of geometry
 tags)."""
+
 from pathlib import Path
 
 from interlis.xtf.parse import parse_xtf

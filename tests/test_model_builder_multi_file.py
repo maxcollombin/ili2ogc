@@ -5,6 +5,7 @@ importe `base.ili` et reference une de ses DOMAIN par nom qualifie
 UnresolvedNamedReference (comportement V1) ; avec un ModelRepository
 pointant sur le repertoire des fixtures, elle doit resoudre vers
 l'instance EnumType reelle construite depuis base.ili."""
+
 import warnings
 from pathlib import Path
 
@@ -166,7 +167,9 @@ def test_extends_cross_model_short_name_collision_resolves_to_imported_class():
     from interlis.xtf.schema import attributes_of, resolve_class
 
     cls = resolve_class(
-        "CollisionImporter.MainTopic.ModInfo", symbol_table=builder.symbol_table, repository=repository,
+        "CollisionImporter.MainTopic.ModInfo",
+        symbol_table=builder.symbol_table,
+        repository=repository,
     )
     sup = getattr(cls, "Super", None)
     assert sup is not None
@@ -198,7 +201,9 @@ def test_imports_unqualified_reference_resolves_to_the_named_model_not_its_same_
     from interlis.xtf.schema import attributes_of, resolve_class
 
     cls = resolve_class(
-        "Consumer.T.Item", symbol_table=builder.symbol_table, repository=repository,
+        "Consumer.T.Item",
+        symbol_table=builder.symbol_table,
+        repository=repository,
     )
     label_type = cls.ClassAttribute[0].Type
     assert not isinstance(label_type, UnresolvedNamedReference)

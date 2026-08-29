@@ -2,6 +2,7 @@
 
 See docs/sql-conversion-strategy.md for the design decision and scope.
 """
+
 import sqlite3
 import warnings
 from pathlib import Path
@@ -113,7 +114,9 @@ def test_reference_becomes_fk_column_and_constraint():
     builder = _build(_MODEL)
     owner = _resolved_class(builder, "Foo.T.Owner")
     parcel = _resolved_class(builder, "Foo.T.Parcel")
-    tables = build_tables([parcel, owner])  # owner must ALSO be converted, or the FK gets dropped (see test_foreign_key_dropped_when_target_not_converted)
+    tables = build_tables(
+        [parcel, owner]
+    )  # owner must ALSO be converted, or the FK gets dropped (see test_foreign_key_dropped_when_target_not_converted)
     table = _table(tables, "parcel")
     owner_col = next(c for c in table.columns if c.name == "owner")
     assert owner_col.sql_type == "text"
@@ -167,8 +170,7 @@ def test_structure_class_itself_is_not_a_table():
 
 
 def test_missing_crs_produces_a_note_not_an_untyped_column():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     NoCrsCoord = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
@@ -178,8 +180,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "Foo.T.A")
     tables = build_tables([a])
     table = _table(tables, "a")
@@ -188,8 +189,7 @@ END Foo.
 
 
 def test_role_becomes_fk_when_symbol_table_given():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS Item =
@@ -204,8 +204,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END Holder_Item;
   END T;
 END Foo.
-"""
-    )
+""")
     item = _resolved_class(builder, "Foo.T.Item")
     holder = _resolved_class(builder, "Foo.T.Holder")
     tables = build_tables([item, holder], symbol_table=builder.symbol_table)
@@ -215,8 +214,7 @@ END Foo.
 
 
 def test_enum_boolean_formatted_blackbox_column_types():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     MyDate = FORMAT INTERLIS.XMLDate "1900-01-01" .. "2999-12-31";
@@ -229,8 +227,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "Foo.T.A")
     tables = build_tables([a])
     table = _table(tables, "a")
@@ -242,8 +239,7 @@ END Foo.
 
 
 def test_name_and_uri_text_kinds_get_exact_bounds():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -252,8 +248,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "Foo.T.A")
     tables = build_tables([a])
     table = _table(tables, "a")
@@ -287,7 +282,10 @@ def test_render_gpkg_geometry_column_and_metadata_rows():
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     ddl = render_gpkg(build_tables([parcel]))
     assert '"geom" POINT NOT NULL' in ddl
-    assert "INSERT INTO gpkg_contents (table_name, data_type, identifier, srs_id) VALUES ('parcel', 'features', 'parcel', 2056);" in ddl
+    assert (
+        "INSERT INTO gpkg_contents (table_name, data_type, identifier, srs_id) VALUES ('parcel', 'features', 'parcel', 2056);"
+        in ddl
+    )
     assert (
         "INSERT INTO gpkg_geometry_columns (table_name, column_name, geometry_type_name, srs_id, z, m) "
         "VALUES ('parcel', 'geom', 'POINT', 2056, 0, 0);"
@@ -297,8 +295,7 @@ def test_render_gpkg_geometry_column_and_metadata_rows():
 
 
 def test_render_gpkg_epsg_4326_skipped_as_pre_registered():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     !!@CRS=EPSG:4326
@@ -309,8 +306,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "Foo.T.A")
     ddl = render_gpkg(build_tables([a]))
     assert "gpkg_spatial_ref_sys" not in ddl
@@ -320,13 +316,14 @@ def test_render_gpkg_non_spatial_table_registered_as_attributes():
     builder = _build(_MODEL)
     owner = _resolved_class(builder, "Foo.T.Owner")
     ddl = render_gpkg(build_tables([owner]))
-    assert "INSERT INTO gpkg_contents (table_name, data_type, identifier) VALUES ('owner', 'attributes', 'owner');" in ddl
+    assert (
+        "INSERT INTO gpkg_contents (table_name, data_type, identifier) VALUES ('owner', 'attributes', 'owner');" in ddl
+    )
 
 
 def test_duplicate_class_name_across_topics_gets_disambiguated():
     """Real corpus case (multiple files): two different classes named "Item" in different TOPICs - found via a live SQLite/PostgreSQL run, 2026-08-27 ("table already exists")."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T1 =
     CLASS Item =
@@ -339,8 +336,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END Item;
   END T2;
 END Foo.
-"""
-    )
+""")
     item1 = _resolved_class(builder, "Foo.T1.Item")
     item2 = _resolved_class(builder, "Foo.T2.Item")
     tables = build_tables([item1, item2])
@@ -351,8 +347,7 @@ END Foo.
 
 def test_predefined_uuidoid_becomes_a_column_and_keeps_its_unique():
     """`INTERLIS.UUIDOID` (a reserved-token predefined type) is now materialised as a real TEXT*36 column, so `UNIQUE DatabaseId;` stays a valid constraint instead of being dropped - real corpus case ili_corpus/Axis_V1_1.ili."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -364,8 +359,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "Foo.T.A")
     tables = build_tables([a])
     table = _table(tables, "a")
@@ -382,8 +376,7 @@ END Foo.
 
 def test_reserved_keyword_class_name_gets_quoted():
     """A real class named after a SQL reserved word (real corpus cases: "Union", "Index") - unquoted, both PostgreSQL and SQLite reject `CREATE TABLE union (...)`."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS Union =
@@ -391,8 +384,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END Union;
   END T;
 END Foo.
-"""
-    )
+""")
     union = _resolved_class(builder, "Foo.T.Union")
     tables = build_tables([union])
     pg_ddl = render_postgresql(tables)
@@ -403,8 +395,7 @@ END Foo.
 
 def test_attribute_literally_named_id_gets_renamed_not_the_identity_column():
     """Real corpus case (ili_corpus/WasserBase_V1_1.ili): `ID : MANDATORY TEXT*25;` lowercases to the SAME name as the reserved identity column - found via a live SQLite run ("duplicate column name: id"), 2026-08-27."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -413,8 +404,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "Foo.T.A")
     tables = build_tables([a])
     table = _table(tables, "a")
@@ -468,7 +458,9 @@ def test_list_of_structure_child_table_has_seq_and_flattened_columns():
     tables = build_tables([parcel])
     child = _table(tables, "parcel_names")
     names = {c.name: c for c in child.columns}
-    assert "seq" in names and names["seq"].sql_type == "integer" and not names["seq"].nullable  # LIST - ordering matters
+    assert (
+        "seq" in names and names["seq"].sql_type == "integer" and not names["seq"].nullable
+    )  # LIST - ordering matters
     assert names["language"].sql_type == "varchar(2)" and names["language"].nullable
     assert names["text"].sql_type == "varchar(100)" and not names["text"].nullable
 
@@ -483,8 +475,7 @@ def test_render_gpkg_child_table_inline_fk_and_no_topological_sort_needed():
 
 def test_child_table_name_collision_gets_disambiguated_like_any_other_table():
     """A real class literally named "<Parent>_<attr>" would collide with the synthesized child table name - defensive coverage, not seen in the real corpus."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS Parcel_Tags =
@@ -495,8 +486,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END Parcel;
   END T;
 END Foo.
-"""
-    )
+""")
     collider = _resolved_class(builder, "Foo.T.Parcel_Tags")
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     tables = build_tables([collider, parcel])
@@ -532,7 +522,9 @@ def test_mandatory_constraint_becomes_an_inline_check_constraint():
     pg_ddl = render_postgresql(tables)
     gpkg_ddl = render_gpkg(tables)
     assert 'CONSTRAINT chk_parcel_1 CHECK (("parcelnr" >= 0))' in pg_ddl
-    assert 'CONSTRAINT chk_parcel_1 CHECK (("parcelnr" >= 0))' in gpkg_ddl  # inline in BOTH dialects - CHECK has no forward-reference ordering issue, unlike FOREIGN KEY
+    assert (
+        'CONSTRAINT chk_parcel_1 CHECK (("parcelnr" >= 0))' in gpkg_ddl
+    )  # inline in BOTH dialects - CHECK has no forward-reference ordering issue, unlike FOREIGN KEY
     assert "ALTER TABLE" not in pg_ddl.split("CREATE TABLE")[0]  # CHECK never needs the FK's separate ALTER TABLE pass
 
 
@@ -541,7 +533,7 @@ def test_check_constraint_and_or_defined_over_a_flattened_struct_path():
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     ddl = render_postgresql(build_tables([parcel]))
     assert (
-        'CONSTRAINT chk_parcel_namedcheck CHECK '
+        "CONSTRAINT chk_parcel_namedcheck CHECK "
         '(((("status" = \'Active\') OR ("status" = \'Closed\')) AND ("loc_street" IS NOT NULL)))'
     ) in ddl
 
@@ -551,7 +543,7 @@ def test_check_constraint_implication_and_not():
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     ddl = render_postgresql(build_tables([parcel]))
     assert 'CONSTRAINT chk_parcel_impl CHECK ((NOT ("status" = \'Closed\') OR ("loc_number" IS NOT NULL)))' in ddl
-    assert 'CONSTRAINT chk_parcel_notclosed CHECK ((NOT ("status" = \'Closed\')))' in ddl
+    assert "CONSTRAINT chk_parcel_notclosed CHECK ((NOT (\"status\" = 'Closed')))" in ddl
 
 
 def test_check_constraint_executes_against_real_sqlite_and_enforces_the_rule():
@@ -562,20 +554,19 @@ def test_check_constraint_executes_against_real_sqlite_and_enforces_the_rule():
     conn = sqlite3.connect(":memory:")
     conn.executescript(ddl.split("INSERT INTO gpkg_contents")[0])
     conn.execute(
-        'INSERT INTO parcel (id, parcelnr, status, loc_street, loc_number) VALUES (?,?,?,?,?)',
+        "INSERT INTO parcel (id, parcelnr, status, loc_street, loc_number) VALUES (?,?,?,?,?)",
         ("1", 5, "Active", "Main St", None),
     )
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(
-            'INSERT INTO parcel (id, parcelnr, status, loc_street, loc_number) VALUES (?,?,?,?,?)',
+            "INSERT INTO parcel (id, parcelnr, status, loc_street, loc_number) VALUES (?,?,?,?,?)",
             ("2", -1, "Active", "Main St", None),
         )
 
 
 def test_unsupported_constraint_expression_becomes_a_note_not_a_wrong_check():
     """Real corpus bug (2026-08-27, `ili_corpus/Naturereigniskataster_MGDM_V1.ili`): a `factor` alt this project's grammar mapping used to lose entirely (`INTERLIS.len(...)`, see spec/grammar/mapping/07_constraints.yml's `factor.INTERLIS` entry) collapsed to a bare attribute path - `INTERLIS.len(ParcelNr) == 3` would have silently built (and rendered a CHECK for) the wrong condition `ParcelNr == 3`. Fixed at construction (a real `FunctionCall` node now), so this must surface as an unsupported note - never a column comparison."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS Parcel =
@@ -584,8 +575,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END Parcel;
   END T;
 END Foo.
-"""
-    )
+""")
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     tables = build_tables([parcel])
     table = _table(tables, "parcel")
@@ -634,27 +624,26 @@ def test_unique_local_executes_against_real_sqlite_and_enforces_per_parent_scope
     ddl = render_gpkg(build_tables([cls]))
     conn = sqlite3.connect(":memory:")
     conn.executescript(ddl.split("INSERT INTO gpkg_contents")[0])
-    conn.execute('INSERT INTO countrynamestranslation (id) VALUES (?)', ("p1",))
-    conn.execute('INSERT INTO countrynamestranslation (id) VALUES (?)', ("p2",))
+    conn.execute("INSERT INTO countrynamestranslation (id) VALUES (?)", ("p1",))
+    conn.execute("INSERT INTO countrynamestranslation (id) VALUES (?)", ("p2",))
     conn.execute(
-        'INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)',
+        "INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)",
         ("e1", "p1", 0, "CH"),
     )
     conn.execute(  # same code, DIFFERENT parent - must be allowed (that's the whole point of "LOCAL")
-        'INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)',
+        "INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)",
         ("e2", "p2", 0, "CH"),
     )
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(  # same code, SAME parent - must be rejected
-            'INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)',
+            "INSERT INTO countrynamestranslation_entries (id, countrynamestranslation_fk, seq, code) VALUES (?,?,?,?)",
             ("e3", "p1", 1, "CH"),
         )
 
 
 def test_unique_local_on_a_structure_nested_one_level_into_a_class():
     """Dominant real corpus idiom (`ili_corpus/KbS_V1_5.ili`'s MultilingualUri/MultilingualText pattern): a STRUCTURE wraps the BAG/LIST AND declares UNIQUE (LOCAL) on itself, embedded one level into a Class as an ordinary attribute - the child table is qualified with the STRUCTURE attribute's own name (`parcel_name_entries`, not `parcel_entries`), with its UNIQUE (LOCAL) applied exactly like the direct-on-Class case."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     STRUCTURE LocalisedText =
@@ -670,8 +659,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END Parcel;
   END T;
 END Foo.
-"""
-    )
+""")
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     tables = build_tables([parcel])
     child = _table(tables, "parcel_name_entries")
@@ -683,8 +671,7 @@ END Foo.
 
 def test_unique_local_on_a_nested_structure_executes_against_real_sqlite_and_enforces_per_parent_scope():
     """Not just text assembly - same live-engine discipline as the direct-on-Class case above."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     STRUCTURE LocalisedText =
@@ -700,8 +687,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END Parcel;
   END T;
 END Foo.
-"""
-    )
+""")
     parcel = _resolved_class(builder, "Foo.T.Parcel")
     ddl = render_gpkg(build_tables([parcel]))
     conn = sqlite3.connect(":memory:")

@@ -11,6 +11,7 @@ its OWN isolated SymbolTable, to never introduce a short-name ambiguity
 BETWEEN unrelated models (only full-qualified-name resolution, in the
 explicitly targeted model's table, crosses files).
 """
+
 import re
 from pathlib import Path
 from typing import Any

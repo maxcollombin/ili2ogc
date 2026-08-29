@@ -6,6 +6,7 @@ rename syntax). The transfer format is unchanged (refman SS4.3.3), so the
 translation only drives a `--lang` rename of `convert` / `convert-jsonfg`
 output - the .ili input and the .xtf wire tags stay in the base language.
 """
+
 import json
 import warnings
 from pathlib import Path
@@ -38,8 +39,10 @@ def _build(name: str) -> InterlisModelBuilder:
 def test_positional_alignment_builds_the_name_map():
     builder = _build("CheminsPedestres_V1.ili")
     model = next(
-        i for i in builder.symbol_table.all_registered()
-        if isinstance(i, MetaInstance) and i._qualified_class == "IlisMeta16.ModelData.Model"
+        i
+        for i in builder.symbol_table.all_registered()
+        if isinstance(i, MetaInstance)
+        and i._qualified_class == "IlisMeta16.ModelData.Model"
         and i.Name == "CheminsPedestres_V1"
     )
     tr = model._translation
@@ -78,10 +81,21 @@ def test_convert_lang_renames_defs_properties_required_and_view(capsys):
 
 
 def test_convert_sql_lang_renames_tables_columns_views_and_fk_refs(capsys):
-    assert main([
-        "convert-sql", str(FIX / "Wanderwege_V1.ili"),
-        "--dialect", "postgresql", "--lang", "fr", "--repo", str(FIX),
-    ]) == 0
+    assert (
+        main(
+            [
+                "convert-sql",
+                str(FIX / "Wanderwege_V1.ili"),
+                "--dialect",
+                "postgresql",
+                "--lang",
+                "fr",
+                "--repo",
+                str(FIX),
+            ]
+        )
+        == 0
+    )
     ddl = capsys.readouterr().out
     assert 'CREATE TABLE "tronconchemin"' in ddl
     assert '"designation" varchar(40)' in ddl
@@ -95,10 +109,18 @@ def test_convert_sql_lang_renames_tables_columns_views_and_fk_refs(capsys):
 
 
 def test_convert_jsonfg_lang_renames_featuretype_and_property_keys_but_not_the_wire_values(capsys):
-    rc = main([
-        "convert-jsonfg", str(FIX / "wanderwege.xtf"),
-        "--model", str(FIX / "Wanderwege_V1.ili"), "--lang", "fr", "--repo", str(FIX),
-    ])
+    rc = main(
+        [
+            "convert-jsonfg",
+            str(FIX / "wanderwege.xtf"),
+            "--model",
+            str(FIX / "Wanderwege_V1.ili"),
+            "--lang",
+            "fr",
+            "--repo",
+            str(FIX),
+        ]
+    )
     assert rc == 0
     features = {f["featureType"]: f["properties"] for f in json.loads(capsys.readouterr().out)["features"]}
     assert set(features) == {"TronconChemin", "Indicateur"}

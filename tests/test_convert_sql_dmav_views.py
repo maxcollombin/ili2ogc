@@ -14,6 +14,7 @@ makes that shape produce an executable `CREATE VIEW`:
 
 The hermetic, network-free reduction is `tests/test_view_dmav_pattern.py`.
 """
+
 import sqlite3
 import warnings
 from pathlib import Path

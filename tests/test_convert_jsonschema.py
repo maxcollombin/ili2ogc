@@ -5,6 +5,7 @@ mappings/ilismeta16-to-jsonschema-rules.yml /
 spec/conversion/jsonschema-mapping.yml for the field contract this module
 implements.
 """
+
 import warnings
 from pathlib import Path
 
@@ -33,8 +34,7 @@ def _resolved_class(builder, name: str):
 
 
 def test_numtype_integer_range_gets_minimum_maximum():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -42,16 +42,14 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Age"] == {"type": "integer", "minimum": 0, "maximum": 130}
 
 
 def test_numtype_decimal_range_gets_number_type():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -59,16 +57,14 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Height"] == {"type": "number", "minimum": 0.0, "maximum": 999.999}
 
 
 def test_texttype_with_and_without_maxlength():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -77,8 +73,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Code"] == {"type": "string", "maxLength": 20}
@@ -87,8 +82,7 @@ END Foo.
 
 def test_mandatory_named_domain_reference_reaches_required():
     """`MANDATORY <named domain>` (e.g. `Attr : MANDATORY MyText;`) now correctly lands in "required" - see tests/test_model_builder_mandatory_domain.py for the builder-level fix."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     MyText = TEXT*20;
@@ -99,8 +93,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["required"] == ["Required"]
@@ -108,8 +101,7 @@ END Foo.
 
 def test_texttype_name_and_uri_kinds():
     """`NAME`/`URI` (eCH-0031 SS3.2.2/SS3.8.1) - exact `pattern`/`format`+`maxLength`, not the plain string fallback."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -118,17 +110,19 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
-    assert schema["properties"]["Ident"] == {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,254}$", "maxLength": 255}
+    assert schema["properties"]["Ident"] == {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,254}$",
+        "maxLength": 255,
+    }
     assert schema["properties"]["Link"] == {"type": "string", "format": "uri", "maxLength": 1023}
 
 
 def test_enumtype_flat_and_nested_sorted_others_excluded():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -136,8 +130,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Kategorie"] == {
@@ -147,8 +140,7 @@ END Foo.
 
 
 def test_booleantype_attribute():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -156,16 +148,14 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Active"] == {"type": "boolean"}
 
 
 def test_formattedtype_attribute_gets_string_type():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     Kommentar = FORMAT MyCustomFormat "a" .. "z";
@@ -175,8 +165,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Notiz"] == {"type": "string"}
@@ -187,8 +176,7 @@ def test_formattedtype_known_format_gets_json_schema_format_hint():
 
     See docs/ech-0118-gml-mapping-analysis.md.
     """
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     ADate = FORMAT INTERLIS.XMLDate "1900-01-01" .. "2999-12-31";
@@ -202,8 +190,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["D"] == {"type": "string", "format": "date"}
@@ -212,8 +199,7 @@ END Foo.
 
 
 def test_blackboxtype_attribute_surfaces_kind_marker():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -222,19 +208,19 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Bild"] == {
-        "type": "string", "x-blackbox-kind": "Binary", "contentEncoding": "base64",
+        "type": "string",
+        "x-blackbox-kind": "Binary",
+        "contentEncoding": "base64",
     }
     assert schema["properties"]["Meta"] == {"type": "string", "x-blackbox-kind": "Xml"}
 
 
 def test_reference_to_attribute_gets_string_type_and_target_marker():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS Item =
@@ -245,16 +231,14 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Ref"] == {"type": "string", "x-reference-target": "Item"}
 
 
 def test_reference_to_external_attribute_surfaces_external_marker():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS Item =
@@ -265,8 +249,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Ref"] == {
@@ -322,8 +305,10 @@ def test_embedded_role_target_never_gets_a_defs_entry():
     (same as a plain REFERENCE TO target, Lot 6)."""
     builder = _build(_ASSOCIATION_MODEL)
     classes = [
-        instance for instance in builder.symbol_table.all_registered()
-        if hasattr(instance, "_qualified_class") and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
+        instance
+        for instance in builder.symbol_table.all_registered()
+        if hasattr(instance, "_qualified_class")
+        and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
         and getattr(instance, "Kind", None) == "Class"
     ]
     schema = model_to_json_schema(classes, symbol_table=builder.symbol_table)
@@ -336,8 +321,7 @@ def test_embedded_role_target_never_gets_a_defs_entry():
 
 
 def test_mandatory_attribute_is_required():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -346,8 +330,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["required"] == ["Id"]
@@ -355,8 +338,7 @@ END Foo.
 
 
 def test_coordtype_2d_gets_position_tuple():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 2000.000;
@@ -367,8 +349,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Position"] == {
@@ -385,8 +366,7 @@ END Foo.
 
 
 def test_coordtype_3d_gets_three_axes():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     Coord3D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000, -200.000 .. 5000.000;
@@ -396,8 +376,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert len(schema["properties"]["Position"]["prefixItems"]) == 3
@@ -405,8 +384,7 @@ END Foo.
 
 
 def test_multicoord_wraps_position_in_array():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     Points2D = MULTICOORD 0.000 .. 1000.000, 0.000 .. 1000.000;
@@ -416,8 +394,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Positions"]["type"] == "array"
@@ -426,8 +403,7 @@ END Foo.
 
 
 def test_polyline_gets_array_of_positions():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
@@ -438,8 +414,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Geometrie"] == {
@@ -458,8 +433,7 @@ END Foo.
 
 
 def test_surface_gets_array_of_rings_with_boundary_order_marker():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
@@ -470,8 +444,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     geom = schema["properties"]["Geometrie"]
@@ -482,8 +455,7 @@ END Foo.
 
 
 def test_area_gets_same_shape_as_surface():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
@@ -494,16 +466,14 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["properties"]["Geometrie"]["x-boundary-order"] == "outer-first"
 
 
 def test_multisurface_wraps_ring_array_once_more():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     Coord2D = COORD 0.000 .. 1000.000, 0.000 .. 1000.000;
@@ -514,8 +484,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     geom = schema["properties"]["Geometrie"]
@@ -535,8 +504,7 @@ def test_coordtype_axis_unresolved_falls_back_to_number_array():
 
 
 def test_class_schema_has_title_and_object_type():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -544,8 +512,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     schema = class_to_json_schema(cls)
     assert schema["type"] == "object"
@@ -553,8 +520,7 @@ END Foo.
 
 
 def test_model_to_json_schema_collects_defs_by_name():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -565,8 +531,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END B;
   END T;
 END Foo.
-"""
-    )
+""")
     classes = [_resolved_class(builder, "A"), _resolved_class(builder, "B")]
     doc = model_to_json_schema(classes)
     assert doc["$schema"] == "https://json-schema.org/draft/2020-12/schema"
@@ -575,8 +540,7 @@ END Foo.
 
 
 def test_structure_attribute_gets_ref_when_target_reachable():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     STRUCTURE Sub =
@@ -587,8 +551,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "A")
     sub = _resolved_class(builder, "Sub")
     doc = model_to_json_schema([a, sub])
@@ -601,8 +564,7 @@ def test_structure_attribute_discovered_even_when_not_in_given_roots():
     # model_to_json_schema must pull in a nested Structure even if the
     # caller only passed the top-level Class (mirrors a cross-model
     # reference resolved via --repo but never locally registered).
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     STRUCTURE Sub =
@@ -613,8 +575,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "A")
     doc = model_to_json_schema([a])
     assert set(doc["$defs"]) == {"A", "Sub"}
@@ -622,8 +583,7 @@ END Foo.
 
 
 def test_structure_attribute_standalone_without_ref_keys_gets_marker():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     STRUCTURE Sub =
@@ -634,16 +594,14 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "A")
     schema = class_to_json_schema(a)
     assert schema["properties"]["Position"] == {"x-unsupported": "Class"}
 
 
 def test_bag_of_structure_gets_array_of_ref_and_ordered_marker():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     STRUCTURE Sub =
@@ -655,24 +613,28 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "A")
     sub = _resolved_class(builder, "Sub")
     doc = model_to_json_schema([a, sub])
     props = doc["$defs"]["A"]["properties"]
     assert props["Many"] == {
-        "type": "array", "items": {"$ref": "#/$defs/Sub"}, "minItems": 0, "x-ordered": False,
+        "type": "array",
+        "items": {"$ref": "#/$defs/Sub"},
+        "minItems": 0,
+        "x-ordered": False,
     }
     assert props["Ordered"] == {
-        "type": "array", "items": {"$ref": "#/$defs/Sub"},
-        "minItems": 1, "maxItems": 5, "x-ordered": True,
+        "type": "array",
+        "items": {"$ref": "#/$defs/Sub"},
+        "minItems": 1,
+        "maxItems": 5,
+        "x-ordered": True,
     }
 
 
 def test_list_of_scalar_type():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -680,20 +642,20 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "A")
     schema = class_to_json_schema(a)
     assert schema["properties"]["Tags"] == {
         "type": "array",
         "items": {"type": "string", "maxLength": 5},
-        "minItems": 1, "maxItems": 3, "x-ordered": True,
+        "minItems": 1,
+        "maxItems": 3,
+        "x-ordered": True,
     }
 
 
 def test_recursive_structure_produces_ref_not_infinite_expansion():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     STRUCTURE Node =
@@ -705,22 +667,23 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = _resolved_class(builder, "A")
     doc = model_to_json_schema([a])
     assert set(doc["$defs"]) == {"A", "Node"}
     assert doc["$defs"]["A"]["properties"]["Root"] == {"$ref": "#/$defs/Node"}
     assert doc["$defs"]["Node"]["properties"]["Children"] == {
-        "type": "array", "items": {"$ref": "#/$defs/Node"}, "minItems": 0, "x-ordered": False,
+        "type": "array",
+        "items": {"$ref": "#/$defs/Node"},
+        "minItems": 0,
+        "x-ordered": False,
     }
 
 
 def test_attributes_of_and_resolve_attribute_are_reused_not_duplicated():
     # Sanity check that convert.jsonschema is layered on top of
     # xtf.schema's existing resolution, not a parallel implementation.
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -728,8 +691,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = _resolved_class(builder, "A")
     attrs = attributes_of(cls)
     resolved = resolve_attribute(attrs["Age"])
@@ -774,7 +736,8 @@ def test_abstract_structure_attribute_without_symbol_table_keeps_ref_with_abstra
     surface = _resolved_class(builder, "Surface")
     doc = model_to_json_schema([a, surface])
     assert doc["$defs"]["A"]["properties"]["Shape"] == {
-        "$ref": "#/$defs/Surface", "x-abstract": True,
+        "$ref": "#/$defs/Surface",
+        "x-abstract": True,
     }
 
 
@@ -805,5 +768,6 @@ def test_abstract_structure_with_no_concrete_subclass_falls_back_to_marked_ref()
     a = _resolved_class(builder, "A")
     doc = model_to_json_schema([a], symbol_table=builder.symbol_table)
     assert doc["$defs"]["A"]["properties"]["Orphan"] == {
-        "$ref": "#/$defs/OrphanAbstract", "x-abstract": True,
+        "$ref": "#/$defs/OrphanAbstract",
+        "x-abstract": True,
     }

@@ -8,6 +8,7 @@ item 8's Lot A2) - `class_to_json_schema`/`model_to_json_schema`
 confirmed here: a View is simply one more root, and its already-flattened
 attribute set converts through the exact same path as a plain Class.
 """
+
 import warnings
 from pathlib import Path
 
@@ -125,7 +126,11 @@ def test_join_of_where_view_flattens_both_bases_into_one_schema():
 
 def test_model_to_json_schema_accepts_views_alongside_classes():
     builder = _build(JOIN_SRC)
-    classes = [i for i in builder.symbol_table.all_registered() if getattr(i, "_qualified_class", None) == "IlisMeta16.ModelData.Class"]
+    classes = [
+        i
+        for i in builder.symbol_table.all_registered()
+        if getattr(i, "_qualified_class", None) == "IlisMeta16.ModelData.Class"
+    ]
     view = _view(builder, "VJ")
     schema = model_to_json_schema(classes + [view], symbol_table=builder.symbol_table)
     assert set(schema["$defs"]) == {"B", "C", "VJ"}

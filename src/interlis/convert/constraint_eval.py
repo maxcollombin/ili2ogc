@@ -25,6 +25,7 @@ only evaluates `SimpleConstraint` entries with no `Percentage` (plain
 form (`Kind` `LowPercC`/`HighPercC`) are population/basket-level checks that
 need more than one Feature to evaluate, out of scope here.
 """
+
 import re
 from typing import Any
 
@@ -220,7 +221,9 @@ def _evaluate_path_factor(expr: MetaInstance, properties: dict[str, Any]) -> Any
         raise UnsupportedExpressionError("INSPECTION-based path factors are not supported")
     found, value = _resolve_path(expr.PathEls, properties)
     if not found:
-        raise UnsupportedExpressionError(f"attribute path {_describe_path(expr.PathEls)!r} is not present in the payload")
+        raise UnsupportedExpressionError(
+            f"attribute path {_describe_path(expr.PathEls)!r} is not present in the payload"
+        )
     return value
 
 

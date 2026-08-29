@@ -15,6 +15,7 @@ kind:constant+value, composed segments+join(+negative index),
 sequence_pattern, field:null alone (value propagated by the build
 context).
 """
+
 import warnings
 from typing import Any
 
@@ -398,7 +399,9 @@ def _resolve_join(ctx: Any, source: dict, builder: Any, rule: str) -> str:
     return separator.join(s for s in segments if s is not None)
 
 
-def _match_sequence_pattern(ctx: Any, field: str, rule_map: dict, builder: Any, rule: str, optional: bool = False) -> Any:
+def _match_sequence_pattern(
+    ctx: Any, field: str, rule_map: dict, builder: Any, rule: str, optional: bool = False
+) -> Any:
     if not ca.has_accessor(ctx, field):
         raise BuildError(f"accessor {field!r} not found on {type(ctx).__name__}", rule=rule, ctx=ctx)
     # `field` can itself be a "multi" accessor (e.g. '--' = two MINUS
@@ -420,7 +423,7 @@ def _match_sequence_pattern(ctx: Any, field: str, rule_map: dict, builder: Any, 
         raise BuildError(f"{field!r} not found in ctx.children", rule=rule, ctx=ctx)
 
     max_len = max(len(pattern.split()) for pattern in rule_map)
-    window = children[start:start + max_len]
+    window = children[start : start + max_len]
     names = [_token_name(n, builder) for n in window]
     for length in range(max_len, 0, -1):
         candidate = " ".join(n for n in names[:length] if n)
@@ -428,5 +431,6 @@ def _match_sequence_pattern(ctx: Any, field: str, rule_map: dict, builder: Any, 
             return rule_map[candidate]
     raise BuildError(
         f"no token sequence matches {sorted(rule_map)} starting at {field!r} (got {names!r})",
-        rule=rule, ctx=ctx,
+        rule=rule,
+        ctx=ctx,
     )

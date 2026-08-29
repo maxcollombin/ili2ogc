@@ -5,6 +5,7 @@ etaient charges - un modele du header jamais exerce par les donnees
 restait invisible, disponible ou non). Reutilise les fixtures
 `tests/fixtures/multi_file/` (Base disponible, BrokenSyntax indexe mais en
 echec, NoSuchModel absent), meme corpus que `test_model_builder_multi_file.py`."""
+
 import warnings
 from pathlib import Path
 
@@ -22,7 +23,8 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures/multi_file"
 
 def _transfer(names: list[str]) -> XtfTransfer:
     return XtfTransfer(
-        sender=None, ili_version=None,
+        sender=None,
+        ili_version=None,
         models=[XtfModelRef(name=n, version="2026-08-07", uri="https://example.org") for n in names],
         baskets=[],
     )
@@ -45,7 +47,8 @@ def test_header_completeness_covers_all_four_states():
         builder.build(tree)
 
     statuses = header_completeness(
-        _transfer(["INTERLIS", "Base", "NoSuchModel", "BrokenSyntax"]), repository=repository,
+        _transfer(["INTERLIS", "Base", "NoSuchModel", "BrokenSyntax"]),
+        repository=repository,
     )
     by_name = {s.name: s.status for s in statuses}
     assert by_name == {

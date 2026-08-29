@@ -10,6 +10,7 @@ every OTHER attribute using the same domain as mandatory too. The fix
 gives a `MANDATORY`-qualified attribute its own private clone of the
 resolved domain instead, leaving the shared one untouched.
 """
+
 import warnings
 from pathlib import Path
 
@@ -70,8 +71,7 @@ def test_shared_domain_instance_is_never_mutated():
 
 def test_inline_mandatory_type_unaffected_by_this_fix():
     """A fresh, non-shared instance (inline type, not a named domain) already worked before this fix - must keep working."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -79,8 +79,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = builder.symbol_table.resolve("Foo.T.A")
     resolved = resolve_attribute(attributes_of(a)["Inline"])
     assert resolved.mandatory is True
@@ -88,8 +87,7 @@ END Foo.
 
 def test_mandatory_on_domain_already_declared_mandatory_needs_no_clone():
     """The DOMAIN itself is `MANDATORY <type>` - already correct, no override/clone needed."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   DOMAIN
     AlwaysSet = MANDATORY TEXT*20;
@@ -99,8 +97,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     a = builder.symbol_table.resolve("Foo.T.A")
     domain = builder.symbol_table.resolve("Foo.AlwaysSet")
     resolved = resolve_attribute(attributes_of(a)["Attr1"])

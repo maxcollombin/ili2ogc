@@ -11,6 +11,7 @@ itself (InterlisParser.py's inspection()) only matches AREA inside an
 same `presence: true` dispatch pattern already used for
 viewDef.Abstract/Final/Transient.
 """
+
 import warnings
 from pathlib import Path
 

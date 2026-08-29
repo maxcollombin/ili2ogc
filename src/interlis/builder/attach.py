@@ -13,6 +13,7 @@ Resolution order (first match wins):
 4. No match -> explicit BuildError (defensive: should not happen for a
    well-formed binding, but keeps the engine robust against a future one).
 """
+
 from interlis.builder.errors import BuildError
 from interlis.metamodel.instance import MetaInstance
 from interlis.spec.uml_index import UmlIndex
@@ -98,7 +99,10 @@ class AttachmentResolver:
         Returns False if no such association exists (the caller then falls
         back to a plain replacement).
         """
-        own_classes = {head._qualified_class, *(self.uml.qualified.get(head._qualified_class, {}).get("all_superclasses") or [])}
+        own_classes = {
+            head._qualified_class,
+            *(self.uml.qualified.get(head._qualified_class, {}).get("all_superclasses") or []),
+        }
         for assoc_el in self.uml.qualified.values():
             if assoc_el.get("kind") != "Association":
                 continue
@@ -182,7 +186,14 @@ class AttachmentResolver:
             for i, end in enumerate(ends):
                 other = ends[1 - i]
                 if end.get("target") in from_classes and other.get("target") in to_classes:
-                    candidates.append((other.get("aggregation") or "none", assoc_el.get("name"), other.get("role"), other.get("upper")))
+                    candidates.append(
+                        (
+                            other.get("aggregation") or "none",
+                            assoc_el.get("name"),
+                            other.get("role"),
+                            other.get("upper"),
+                        )
+                    )
         if not candidates:
             return None
         candidates.sort(key=lambda c: (c[0] == "composite", c[1]))

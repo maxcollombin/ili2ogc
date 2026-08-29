@@ -3,6 +3,7 @@
 See docs/jsonfg-conversion-strategy.md for the design decision and scope
 (JSON-FG "core" + "types-schemas" requirements classes only).
 """
+
 import warnings
 from pathlib import Path
 
@@ -227,7 +228,8 @@ def test_out_of_scope_attribute_gets_marker_not_dropped():
     builder = _build(_MODEL)
     cls = _resolved_class(builder, "A")
     obj = XtfObject(
-        tid="obj-3", qualified_class="Foo.T.A",
+        tid="obj-3",
+        qualified_class="Foo.T.A",
         attributes={"Ref": [_node("Ref", "obj-1")]},
     )
     feature = object_to_feature(obj, cls)
@@ -238,7 +240,8 @@ def test_unknown_attribute_name_skipped():
     builder = _build(_MODEL)
     cls = _resolved_class(builder, "A")
     obj = XtfObject(
-        tid="obj-4", qualified_class="Foo.T.A",
+        tid="obj-4",
+        qualified_class="Foo.T.A",
         attributes={"NotInSchema": [_node("NotInSchema", "x")]},
     )
     feature = object_to_feature(obj, cls)
@@ -249,7 +252,8 @@ def test_coord_attribute_becomes_place_point_with_crs():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "APoint")
     obj = XtfObject(
-        tid="p-1", qualified_class="Foo.T.APoint",
+        tid="p-1",
+        qualified_class="Foo.T.APoint",
         attributes={"Geom": [_wrap("Geom", _coord("2600000.0", "1200000.0"))]},
     )
     feature = object_to_feature(obj, cls)
@@ -263,14 +267,25 @@ def test_multicoord_attribute_becomes_place_multipoint():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "AMultiPoint")
     obj = XtfObject(
-        tid="mp-1", qualified_class="Foo.T.AMultiPoint",
-        attributes={"Geom": [_wrap("Geom", _wrap(
-            "MULTICOORD", _coord("2600000.0", "1200000.0"), _coord("2600100.0", "1200100.0"),
-        ))]},
+        tid="mp-1",
+        qualified_class="Foo.T.AMultiPoint",
+        attributes={
+            "Geom": [
+                _wrap(
+                    "Geom",
+                    _wrap(
+                        "MULTICOORD",
+                        _coord("2600000.0", "1200000.0"),
+                        _coord("2600100.0", "1200100.0"),
+                    ),
+                )
+            ]
+        },
     )
     feature = object_to_feature(obj, cls)
     assert feature["place"] == {
-        "type": "MultiPoint", "coordinates": [[2600000.0, 1200000.0], [2600100.0, 1200100.0]],
+        "type": "MultiPoint",
+        "coordinates": [[2600000.0, 1200000.0], [2600100.0, 1200100.0]],
     }
     assert "Geom" not in feature["properties"]
 
@@ -279,28 +294,54 @@ def test_polyline_attribute_becomes_place_linestring():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ALine")
     obj = XtfObject(
-        tid="l-1", qualified_class="Foo.T.ALine",
-        attributes={"Geom": [_wrap("Geom", _wrap(
-            "POLYLINE", _coord("2600000.0", "1200000.0"), _coord("2600100.0", "1200100.0"),
-        ))]},
+        tid="l-1",
+        qualified_class="Foo.T.ALine",
+        attributes={
+            "Geom": [
+                _wrap(
+                    "Geom",
+                    _wrap(
+                        "POLYLINE",
+                        _coord("2600000.0", "1200000.0"),
+                        _coord("2600100.0", "1200100.0"),
+                    ),
+                )
+            ]
+        },
     )
     feature = object_to_feature(obj, cls)
     assert feature["place"] == {
-        "type": "LineString", "coordinates": [[2600000.0, 1200000.0], [2600100.0, 1200100.0]],
+        "type": "LineString",
+        "coordinates": [[2600000.0, 1200000.0], [2600100.0, 1200100.0]],
     }
 
 
 def test_surface_attribute_becomes_place_polygon_outer_ring_first():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "APoly")
-    outer = _wrap("BOUNDARY", _wrap(
-        "POLYLINE", _coord("0.0", "0.0"), _coord("10.0", "0.0"), _coord("10.0", "10.0"), _coord("0.0", "0.0"),
-    ))
-    hole = _wrap("BOUNDARY", _wrap(
-        "POLYLINE", _coord("1.0", "1.0"), _coord("2.0", "1.0"), _coord("2.0", "2.0"), _coord("1.0", "1.0"),
-    ))
+    outer = _wrap(
+        "BOUNDARY",
+        _wrap(
+            "POLYLINE",
+            _coord("0.0", "0.0"),
+            _coord("10.0", "0.0"),
+            _coord("10.0", "10.0"),
+            _coord("0.0", "0.0"),
+        ),
+    )
+    hole = _wrap(
+        "BOUNDARY",
+        _wrap(
+            "POLYLINE",
+            _coord("1.0", "1.0"),
+            _coord("2.0", "1.0"),
+            _coord("2.0", "2.0"),
+            _coord("1.0", "1.0"),
+        ),
+    )
     obj = XtfObject(
-        tid="s-1", qualified_class="Foo.T.APoly",
+        tid="s-1",
+        qualified_class="Foo.T.APoly",
         attributes={"Geom": [_wrap("Geom", _wrap("SURFACE", outer, hole))]},
     )
     feature = object_to_feature(obj, cls)
@@ -315,9 +356,12 @@ def test_polyline_pure_arc_becomes_bare_circular_string():
     """A POLYLINE = COORD then a single ARC, no other straight segment -> a bare `CircularString`, not wrapped in `CompoundCurve`."""
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ALine")
-    arc = _wrap("ARC", _node("C1", "2600100.0"), _node("C2", "1200100.0"), _node("A1", "2600050.0"), _node("A2", "1200050.0"))
+    arc = _wrap(
+        "ARC", _node("C1", "2600100.0"), _node("C2", "1200100.0"), _node("A1", "2600050.0"), _node("A2", "1200050.0")
+    )
     obj = XtfObject(
-        tid="l-2", qualified_class="Foo.T.ALine",
+        tid="l-2",
+        qualified_class="Foo.T.ALine",
         attributes={"Geom": [_wrap("Geom", _wrap("POLYLINE", _coord("2600000.0", "1200000.0"), arc))]},
     )
     feature = object_to_feature(obj, cls)
@@ -332,18 +376,34 @@ def test_polyline_pure_arc_becomes_bare_circular_string():
 def test_polyline_straight_then_arc_then_straight_becomes_compound_curve():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ALine")
-    arc = _wrap("ARC", _node("C1", "2600100.0"), _node("C2", "1200100.0"), _node("A1", "2600050.0"), _node("A2", "1200050.0"))
+    arc = _wrap(
+        "ARC", _node("C1", "2600100.0"), _node("C2", "1200100.0"), _node("A1", "2600050.0"), _node("A2", "1200050.0")
+    )
     obj = XtfObject(
-        tid="l-4", qualified_class="Foo.T.ALine",
-        attributes={"Geom": [_wrap("Geom", _wrap(
-            "POLYLINE", _coord("2600000.0", "1200000.0"), arc, _coord("2600200.0", "1200200.0"),
-        ))]},
+        tid="l-4",
+        qualified_class="Foo.T.ALine",
+        attributes={
+            "Geom": [
+                _wrap(
+                    "Geom",
+                    _wrap(
+                        "POLYLINE",
+                        _coord("2600000.0", "1200000.0"),
+                        arc,
+                        _coord("2600200.0", "1200200.0"),
+                    ),
+                )
+            ]
+        },
     )
     feature = object_to_feature(obj, cls)
     place = feature["place"]
     assert place["type"] == "CompoundCurve"
     assert place["geometries"] == [
-        {"type": "CircularString", "coordinates": [[2600000.0, 1200000.0], [2600050.0, 1200050.0], [2600100.0, 1200100.0]]},
+        {
+            "type": "CircularString",
+            "coordinates": [[2600000.0, 1200000.0], [2600050.0, 1200050.0], [2600100.0, 1200100.0]],
+        },
         {"type": "LineString", "coordinates": [[2600100.0, 1200100.0], [2600200.0, 1200200.0]]},
     ]
     assert CONF_CIRCULAR_ARCS in feature["conformsTo"]
@@ -355,7 +415,8 @@ def test_custom_line_form_segment_falls_back_to_unsupported_property():
     cls = _resolved_class(builder, "ALine")
     custom = _wrap("CustomForm", _node("X", "1"))
     obj = XtfObject(
-        tid="l-5", qualified_class="Foo.T.ALine",
+        tid="l-5",
+        qualified_class="Foo.T.ALine",
         attributes={"Geom": [_wrap("Geom", _wrap("POLYLINE", _coord("2600000.0", "1200000.0"), custom))]},
     )
     feature = object_to_feature(obj, cls)
@@ -370,7 +431,8 @@ def test_polyline_two_chained_arcs_become_one_circular_string():
     arc1 = _wrap("ARC", _node("C1", "2.0"), _node("C2", "0.0"), _node("A1", "1.0"), _node("A2", "1.0"))
     arc2 = _wrap("ARC", _node("C1", "4.0"), _node("C2", "0.0"), _node("A1", "3.0"), _node("A2", "1.0"))
     obj = XtfObject(
-        tid="l-6", qualified_class="Foo.T.ALine",
+        tid="l-6",
+        qualified_class="Foo.T.ALine",
         attributes={"Geom": [_wrap("Geom", _wrap("POLYLINE", _coord("0.0", "0.0"), arc1, arc2))]},
     )
     feature = object_to_feature(obj, cls)
@@ -387,7 +449,8 @@ def test_surface_arc_boundary_becomes_curve_polygon():
     arc = _wrap("ARC", _node("C1", "10.0"), _node("C2", "0.0"), _node("A1", "5.0"), _node("A2", "5.0"))
     boundary = _wrap("BOUNDARY", _wrap("POLYLINE", _coord("0.0", "0.0"), arc, _coord("0.0", "0.0")))
     obj = XtfObject(
-        tid="s-2", qualified_class="Foo.T.APolyArc",
+        tid="s-2",
+        qualified_class="Foo.T.APolyArc",
         attributes={"Geom": [_wrap("Geom", _wrap("SURFACE", boundary))]},
     )
     feature = object_to_feature(obj, cls)
@@ -414,7 +477,8 @@ def test_multipolyline_with_one_arc_part_becomes_multi_curve():
     arc = _wrap("ARC", _node("C1", "12.0"), _node("C2", "10.0"), _node("A1", "11.0"), _node("A2", "11.0"))
     curved = _wrap("POLYLINE", _coord("10.0", "10.0"), arc)
     obj = XtfObject(
-        tid="ml-1", qualified_class="Foo.T.AMultiLine",
+        tid="ml-1",
+        qualified_class="Foo.T.AMultiLine",
         attributes={"Geom": [_wrap("Geom", _wrap("MULTIPOLYLINE", straight, curved))]},
     )
     feature = object_to_feature(obj, cls)
@@ -432,15 +496,23 @@ def test_multisurface_with_one_curved_part_becomes_multi_surface():
     """One straight `Polygon` + one curved `CurvePolygon` part in a MULTISURFACE -> `MultiSurface` (SS7.5.5)."""
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "AMultiPolyArc")
-    straight_boundary = _wrap("BOUNDARY", _wrap(
-        "POLYLINE", _coord("0.0", "0.0"), _coord("1.0", "0.0"), _coord("1.0", "1.0"), _coord("0.0", "0.0"),
-    ))
+    straight_boundary = _wrap(
+        "BOUNDARY",
+        _wrap(
+            "POLYLINE",
+            _coord("0.0", "0.0"),
+            _coord("1.0", "0.0"),
+            _coord("1.0", "1.0"),
+            _coord("0.0", "0.0"),
+        ),
+    )
     arc = _wrap("ARC", _node("C1", "20.0"), _node("C2", "10.0"), _node("A1", "15.0"), _node("A2", "15.0"))
     curved_boundary = _wrap("BOUNDARY", _wrap("POLYLINE", _coord("10.0", "10.0"), arc, _coord("10.0", "10.0")))
     straight_surface = _wrap("SURFACE", straight_boundary)
     curved_surface = _wrap("SURFACE", curved_boundary)
     obj = XtfObject(
-        tid="ms-1", qualified_class="Foo.T.AMultiPolyArc",
+        tid="ms-1",
+        qualified_class="Foo.T.AMultiPolyArc",
         attributes={"Geom": [_wrap("Geom", _wrap("MULTISURFACE", straight_surface, curved_surface))]},
     )
     feature = object_to_feature(obj, cls)
@@ -469,7 +541,8 @@ def test_missing_crs_meta_falls_back_to_unsupported_property():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ANoCrs")
     obj = XtfObject(
-        tid="nc-1", qualified_class="Foo.T.ANoCrs",
+        tid="nc-1",
+        qualified_class="Foo.T.ANoCrs",
         attributes={"Geom": [_wrap("Geom", _coord("100.0", "200.0"))]},
     )
     feature = object_to_feature(obj, cls)
@@ -481,11 +554,19 @@ def test_multi_geometry_class_gets_geometry_collection_place():
     """A class with 2 resolvable geometry attributes (real corpus shape: `Station`, point + area) bundles both into one `GeometryCollection` - no "primary" is picked."""
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ATwoGeoms")
-    outer = _wrap("BOUNDARY", _wrap(
-        "POLYLINE", _coord("0.0", "0.0"), _coord("10.0", "0.0"), _coord("10.0", "10.0"), _coord("0.0", "0.0"),
-    ))
+    outer = _wrap(
+        "BOUNDARY",
+        _wrap(
+            "POLYLINE",
+            _coord("0.0", "0.0"),
+            _coord("10.0", "0.0"),
+            _coord("10.0", "10.0"),
+            _coord("0.0", "0.0"),
+        ),
+    )
     obj = XtfObject(
-        tid="tg-1", qualified_class="Foo.T.ATwoGeoms",
+        tid="tg-1",
+        qualified_class="Foo.T.ATwoGeoms",
         attributes={
             "Point": [_wrap("Point", _coord("2600000.0", "1200000.0"))],
             "Area": [_wrap("Area", _wrap("SURFACE", outer))],
@@ -509,7 +590,8 @@ def test_multi_geometry_class_with_only_one_attribute_populated():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ATwoGeoms")
     obj = XtfObject(
-        tid="tg-2", qualified_class="Foo.T.ATwoGeoms",
+        tid="tg-2",
+        qualified_class="Foo.T.ATwoGeoms",
         attributes={"Point": [_wrap("Point", _coord("2600000.0", "1200000.0"))]},
     )
     feature = object_to_feature(obj, cls)
@@ -522,7 +604,8 @@ def test_multi_geometry_class_with_mismatched_crs_gets_no_place():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ATwoGeomsDiffCrs")
     obj = XtfObject(
-        tid="tg-3", qualified_class="Foo.T.ATwoGeomsDiffCrs",
+        tid="tg-3",
+        qualified_class="Foo.T.ATwoGeomsDiffCrs",
         attributes={
             "PointA": [_wrap("PointA", _coord("2600000.0", "1200000.0"))],
             "PointB": [_wrap("PointB", _coord("600000.0", "200000.0"))],
@@ -540,7 +623,8 @@ def test_without_meta_capture_crs_is_unresolved():
     builder = _build(_GEOM_MODEL, capture_meta=False)
     cls = _resolved_class(builder, "APoint")
     obj = XtfObject(
-        tid="p-2", qualified_class="Foo.T.APoint",
+        tid="p-2",
+        qualified_class="Foo.T.APoint",
         attributes={"Geom": [_wrap("Geom", _coord("2600000.0", "1200000.0"))]},
     )
     feature = object_to_feature(obj, cls)
@@ -575,7 +659,7 @@ def test_without_schema_url_omits_feature_schema():
 
 
 def test_standalone_false_omits_feature_schema_even_with_schema_url():
-    """"featureSchema" stays a root-object-only member here, same stance as "conformsTo" - never duplicated per nested Feature."""
+    """ "featureSchema" stays a root-object-only member here, same stance as "conformsTo" - never duplicated per nested Feature."""
     builder = _build(_MODEL)
     cls = _resolved_class(builder, "A")
     obj = XtfObject(tid="obj-8", qualified_class="Foo.T.A", attributes={})
@@ -586,7 +670,10 @@ def test_standalone_false_omits_feature_schema_even_with_schema_url():
 def test_transfer_to_feature_collection_wraps_features_without_per_feature_conforms_to():
     builder = _build(_MODEL)
     basket = XtfBasket(
-        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
         objects=[
             XtfObject(tid="c-1", qualified_class="Foo.T.A", attributes={"Age": [_node("Age", "1")]}),
             XtfObject(tid="c-2", qualified_class="Foo.T.A", attributes={"Age": [_node("Age", "2")]}),
@@ -606,7 +693,10 @@ def test_transfer_to_feature_collection_wraps_features_without_per_feature_confo
 def test_transfer_to_feature_collection_skips_unresolvable_class():
     builder = _build(_MODEL)
     basket = XtfBasket(
-        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
         objects=[XtfObject(tid="u-1", qualified_class="Foo.T.DoesNotExist", attributes={})],
     )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
@@ -616,8 +706,7 @@ def test_transfer_to_feature_collection_skips_unresolvable_class():
 
 
 def test_transfer_to_feature_collection_no_hoisted_featuretype_when_heterogeneous():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -628,10 +717,12 @@ MODEL Foo AT "http://x" VERSION "1" =
     END B;
   END T;
 END Foo.
-"""
-    )
+""")
     basket = XtfBasket(
-        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
         objects=[
             XtfObject(tid="a-1", qualified_class="Foo.T.A", attributes={}),
             XtfObject(tid="b-1", qualified_class="Foo.T.B", attributes={}),
@@ -646,7 +737,10 @@ END Foo.
 def test_transfer_to_feature_collection_schema_url_homogeneous_is_a_string():
     builder = _build(_MODEL)
     basket = XtfBasket(
-        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
         objects=[
             XtfObject(tid="c-1", qualified_class="Foo.T.A", attributes={}),
             XtfObject(tid="c-2", qualified_class="Foo.T.A", attributes={}),
@@ -659,8 +753,7 @@ def test_transfer_to_feature_collection_schema_url_homogeneous_is_a_string():
 
 
 def test_transfer_to_feature_collection_schema_url_heterogeneous_is_an_object():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -671,10 +764,12 @@ MODEL Foo AT "http://x" VERSION "1" =
     END B;
   END T;
 END Foo.
-"""
-    )
+""")
     basket = XtfBasket(
-        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
         objects=[
             XtfObject(tid="a-1", qualified_class="Foo.T.A", attributes={}),
             XtfObject(tid="b-1", qualified_class="Foo.T.B", attributes={}),
@@ -688,7 +783,10 @@ END Foo.
 def test_transfer_to_feature_collection_without_schema_url_omits_feature_schema():
     builder = _build(_MODEL)
     basket = XtfBasket(
-        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
         objects=[XtfObject(tid="c-1", qualified_class="Foo.T.A", attributes={})],
     )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
@@ -700,7 +798,8 @@ def test_plain_reference_to_becomes_string_oid():
     builder = _build(_REF_MODEL)
     cls = _resolved_class(builder, "Holder")
     obj = XtfObject(
-        tid="h-1", qualified_class="Foo.T.Holder",
+        tid="h-1",
+        qualified_class="Foo.T.Holder",
         attributes={"DirectRef": [_wrap("DirectRef", _ref_node("Item", "tgt-1"))]},
     )
     feature = object_to_feature(obj, cls)
@@ -718,7 +817,8 @@ def test_catalog_reference_structure_becomes_string_oid():
     builder = _build(_REF_MODEL)
     cls = _resolved_class(builder, "Holder")
     obj = XtfObject(
-        tid="h-2", qualified_class="Foo.T.Holder",
+        tid="h-2",
+        qualified_class="Foo.T.Holder",
         attributes={"CatalogRef": [_wrap("CatalogRef", _wrap("ItemRefWrapper", _ref_node("Reference", "tgt-2")))]},
     )
     feature = object_to_feature(obj, cls)
@@ -729,7 +829,8 @@ def test_genuine_structure_without_ref_recurses_into_nested_object():
     builder = _build(_REF_MODEL)
     cls = _resolved_class(builder, "Holder")
     obj = XtfObject(
-        tid="h-3", qualified_class="Foo.T.Holder",
+        tid="h-3",
+        qualified_class="Foo.T.Holder",
         attributes={"NoRefStruct": [_wrap("NoRefStruct", _wrap("PlainWrapperWrapper", _node("Sub", "hello")))]},
     )
     feature = object_to_feature(obj, cls)
@@ -740,7 +841,8 @@ def test_embedded_role_absent_without_symbol_table():
     builder = _build(_REF_MODEL)
     cls = _resolved_class(builder, "Indicator")
     obj = XtfObject(
-        tid="i-1", qualified_class="Foo.T.Indicator",
+        tid="i-1",
+        qualified_class="Foo.T.Indicator",
         attributes={"Value": [_node("Value", "v")], "rLocation": [_ref_node("rLocation", "loc-1")]},
     )
     feature = object_to_feature(obj, cls)
@@ -751,7 +853,8 @@ def test_embedded_role_becomes_string_oid_with_symbol_table():
     builder = _build(_REF_MODEL)
     cls = _resolved_class(builder, "Indicator")
     obj = XtfObject(
-        tid="i-2", qualified_class="Foo.T.Indicator",
+        tid="i-2",
+        qualified_class="Foo.T.Indicator",
         attributes={"Value": [_node("Value", "v")], "rLocation": [_ref_node("rLocation", "loc-1")]},
     )
     feature = object_to_feature(obj, cls, symbol_table=builder.symbol_table)
@@ -763,7 +866,8 @@ def test_multivalue_of_scalars_becomes_array():
     builder = _build(_MULTI_MODEL)
     cls = _resolved_class(builder, "Facility")
     obj = XtfObject(
-        tid="f-1", qualified_class="Foo.T.Facility",
+        tid="f-1",
+        qualified_class="Foo.T.Facility",
         attributes={"Codes": [_wrap("Codes", _node("Item", "AA"), _node("Item", "BB"))]},
     )
     feature = object_to_feature(obj, cls)
@@ -814,7 +918,8 @@ def test_child_row_features_scalar_bag_gets_a_value_property_and_parent_fk():
     builder = _build(_CHILD_ROWS_MODEL)
     cls = _resolved_class(builder, "Parcel")
     obj = XtfObject(
-        tid="p-1", qualified_class="Foo.T.Parcel",
+        tid="p-1",
+        qualified_class="Foo.T.Parcel",
         attributes={
             "ParcelNr": [_node("ParcelNr", "42")],
             "Tags": [_wrap("Tags", _node("TEXT", "AA"), _node("TEXT", "BB"))],
@@ -837,7 +942,8 @@ def test_child_row_features_list_of_structure_spreads_members_and_gets_seq():
     en = _wrap("LocalisedText", _node("Language", "en"), _node("Text", "Hello"))
     fr = _wrap("LocalisedText", _node("Language", "fr"), _node("Text", "Bonjour"))
     obj = XtfObject(
-        tid="p-2", qualified_class="Foo.T.Parcel",
+        tid="p-2",
+        qualified_class="Foo.T.Parcel",
         attributes={
             "ParcelNr": [_node("ParcelNr", "1")],
             "Names": [_wrap("Names", en, fr)],
@@ -856,7 +962,8 @@ def test_child_row_features_never_produced_by_default():
     builder = _build(_CHILD_ROWS_MODEL)
     cls = _resolved_class(builder, "Parcel")
     obj = XtfObject(
-        tid="p-3", qualified_class="Foo.T.Parcel",
+        tid="p-3",
+        qualified_class="Foo.T.Parcel",
         attributes={
             "ParcelNr": [_node("ParcelNr", "1")],
             "Tags": [_wrap("Tags", _node("TEXT", "AA"))],
@@ -872,7 +979,8 @@ def test_child_row_features_never_produced_by_default():
 def test_transfer_to_feature_collection_include_child_rows_appends_them():
     builder = _build(_CHILD_ROWS_MODEL)
     obj = XtfObject(
-        tid="p-4", qualified_class="Foo.T.Parcel",
+        tid="p-4",
+        qualified_class="Foo.T.Parcel",
         attributes={
             "ParcelNr": [_node("ParcelNr", "1")],
             "Tags": [_wrap("Tags", _node("TEXT", "AA"), _node("TEXT", "BB"))],
@@ -899,14 +1007,19 @@ def test_transfer_to_feature_collection_hoists_uniform_coord_ref_sys():
     """
     builder = _build(_GEOM_MODEL, capture_meta=True)
     basket = XtfBasket(
-        bid="b1", qualified_topic="Foo.T", kind=None, endstate=None,
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
         objects=[
             XtfObject(
-                tid="p-1", qualified_class="Foo.T.APoint",
+                tid="p-1",
+                qualified_class="Foo.T.APoint",
                 attributes={"Geom": [_wrap("Geom", _coord("2600000.0", "1200000.0"))]},
             ),
             XtfObject(
-                tid="p-2", qualified_class="Foo.T.APoint",
+                tid="p-2",
+                qualified_class="Foo.T.APoint",
                 attributes={"Geom": [_wrap("Geom", _coord("2650000.0", "1250000.0"))]},
             ),
         ],

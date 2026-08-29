@@ -19,6 +19,7 @@ Two distinct sources of information - don't guess, verify:
   produce a basket of their own (used only as TYPES), so they can't serve
   as an entry point for `InterlisModelBuilder.build()`.
 """
+
 from dataclasses import dataclass
 
 from interlis.xtf.parse import XtfTransfer
@@ -75,10 +76,7 @@ def header_completeness(transfer: XtfTransfer, repository) -> list[HeaderModelSt
     positively asserts that a `--repo` WAS searched and found nothing).
     """
     if repository is None:
-        return [
-            HeaderModelStatus(name=m.name, version=m.version, uri=m.uri, status="no_repo")
-            for m in transfer.models
-        ]
+        return [HeaderModelStatus(name=m.name, version=m.version, uri=m.uri, status="no_repo") for m in transfer.models]
     return [
         HeaderModelStatus(name=m.name, version=m.version, uri=m.uri, status=repository.availability(m.name))
         for m in transfer.models

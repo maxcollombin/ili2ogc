@@ -2,6 +2,7 @@
 
 Runs the Lexer+Parser.
 """
+
 import re
 from pathlib import Path
 
@@ -112,7 +113,7 @@ def meta_attribute_comments(text: str) -> list[tuple[int, str, str]]:
     for token in tokens.tokens:
         if token.channel == 0 or token.text is None or not token.text.startswith(_META_ATTRIBUTE_PREFIX):
             continue
-        body = token.text[len(_META_ATTRIBUTE_PREFIX):]
+        body = token.text[len(_META_ATTRIBUTE_PREFIX) :]
         for pair in body.split(";"):
             if "=" not in pair:
                 continue

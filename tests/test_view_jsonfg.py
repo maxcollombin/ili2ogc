@@ -9,6 +9,7 @@ attribute/reference on it - the FGDM4GS `Seg->OfRoad == Road` idiom). A
 `WHERE` outside that subset still leaves the whole VIEW skipped with a
 clear diagnostic.
 """
+
 import warnings
 from pathlib import Path
 
@@ -239,17 +240,27 @@ def test_where_reference_join_keeps_only_matching_rows():
 
     def _seg(tid: str, nr: str, of_road: str) -> XtfObject:
         return XtfObject(
-            tid=tid, qualified_class="Roads.T.Segment",
+            tid=tid,
+            qualified_class="Roads.T.Segment",
             attributes={"SegNr": [_node("SegNr", nr)], "OfRoad": [RawNode("OfRoad", None, {"REF": of_road}, [])]},
         )
 
     def _road(tid: str, name: str) -> XtfObject:
         return XtfObject(tid=tid, qualified_class="Roads.T.Road", attributes={"RoadName": [_node("RoadName", name)]})
 
-    basket = XtfBasket(bid="b", qualified_topic="Roads.T", kind=None, endstate=None, objects=[
-        _road("r1", "Main St"), _road("r2", "Side St"),
-        _seg("s1", "1", "r1"), _seg("s2", "2", "r1"), _seg("s3", "3", "r2"),
-    ])
+    basket = XtfBasket(
+        bid="b",
+        qualified_topic="Roads.T",
+        kind=None,
+        endstate=None,
+        objects=[
+            _road("r1", "Main St"),
+            _road("r2", "Side St"),
+            _seg("s1", "1", "r1"),
+            _seg("s2", "2", "r1"),
+            _seg("s3", "3", "r2"),
+        ],
+    )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
 
     features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
@@ -371,14 +382,22 @@ def test_inspection_yields_one_feature_per_bag_element():
     builder = _build(_KINDS_MODEL)
     view = _view(builder, "Insp")
     owner = XtfObject(
-        tid="o1", qualified_class="Kinds.Base.Owner",
+        tid="o1",
+        qualified_class="Kinds.Base.Owner",
         attributes={
             "Name": [_node("Name", "Alice")],
             # real wire form: ONE wrapper named after the attribute, each occurrence a direct child
-            "Items": [RawNode("Items", None, {}, [
-                RawNode("Kinds.Base.Item", None, {}, [RawNode("Label", "one", {}, [])]),
-                RawNode("Kinds.Base.Item", None, {}, [RawNode("Label", "two", {}, [])]),
-            ])],
+            "Items": [
+                RawNode(
+                    "Items",
+                    None,
+                    {},
+                    [
+                        RawNode("Kinds.Base.Item", None, {}, [RawNode("Label", "one", {}, [])]),
+                        RawNode("Kinds.Base.Item", None, {}, [RawNode("Label", "two", {}, [])]),
+                    ],
+                )
+            ],
         },
     )
     basket = XtfBasket(bid="b", qualified_topic="Kinds.Base", kind=None, endstate=None, objects=[owner])

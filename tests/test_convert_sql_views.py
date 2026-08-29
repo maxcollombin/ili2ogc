@@ -15,6 +15,7 @@ carries the same shapes (a `JOIN OF ... WHERE role == base`, a
 `PROJECTION OF`, a reference hop) and is verified end-to-end against a
 real SQLite engine.
 """
+
 import sqlite3
 import warnings
 from pathlib import Path
@@ -133,9 +134,9 @@ def test_join_view_executes_against_real_sqlite():
     conn.execute("INSERT INTO segment (id, segnr, geom, ofroad) VALUES ('s1', 1, 'x', 'r1')")
     conn.execute("INSERT INTO segment (id, segnr, geom, ofroad) VALUES ('s2', 2, 'x', 'r1')")
     conn.execute("INSERT INTO segment (id, segnr, geom, ofroad) VALUES ('s3', 3, 'x', 'r2')")
-    rows = sorted(conn.execute('SELECT segnr, road_name, owner_name FROM roadsegments'))
+    rows = sorted(conn.execute("SELECT segnr, road_name, owner_name FROM roadsegments"))
     assert rows == [(1, "Main St", "City"), (2, "Main St", "City"), (3, "Side St", "Canton")]
-    proj = sorted(conn.execute('SELECT road_name FROM segmentroad'))
+    proj = sorted(conn.execute("SELECT road_name FROM segmentroad"))
     assert proj == [("Main St",), ("Main St",), ("Side St",)]
 
 
@@ -169,7 +170,9 @@ def _convert_with_auto_base_models(derived: str):
     class_symbol_tables: dict[int, object] = {}
     already = {id(c) for c in classes}
     view_base_ids = {
-        id(rbv.BaseView) for v in views for rbv in (getattr(v, "RenamedBaseView", None) or [])
+        id(rbv.BaseView)
+        for v in views
+        for rbv in (getattr(v, "RenamedBaseView", None) or [])
         if isinstance(getattr(rbv, "BaseView", None), MetaInstance)
     }
     for model_table in repo.loaded_models().values():
@@ -186,11 +189,17 @@ def _convert_with_auto_base_models(derived: str):
 
     ctn: dict[int, str] = {}
     tables = build_tables(
-        classes, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables, class_table_names=ctn,
+        classes,
+        symbol_table=builder.symbol_table,
+        class_symbol_tables=class_symbol_tables,
+        class_table_names=ctn,
     )
     sql_views = build_views(
-        views, tables, symbol_table=builder.symbol_table,
-        class_symbol_tables=class_symbol_tables, class_table_names=ctn,
+        views,
+        tables,
+        symbol_table=builder.symbol_table,
+        class_symbol_tables=class_symbol_tables,
+        class_table_names=ctn,
     )
     return tables, sql_views
 

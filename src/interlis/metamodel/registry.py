@@ -5,6 +5,7 @@ disk or committed separately) - the YAML stays the single source of
 truth. Design rationale (why fields are typed `Any`, why generation
 needs no forward-ref resolution): docs/dev-notes/metamodel-registry-any-typing.md.
 """
+
 from typing import Any
 
 from pydantic import Field, create_model
@@ -75,6 +76,7 @@ class MetamodelRegistry:
             values = schema.enum_values_for(qn, attr_name)
             if values:
                 from typing import Literal
+
                 py_type = Literal[tuple(values)]  # type: ignore[valid-type]
         if upper == "*":
             return (list[py_type], Field(default_factory=list))

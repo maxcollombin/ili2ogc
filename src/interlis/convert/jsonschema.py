@@ -9,6 +9,7 @@ InterlisModelBuilder, reusing xtf.schema's type-resolution helpers
 duplicating any resolution logic - convert() is a decoupled stage from
 validate().
 """
+
 from typing import Any
 
 import jsonschema
@@ -355,7 +356,9 @@ def _concrete_subclasses(abstract_class: MetaInstance, symbol_table: SymbolTable
 
 
 def _class_ref_or_marker(
-    class_instance: MetaInstance | None, ref_keys: dict[int, str], symbol_table: SymbolTable | None = None,
+    class_instance: MetaInstance | None,
+    ref_keys: dict[int, str],
+    symbol_table: SymbolTable | None = None,
 ) -> dict[str, Any]:
     """Return a `$ref` to `class_instance`'s own $defs entry, or the unsupported marker.
 
@@ -402,7 +405,10 @@ def _class_ref_or_marker(
 
 
 def _element_schema(
-    kind: str | None, type_instance: MetaInstance | None, ref_keys: dict[int, str], symbol_table: SymbolTable | None = None,
+    kind: str | None,
+    type_instance: MetaInstance | None,
+    ref_keys: dict[int, str],
+    symbol_table: SymbolTable | None = None,
 ) -> dict[str, Any]:
     """Return the schema for one "leaf" type - a plain attribute's type, or a MultiValue's BaseType.
 
@@ -428,7 +434,9 @@ def _element_schema(
 
 
 def _multi_value_schema(
-    multi_value: MetaInstance, ref_keys: dict[int, str], symbol_table: SymbolTable | None = None,
+    multi_value: MetaInstance,
+    ref_keys: dict[int, str],
+    symbol_table: SymbolTable | None = None,
 ) -> dict[str, Any]:
     """`BAG {m..n} OF X` / `LIST {m..n} OF X` -> `type: array`.
 
@@ -466,7 +474,9 @@ def _multi_value_schema(
 
 
 def _attribute_schema(
-    resolved: ResolvedAttribute, ref_keys: dict[int, str], symbol_table: SymbolTable | None = None,
+    resolved: ResolvedAttribute,
+    ref_keys: dict[int, str],
+    symbol_table: SymbolTable | None = None,
 ) -> dict[str, Any]:
     """Return the JSON Schema for one resolved attribute.
 
@@ -519,7 +529,11 @@ def _nested_class(resolved: ResolvedAttribute) -> MetaInstance | None:
         return resolved.type_instance
     if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
         base = getattr(resolved.type_instance, "BaseType", None)
-        if isinstance(base, MetaInstance) and base._qualified_class.rsplit(".", 1)[-1] == "Class" and _is_structure(base):
+        if (
+            isinstance(base, MetaInstance)
+            and base._qualified_class.rsplit(".", 1)[-1] == "Class"
+            and _is_structure(base)
+        ):
             return base
     return None
 
@@ -550,7 +564,11 @@ def _discover_classes(roots: list[MetaInstance], symbol_table: SymbolTable | Non
         if id(cls) in found:
             continue
         found[id(cls)] = cls
-        if symbol_table is not None and getattr(cls, "Kind", None) == "Structure" and bool(getattr(cls, "Abstract", False)):
+        if (
+            symbol_table is not None
+            and getattr(cls, "Kind", None) == "Structure"
+            and bool(getattr(cls, "Abstract", False))
+        ):
             for concrete in _concrete_subclasses(cls, symbol_table):
                 if id(concrete) not in found:
                     queue.append(concrete)
@@ -578,7 +596,9 @@ def _assign_keys(classes_by_id: dict[int, MetaInstance]) -> dict[int, str]:
 
 
 def class_to_json_schema(
-    class_instance: MetaInstance, ref_keys: dict[int, str] | None = None, symbol_table: SymbolTable | None = None,
+    class_instance: MetaInstance,
+    ref_keys: dict[int, str] | None = None,
+    symbol_table: SymbolTable | None = None,
 ) -> dict[str, Any]:
     """Convert one IlisMeta16 Class (or Structure - same metaclass) instance.
 
@@ -626,7 +646,9 @@ def class_to_json_schema(
     ref_keys = ref_keys or {}
     properties: dict[str, Any] = {}
     required: list[str] = []
-    members = schema_members_of(class_instance, symbol_table) if symbol_table is not None else attributes_of(class_instance)
+    members = (
+        schema_members_of(class_instance, symbol_table) if symbol_table is not None else attributes_of(class_instance)
+    )
     for name, attr in members.items():
         resolved = resolve_attribute(attr)
         properties[name] = _attribute_schema(resolved, ref_keys, symbol_table)
@@ -675,13 +697,19 @@ def validate_feature_properties(properties: dict[str, Any], schema: dict[str, An
     for this collection (a JOIN OF View) - that's `_crud_operations`'s
     job, a separate concern from payload SHAPE validation.
     """
-    root = {"$schema": schema.get("$schema", JSON_SCHEMA_DRAFT), "$defs": schema.get("$defs", {}), "$ref": f"#/$defs/{key}"}
+    root = {
+        "$schema": schema.get("$schema", JSON_SCHEMA_DRAFT),
+        "$defs": schema.get("$defs", {}),
+        "$ref": f"#/$defs/{key}",
+    }
     validator = jsonschema.Draft202012Validator(root)
     return [error.message for error in validator.iter_errors(properties)]
 
 
 def model_to_json_schema(
-    classes: list[MetaInstance], symbol_table: SymbolTable | None = None, model: MetaInstance | None = None,
+    classes: list[MetaInstance],
+    symbol_table: SymbolTable | None = None,
+    model: MetaInstance | None = None,
 ) -> dict[str, Any]:
     """Convert every Class/Structure reachable from `classes` into one JSON Schema document.
 

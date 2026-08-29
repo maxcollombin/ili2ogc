@@ -6,6 +6,7 @@ seule fixture reutilisee de test_model_builder_minimal.py). Construit des
 XtfObject/RawNode synthetiques directement en Python plutot qu'un vrai .xtf
 sur disque - la couche structurelle (parse.py) est deja testee separement
 (test_xtf_parse.py), ce fichier teste uniquement le croisement schema/donnees."""
+
 import warnings
 from pathlib import Path
 
@@ -42,19 +43,23 @@ def _text_attr(name: str, text: str | None) -> tuple[str, list[RawNode]]:
 
 def _object(tid: str, attrs: dict[str, str | None]) -> XtfObject:
     return XtfObject(
-        tid=tid, qualified_class=CLASS_NAME,
+        tid=tid,
+        qualified_class=CLASS_NAME,
         attributes=dict(_text_attr(name, text) for name, text in attrs.items()),
     )
 
 
 def _transfer(*objects: XtfObject) -> XtfTransfer:
-    basket = XtfBasket(bid="b1", qualified_topic="MinimalTest.MainTopic", kind=None, endstate=None, objects=list(objects))
+    basket = XtfBasket(
+        bid="b1", qualified_topic="MinimalTest.MainTopic", kind=None, endstate=None, objects=list(objects)
+    )
     return XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
 
 
 def _messages(issues, *, attribute: str | None = None, severity: str | None = None) -> list[str]:
     return [
-        i.message for i in issues
+        i.message
+        for i in issues
         if (attribute is None or i.attribute == attribute) and (severity is None or i.severity == severity)
     ]
 
@@ -160,10 +165,13 @@ def _ref_attr(name: str, target_tid: str) -> tuple[str, list[RawNode]]:
 def test_reference_resolved_within_same_basket_has_no_issue(ref_builder):
     location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "loc-1")]),
     )
-    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator])
+    basket = XtfBasket(
+        bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator]
+    )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     assert _messages(issues, attribute="RefLocation") == []
@@ -176,7 +184,8 @@ def test_reference_resolved_across_different_baskets_has_no_issue(ref_builder):
     l'objet source."""
     location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "loc-1")]),
     )
     basket_a = XtfBasket(bid="a", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location])
@@ -188,7 +197,8 @@ def test_reference_resolved_across_different_baskets_has_no_issue(ref_builder):
 
 def test_reference_target_not_found_is_warning_not_error(ref_builder):
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "does-not-exist")]),
     )
     basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
@@ -207,10 +217,13 @@ def test_reference_target_not_found_is_warning_not_error(ref_builder):
 def test_reference_resolved_to_declared_class_has_no_issue(ref_builder):
     location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "loc-1")]),
     )
-    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator])
+    basket = XtfBasket(
+        bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator]
+    )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     assert _messages(issues, attribute="RefLocation") == []
@@ -221,14 +234,18 @@ def test_reference_resolved_to_subclass_is_compatible(ref_builder):
     Location doit accepter une cible reelle de type SpecialLocation
     (EXTENDS Location) sans le signaler comme incompatible."""
     special = XtfObject(
-        tid="loc-1", qualified_class="RefTest.MainTopic.SpecialLocation",
+        tid="loc-1",
+        qualified_class="RefTest.MainTopic.SpecialLocation",
         attributes=dict([_text_attr("Name", "Bern"), _text_attr("Detail", "capital")]),
     )
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "loc-1")]),
     )
-    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[special, indicator])
+    basket = XtfBasket(
+        bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[special, indicator]
+    )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     assert _messages(issues, attribute="RefLocation") == []
@@ -240,13 +257,18 @@ def test_reference_resolved_to_incompatible_class_is_error(ref_builder):
     introuvable") mais de classe Indicator, sans rapport avec Location
     (ni identique, ni sous-classe) - doit devenir une `error`."""
     other_indicator = XtfObject(
-        tid="ind-2", qualified_class=INDICATOR_CLASS, attributes=dict([_text_attr("Value", "1")]),
+        tid="ind-2",
+        qualified_class=INDICATOR_CLASS,
+        attributes=dict([_text_attr("Value", "1")]),
     )
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "ind-2")]),
     )
-    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[other_indicator, indicator])
+    basket = XtfBasket(
+        bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[other_indicator, indicator]
+    )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     msgs = _messages(issues, attribute="RefLocation", severity="error")
@@ -259,15 +281,19 @@ def test_reference_resolved_to_incompatible_class_is_error(ref_builder):
 # que ASSOCIATION MeasurementLocation_Indicator sur le corpus reel
 # RoadTrafficCensus_V1_1) ---
 
+
 def test_embedded_role_resolved_is_not_unknown_attribute(ref_builder):
     """rLocation s'embarque sur Indicator (role rIndicator, cote {0..*}) -
     doit etre reconnu comme un attribut de schema valide, PAS "inconnu"."""
     location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("rLocation", "loc-1")]),
     )
-    basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator])
+    basket = XtfBasket(
+        bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[location, indicator]
+    )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=ref_builder.symbol_table)
     assert _messages(issues, attribute="rLocation") == []
@@ -287,7 +313,8 @@ def test_embedded_role_not_exposed_on_opposite_class(ref_builder):
 
 def test_embedded_role_unresolved_ref_is_warning(ref_builder):
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("rLocation", "does-not-exist")]),
     )
     basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
@@ -323,9 +350,12 @@ def test_embedded_role_from_base_class_resolved_on_subclass_instance_has_no_issu
     IVS_V2_1) : un objet de la SOUS-CLASSE porte le REF du role embarque
     declare sur la classe de BASE - doit resoudre sans issue, PAS
     "attribut absent du schema"."""
-    note = XtfObject(tid="note-1", qualified_class="RefTest.MainTopic.Note", attributes=dict([_text_attr("Text", "hello")]))
+    note = XtfObject(
+        tid="note-1", qualified_class="RefTest.MainTopic.Note", attributes=dict([_text_attr("Text", "hello")])
+    )
     special = XtfObject(
-        tid="special-1", qualified_class=SPECIAL_LOCATION_CLASS,
+        tid="special-1",
+        qualified_class=SPECIAL_LOCATION_CLASS,
         attributes=dict([_text_attr("Name", "Bern"), _ref_attr("rNote", "note-1")]),
     )
     basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[note, special])
@@ -338,13 +368,15 @@ def test_embedded_role_from_base_class_resolved_on_subclass_instance_has_no_issu
 # embarque lui-meme (tests/fixtures/xtf/reference_model.ili : ASSOCIATION
 # Location_ExternalIndicator, rExtLocation (EXTERNAL) -<#> Location) ---
 
+
 def test_embedded_role_external_unresolved_ref_reports_catalogue_expected(ref_builder):
     """rExtLocation porte sa PROPRE clause (EXTERNAL) sur le role - un REF
     non resolu doit etre signale comme la situation NORMALE attendue
     (meme message qu'une REFERENCE TO (EXTERNAL) ordinaire, Lot 35), pas
     comme un signal de donnee incorrecte."""
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("rExtLocation", "ext.catalog.1")]),
     )
     basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
@@ -361,7 +393,8 @@ def test_embedded_role_non_external_unresolved_ref_flags_data_issue(ref_builder)
     le message neutre "indetermine" maintenant que le statut des roles est
     resolu."""
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("rLocation", "does-not-exist")]),
     )
     basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
@@ -373,13 +406,15 @@ def test_embedded_role_non_external_unresolved_ref_flags_data_issue(ref_builder)
 
 # --- Lot 35 : catalogue objects (REFERENCE TO (EXTERNAL), --catalog) ---
 
+
 def test_non_external_unresolved_ref_flags_data_issue(ref_builder):
     """RefLocation (pas de clause EXTERNAL) : un REF non resolu doit rester
     `warning` (RULE #5, jamais `error` sans catalogue charge) mais le
     message doit signaler que la cible DEVRAIT normalement etre dans ce
     meme panier (eCH-0031 V2.1.0 3.6.3)."""
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefLocation", "does-not-exist")]),
     )
     basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
@@ -395,7 +430,8 @@ def test_external_unresolved_ref_reports_catalogue_expected(ref_builder):
     NORMALE attendue pour une reference-catalogue (pas un signal de donnee
     incorrecte)."""
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefCatalogItem", "ext.catalog.99")]),
     )
     basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
@@ -410,12 +446,17 @@ def test_external_ref_resolved_via_catalog_argument_has_no_issue(ref_builder):
     .xtf SEPARE du transfert principal (Lot 35, `--catalog`) - passer ce
     transfert-catalogue via `catalogs=` doit le rendre resoluble, exactement
     comme un objet du transfert principal."""
-    catalog_item = XtfObject(tid="ext.catalog.99", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Catalogue")]))
-    catalog_basket = XtfBasket(bid="cat", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[catalog_item])
+    catalog_item = XtfObject(
+        tid="ext.catalog.99", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Catalogue")])
+    )
+    catalog_basket = XtfBasket(
+        bid="cat", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[catalog_item]
+    )
     catalog_transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[catalog_basket])
 
     indicator = XtfObject(
-        tid="ind-1", qualified_class=INDICATOR_CLASS,
+        tid="ind-1",
+        qualified_class=INDICATOR_CLASS,
         attributes=dict([_text_attr("Value", "42"), _ref_attr("RefCatalogItem", "ext.catalog.99")]),
     )
     basket = XtfBasket(bid="b1", qualified_topic="RefTest.MainTopic", kind=None, endstate=None, objects=[indicator])
@@ -425,7 +466,9 @@ def test_external_ref_resolved_via_catalog_argument_has_no_issue(ref_builder):
     assert _messages(issues_without_catalog, attribute="RefCatalogItem") != []
 
     issues_with_catalog = validate_transfer(
-        transfer, symbol_table=ref_builder.symbol_table, catalogs=[catalog_transfer],
+        transfer,
+        symbol_table=ref_builder.symbol_table,
+        catalogs=[catalog_transfer],
     )
     assert _messages(issues_with_catalog, attribute="RefCatalogItem") == []
 
@@ -454,7 +497,7 @@ def restriction_builder():
 
 
 def test_restriction_text_matching_first_candidate_has_no_issue(restriction_builder):
-    """"Red" appartient au domaine inline de sColor - le 1er candidat de
+    """ "Red" appartient au domaine inline de sColor - le 1er candidat de
     `RESTRICTION(sColor; sSize)`."""
     obj = XtfObject(tid="w1", qualified_class=WIDGET_CLASS, attributes=dict([_text_attr("Sel", "Red")]))
     basket = XtfBasket(bid="b1", qualified_topic="RestrictionTest.MainTopic", kind=None, endstate=None, objects=[obj])
@@ -464,7 +507,7 @@ def test_restriction_text_matching_first_candidate_has_no_issue(restriction_buil
 
 
 def test_restriction_text_matching_second_candidate_has_no_issue(restriction_builder):
-    """"Small" appartient au domaine inline de sSize - le 2e candidat,
+    """ "Small" appartient au domaine inline de sSize - le 2e candidat,
     PAS le 1er (regression Lot 41 : la segmentation SEMI-naive tronquait
     silencieusement `_build_domain_class_restriction` a son 1er candidat
     seulement, avant le fix de profondeur LPAR/RPAR)."""
@@ -476,7 +519,7 @@ def test_restriction_text_matching_second_candidate_has_no_issue(restriction_bui
 
 
 def test_restriction_text_matching_no_candidate_is_warning(restriction_builder):
-    """"Purple" n'appartient a AUCUN des 2 domaines inline (sColor:
+    """ "Purple" n'appartient a AUCUN des 2 domaines inline (sColor:
     Red/Blue, sSize: Small/Large) - les 2 candidats sont PLEINEMENT
     verifiables (enums inline, rien d'externe) -> `warning`, pas `info`."""
     obj = XtfObject(tid="w1", qualified_class=WIDGET_CLASS, attributes=dict([_text_attr("Sel", "Purple")]))
@@ -495,7 +538,9 @@ def test_restriction_text_with_unverifiable_candidate_is_info_not_warning(restri
     interne est une REFERENCE, jamais verifiable par ce mecanisme) reste
     non tranche - RULE #5, rester `info` (statut reellement indetermine)
     plutot que d'affirmer a tort une non-conformite."""
-    obj = XtfObject(tid="w1", qualified_class=WIDGET_EXTERNAL_CLASS, attributes=dict([_text_attr("Sel", "not-a-color")]))
+    obj = XtfObject(
+        tid="w1", qualified_class=WIDGET_EXTERNAL_CLASS, attributes=dict([_text_attr("Sel", "not-a-color")])
+    )
     basket = XtfBasket(bid="b1", qualified_topic="RestrictionTest.MainTopic", kind=None, endstate=None, objects=[obj])
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=restriction_builder.symbol_table)
@@ -603,9 +648,15 @@ def test_coord_component_count_mismatch_flagged(geometry_builder):
 
 
 def test_multicoord_valid_has_no_issue(geometry_builder):
-    inner = RawNode(tag="MULTICOORD", text=None, attrib={}, children=[
-        _coord_node("10.0", "20.0"), _coord_node("30.0", "40.0"),
-    ])
+    inner = RawNode(
+        tag="MULTICOORD",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("10.0", "20.0"),
+            _coord_node("30.0", "40.0"),
+        ],
+    )
     obj = _obj(MULTIPOINT_CLASS, "mp1", _geom_attr("Pos", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     assert _messages(issues, attribute="Pos") == []
@@ -616,9 +667,15 @@ def test_polyline_valid_has_no_issue(geometry_builder):
     attache avant ce lot) - sans lui, `axes` serait vide et le Max de C1
     (100.0, hors plage volontairement testee ci-dessous par contraste)
     resterait invisible."""
-    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), _coord_node("50.0", "50.0"),
-    ])
+    inner = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            _coord_node("50.0", "50.0"),
+        ],
+    )
     obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     assert _messages(issues, attribute="Geom") == []
@@ -628,9 +685,15 @@ def test_polyline_out_of_range_vertex_flagged(geometry_builder):
     """Preuve directe que le fix LineType.CoordType (Lot 42) alimente
     reellement la verification de plage sur un segment de POLYLINE, pas
     seulement la structure."""
-    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), _coord_node("999.0", "50.0"),
-    ])
+    inner = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            _coord_node("999.0", "50.0"),
+        ],
+    )
     obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     msgs = _messages(issues, attribute="Geom", severity="error")
@@ -641,9 +704,15 @@ def test_polyline_inherited_coord_type_via_extends_has_no_issue(geometry_builder
     """Lot 44 : DirectedLine EXTENDS Line = DIRECTED POLYLINE; (aucune
     clause VERTEX propre, meme forme que CHBase reel) - la plage d'axe doit
     etre retrouvee en remontant Super jusqu'a Line, pas seulement absente."""
-    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), _coord_node("50.0", "50.0"),
-    ])
+    inner = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            _coord_node("50.0", "50.0"),
+        ],
+    )
     obj = _obj(DIRECTEDWAY_CLASS, "dw1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     assert _messages(issues, attribute="Geom") == []
@@ -653,9 +722,15 @@ def test_polyline_inherited_coord_type_out_of_range_flagged(geometry_builder):
     """Preuve directe (pas seulement l'absence de faux positif) que la
     plage HERITEE de Line est reellement appliquee a DirectedLine, pas
     seulement que la structure passe faute de plage connue."""
-    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), _coord_node("999.0", "50.0"),
-    ])
+    inner = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            _coord_node("999.0", "50.0"),
+        ],
+    )
     obj = _obj(DIRECTEDWAY_CLASS, "dw1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     msgs = _messages(issues, attribute="Geom", severity="error")
@@ -678,9 +753,15 @@ def test_polyline_custom_line_form_segment_reported_as_info(geometry_builder):
     declared via lineFormTypeDef) is not structurally validated (no
     confirmed real-world tag encoding to check it against), but must no
     longer be silently dropped from the report - it's surfaced as `info`."""
-    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), RawNode(tag="ZIGZAG", text=None, attrib={}, children=[]),
-    ])
+    inner = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            RawNode(tag="ZIGZAG", text=None, attrib={}, children=[]),
+        ],
+    )
     obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     assert _messages(issues, attribute="Geom", severity="error") == []
@@ -691,9 +772,15 @@ def test_polyline_custom_line_form_segment_reported_as_info(geometry_builder):
 def test_polyline_only_coord_and_arc_has_no_info_issue(geometry_builder):
     """Contrast case: a POLYLINE made only of COORD/ARC segments must not
     trigger the custom LINE FORM `info` notice."""
-    inner = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), _coord_node("50.0", "50.0"),
-    ])
+    inner = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            _coord_node("50.0", "50.0"),
+        ],
+    )
     obj = _obj(WAY_CLASS, "w1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     assert _messages(issues, attribute="Geom", severity="info") == []
@@ -703,10 +790,17 @@ def test_surface_boundary_custom_line_form_segment_reported_as_info(geometry_bui
     """Same custom LINE FORM surfacing, nested inside a SURFACE/BOUNDARY
     (eCH-0031's SegmentSequence applies uniformly to both POLYLINE-typed
     attributes and SURFACE/AREA boundaries)."""
-    polyline = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), RawNode(tag="ZIGZAG", text=None, attrib={}, children=[]),
-        _coord_node("50.0", "50.0"), _coord_node("0.0", "0.0"),
-    ])
+    polyline = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            RawNode(tag="ZIGZAG", text=None, attrib={}, children=[]),
+            _coord_node("50.0", "50.0"),
+            _coord_node("0.0", "0.0"),
+        ],
+    )
     boundary = RawNode(tag="BOUNDARY", text=None, attrib={}, children=[polyline])
     inner = RawNode(tag="SURFACE", text=None, attrib={}, children=[boundary])
     obj = _obj(ZONE_CLASS, "z1", _geom_attr("Geom", inner))
@@ -717,9 +811,17 @@ def test_surface_boundary_custom_line_form_segment_reported_as_info(geometry_bui
 
 
 def test_surface_valid_has_no_issue(geometry_builder):
-    polyline = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), _coord_node("50.0", "0.0"), _coord_node("50.0", "50.0"), _coord_node("0.0", "0.0"),
-    ])
+    polyline = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            _coord_node("50.0", "0.0"),
+            _coord_node("50.0", "50.0"),
+            _coord_node("0.0", "0.0"),
+        ],
+    )
     boundary = RawNode(tag="BOUNDARY", text=None, attrib={}, children=[polyline])
     inner = RawNode(tag="SURFACE", text=None, attrib={}, children=[boundary])
     obj = _obj(ZONE_CLASS, "z1", _geom_attr("Geom", inner))
@@ -731,12 +833,24 @@ def test_multipolyline_valid_has_no_issue(geometry_builder):
     """MultiWay.Geom (Lot 42 - correctif Multi, `presence: true` sur un
     field compose etait auparavant TOUJOURS ignore par le moteur - Multi
     contenait le TEXTE LITTERAL du token matche au lieu d'un booleen)."""
-    polyline_a = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("0.0", "0.0"), _coord_node("10.0", "10.0"),
-    ])
-    polyline_b = RawNode(tag="POLYLINE", text=None, attrib={}, children=[
-        _coord_node("20.0", "20.0"), _coord_node("30.0", "30.0"),
-    ])
+    polyline_a = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("0.0", "0.0"),
+            _coord_node("10.0", "10.0"),
+        ],
+    )
+    polyline_b = RawNode(
+        tag="POLYLINE",
+        text=None,
+        attrib={},
+        children=[
+            _coord_node("20.0", "20.0"),
+            _coord_node("30.0", "30.0"),
+        ],
+    )
     inner = RawNode(tag="MULTIPOLYLINE", text=None, attrib={}, children=[polyline_a, polyline_b])
     obj = _obj(MULTIWAY_CLASS, "mw1", _geom_attr("Geom", inner))
     issues = _validate_one(obj, geometry_builder.symbol_table)
@@ -776,10 +890,13 @@ def test_embedded_role_from_imported_model_is_not_unknown_attribute(cross_model_
     builder, repository = cross_model_builder
     parent = XtfObject(tid="p1", qualified_class=EMBED_PARENT_CLASS, attributes=dict([_text_attr("Name", "P")]))
     child = XtfObject(
-        tid="c1", qualified_class=EMBED_CHILD_CLASS,
+        tid="c1",
+        qualified_class=EMBED_CHILD_CLASS,
         attributes=dict([_text_attr("Name", "C"), _ref_attr("Parent", "p1")]),
     )
-    basket = XtfBasket(bid="b1", qualified_topic="EmbedBase.MainTopic", kind=None, endstate=None, objects=[parent, child])
+    basket = XtfBasket(
+        bid="b1", qualified_topic="EmbedBase.MainTopic", kind=None, endstate=None, objects=[parent, child]
+    )
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     issues = validate_transfer(transfer, symbol_table=builder.symbol_table, repository=repository)
     assert _messages(issues, attribute="Parent") == []

@@ -12,6 +12,7 @@ from `interlis.diagnostic_ids.REGISTRY`. `help` names the fix, GDAL
 RFC 104 style ("... - pass its model to --repo or --catalog"); it is
 required in spirit for a class-C (missing-input) diagnostic.
 """
+
 from __future__ import annotations
 
 import re
@@ -118,6 +119,7 @@ class DiagnosticBag:
 
 def render_text(bag: DiagnosticBag, *, color: bool = False) -> str:
     """Ruff-style: one `SEVERITY RULE-ID  location  message` line, then an indented `help:` line."""
+
     def paint(text: str, code: str) -> str:
         return f"\033[{code}m{text}\033[0m" if color else text
 
@@ -174,15 +176,19 @@ def render_sarif(bag: DiagnosticBag, *, tool_version: str = "0") -> dict:
     return {
         "version": "2.1.0",
         "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
-        "runs": [{
-            "tool": {"driver": {
-                "name": "interlis",
-                "informationUri": "https://github.com/geostandards-ch/interlis-runtime",
-                "version": tool_version,
-                "rules": list(rules_seen.values()),
-            }},
-            "results": results,
-        }],
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "interlis",
+                        "informationUri": "https://github.com/geostandards-ch/interlis-runtime",
+                        "version": tool_version,
+                        "rules": list(rules_seen.values()),
+                    }
+                },
+                "results": results,
+            }
+        ],
     }
 
 

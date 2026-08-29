@@ -9,6 +9,7 @@ voir .claude/PROGRESS.md) : la resolution de la reference de classe cible
 d'un roleDef (restrictedClassOrAssRef) n'est pas encore cablee dans
 spec/grammar/mapping/ (documentee "not yet mapped" dans sa propre note),
 donc les ForwardRef ne sont pas exercees ici de bout en bout."""
+
 import warnings
 from pathlib import Path
 

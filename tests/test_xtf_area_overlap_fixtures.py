@@ -8,6 +8,7 @@ validator, see docs/dev-notes/xtf-validator-scope.md) - the *NotAllowedOverlap
 fixtures are included for structural coverage only, not to assert an overlap
 error that this validator doesn't compute.
 """
+
 import warnings
 from pathlib import Path
 

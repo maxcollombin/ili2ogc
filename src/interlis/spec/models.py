@@ -5,6 +5,7 @@ and the ModelBuilder's execution (interlis.builder) - one single
 definition of "what a mapping entry looks like", so the two never drift
 apart over time.
 """
+
 from typing import Any
 
 from pydantic import BaseModel, field_validator

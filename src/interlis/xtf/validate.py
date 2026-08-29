@@ -21,6 +21,7 @@ real-world tag encoding exists to validate its content against). Full
 detail, severity rationale, and real-corpus evidence for each item:
 docs/dev-notes/xtf-validator-scope.md.
 """
+
 from dataclasses import dataclass
 
 from interlis.builder.repository import ModelRepository
@@ -28,9 +29,19 @@ from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 from interlis.xtf.schema import (
-    ResolvedAttribute, coord_axes, enum_values, home_symbol_table, is_class_compatible, line_coord_type,
-    reference_external_status, reference_target_class, resolve_attribute, resolve_class, restriction_candidates,
-    schema_members_of, single_own_attribute,
+    ResolvedAttribute,
+    coord_axes,
+    enum_values,
+    home_symbol_table,
+    is_class_compatible,
+    line_coord_type,
+    reference_external_status,
+    reference_target_class,
+    resolve_attribute,
+    resolve_class,
+    restriction_candidates,
+    schema_members_of,
+    single_own_attribute,
 )
 
 # Concrete Type classes recognized as "reference to an object" (structural
@@ -61,7 +72,9 @@ class ValidationIssue:
 
         severity = "note" if self.severity == "info" else self.severity
         return Diagnostic(
-            severity, "XTF-VALIDATION", self.message,
+            severity,
+            "XTF-VALIDATION",
+            self.message,
             Location(file=file, model=self.qualified_class, element_path=self.attribute, tid=self.object_tid),
         )
 
@@ -138,7 +151,7 @@ def _numeric_range_tolerance(min_raw, max_raw) -> float:
     for raw in (min_raw, max_raw):
         if raw is not None:
             decimals = max(decimals, _decimal_places(str(raw)))
-    return 0.5 * (10 ** -decimals)
+    return 0.5 * (10**-decimals)
 
 
 def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> list[str]:
@@ -334,9 +347,14 @@ def _validate_axis_values(components: list[RawNode], axes: list[MetaInstance], c
         problems.append(f"{ctx}: {len(components)} {label} component(s), {len(axes)} expected (CoordType.Axis)")
     for i, comp in enumerate(components):
         axis = axes[i] if i < len(axes) else None
-        problems.extend(_numeric_problems(
-            comp.text, getattr(axis, "Min", None), getattr(axis, "Max", None), f"{ctx}.{label}{i + 1}",
-        ))
+        problems.extend(
+            _numeric_problems(
+                comp.text,
+                getattr(axis, "Min", None),
+                getattr(axis, "Max", None),
+                f"{ctx}.{label}{i + 1}",
+            )
+        )
     return problems
 
 
@@ -463,12 +481,16 @@ def _validate_coord_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: s
 # above for why Surface/Area share both spellings) - `_geom_tag` handles the
 # XTF 2.3/2.4 case difference, this only needs to handle the AREA synonym.
 _LINE_KIND_TAGS = {
-    "Polyline": frozenset({"POLYLINE"}), "DirectedPolyline": frozenset({"POLYLINE"}),
-    "Surface": _SURFACE_TAGS, "Area": _SURFACE_TAGS,
+    "Polyline": frozenset({"POLYLINE"}),
+    "DirectedPolyline": frozenset({"POLYLINE"}),
+    "Surface": _SURFACE_TAGS,
+    "Area": _SURFACE_TAGS,
 }
 _LINE_KIND_MULTI_TAGS = {
-    "Polyline": frozenset({"MULTIPOLYLINE"}), "DirectedPolyline": frozenset({"MULTIPOLYLINE"}),
-    "Surface": frozenset({"MULTISURFACE", "MULTIAREA"}), "Area": frozenset({"MULTISURFACE", "MULTIAREA"}),
+    "Polyline": frozenset({"MULTIPOLYLINE"}),
+    "DirectedPolyline": frozenset({"MULTIPOLYLINE"}),
+    "Surface": frozenset({"MULTISURFACE", "MULTIAREA"}),
+    "Area": frozenset({"MULTISURFACE", "MULTIAREA"}),
 }
 
 
@@ -500,7 +522,9 @@ def _line_form_infos(node: RawNode, ctx: str) -> list[str]:
     tags = _custom_line_form_tags(node)
     if not tags:
         return []
-    return [f"{ctx}: custom LINE FORM segment(s) present ({', '.join(sorted(tags))}) - structure not validated by this tool"]
+    return [
+        f"{ctx}: custom LINE FORM segment(s) present ({', '.join(sorted(tags))}) - structure not validated by this tool"
+    ]
 
 
 def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> tuple[list[str], list[str]]:
@@ -549,8 +573,14 @@ _GENERIC_RESTRICTION_INFO = (
 
 
 def _validate_restriction_text(
-    resolved: ResolvedAttribute, node: RawNode | None, *, basket_bid: str, tid: str | None, qualified_class: str,
-    path: str, ctx: str,
+    resolved: ResolvedAttribute,
+    node: RawNode | None,
+    *,
+    basket_bid: str,
+    tid: str | None,
+    qualified_class: str,
+    path: str,
+    ctx: str,
 ) -> "ValidationIssue | None":
     """Interpret the 3rd XTF encoding form: `CLASS RESTRICTION(A; B; C)`.
 
@@ -589,14 +619,22 @@ def _validate_restriction_text(
         return None
     if len(checkable) < len(single_attr_candidates):
         return ValidationIssue(
-            "info", basket_bid, tid, qualified_class, path,
+            "info",
+            basket_bid,
+            tid,
+            qualified_class,
+            path,
             f"{ctx}: bare text value {node.text!r} (CLASS RESTRICTION, 3rd encoding form) matches "
             f"none of the {len(checkable)}/{len(single_attr_candidates)} verifiable candidate(s) - the "
             "rest are unresolved (external model not loaded via --repo)",
         )
     names = [getattr(c, "Name", None) for c, _ in checkable]
     return ValidationIssue(
-        "warning", basket_bid, tid, qualified_class, path,
+        "warning",
+        basket_bid,
+        tid,
+        qualified_class,
+        path,
         f"{ctx}: bare text value {node.text!r} (CLASS RESTRICTION, 3rd encoding form) matches "
         f"none of the {len(checkable)} declared candidate(s) ({names!r})",
     )
@@ -633,7 +671,9 @@ def _build_tid_index(transfer: XtfTransfer, catalogs: list[XtfTransfer] | None =
 
 
 def _resolved_schema_of(
-    cls: MetaInstance, symbol_table: SymbolTable, cache: dict[int, dict[str, ResolvedAttribute]],
+    cls: MetaInstance,
+    symbol_table: SymbolTable,
+    cache: dict[int, dict[str, ResolvedAttribute]],
 ) -> dict[str, ResolvedAttribute]:
     """Return `schema_members_of`+`resolve_attribute`, memoized per class.
 
@@ -671,15 +711,26 @@ def _group_by_tag(nodes: list[RawNode]) -> dict[str, list[RawNode]]:
 
 
 def _validate_object(
-    obj: XtfObject, basket: XtfBasket, *, symbol_table: SymbolTable, repository: ModelRepository | None,
-    tid_index: dict[str, XtfObject], schema_cache: dict[int, dict[str, ResolvedAttribute]],
+    obj: XtfObject,
+    basket: XtfBasket,
+    *,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None,
+    tid_index: dict[str, XtfObject],
+    schema_cache: dict[int, dict[str, ResolvedAttribute]],
 ) -> list[ValidationIssue]:
     cls = resolve_class(obj.qualified_class, symbol_table=symbol_table, repository=repository)
     if cls is None:
-        return [ValidationIssue(
-            "error", basket.bid, obj.tid, obj.qualified_class, None,
-            "class absent from the resolved schema (model not loaded/findable via --repo, or wrong qualified name)",
-        )]
+        return [
+            ValidationIssue(
+                "error",
+                basket.bid,
+                obj.tid,
+                obj.qualified_class,
+                None,
+                "class absent from the resolved schema (model not loaded/findable via --repo, or wrong qualified name)",
+            )
+        ]
 
     # The table that ACTUALLY declares `cls` can differ from the root
     # table (e.g. a class resolved via ModelRepository, TOPIC EXTENDS of a
@@ -687,16 +738,33 @@ def _validate_object(
     # associations where they're really declared.
     cls_table = home_symbol_table(obj.qualified_class, symbol_table=symbol_table, repository=repository)
     return _validate_attrs(
-        cls, obj.attributes, path_prefix="", basket_bid=basket.bid, tid=obj.tid, qualified_class=obj.qualified_class,
-        home_table=cls_table, symbol_table=symbol_table, repository=repository, tid_index=tid_index,
+        cls,
+        obj.attributes,
+        path_prefix="",
+        basket_bid=basket.bid,
+        tid=obj.tid,
+        qualified_class=obj.qualified_class,
+        home_table=cls_table,
+        symbol_table=symbol_table,
+        repository=repository,
+        tid_index=tid_index,
         schema_cache=schema_cache,
     )
 
 
 def _validate_attrs(
-    cls: MetaInstance, attrs: dict[str, list[RawNode]], *, path_prefix: str, basket_bid: str, tid: str | None,
-    qualified_class: str, home_table: SymbolTable, symbol_table: SymbolTable, repository: ModelRepository | None,
-    tid_index: dict[str, XtfObject], schema_cache: dict[int, dict[str, ResolvedAttribute]],
+    cls: MetaInstance,
+    attrs: dict[str, list[RawNode]],
+    *,
+    path_prefix: str,
+    basket_bid: str,
+    tid: str | None,
+    qualified_class: str,
+    home_table: SymbolTable,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None,
+    tid_index: dict[str, XtfObject],
+    schema_cache: dict[int, dict[str, ResolvedAttribute]],
 ) -> list[ValidationIssue]:
     """Validate every attribute in `attrs` against `cls`'s schema.
 
@@ -717,34 +785,67 @@ def _validate_attrs(
     for attr_name, raw_nodes in attrs.items():
         path = f"{path_prefix}.{attr_name}" if path_prefix else attr_name
         if attr_name not in schema_attrs:
-            issues.append(ValidationIssue(
-                "warning", basket_bid, tid, qualified_class, path,
-                "attribut absent du schema (classe connue) - inconnu, ou herite via EXTENDS depuis un "
-                "modele importe non charge (non couvert actuellement)",
-            ))
+            issues.append(
+                ValidationIssue(
+                    "warning",
+                    basket_bid,
+                    tid,
+                    qualified_class,
+                    path,
+                    "attribut absent du schema (classe connue) - inconnu, ou herite via EXTENDS depuis un "
+                    "modele importe non charge (non couvert actuellement)",
+                )
+            )
             continue
         resolved = schema_attrs[attr_name]
         ctx = f"{qualified_class}[{tid}].{path}"
-        issues.extend(_validate_resolved_attr(
-            resolved, raw_nodes, path=path, ctx=ctx, basket_bid=basket_bid, tid=tid, qualified_class=qualified_class,
-            home_table=home_table, symbol_table=symbol_table, repository=repository, tid_index=tid_index,
-            schema_cache=schema_cache,
-        ))
+        issues.extend(
+            _validate_resolved_attr(
+                resolved,
+                raw_nodes,
+                path=path,
+                ctx=ctx,
+                basket_bid=basket_bid,
+                tid=tid,
+                qualified_class=qualified_class,
+                home_table=home_table,
+                symbol_table=symbol_table,
+                repository=repository,
+                tid_index=tid_index,
+                schema_cache=schema_cache,
+            )
+        )
 
     for attr_name, resolved in schema_attrs.items():
         if resolved.mandatory and attr_name not in attrs:
             path = f"{path_prefix}.{attr_name}" if path_prefix else attr_name
-            issues.append(ValidationIssue(
-                "error", basket_bid, tid, qualified_class, path,
-                f"{qualified_class}[{tid}].{path}: attribut MANDATORY {attr_name!r} absent",
-            ))
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    basket_bid,
+                    tid,
+                    qualified_class,
+                    path,
+                    f"{qualified_class}[{tid}].{path}: attribut MANDATORY {attr_name!r} absent",
+                )
+            )
     return issues
 
 
 def _validate_resolved_attr(
-    resolved: ResolvedAttribute, raw_nodes: list[RawNode], *, path: str, ctx: str, basket_bid: str, tid: str | None,
-    qualified_class: str, home_table: SymbolTable, symbol_table: SymbolTable, repository: ModelRepository | None,
-    tid_index: dict[str, XtfObject], schema_cache: dict[int, dict[str, ResolvedAttribute]],
+    resolved: ResolvedAttribute,
+    raw_nodes: list[RawNode],
+    *,
+    path: str,
+    ctx: str,
+    basket_bid: str,
+    tid: str | None,
+    qualified_class: str,
+    home_table: SymbolTable,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None,
+    tid_index: dict[str, XtfObject],
+    schema_cache: dict[int, dict[str, ResolvedAttribute]],
     already_unwrapped: bool = False,
 ) -> list[ValidationIssue]:
     """Dispatch by `type_kind` for ONE already-resolved attribute.
@@ -794,22 +895,41 @@ def _validate_resolved_attr(
         # mechanism, unlimited recursion) via a synthetic `ResolvedAttribute`.
         base_type = getattr(resolved.type_instance, "BaseType", None)
         if not isinstance(base_type, MetaInstance):
-            issues.append(ValidationIssue(
-                "info", basket_bid, tid, qualified_class, path,
-                f"{ctx}: unchecked 'MultiValue' type (BaseType unresolved - external model not loaded via --repo)",
-            ))
+            issues.append(
+                ValidationIssue(
+                    "info",
+                    basket_bid,
+                    tid,
+                    qualified_class,
+                    path,
+                    f"{ctx}: unchecked 'MultiValue' type (BaseType unresolved - external model not loaded via --repo)",
+                )
+            )
             return issues
         base_kind = base_type._qualified_class.rsplit(".", 1)[-1]
         for node in raw_nodes:
             for i, occurrence in enumerate(node.children):
                 occ_path = f"{path}[{i}]"
-                occ_resolved = ResolvedAttribute(attr=resolved.attr, type_instance=base_type, type_kind=base_kind, mandatory=False)
-                issues.extend(_validate_resolved_attr(
-                    occ_resolved, [occurrence], path=occ_path, ctx=f"{qualified_class}[{tid}].{occ_path}",
-                    basket_bid=basket_bid, tid=tid, qualified_class=qualified_class, home_table=home_table,
-                    symbol_table=symbol_table, repository=repository, tid_index=tid_index, schema_cache=schema_cache,
-                    already_unwrapped=True,
-                ))
+                occ_resolved = ResolvedAttribute(
+                    attr=resolved.attr, type_instance=base_type, type_kind=base_kind, mandatory=False
+                )
+                issues.extend(
+                    _validate_resolved_attr(
+                        occ_resolved,
+                        [occurrence],
+                        path=occ_path,
+                        ctx=f"{qualified_class}[{tid}].{occ_path}",
+                        basket_bid=basket_bid,
+                        tid=tid,
+                        qualified_class=qualified_class,
+                        home_table=home_table,
+                        symbol_table=symbol_table,
+                        repository=repository,
+                        tid_index=tid_index,
+                        schema_cache=schema_cache,
+                        already_unwrapped=True,
+                    )
+                )
         return issues
 
     if kind in _REFERENCE_TYPE_KINDS:
@@ -841,15 +961,30 @@ def _validate_resolved_attr(
                 for node in raw_nodes:
                     wrapper = node if already_unwrapped else (node.children[0] if node.children else None)
                     child_attrs = _group_by_tag(wrapper.children) if wrapper is not None else {}
-                    issues.extend(_validate_attrs(
-                        resolved.type_instance, child_attrs, path_prefix=path, basket_bid=basket_bid, tid=tid,
-                        qualified_class=qualified_class, home_table=home_table, symbol_table=symbol_table,
-                        repository=repository, tid_index=tid_index, schema_cache=schema_cache,
-                    ))
+                    issues.extend(
+                        _validate_attrs(
+                            resolved.type_instance,
+                            child_attrs,
+                            path_prefix=path,
+                            basket_bid=basket_bid,
+                            tid=tid,
+                            qualified_class=qualified_class,
+                            home_table=home_table,
+                            symbol_table=symbol_table,
+                            repository=repository,
+                            tid_index=tid_index,
+                            schema_cache=schema_cache,
+                        )
+                    )
                 return issues
             restriction_issue = _validate_restriction_text(
-                resolved, raw_nodes[0] if raw_nodes else None, basket_bid=basket_bid, tid=tid,
-                qualified_class=qualified_class, path=path, ctx=ctx,
+                resolved,
+                raw_nodes[0] if raw_nodes else None,
+                basket_bid=basket_bid,
+                tid=tid,
+                qualified_class=qualified_class,
+                path=path,
+                ctx=ctx,
             )
             if restriction_issue is not None:
                 issues.append(restriction_issue)
@@ -887,10 +1022,16 @@ def _validate_resolved_attr(
                     "likely external/catalogue reference, or a broken one - EXTERNAL status "
                     "undetermined by this validator (unrecognized structure)"
                 )
-            issues.append(ValidationIssue(
-                "warning", basket_bid, tid, qualified_class, path,
-                f"{ctx}: REF {ref!r} not found in this transfer ({detail})",
-            ))
+            issues.append(
+                ValidationIssue(
+                    "warning",
+                    basket_bid,
+                    tid,
+                    qualified_class,
+                    path,
+                    f"{ctx}: REF {ref!r} not found in this transfer ({detail})",
+                )
+            )
         else:
             # REF resolved successfully - now check the actual target
             # object's class compatibility against the class DECLARED by
@@ -902,12 +1043,18 @@ def _validate_resolved_attr(
                 target_obj = tid_index[ref]
                 actual_cls = resolve_class(target_obj.qualified_class, symbol_table=symbol_table, repository=repository)
                 if actual_cls is not None and not is_class_compatible(actual_cls, declared):
-                    issues.append(ValidationIssue(
-                        "error", basket_bid, tid, qualified_class, path,
-                        f"{ctx}: REF {ref!r} resolved to {target_obj.qualified_class!r}, incompatible "
-                        f"with declared class {getattr(declared, 'Name', '?')!r} "
-                        "(neither identical nor a subclass via EXTENDS)",
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            "error",
+                            basket_bid,
+                            tid,
+                            qualified_class,
+                            path,
+                            f"{ctx}: REF {ref!r} resolved to {target_obj.qualified_class!r}, incompatible "
+                            f"with declared class {getattr(declared, 'Name', '?')!r} "
+                            "(neither identical nor a subclass via EXTENDS)",
+                        )
+                    )
         return issues
 
     if kind == "CoordType":
@@ -947,10 +1094,16 @@ def _validate_resolved_attr(
         # silently ignored by `_validate_scalar` (which would return an
         # empty list for an unknown `type_kind`) - avoid a "0 problems"
         # total giving a false impression of complete conformance.
-        issues.append(ValidationIssue(
-            "info", basket_bid, tid, qualified_class, path,
-            f"{ctx}: unchecked type {kind!r} (type not covered/unresolved)",
-        ))
+        issues.append(
+            ValidationIssue(
+                "info",
+                basket_bid,
+                tid,
+                qualified_class,
+                path,
+                f"{ctx}: unchecked type {kind!r} (type not covered/unresolved)",
+            )
+        )
         return issues
 
     for node in raw_nodes:
@@ -960,7 +1113,10 @@ def _validate_resolved_attr(
 
 
 def validate_transfer(
-    transfer: XtfTransfer, *, symbol_table: SymbolTable, repository: ModelRepository | None = None,
+    transfer: XtfTransfer,
+    *,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None = None,
     catalogs: list[XtfTransfer] | None = None,
 ) -> list[ValidationIssue]:
     """Validate an XtfTransfer, returning the list of issues found.
@@ -976,8 +1132,14 @@ def validate_transfer(
     issues: list[ValidationIssue] = []
     for basket in transfer.baskets:
         for obj in basket.objects:
-            issues.extend(_validate_object(
-                obj, basket, symbol_table=symbol_table, repository=repository, tid_index=tid_index,
-                schema_cache=schema_cache,
-            ))
+            issues.extend(
+                _validate_object(
+                    obj,
+                    basket,
+                    symbol_table=symbol_table,
+                    repository=repository,
+                    tid_index=tid_index,
+                    schema_cache=schema_cache,
+                )
+            )
     return issues

@@ -1,4 +1,5 @@
 """Errors and diagnostic objects for the ModelBuilder."""
+
 from typing import Any
 
 

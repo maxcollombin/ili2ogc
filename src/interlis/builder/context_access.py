@@ -11,6 +11,7 @@ an accessor guaranteed unique takes NO parameter. Introspecting the bound
 signature (len(parameters) == 0 vs 1) reliably distinguishes the two
 cases, without depending on an external cache.
 """
+
 import inspect
 from typing import Any
 

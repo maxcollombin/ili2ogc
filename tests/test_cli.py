@@ -1,4 +1,5 @@
 """CLI wiring tests - root-file eCH-0117 meta-attribute capture (technicalContact/CRS)."""
+
 import json
 from pathlib import Path
 
@@ -124,9 +125,19 @@ def test_convert_sql_catalog_flag_still_works_when_target_model_is_not_on_repo(t
     main_path.write_text(_MAIN_MODEL_WITH_CATALOG_REF, encoding="utf-8")
     catalog_path = tmp_path / "Catalog.ili"
 
-    assert main([
-        "convert-sql", str(main_path), "--repo", str(tmp_path), "--catalog", str(catalog_path),
-    ]) == 0
+    assert (
+        main(
+            [
+                "convert-sql",
+                str(main_path),
+                "--repo",
+                str(tmp_path),
+                "--catalog",
+                str(catalog_path),
+            ]
+        )
+        == 0
+    )
     ddl = capsys.readouterr().out
     assert 'CREATE TABLE "zonecatalog" (' in ddl
     assert 'FOREIGN KEY ("zone") REFERENCES "zonecatalog" ("id")' in ddl
@@ -139,10 +150,21 @@ def test_convert_sql_catalog_flag_ignores_the_same_file_given_twice(tmp_path, ca
     catalog_path = tmp_path / "Catalog.ili"
     catalog_path.write_text(_CATALOG_MODEL, encoding="utf-8")
 
-    assert main([
-        "convert-sql", str(main_path), "--repo", str(tmp_path),
-        "--catalog", str(catalog_path), "--catalog", str(catalog_path),
-    ]) == 0
+    assert (
+        main(
+            [
+                "convert-sql",
+                str(main_path),
+                "--repo",
+                str(tmp_path),
+                "--catalog",
+                str(catalog_path),
+                "--catalog",
+                str(catalog_path),
+            ]
+        )
+        == 0
+    )
     ddl = capsys.readouterr().out
     assert ddl.count('CREATE TABLE "zonecatalog"') == 1
     assert 'CREATE TABLE "zonecatalog_2"' not in ddl
@@ -177,9 +199,19 @@ def test_convert_sql_catalog_flag_resolves_embedded_role_in_the_catalogues_own_m
     # `ZoneCatalog`, so Main.ili's `Zone` REFERENCE TO stays unresolved
     # (one SQL-REF-TARGET-UNRESOLVED -- NOTE) - unrelated to the embedded
     # role under test.
-    assert main([
-        "convert-sql", str(main_path), "--repo", str(tmp_path), "--catalog", str(catalog_path),
-    ]) == 2
+    assert (
+        main(
+            [
+                "convert-sql",
+                str(main_path),
+                "--repo",
+                str(tmp_path),
+                "--catalog",
+                str(catalog_path),
+            ]
+        )
+        == 2
+    )
     ddl = capsys.readouterr().out
     # `Parent_Child` embeds role `Parent` (the {1} end) onto `Child` (the
     # {0..*} end) - entirely declared inside Catalog.ili, invisible from

@@ -2,6 +2,7 @@
 
 Merges the 9 themed files.
 """
+
 from pathlib import Path
 
 import yaml

@@ -15,6 +15,7 @@ design, see registry.py). Only EnumerationType gets special handling
 resolved directly by the registry's permissive `Any` typing (see its
 docstring for the rationale).
 """
+
 from pathlib import Path
 
 import yaml
@@ -42,10 +43,7 @@ class MetamodelSchema:
         Selects kind Class or DataType. Excludes Association and
         Enumeration (separate structures, not generated as instances).
         """
-        return {
-            qn: el for qn, el in self.uml.qualified.items()
-            if el.get("kind") in ("Class", "DataType")
-        }
+        return {qn: el for qn, el in self.uml.qualified.items() if el.get("kind") in ("Class", "DataType")}
 
     def associations(self) -> dict[str, dict]:
         return {qn: el for qn, el in self.uml.qualified.items() if el.get("kind") == "Association"}

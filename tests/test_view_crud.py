@@ -8,6 +8,7 @@ View gets the full CRUD set. `validate_feature_properties` is the
 `jsonschema` package against this runtime's own `model_to_json_schema`
 output.
 """
+
 import warnings
 from pathlib import Path
 

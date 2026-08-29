@@ -5,6 +5,7 @@ method. The generic visit(ctx) derives the rule name from
 type(ctx).__name__, loads the matching spec/grammar/mapping/*.yml entry,
 and applies one of 4 execution strategies depending on `kind`.
 """
+
 import warnings
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,7 @@ from interlis.metamodel.registry import MetamodelRegistry
 from interlis.metamodel.uml_schema import MetamodelSchema
 from interlis.spec.models import SpecEntry
 from interlis.spec.spec_index import load_spec
+
 
 class InterlisModelBuilder(InterlisParserVisitor):
     def __init__(self, mappings_dir: Path, spec_dir: Path, *, repository: ModelRepository | None = None):
@@ -110,7 +112,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
         self.repository.bind_builder_factory(self._make_sub_builder)
 
     def _make_sub_builder(self) -> "InterlisModelBuilder":
-        return InterlisModelBuilder._from_shared(self.schema, self.registry, self.spec, self.attachment, self.repository)
+        return InterlisModelBuilder._from_shared(
+            self.schema, self.registry, self.spec, self.attachment, self.repository
+        )
 
     # ------------------------------------------------------------------
     # Point d'entree public
@@ -174,8 +178,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
             if not isinstance(resolved, MetaInstance) or bool(getattr(resolved, "Mandatory", False)):
                 continue
             fields = {
-                k: v for k, v in {**resolved.__dict__, **(resolved.model_extra or {})}.items()
-                if not k.startswith("_")
+                k: v for k, v in {**resolved.__dict__, **(resolved.model_extra or {})}.items() if not k.startswith("_")
             }
             fields["Mandatory"] = True
             instance.Type = self.registry.new_instance(resolved._qualified_class, **fields)
@@ -213,13 +216,23 @@ class InterlisModelBuilder(InterlisParserVisitor):
             top = self.registry.new_instance("IlisMeta16.ModelData.EnumNode")
             top.Name = "TOP"
             self.attachment.attach(
-                instance, "TopNode", top, association="TopNode", role="TopNode", rule="<predefined>",
+                instance,
+                "TopNode",
+                top,
+                association="TopNode",
+                role="TopNode",
+                rule="<predefined>",
             )
             for element_name in self._PREDEFINED_ENUM_ELEMENTS[token]:
                 node = self.registry.new_instance("IlisMeta16.ModelData.EnumNode")
                 node.Name = element_name
                 self.attachment.attach(
-                    top, "Node", node, association="SubNode", role="Node", rule="<predefined>",
+                    top,
+                    "Node",
+                    node,
+                    association="SubNode",
+                    role="Node",
+                    rule="<predefined>",
                 )
         elif token == "BOOLEAN":
             instance = self.registry.new_instance("IlisMeta16.ModelData.BooleanType")
@@ -254,7 +267,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
         if isinstance(type_value, str) and type_value in ("INTERLIS.HALIGNMENT", "INTERLIS.VALIGNMENT"):
             token = type_value.split(".", 1)[1]
         elif isinstance(type_value, ForwardRef) and type_value.name in (
-            "INTERLIS.BOOLEAN", "INTERLIS.URI", "INTERLIS.UUIDOID",
+            "INTERLIS.BOOLEAN",
+            "INTERLIS.URI",
+            "INTERLIS.UUIDOID",
         ):
             token = type_value.name.split(".", 1)[1]
         if token is None:
@@ -296,7 +311,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
             meta.Name = name
             meta.Value = value
             self.attachment.attach(
-                instance, "MetaAttribute", meta, association="MetaAttributes", role="MetaAttribute", rule="metaAttribute",
+                instance,
+                "MetaAttribute",
+                meta,
+                association="MetaAttributes",
+                role="MetaAttribute",
+                rule="metaAttribute",
             )
             self._meta_attribute_index += 1
 
@@ -386,8 +406,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         if entry.parent and self._parent_stack:
             self.attachment.attach(
-                self._parent_stack[-1], entry.parent.role, instance,
-                association=entry.parent.association, role=entry.parent.role, rule=rule_name,
+                self._parent_stack[-1],
+                entry.parent.role,
+                instance,
+                association=entry.parent.association,
+                role=entry.parent.role,
+                rule=rule_name,
             )
 
         return instance
@@ -480,7 +504,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
             self._push_construction_context(rule_name, submodel)
             self._parent_stack.append(submodel)
             try:
-                self._apply_bindings(submodel, ctx, rule_name, prefixed_bindings.get("SubModel", {}), construction_ctx, consumed)
+                self._apply_bindings(
+                    submodel, ctx, rule_name, prefixed_bindings.get("SubModel", {}), construction_ctx, consumed
+                )
             finally:
                 self._parent_stack.pop()
                 self._pop_construction_context()
@@ -510,8 +536,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
         if entry.parent and self._parent_stack:
             for inst in instances.values():
                 self.attachment.attach(
-                    self._parent_stack[-1], entry.parent.role, inst,
-                    association=entry.parent.association, role=entry.parent.role, rule=rule_name,
+                    self._parent_stack[-1],
+                    entry.parent.role,
+                    inst,
+                    association=entry.parent.association,
+                    role=entry.parent.role,
+                    rule=rule_name,
                 )
 
         return submodel if submodel is not None else next(iter(instances.values()))
@@ -571,16 +601,19 @@ class InterlisModelBuilder(InterlisParserVisitor):
             )
             if name_node is None:
                 continue  # segment with no Name (e.g. leftover before the 1st token) - nothing to build
-            mandatory = any(
-                isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.MANDATORY for c in segment
-            )
+            mandatory = any(isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.MANDATORY for c in segment)
             content_node = next(
-                (c for c in segment if isinstance(c, ParserRuleContext) and self._rule_name(c) in ("type", "numeric", "enumeration")),
+                (
+                    c
+                    for c in segment
+                    if isinstance(c, ParserRuleContext) and self._rule_name(c) in ("type", "numeric", "enumeration")
+                ),
                 None,
             )
             if content_node is None:
                 class_token = next(
-                    (c for c in segment if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.CLASS), None,
+                    (c for c in segment if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.CLASS),
+                    None,
                 )
                 if class_token is None:
                     continue  # unreachable in practice: a bare "STRING DOTDOT STRING" domainDef alternative parses via type_'s own alternative instead (ANTLR resolves the ambiguity there - see type.text_range_alt, spec/grammar/mapping/06_types.yml) - kept as a defensive no-op, not a real gap
@@ -602,8 +635,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     instance.Mandatory = True
                 if entry.parent and self._parent_stack:
                     self.attachment.attach(
-                        self._parent_stack[-1], entry.parent.role, instance,
-                        association=entry.parent.association, role=entry.parent.role, rule=rule_name,
+                        self._parent_stack[-1],
+                        entry.parent.role,
+                        instance,
+                        association=entry.parent.association,
+                        role=entry.parent.role,
+                        rule=rule_name,
                     )
                 results.append(instance)
                 continue
@@ -618,7 +655,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 # type_(), e.g. OID TEXT / TEXT*5) was ever built.
                 instance = self.visit(content_node)
             else:
-                target = "IlisMeta16.ModelData.NumType" if content_rule == "numeric" else "IlisMeta16.ModelData.EnumType"
+                target = (
+                    "IlisMeta16.ModelData.NumType" if content_rule == "numeric" else "IlisMeta16.ModelData.EnumType"
+                )
                 instance = self.visit_wrapped(content_node, target, rule_name)
             if not isinstance(instance, MetaInstance):
                 continue
@@ -630,8 +669,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 instance.Mandatory = True
             if entry.parent and self._parent_stack:
                 self.attachment.attach(
-                    self._parent_stack[-1], entry.parent.role, instance,
-                    association=entry.parent.association, role=entry.parent.role, rule=rule_name,
+                    self._parent_stack[-1],
+                    entry.parent.role,
+                    instance,
+                    association=entry.parent.association,
+                    role=entry.parent.role,
+                    rule=rule_name,
                 )
             results.append(instance)
 
@@ -659,13 +702,21 @@ class InterlisModelBuilder(InterlisParserVisitor):
         crashes the whole file.
         """
         extends_idx = next(
-            (i for i, c in enumerate(segment) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.EXTENDS),
+            (
+                i
+                for i, c in enumerate(segment)
+                if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.EXTENDS
+            ),
             None,
         )
         if extends_idx is None:
             return
         domain_ref_node = next(
-            (c for c in segment[extends_idx + 1:] if isinstance(c, ParserRuleContext) and self._rule_name(c) == "domainRef"),
+            (
+                c
+                for c in segment[extends_idx + 1 :]
+                if isinstance(c, ParserRuleContext) and self._rule_name(c) == "domainRef"
+            ),
             None,
         )
         if domain_ref_node is None:
@@ -730,12 +781,15 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 continue
             if isinstance(child, TerminalNode) and child.symbol.type == InterlisParser.OID:
                 basket = (
-                    i > 0 and isinstance(children[i - 1], TerminalNode)
+                    i > 0
+                    and isinstance(children[i - 1], TerminalNode)
                     and children[i - 1].symbol.type == InterlisParser.BASKET
                 )
                 j = i + 2  # skip OID, AS
                 ref_tokens: list[Any] = []
-                while j < n and not (isinstance(children[j], TerminalNode) and children[j].symbol.type == InterlisParser.SEMI):
+                while j < n and not (
+                    isinstance(children[j], TerminalNode) and children[j].symbol.type == InterlisParser.SEMI
+                ):
                     ref_tokens.append(children[j])
                     j += 1
                 value = self._resolve_oid_domain_ref(ref_tokens, ctx, rule_name)
@@ -772,7 +826,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
         )
         qualified = ".".join((["INTERLIS"] if interlis_prefixed else []) + names)
         return ForwardRef(
-            name=qualified, rule=rule_name, home_model=self._current_model_name(),
+            name=qualified,
+            rule=rule_name,
+            home_model=self._current_model_name(),
             topic_extends_hint=self._current_topic_extends_hint(ctx),
         )
 
@@ -879,13 +935,20 @@ class InterlisModelBuilder(InterlisParserVisitor):
         """
         instance = self.registry.new_instance("IlisMeta16.ModelData.ReferenceType")
         instance.External = False
-        refs = [c for c in segment if isinstance(c, ParserRuleContext) and self._rule_name(c) == "classOrAssociationRef"]
+        refs = [
+            c for c in segment if isinstance(c, ParserRuleContext) and self._rule_name(c) == "classOrAssociationRef"
+        ]
         for ref_ctx in refs:
             value = self.visit(ref_ctx)
             if value is None:
                 continue
             self.attachment.attach(
-                instance, "BaseClass", value, association="BaseClass", role="BaseClass", rule=rule_name,
+                instance,
+                "BaseClass",
+                value,
+                association="BaseClass",
+                role="BaseClass",
+                rule=rule_name,
             )
             if isinstance(value, ForwardRef):
                 self.forward_refs.register_pending(value, instance, "BaseClass")
@@ -905,7 +968,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
         <int>` binding, not fixed here. Full design rationale and the
         related grammar findings: docs/dev-notes/type-string-range-investigation.md.
         """
-        strings = [c for c in (ctx.children or []) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.STRING]
+        strings = [
+            c for c in (ctx.children or []) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.STRING
+        ]
         if len(strings) != 2:
             return None
         instance = self.registry.new_instance("IlisMeta16.ModelData.FormattedType")
@@ -939,8 +1004,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
             return None
         hints = self._expand_kind_hint("CoordType")
         return ForwardRef(
-            name=".".join(names), resolves_to_hint=hints or None, rule=rule_name,
-            home_model=self._current_model_name(), topic_extends_hint=self._current_topic_extends_hint(ctx),
+            name=".".join(names),
+            resolves_to_hint=hints or None,
+            rule=rule_name,
+            home_model=self._current_model_name(),
+            topic_extends_hint=self._current_topic_extends_hint(ctx),
         )
 
     def _build_local_uniqueness_def(self, ctx: ParserRuleContext) -> dict[str, Any]:
@@ -989,11 +1057,15 @@ class InterlisModelBuilder(InterlisParserVisitor):
         """
         children = list(ctx.getChildren())[3:]  # skip LPAR LOCAL RPAR
         colon_index = next(
-            (i for i, c in enumerate(children) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.COLON),
+            (
+                i
+                for i, c in enumerate(children)
+                if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.COLON
+            ),
             None,
         )
         role_tokens = children[:colon_index] if colon_index is not None else children
-        attr_tokens = children[colon_index + 1:] if colon_index is not None else []
+        attr_tokens = children[colon_index + 1 :] if colon_index is not None else []
 
         def path_el(name: str) -> MetaInstance:
             el = self.registry.new_instance("IlisMeta16.ModelData.PathEl")
@@ -1001,12 +1073,18 @@ class InterlisModelBuilder(InterlisParserVisitor):
             el.Ref = name
             return el
 
-        role_names = [t.getText() for t in role_tokens if isinstance(t, TerminalNode) and t.symbol.type == InterlisParser.Name]
-        attr_names = [t.getText() for t in attr_tokens if isinstance(t, TerminalNode) and t.symbol.type == InterlisParser.Name]
+        role_names = [
+            t.getText() for t in role_tokens if isinstance(t, TerminalNode) and t.symbol.type == InterlisParser.Name
+        ]
+        attr_names = [
+            t.getText() for t in attr_tokens if isinstance(t, TerminalNode) and t.symbol.type == InterlisParser.Name
+        ]
 
         def factor(names: list[str]) -> MetaInstance:
             instance = self.registry.new_instance("IlisMeta16.ModelData.PathOrInspFactor")
-            instance.PathEls = [path_el(name) for name in names]  # a fresh PathEl per factor - never shared across UniqueDef entries
+            instance.PathEls = [
+                path_el(name) for name in names
+            ]  # a fresh PathEl per factor - never shared across UniqueDef entries
             return instance
 
         if not role_names:
@@ -1045,13 +1123,21 @@ class InterlisModelBuilder(InterlisParserVisitor):
           level (already documented as such).
         """
         parent_context = self._parent_stack[-1] if self._parent_stack else None
-        is_top_level = isinstance(parent_context, MetaInstance) and parent_context._qualified_class == "IlisMeta16.ModelData.EnumType"
+        is_top_level = (
+            isinstance(parent_context, MetaInstance)
+            and parent_context._qualified_class == "IlisMeta16.ModelData.EnumType"
+        )
 
         if is_top_level:
             top = self.registry.new_instance("IlisMeta16.ModelData.EnumNode")
             top.Name = "TOP"
             self.attachment.attach(
-                parent_context, "TopNode", top, association="TopNode", role="TopNode", rule=rule_name,
+                parent_context,
+                "TopNode",
+                top,
+                association="TopNode",
+                role="TopNode",
+                rule=rule_name,
             )
             children_target = top
             final_target = parent_context
@@ -1064,19 +1150,28 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 node = self.visit(el_ctx)
                 if isinstance(node, MetaInstance):
                     self.attachment.attach(
-                        children_target, "Node", node, association="SubNode", role="Node", rule=rule_name,
+                        children_target,
+                        "Node",
+                        node,
+                        association="SubNode",
+                        role="Node",
+                        rule=rule_name,
                     )
 
         construction_ctx = self._construction_stack[-1] if self._construction_stack else {}
         consumed: set[int] = set()
         final_binding = entry.attribute_bindings.get("Final") if entry.attribute_bindings else None
         if final_target is not None and isinstance(final_binding, dict):
-            final_value = self._resolve_binding_value(ctx, rule_name, "Final", final_binding, construction_ctx, consumed)
+            final_value = self._resolve_binding_value(
+                ctx, rule_name, "Final", final_binding, construction_ctx, consumed
+            )
             if final_value:
                 self.attachment.attach(final_target, "Final", final_value, rule=rule_name)
         order_binding = entry.attribute_bindings.get("Order") if entry.attribute_bindings else None
         if is_top_level and isinstance(order_binding, dict):
-            order_value = self._resolve_binding_value(ctx, rule_name, "Order", order_binding, construction_ctx, consumed)
+            order_value = self._resolve_binding_value(
+                ctx, rule_name, "Order", order_binding, construction_ctx, consumed
+            )
             if order_value:
                 self.attachment.attach(parent_context, "Order", order_value, rule=rule_name)
         return None
@@ -1305,7 +1400,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
             return result
 
         if len(bag) == 1:
-            (only_key, only_value), = bag.items()
+            ((only_key, only_value),) = bag.items()
             if only_key.startswith("_") or not entry.feeds_into:
                 # Unwrap to the bare value in the common case: either a
                 # single notes-only/relay key (e.g. attributePath's own
@@ -1371,7 +1466,10 @@ class InterlisModelBuilder(InterlisParserVisitor):
         for h in hint:
             expanded.extend(self._expand_kind_hint(h))
         return ForwardRef(
-            name=name, resolves_to_hint=expanded or None, rule=rule_name, home_model=self._current_model_name(),
+            name=name,
+            resolves_to_hint=expanded or None,
+            rule=rule_name,
+            home_model=self._current_model_name(),
             topic_extends_hint=self._current_topic_extends_hint(ctx),
         )
 
@@ -1438,7 +1536,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
         if not element.get("abstract"):
             return [short_name]
         descendants = [
-            qn.rsplit(".", 1)[-1] for qn, el in self.schema.uml.qualified.items()
+            qn.rsplit(".", 1)[-1]
+            for qn, el in self.schema.uml.qualified.items()
             if qualified in (el.get("all_superclasses") or [])
         ]
         return descendants or [short_name]
@@ -1458,7 +1557,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
         for key, binding in bindings.items():
             if not isinstance(binding, dict):
                 continue
-            if binding.get("status") in ("not_applicable", "unresolved") and "source" not in binding and "target" not in binding:
+            if (
+                binding.get("status") in ("not_applicable", "unresolved")
+                and "source" not in binding
+                and "target" not in binding
+            ):
                 continue
 
             try:
@@ -1492,8 +1595,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
             if nested is None:
                 return
             self.attachment.attach(
-                instance, key, nested,
-                association=binding.get("association"), role=binding.get("role"), rule=rule_name,
+                instance,
+                key,
+                nested,
+                association=binding.get("association"),
+                role=binding.get("role"),
+                rule=rule_name,
             )
             return
 
@@ -1540,14 +1647,22 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 # limitation as BaseClass/EXTENDS) - never fatal.
                 value.graceful = True
             self.attachment.attach(
-                instance, key, value,
-                association=binding.get("association"), role=binding.get("role"), rule=rule_name,
+                instance,
+                key,
+                value,
+                association=binding.get("association"),
+                role=binding.get("role"),
+                rule=rule_name,
             )
             self.forward_refs.register_pending(value, instance, self._resolved_field_name(instance, key, binding))
             return
         self.attachment.attach(
-            instance, key, value,
-            association=binding.get("association"), role=binding.get("role"), rule=rule_name,
+            instance,
+            key,
+            value,
+            association=binding.get("association"),
+            role=binding.get("role"),
+            rule=rule_name,
         )
 
     def _resolved_field_name(self, instance: MetaInstance, key: str, binding: dict) -> str:
@@ -1561,11 +1676,18 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return found[1] if found else key
 
     def _build_nested(
-        self, ctx: ParserRuleContext, rule_name: str, key: str, binding: dict, construction_ctx: dict, consumed: set[int]
+        self,
+        ctx: ParserRuleContext,
+        rule_name: str,
+        key: str,
+        binding: dict,
+        construction_ctx: dict,
+        consumed: set[int],
     ) -> MetaInstance | None:
         target = binding["target"]
         sub_bindings = {
-            k: v for k, v in binding.items()
+            k: v
+            for k, v in binding.items()
             if k not in ("target", "note", "association", "role") and isinstance(v, dict) and "source" in v
         }
         if not sub_bindings:
@@ -1620,7 +1742,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
         loop - same principle as the construction context propagated
         elsewhere, e.g. interlis2def.iliVersion).
         """
-        items = self._resolve_binding_value(ctx, rule_name, key, {"source": binding["for_each"]}, construction_ctx, consumed)
+        items = self._resolve_binding_value(
+            ctx, rule_name, key, {"source": binding["for_each"]}, construction_ctx, consumed
+        )
         if items is None:
             return
         if not isinstance(items, list):
@@ -1630,7 +1754,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         target = binding["target"]
         sub_bindings = {
-            k: v for k, v in binding.items()
+            k: v
+            for k, v in binding.items()
             if k not in ("for_each", "target", "note", "association", "role") and isinstance(v, dict)
         }
         for item in items:
@@ -1640,8 +1765,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
             self._apply_bindings(built, ctx, rule_name, sub_bindings, item_ctx, consumed)
             if binding.get("association"):
                 self.attachment.attach(
-                    instance, key, built,
-                    association=binding.get("association"), role=binding.get("role"), rule=rule_name,
+                    instance,
+                    key,
+                    built,
+                    association=binding.get("association"),
+                    role=binding.get("role"),
+                    rule=rule_name,
                 )
             else:
                 # No collection role on the metamodel side (e.g. Import: a
@@ -1658,7 +1787,13 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 current.append(built)
 
     def _resolve_binding_value(
-        self, ctx: ParserRuleContext, rule_name: str, key: str, binding: dict, construction_ctx: dict, consumed: set[int]
+        self,
+        ctx: ParserRuleContext,
+        rule_name: str,
+        key: str,
+        binding: dict,
+        construction_ctx: dict,
+        consumed: set[int],
     ) -> Any:
         source = binding.get("source")
         if not isinstance(source, dict):
@@ -1683,8 +1818,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
         rule_map = binding.get("rule") if isinstance(binding.get("rule"), dict) else binding.get("mapping")
         wrap_map = binding.get("wrap") if isinstance(binding.get("wrap"), dict) else None
         return resolve_source(
-            ctx, source, rule=rule_name, construction_context=construction_ctx, builder=self,
-            rule_map=rule_map, binding_key=key, wrap_map=wrap_map,
+            ctx,
+            source,
+            rule=rule_name,
+            construction_context=construction_ctx,
+            builder=self,
+            rule_map=rule_map,
+            binding_key=key,
+            wrap_map=wrap_map,
         )
 
     def visit_wrapped(self, node: ParserRuleContext, target: str, rule_name: str) -> MetaInstance:
@@ -1783,7 +1924,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
                             consumed.add(id(node))
                 rule_map = nested.get("mapping") or nested.get("rule")
                 return resolve_source(
-                    ctx, source, rule=rule_name, construction_context=construction_ctx, builder=self, rule_map=rule_map,
+                    ctx,
+                    source,
+                    rule=rule_name,
+                    construction_context=construction_ctx,
+                    builder=self,
+                    rule_map=rule_map,
                 )
         if extra.get("dynamic") and isinstance(extra.get("rule"), dict):
             for token_or_rule, value in extra["rule"].items():
@@ -2167,10 +2313,17 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 for attr in getattr(base.BaseView, "ClassAttribute", None) or []:
                     copy = self.registry.new_instance("IlisMeta16.ModelData.AttrOrParam")
                     copy.Name = attr.Name
-                    self.attachment.attach(copy, "Type", attr.Type, association="AttrOrParamType", role="Type", rule="viewAttributes")
+                    self.attachment.attach(
+                        copy, "Type", attr.Type, association="AttrOrParamType", role="Type", rule="viewAttributes"
+                    )
                     copy.Derivates = [self._identity_view_path(all_of_name, attr.Name)]
                     self.attachment.attach(
-                        view, "ClassAttribute", copy, association="ClassAttr", role="ClassAttribute", rule="viewAttributes",
+                        view,
+                        "ClassAttribute",
+                        copy,
+                        association="ClassAttr",
+                        role="ClassAttribute",
+                        rule="viewAttributes",
                     )
 
     def _identity_view_path(self, base_ref: str, attr_name: str) -> MetaInstance:
@@ -2240,7 +2393,10 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return None
 
     _VIEW_ATTRIBUTE_MODIFIER_TOKENS = (
-        InterlisParser.ABSTRACT, InterlisParser.EXTENDED, InterlisParser.FINAL, InterlisParser.TRANSIENT,
+        InterlisParser.ABSTRACT,
+        InterlisParser.EXTENDED,
+        InterlisParser.FINAL,
+        InterlisParser.TRANSIENT,
     )
 
     @staticmethod
@@ -2274,7 +2430,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
         i, n = 0, len(children)
         while i < n:
             node = children[i]
-            if isinstance(node, TerminalNode) and node.symbol.type == InterlisParser.Name and id(node) not in all_of_name_ids:
+            if (
+                isinstance(node, TerminalNode)
+                and node.symbol.type == InterlisParser.Name
+                and id(node) not in all_of_name_ids
+            ):
                 modifier_tokens: set[int] = set()
                 j = i + 1
                 while j < n:
@@ -2284,7 +2444,10 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     if isinstance(child, TerminalNode) and child.symbol.type == InterlisParser.SEMI:
                         j = -1
                         break
-                    if isinstance(child, TerminalNode) and child.symbol.type in InterlisModelBuilder._VIEW_ATTRIBUTE_MODIFIER_TOKENS:
+                    if (
+                        isinstance(child, TerminalNode)
+                        and child.symbol.type in InterlisModelBuilder._VIEW_ATTRIBUTE_MODIFIER_TOKENS
+                    ):
                         modifier_tokens.add(child.symbol.type)
                     j += 1
                 if j != -1 and j < n and j + 1 < n and isinstance(children[j + 1], ParserRuleContext):
@@ -2330,7 +2493,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
             if expr is not None:
                 attr.Derivates = [expr]
             self.attachment.attach(
-                view, "ClassAttribute", attr, association="ClassAttr", role="ClassAttribute", rule="viewAttributes",
+                view,
+                "ClassAttribute",
+                attr,
+                association="ClassAttr",
+                role="ClassAttribute",
+                rule="viewAttributes",
             )
             if expr is not None:
                 self._pending_view_bare_attrs.append((view, attr, expr))
@@ -2369,7 +2537,12 @@ class InterlisModelBuilder(InterlisParserVisitor):
             type_instance = self._resolve_view_attribute_type(view, expr)
             if type_instance is not None:
                 self.attachment.attach(
-                    attr, "Type", type_instance, association="AttrOrParamType", role="Type", rule="viewAttributes",
+                    attr,
+                    "Type",
+                    type_instance,
+                    association="AttrOrParamType",
+                    role="Type",
+                    rule="viewAttributes",
                 )
 
     @classmethod
@@ -2482,7 +2655,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
             # extraction - the base element's fully-qualified name.
             translation.Translations = [
                 self.registry.new_instance(
-                    "IlisMeta16.ModelTranslation.METranslation", Of=base_qname, TranslatedName=translated_name,
+                    "IlisMeta16.ModelTranslation.METranslation",
+                    Of=base_qname,
+                    TranslatedName=translated_name,
                 )
                 for base_qname, translated_name in pairs
             ]
@@ -2490,8 +2665,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
             model._translation = {
                 "language": getattr(model, "Language", None),
                 "of": base.Name,
-                "names": names,          # {fully-qualified base name: translated short name}
-                "elements": elements,    # {base class/view/topic/domain short name: translated}
+                "names": names,  # {fully-qualified base name: translated short name}
+                "elements": elements,  # {base class/view/topic/domain short name: translated}
                 "attributes": attributes,  # {(owner short name, attribute short name): translated}
             }
 
@@ -2512,8 +2687,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
         return model_in(self.symbol_table) or model_in(self.repository.symbol_table_for(name))
 
     def _align_translation(
-        self, base: MetaInstance, translated: MetaInstance, base_qname: str, owner_name: str | None,
-        names: dict[str, str], elements: dict[str, str], attributes: dict[tuple[str, str], str],
+        self,
+        base: MetaInstance,
+        translated: MetaInstance,
+        base_qname: str,
+        owner_name: str | None,
+        names: dict[str, str],
+        elements: dict[str, str],
+        attributes: dict[tuple[str, str], str],
         pairs: list[tuple[str, str]],
     ) -> None:
         b_name = getattr(base, "Name", None)
@@ -2539,8 +2720,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
             for b_child, t_child in zip(b_children, t_children):
                 child_name = getattr(b_child, "Name", None)
                 self._align_translation(
-                    b_child, t_child, f"{base_qname}.{child_name}" if child_name else base_qname,
-                    next_owner, names, elements, attributes, pairs,
+                    b_child,
+                    t_child,
+                    f"{base_qname}.{child_name}" if child_name else base_qname,
+                    next_owner,
+                    names,
+                    elements,
+                    attributes,
+                    pairs,
                 )
 
     def _qualify_name(self, name: str) -> str:
@@ -2599,7 +2786,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 results.append((self._rule_name(child), self.visit(child)))
         return results
 
-    def _attach_unclaimed_results(self, instance: MetaInstance, sweep_results: list[tuple[str, Any]], rule_name: str) -> None:
+    def _attach_unclaimed_results(
+        self, instance: MetaInstance, sweep_results: list[tuple[str, Any]], rule_name: str
+    ) -> None:
         """Try to attach unclaimed children that produced a concrete result.
 
         For a child not claimed by attribute_bindings whose rule has NO
@@ -2668,7 +2857,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 siblings = [v for v in value.values() if isinstance(v, MetaInstance)]
                 has_unresolved_sibling = any(isinstance(v, ForwardRef) for v in value.values())
                 for key, sub_value in value.items():
-                    if sub_value is None or (isinstance(sub_value, list) and not sub_value) or self._is_hollow(sub_value):
+                    if (
+                        sub_value is None
+                        or (isinstance(sub_value, list) and not sub_value)
+                        or self._is_hollow(sub_value)
+                    ):
                         continue
                     if key.startswith("_"):
                         # Internal key (project convention, e.g. _collection,
@@ -2723,15 +2916,21 @@ class InterlisModelBuilder(InterlisParserVisitor):
                             if isinstance(sub_value, MetaInstance):
                                 candidate_classes = [sub_value._qualified_class]
                             elif isinstance(sub_value, ForwardRef):
-                                hints = sub_value.resolves_to_hint if isinstance(sub_value.resolves_to_hint, list) else (
-                                    [sub_value.resolves_to_hint] if sub_value.resolves_to_hint else []
+                                hints = (
+                                    sub_value.resolves_to_hint
+                                    if isinstance(sub_value.resolves_to_hint, list)
+                                    else ([sub_value.resolves_to_hint] if sub_value.resolves_to_hint else [])
                                 )
                                 candidate_classes = [
-                                    qn for hint in hints for qn in self.schema.uml.qualified
+                                    qn
+                                    for hint in hints
+                                    for qn in self.schema.uml.qualified
                                     if qn.rsplit(".", 1)[-1] == hint
                                 ]
                             for qualified_class in candidate_classes:
-                                found = self.attachment.find_association_connecting(instance._qualified_class, qualified_class)
+                                found = self.attachment.find_association_connecting(
+                                    instance._qualified_class, qualified_class
+                                )
                                 if found is not None:
                                     _assoc_name, role, upper = found
                                     self.attachment._set_field(instance, role, sub_value, upper)
@@ -2833,8 +3032,10 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 # (resolves_to_hint, a short name - its full qualified name
                 # is looked up in the schema) since the real class isn't
                 # known yet before resolution.
-                hints = value.resolves_to_hint if isinstance(value.resolves_to_hint, list) else (
-                    [value.resolves_to_hint] if value.resolves_to_hint else []
+                hints = (
+                    value.resolves_to_hint
+                    if isinstance(value.resolves_to_hint, list)
+                    else ([value.resolves_to_hint] if value.resolves_to_hint else [])
                 )
                 for hint in hints:
                     qualified_hint = next(

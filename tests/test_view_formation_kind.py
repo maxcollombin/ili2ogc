@@ -20,6 +20,7 @@ normally skips an already-self-attached child never fired. `JOIN OF`/
 `ViewDefContext` directly) and excluding `formationDef` explicitly in
 `_attach_unclaimed_results`.
 """
+
 import warnings
 from pathlib import Path
 

@@ -11,6 +11,7 @@ instance is already registered under its full qualified name
 (Model.Topic.ClassName, via InterlisModelBuilder._qualify_name), which
 matches XtfObject.qualified_class exactly (same naming convention).
 """
+
 from dataclasses import dataclass
 
 from interlis.builder.repository import ModelRepository
@@ -18,7 +19,9 @@ from interlis.builder.forward_refs import SymbolTable
 from interlis.metamodel.instance import MetaInstance
 
 
-def resolve_class(qualified_class: str, *, symbol_table: SymbolTable, repository: ModelRepository | None) -> MetaInstance | None:
+def resolve_class(
+    qualified_class: str, *, symbol_table: SymbolTable, repository: ModelRepository | None
+) -> MetaInstance | None:
     """Find the IlisMeta16.ModelData.Class instance for a qualified_class.
 
     Looks up an XtfObject.qualified_class ("Model.Topic.ClassName"). Checks
@@ -38,7 +41,9 @@ def resolve_class(qualified_class: str, *, symbol_table: SymbolTable, repository
     return None
 
 
-def home_symbol_table(qualified_class: str, *, symbol_table: SymbolTable, repository: ModelRepository | None) -> SymbolTable:
+def home_symbol_table(
+    qualified_class: str, *, symbol_table: SymbolTable, repository: ModelRepository | None
+) -> SymbolTable:
     """Return the symbol table that actually declares `qualified_class`.
 
     The root model's table if it already registers this class there,
@@ -298,7 +303,9 @@ def resolve_attribute(attr: MetaInstance) -> ResolvedAttribute:
         # mechanism as any other ClassRelatedType - like ReferenceType).
         target = _class_related_base_class(attr)
         return ResolvedAttribute(
-            attr=attr, type_instance=target, type_kind="Class" if target is not None else None,
+            attr=attr,
+            type_instance=target,
+            type_kind="Class" if target is not None else None,
             mandatory=bool(getattr(attr, "Mandatory", False)),
         )
     type_instance = getattr(attr, "Type", None)

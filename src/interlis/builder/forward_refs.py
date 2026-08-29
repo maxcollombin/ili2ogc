@@ -13,6 +13,7 @@ imported model's table, loaded on demand. Without a repository (or if the
 model remains unfindable), the name becomes a documented
 UnresolvedNamedReference instead of an exception.
 """
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -177,7 +178,8 @@ class SymbolTable:
             # their own qualified name).
             candidate_ids = {id(c) for c in candidates}
             in_model = [
-                v for k, v in self._qualified.items()
+                v
+                for k, v in self._qualified.items()
                 if k.startswith(home_model + ".") and k.rsplit(".", 1)[-1] == short and id(v) in candidate_ids
             ]
             if len(in_model) == 1:
@@ -206,7 +208,7 @@ class SymbolTable:
         prefix = old_prefix + "."
         for qualified, instance in list(self._qualified.items()):
             if qualified.startswith(prefix):
-                self._qualified[new_prefix + "." + qualified[len(prefix):]] = instance
+                self._qualified[new_prefix + "." + qualified[len(prefix) :]] = instance
 
     def has_prefix(self, name: str) -> bool:
         """Check whether `name`'s model prefix refers to the current file.
@@ -297,9 +299,7 @@ class ForwardRefResolver:
         if not self.symbol_table.unqualified_imports:
             if ref.graceful:
                 return UnresolvedNamedReference(ref.name, reason="unresolved_extends")
-            raise BuildError(
-                f"unresolved reference, not attributable to an import: {ref.name!r}", rule=ref.rule
-            )
+            raise BuildError(f"unresolved reference, not attributable to an import: {ref.name!r}", rule=ref.rule)
         if repository is not None:
             for model_name in self.symbol_table.unqualified_imports:
                 # Try the name QUALIFIED with that model first: `IMPORTS

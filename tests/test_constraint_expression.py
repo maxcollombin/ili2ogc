@@ -33,6 +33,7 @@ exercised:
   un-joined `enumerationConst` bag `{"Value": ["false"], "Others": False}`
   instead of the plain dotted-path string the metamodel declares.
 """
+
 import warnings
 from pathlib import Path
 
@@ -113,7 +114,7 @@ def test_local_uniqueness_builds_kind_and_uniquedef_from_the_real_corpus_shape()
 def test_local_uniqueness_multiple_trailing_attributes_become_separate_uniquedef_entries():
     cls = _class_with_constraint("UNIQUE (LOCAL) ASV: Datum, KBfrei;")
     constraint = cls.Constraint[0]
-    assert [ [(pe.Kind, pe.Ref) for pe in p.PathEls] for p in constraint.UniqueDef ] == [
+    assert [[(pe.Kind, pe.Ref) for pe in p.PathEls] for p in constraint.UniqueDef] == [
         [("ReferenceAttr", "ASV"), ("ReferenceAttr", "Datum")],
         [("ReferenceAttr", "ASV"), ("ReferenceAttr", "KBfrei")],
     ]
@@ -142,7 +143,7 @@ def test_relation_operators_resolve_to_the_right_operation():
 
 
 def test_implication_operator_builds_compound_expr():
-    cls = _class_with_constraint("MANDATORY CONSTRAINT KBfrei == #false => Datum != \"x\";")
+    cls = _class_with_constraint('MANDATORY CONSTRAINT KBfrei == #false => Datum != "x";')
     expr = cls.Constraint[0].LogicalExpression
     assert expr._qualified_class.endswith("CompoundExpr")
     assert expr.Operation == "Implication"

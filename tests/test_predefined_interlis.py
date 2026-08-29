@@ -7,6 +7,7 @@ ForwardRefResolver._resolve_one, InterlisModelBuilder._register_unqualified_impo
 Couvre aussi la regression corrigee au passage (has_prefix) : une reference
 NON qualifiee introuvable localement, dans un fichier SANS aucun `IMPORTS
 UNQUALIFIED`, doit rester une erreur (BuildError) - pas etre masquee."""
+
 import warnings
 from pathlib import Path
 

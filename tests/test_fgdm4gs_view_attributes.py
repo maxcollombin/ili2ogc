@@ -20,6 +20,7 @@ their base MGDM from the real `ili_corpus/` scratch corpus (gitignored,
 not always present) - not exercised here to keep this test hermetic; see
 the NOTICE file for how to build them manually against `ili_corpus/`.
 """
+
 import warnings
 from pathlib import Path
 
@@ -49,7 +50,8 @@ def _build(fname: str):
 
 def _views(builder) -> list[MetaInstance]:
     return [
-        inst for inst in builder.symbol_table.all_registered()
+        inst
+        for inst in builder.symbol_table.all_registered()
         if isinstance(inst, MetaInstance) and inst._qualified_class == "IlisMeta16.ModelData.View"
     ]
 
@@ -74,22 +76,34 @@ def test_view_structure_builds_correctly(fname, view_name, base_count, kind):
     "fname,view_name,expected",
     [
         (
-            "IVS_V3_d.ili", "ivs_nat",
+            "IVS_V3_d.ili",
+            "ivs_nat",
             {
-                "wkb_geometry": "LineType", "ivs_nummer": "TextType", "ivs_signatur": "TextType",
+                "wkb_geometry": "LineType",
+                "ivs_nummer": "TextType",
+                "ivs_signatur": "TextType",
                 "ivs_kanton": None,  # external CHAdminCodes_V2.CHCantonCode - not loaded by this hermetic repository
-                "ivs_sladatehist": "FormattedType", "ivs_sladatemorph": "FormattedType",
-                "ivs_slabedeutung": "EnumType", "ivs_sortsla": "TextType", "ivs_slaname": "TextType",
+                "ivs_sladatehist": "FormattedType",
+                "ivs_sladatemorph": "FormattedType",
+                "ivs_slabedeutung": "EnumType",
+                "ivs_sortsla": "TextType",
+                "ivs_slaname": "TextType",
             },
         ),
         (
-            "Planungszonen_V2_d_A.ili", "view_pz",
+            "Planungszonen_V2_d_A.ili",
+            "view_pz",
             {
                 "wkb_geometry": "LineType",
-                "publiziert_ab": "FormattedType", "gueltig_bis": "FormattedType",  # INTERLIS.XMLDate, now resolved via the predefined namespace
-                "rechtsstatus": "EnumType", "bemerkungen": "TextType", "code_typ": "TextType",
-                "bezeichnung_typ": "TextType", "abkuerzung_typ": "TextType",
-                "festlegung_stufe_typ": "EnumType", "bemerkung_typ": "TextType",
+                "publiziert_ab": "FormattedType",
+                "gueltig_bis": "FormattedType",  # INTERLIS.XMLDate, now resolved via the predefined namespace
+                "rechtsstatus": "EnumType",
+                "bemerkungen": "TextType",
+                "code_typ": "TextType",
+                "bezeichnung_typ": "TextType",
+                "abkuerzung_typ": "TextType",
+                "festlegung_stufe_typ": "EnumType",
+                "bemerkung_typ": "TextType",
             },
         ),
         (
@@ -98,13 +112,19 @@ def test_view_structure_builds_correctly(fname, view_name, base_count, kind):
             # TypPZ, resolved via AssocRole/BaseClass, not a plain
             # ClassAttribute), hop 3 is a plain attribute on the role's
             # target class - same expected Types as the JOIN OF form above.
-            "Planungszonen_V2_d_B.ili", "view_pz",
+            "Planungszonen_V2_d_B.ili",
+            "view_pz",
             {
                 "wkb_geometry": "LineType",
-                "publiziert_ab": "FormattedType", "gueltig_bis": "FormattedType",
-                "rechtsstatus": "EnumType", "bemerkungen": "TextType", "code_typ": "TextType",
-                "bezeichnung_typ": "TextType", "abkuerzung_typ": "TextType",
-                "festlegung_stufe_typ": "EnumType", "bemerkung_typ": "TextType",
+                "publiziert_ab": "FormattedType",
+                "gueltig_bis": "FormattedType",
+                "rechtsstatus": "EnumType",
+                "bemerkungen": "TextType",
+                "code_typ": "TextType",
+                "bezeichnung_typ": "TextType",
+                "abkuerzung_typ": "TextType",
+                "festlegung_stufe_typ": "EnumType",
+                "bemerkung_typ": "TextType",
             },
         ),
     ],

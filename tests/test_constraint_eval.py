@@ -4,6 +4,7 @@ Real corpus pattern exercised end-to-end here (`ERKAS_Strassen_V2_0.ili`,
 cited in mappings/ilismeta16-to-jsonschema-rules.yml's `Constraint` entry):
 `NOT (KBfrei == #false AND Datum != "1991-02-27") OR DEFINED (REPflichtPers)`.
 """
+
 import warnings
 from pathlib import Path
 

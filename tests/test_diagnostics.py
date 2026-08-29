@@ -1,4 +1,5 @@
 """Shared diagnostics core: Diagnostic / DiagnosticBag / text + SARIF renderers."""
+
 import json
 from pathlib import Path
 
@@ -20,17 +21,23 @@ SARIF_SCHEMA = json.loads((ROOT / "tests/fixtures/sarif-2.1.0-schema.json").read
 
 def _bag() -> DiagnosticBag:
     bag = DiagnosticBag()
-    bag.add(Diagnostic(
-        "warning", "SQL-REF-TARGET-UNRESOLVED",
-        "Parcel.owner: reference target not resolved",
-        Location(file="x.ili", model="Cadastre", element_path="Parcel.owner"),
-        help="pass its model's directory to --repo, or the model file to --catalog",
-    ))
-    bag.add(Diagnostic(
-        "note", "SQL-CONSTRAINT-SET",
-        "SET CONSTRAINT 'areas': a whole-population check",
-        Location(model="Cadastre", element_path="Parcel"),
-    ))
+    bag.add(
+        Diagnostic(
+            "warning",
+            "SQL-REF-TARGET-UNRESOLVED",
+            "Parcel.owner: reference target not resolved",
+            Location(file="x.ili", model="Cadastre", element_path="Parcel.owner"),
+            help="pass its model's directory to --repo, or the model file to --catalog",
+        )
+    )
+    bag.add(
+        Diagnostic(
+            "note",
+            "SQL-CONSTRAINT-SET",
+            "SET CONSTRAINT 'areas': a whole-population check",
+            Location(model="Cadastre", element_path="Parcel"),
+        )
+    )
     return bag
 
 

@@ -25,6 +25,7 @@ name as element text - see `_get_attr_ci` and the "sender"/"model" role
 handling below; confirmed only via non-production reference/test fixtures,
 see tests/fixtures/xtf/xtf24allerrors/NOTICE and xtf24envelope/NOTICE).
 """
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -62,7 +63,7 @@ def _model_name_from_tag(tag: str) -> str | None:
     prefix = "http://www.interlis.ch/xtf/2.4/"
     if not uri.startswith(prefix):
         return None
-    name = uri[len(prefix):]
+    name = uri[len(prefix) :]
     return name if name and name != "INTERLIS" else None
 
 
@@ -180,7 +181,11 @@ def parse_xtf(path: Path) -> XtfTransfer:
             if parent_role is None:
                 role = "transfer"
             elif parent_role == "transfer":
-                role = "headersection" if upper_tag == "HEADERSECTION" else ("datasection" if upper_tag == "DATASECTION" else "other")
+                role = (
+                    "headersection"
+                    if upper_tag == "HEADERSECTION"
+                    else ("datasection" if upper_tag == "DATASECTION" else "other")
+                )
             elif parent_role == "headersection":
                 # SENDER is a child element only in XTF 2.4 (an attribute of
                 # HEADERSECTION itself in XTF 2.3 - handled below, on the
@@ -198,8 +203,10 @@ def parse_xtf(path: Path) -> XtfTransfer:
                 model_name = _model_name_from_tag(elem.tag)
                 qualified_topic = f"{model_name}.{tag}" if model_name else tag
                 current_basket = XtfBasket(
-                    bid=_get_attr_ci(elem, "BID") or "", qualified_topic=qualified_topic,
-                    kind=_get_attr_ci(elem, "KIND"), endstate=_get_attr_ci(elem, "ENDSTATE"),
+                    bid=_get_attr_ci(elem, "BID") or "",
+                    qualified_topic=qualified_topic,
+                    kind=_get_attr_ci(elem, "KIND"),
+                    endstate=_get_attr_ci(elem, "ENDSTATE"),
                 )
             elif parent_role == "basket":
                 role = "object"
@@ -216,7 +223,9 @@ def parse_xtf(path: Path) -> XtfTransfer:
                 model_name = _model_name_from_tag(elem.tag)
                 basket_topic = current_basket.qualified_topic.rsplit(".", 1)[-1]
                 qualified_class = f"{model_name}.{basket_topic}.{tag}" if model_name else tag
-                current_object = XtfObject(tid=_get_attr_ci(elem, "TID"), qualified_class=qualified_class, attributes={})
+                current_object = XtfObject(
+                    tid=_get_attr_ci(elem, "TID"), qualified_class=qualified_class, attributes={}
+                )
             elif parent_role == "object":
                 role = "attribute"
             else:

@@ -14,6 +14,7 @@ reproduction of that idiom, modelled on
 - `.ili -> CREATE VIEW` (`convert/sql.py`) and `.xtf -> JSON-FG`
   (`convert/jsonfg.py`) end to end
 """
+
 import json
 import sqlite3
 import warnings
@@ -45,7 +46,8 @@ def _build():
 
 def _registered(builder, suffix):
     return [
-        inst for inst in builder.symbol_table.all_registered()
+        inst
+        for inst in builder.symbol_table.all_registered()
         if isinstance(inst, MetaInstance) and inst._qualified_class == f"IlisMeta16.ModelData.{suffix}"
     ]
 
@@ -91,8 +93,11 @@ def test_nested_defined_where_is_in_evaluator_scope():
 def test_convert_sql_emits_a_real_create_view_with_exists_predicates():
     builder = _build()
     classes = _registered(builder, "Class")
-    sql_views = build_views(_registered(builder, "View"), build_tables(classes, symbol_table=builder.symbol_table),
-                            symbol_table=builder.symbol_table)
+    sql_views = build_views(
+        _registered(builder, "View"),
+        build_tables(classes, symbol_table=builder.symbol_table),
+        symbol_table=builder.symbol_table,
+    )
     assert len(sql_views) == 1
     v = sql_views[0]
     assert v.body is not None, v.notes

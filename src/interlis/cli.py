@@ -7,6 +7,7 @@ see pyproject.toml) if present, otherwise falls back to a development repo
 checkout (editable install/`uv run` - the data only exists at the repo
 root in that mode, never copied under src/interlis/).
 """
+
 import argparse
 import importlib.resources
 import json
@@ -77,16 +78,21 @@ def _tool_version() -> str:
 def _add_diagnostic_args(subparser: argparse.ArgumentParser) -> None:
     """`--output-format` / `--report` / `--strict` - shared by convert/convert-sql/convert-jsonfg/validate."""
     subparser.add_argument(
-        "--output-format", choices=("text", "sarif"), default="text",
+        "--output-format",
+        choices=("text", "sarif"),
+        default="text",
         help="How diagnostics (NOT the primary output) are rendered on stderr. 'text' (default): "
-             "one line per diagnostic, Ruff-style. 'sarif': a SARIF 2.1.0 log.",
+        "one line per diagnostic, Ruff-style. 'sarif': a SARIF 2.1.0 log.",
     )
     subparser.add_argument(
-        "--report", default=None, metavar="FILE",
+        "--report",
+        default=None,
+        metavar="FILE",
         help="Also write a SARIF 2.1.0 diagnostics log to FILE, regardless of --output-format.",
     )
     subparser.add_argument(
-        "--strict", action="store_true",
+        "--strict",
+        action="store_true",
         help="Treat any diagnostic (note/warning) as a failure: exit 1 instead of 2.",
     )
 
@@ -108,7 +114,10 @@ def _finish(bag: DiagnosticBag, args: argparse.Namespace, *, extra_exit: int = 0
         )
     if len(bag):
         if fmt == "sarif":
-            print(json.dumps(render_sarif(bag, tool_version=_tool_version()), indent=2, ensure_ascii=False), file=sys.stderr)
+            print(
+                json.dumps(render_sarif(bag, tool_version=_tool_version()), indent=2, ensure_ascii=False),
+                file=sys.stderr,
+            )
         else:
             print(render_text(bag, color=sys.stderr.isatty()), file=sys.stderr)
     return extra_exit or bag.exit_code(strict=strict)
@@ -242,25 +251,33 @@ def cmd_convert(args: argparse.Namespace) -> int:
     bag.extend(builder_warnings_to_diagnostics(caught, file=str(path)))
 
     classes = [
-        instance for instance in builder.symbol_table.all_registered()
+        instance
+        for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
     ]
     views = [
-        instance for instance in builder.symbol_table.all_registered()
-        if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
+        instance
+        for instance in builder.symbol_table.all_registered()
+        if isinstance(instance, MetaInstance)
+        and instance._qualified_class.rsplit(".", 1)[-1] == "View"
         and getattr(instance, "FormationKind", None) in _SUPPORTED_VIEW_FORMATION_KINDS
     ]
     # `build()` returns the root Model instance directly for the (real-corpus
     # dominant) single-MODEL-per-file case - a file declaring more than one
     # MODEL yields something else here, so `x-meta` is simply omitted rather
     # than guessing which MODEL the file-level metadata belongs to.
-    root_model = root if isinstance(root, MetaInstance) and root._qualified_class.rsplit(".", 1)[-1] == "Model" else None
+    root_model = (
+        root if isinstance(root, MetaInstance) and root._qualified_class.rsplit(".", 1)[-1] == "Model" else None
+    )
     schema = model_to_json_schema(classes + views, symbol_table=builder.symbol_table, model=root_model)
     bag.extend(_jsonschema_mod.collect_diagnostics(schema, file=str(path)))
     if args.lang:
         translation = load_translation(getattr(root_model, "Name", None) or "", args.lang, repository)
         if translation is None:
-            print(f"--lang {args.lang}: no TRANSLATION OF {getattr(root_model, 'Name', path.stem)!r} for '{args.lang}' in --repo", file=sys.stderr)
+            print(
+                f"--lang {args.lang}: no TRANSLATION OF {getattr(root_model, 'Name', path.stem)!r} for '{args.lang}' in --repo",
+                file=sys.stderr,
+            )
             return 1
         schema = rename_json_schema(schema, translation)
     text = json.dumps(schema, indent=2, ensure_ascii=False)
@@ -313,7 +330,8 @@ def _fold_in_dependency_models(classes, views, root_table, repository, class_sym
     already_names = {getattr(c, "Name", None) for c in classes}
     for model_table in repository.loaded_models().values():
         model_classes = [
-            instance for instance in model_table.all_registered()
+            instance
+            for instance in model_table.all_registered()
             if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
         ]
         if not any(id(c) in needed_ids for c in model_classes):
@@ -390,17 +408,21 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     bag.extend(builder_warnings_to_diagnostics(caught, file=str(path)))
 
     classes = [
-        instance for instance in builder.symbol_table.all_registered()
+        instance
+        for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
     ]
     views = [
-        instance for instance in builder.symbol_table.all_registered()
-        if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
+        instance
+        for instance in builder.symbol_table.all_registered()
+        if isinstance(instance, MetaInstance)
+        and instance._qualified_class.rsplit(".", 1)[-1] == "View"
         and getattr(instance, "FormationKind", None) in _SUPPORTED_VIEW_FORMATION_KINDS
     ]
     for instance in builder.symbol_table.all_registered():
         if (
-            isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
+            isinstance(instance, MetaInstance)
+            and instance._qualified_class.rsplit(".", 1)[-1] == "View"
             and getattr(instance, "FormationKind", None) not in _SUPPORTED_VIEW_FORMATION_KINDS
         ):
             print(
@@ -437,7 +459,8 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
             warnings.simplefilter("ignore")
             catalog_builder.build(catalog_tree, meta_attributes=meta_attribute_comments_in_file(catalog_path))
         catalog_classes = [
-            instance for instance in catalog_builder.symbol_table.all_registered()
+            instance
+            for instance in catalog_builder.symbol_table.all_registered()
             if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
         ]
         classes.extend(catalog_classes)
@@ -455,17 +478,26 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
 
     class_table_names: dict[int, str] = {}
     tables = build_tables(
-        classes, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables,
+        classes,
+        symbol_table=builder.symbol_table,
+        class_symbol_tables=class_symbol_tables,
         class_table_names=class_table_names,
     )
-    sql_views = tuple(build_views(
-        views, tables, symbol_table=builder.symbol_table, class_symbol_tables=class_symbol_tables,
-        class_table_names=class_table_names,
-    ))
+    sql_views = tuple(
+        build_views(
+            views,
+            tables,
+            symbol_table=builder.symbol_table,
+            class_symbol_tables=class_symbol_tables,
+            class_table_names=class_table_names,
+        )
+    )
     bag.extend(_sql_mod.collect_diagnostics(tables, sql_views, file=str(path)))
     ddl = render_gpkg(tables, sql_views) if args.dialect == "gpkg" else render_postgresql(tables, sql_views)
     if args.lang:
-        root_names = builder.symbol_table.root_model_names() if hasattr(builder.symbol_table, "root_model_names") else []
+        root_names = (
+            builder.symbol_table.root_model_names() if hasattr(builder.symbol_table, "root_model_names") else []
+        )
         base_name = next(iter(root_names), None) or path.stem
         translation = load_translation(base_name, args.lang, repository)
         if translation is None:
@@ -480,7 +512,10 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
 
 
 def _resolve_schema_model_path(
-    xtf_path: Path, transfer, args: argparse.Namespace, repository: ModelRepository | None,
+    xtf_path: Path,
+    transfer,
+    args: argparse.Namespace,
+    repository: ModelRepository | None,
 ) -> tuple[Path, str | None] | None:
     """Resolve the .ili file describing `transfer`'s schema, or print an error and return `None`.
 
@@ -571,7 +606,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
         header_status = header_completeness(transfer, repository) if repository is not None else []
     incomplete = [s for s in header_status if s.status not in ("builtin", "available")]
     if incomplete and not args.quiet:
-        print(f"Header models (HEADERSECTION/MODELS): {len(header_status) - len(incomplete)}/{len(header_status)} resolved")
+        print(
+            f"Header models (HEADERSECTION/MODELS): {len(header_status) - len(incomplete)}/{len(header_status)} resolved"
+        )
         for s in incomplete:
             label = {"missing": "not in --repo", "indexed_but_failed": "found but failed to build"}[s.status]
             print(f"  [{label}] {s.name} VERSION={s.version!r} URI={s.uri!r}")
@@ -589,7 +626,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     header_suffix = (
         f" - {len(header_status) - len(incomplete)}/{len(header_status)} header models resolved"
-        if header_status else ""
+        if header_status
+        else ""
     )
     print(
         f"\n{len(issues)} issue(s): "
@@ -608,7 +646,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 encoding="utf-8",
             )
         if getattr(args, "output_format", "text") == "sarif":
-            print(json.dumps(render_sarif(bag, tool_version=_tool_version()), indent=2, ensure_ascii=False), file=sys.stderr)
+            print(
+                json.dumps(render_sarif(bag, tool_version=_tool_version()), indent=2, ensure_ascii=False),
+                file=sys.stderr,
+            )
 
     if counts.get("error"):
         return 1
@@ -683,7 +724,8 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     bag.extend(builder_warnings_to_diagnostics(caught, file=str(model_path)))
 
     candidate_views = [
-        instance for instance in builder.symbol_table.all_registered()
+        instance
+        for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "View"
     ]
     views = []
@@ -695,12 +737,18 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         views.append(view)
 
     collection = transfer_to_feature_collection(
-        transfer, symbol_table=builder.symbol_table, repository=repository, views=views,
-        schema_url=args.feature_schema_url, include_child_rows=args.include_child_rows,
+        transfer,
+        symbol_table=builder.symbol_table,
+        repository=repository,
+        views=views,
+        schema_url=args.feature_schema_url,
+        include_child_rows=args.include_child_rows,
     )
     bag.extend(_jsonfg_mod.collect_diagnostics(collection, file=str(xtf_path)))
     if args.lang:
-        root_names = builder.symbol_table.root_model_names() if hasattr(builder.symbol_table, "root_model_names") else []
+        root_names = (
+            builder.symbol_table.root_model_names() if hasattr(builder.symbol_table, "root_model_names") else []
+        )
         base_name = next(iter(root_names), None) or model_path.stem
         translation = load_translation(base_name, args.lang, repository)
         if translation is None:
@@ -723,22 +771,31 @@ def main(argv: list[str] | None = None) -> int:
     build_parser.add_argument("file", help="Path to the .ili file to build.")
     build_parser.add_argument("-q", "--quiet", action="store_true", help="Don't print warnings.")
     build_parser.add_argument(
-        "--repo", action="append", default=[], metavar="DIR",
+        "--repo",
+        action="append",
+        default=[],
+        metavar="DIR",
         help="Directory of .ili models used to resolve references to imported models "
-             "(IMPORTS) - repeatable. Absent by default: no cross-file resolution (V1 behavior).",
+        "(IMPORTS) - repeatable. Absent by default: no cross-file resolution (V1 behavior).",
     )
     build_parser.set_defaults(func=cmd_build)
 
     convert_parser = subparsers.add_parser(
-        "convert", help="Convert an .ili model to JSON Schema.",
+        "convert",
+        help="Convert an .ili model to JSON Schema.",
     )
     convert_parser.add_argument("file", help="Path to the .ili file to convert.")
     convert_parser.add_argument(
-        "--repo", action="append", default=[], metavar="DIR",
+        "--repo",
+        action="append",
+        default=[],
+        metavar="DIR",
         help="Directory of .ili models used to resolve references to imported models (IMPORTS) - repeatable.",
     )
     convert_parser.add_argument(
-        "--lang", default=None, metavar="CODE",
+        "--lang",
+        default=None,
+        metavar="CODE",
         help="Rename output identifiers through a `TRANSLATION OF` model for this language (e.g. `fr`), "
         "found by name in --repo. The input .ili and the transfer format are unchanged.",
     )
@@ -747,98 +804,136 @@ def main(argv: list[str] | None = None) -> int:
     convert_parser.set_defaults(func=cmd_convert)
 
     convert_sql_parser = subparsers.add_parser(
-        "convert-sql", help="Convert an .ili model to SQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY/CHECK, and CREATE VIEW for Projection/Join VIEWs).",
+        "convert-sql",
+        help="Convert an .ili model to SQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY/CHECK, and CREATE VIEW for Projection/Join VIEWs).",
     )
     convert_sql_parser.add_argument("file", help="Path to the .ili file to convert.")
     convert_sql_parser.add_argument(
-        "--dialect", choices=("postgresql", "gpkg"), default="postgresql",
+        "--dialect",
+        choices=("postgresql", "gpkg"),
+        default="postgresql",
         help="Target SQL dialect. 'postgresql' (default): CREATE TABLE + a separate ALTER TABLE ... ADD CONSTRAINT "
-             "pass for FOREIGN KEY. 'gpkg': GeoPackage/SQLite - everything declared INLINE at CREATE TABLE time "
-             "(SQLite can't add a constraint to an existing table), plus gpkg_contents/gpkg_geometry_columns/"
-             "gpkg_spatial_ref_sys bootstrap rows - assumes the target .gpkg already has the standard GeoPackage "
-             "system tables (created by GDAL beforehand).",
+        "pass for FOREIGN KEY. 'gpkg': GeoPackage/SQLite - everything declared INLINE at CREATE TABLE time "
+        "(SQLite can't add a constraint to an existing table), plus gpkg_contents/gpkg_geometry_columns/"
+        "gpkg_spatial_ref_sys bootstrap rows - assumes the target .gpkg already has the standard GeoPackage "
+        "system tables (created by GDAL beforehand).",
     )
     convert_sql_parser.add_argument(
-        "--repo", action="append", default=[], metavar="DIR",
+        "--repo",
+        action="append",
+        default=[],
+        metavar="DIR",
         help="Directory of .ili models used to resolve IMPORTS - repeatable. An imported model this conversion "
-             "actually depends on (a VIEW's JOIN OF/PROJECTION OF base classes, or a cross-model REFERENCE TO "
-             "target) is folded into the output as CREATE TABLEs automatically when found here, so its CREATE "
-             "VIEW / FOREIGN KEY can be generated without also listing it via --catalog.",
+        "actually depends on (a VIEW's JOIN OF/PROJECTION OF base classes, or a cross-model REFERENCE TO "
+        "target) is folded into the output as CREATE TABLEs automatically when found here, so its CREATE "
+        "VIEW / FOREIGN KEY can be generated without also listing it via --catalog.",
     )
     convert_sql_parser.add_argument(
-        "--catalog", action="append", default=[], metavar="FILE.ili",
+        "--catalog",
+        action="append",
+        default=[],
+        metavar="FILE.ili",
         help="Additional .ili model whose own classes also become tables in this SAME conversion (repeatable) - "
-             "typically a catalogue/reference model (e.g. a value-list Class hierarchy) that another Class in "
-             "'file' points to via REFERENCE TO. Without this, a REFERENCE TO a class from a model not converted "
-             "in the SAME run keeps its column but drops the FOREIGN KEY constraint (the target table doesn't "
-             "exist in this conversion's own output). Also required to turn a VIEW into a CREATE VIEW: pass the "
-             "base model(s) the VIEW's JOIN OF/PROJECTION OF classes come from, else the VIEW is emitted as a "
-             "-- NOTE - see docs/sql-conversion-strategy.md.",
+        "typically a catalogue/reference model (e.g. a value-list Class hierarchy) that another Class in "
+        "'file' points to via REFERENCE TO. Without this, a REFERENCE TO a class from a model not converted "
+        "in the SAME run keeps its column but drops the FOREIGN KEY constraint (the target table doesn't "
+        "exist in this conversion's own output). Also required to turn a VIEW into a CREATE VIEW: pass the "
+        "base model(s) the VIEW's JOIN OF/PROJECTION OF classes come from, else the VIEW is emitted as a "
+        "-- NOTE - see docs/sql-conversion-strategy.md.",
     )
     convert_sql_parser.add_argument(
-        "--lang", default=None, metavar="CODE",
+        "--lang",
+        default=None,
+        metavar="CODE",
         help="Rename tables/columns/views through a `TRANSLATION OF` model for this language (e.g. `fr`), "
         "found by name in --repo. Identifier-level: a base name that would translate two different ways "
         "across classes is left untranslated.",
     )
-    convert_sql_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
+    convert_sql_parser.add_argument(
+        "-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout."
+    )
     _add_diagnostic_args(convert_sql_parser)
     convert_sql_parser.set_defaults(func=cmd_convert_sql)
 
     validate_parser = subparsers.add_parser(
-        "validate", help="Validate an .xtf file against an .ili file's schema.",
+        "validate",
+        help="Validate an .xtf file against an .ili file's schema.",
     )
     validate_parser.add_argument("xtf", help="Path to the .xtf file to validate.")
     validate_parser.add_argument(
-        "--model", default=None,
+        "--model",
+        default=None,
         help="Path to the .ili file describing the expected schema. Omitted: auto-detected from the "
         "transfer's own HEADERSECTION/DATASECTION (requires --repo, see docs/model-resolution-strategy.md).",
     )
     validate_parser.add_argument(
-        "--repo", action="append", default=[], metavar="DIR",
+        "--repo",
+        action="append",
+        default=[],
+        metavar="DIR",
         help="Directory of .ili models to resolve the schema's IMPORTS (repeatable).",
     )
     validate_parser.add_argument(
-        "--catalog", action="append", default=[], metavar="FILE.xtf",
+        "--catalog",
+        action="append",
+        default=[],
+        metavar="FILE.xtf",
         help="Additional catalogue .xtf file (repeatable) - its objects also count for TID/REF "
         "resolution (EXTERNAL references not included in the main transfer, see "
         "docs/model-resolution-strategy.md).",
     )
     validate_parser.add_argument("-q", "--quiet", action="store_true", help="Only print the final summary.")
     validate_parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Also print 'info'-severity issues (unresolved references).",
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Also print 'info'-severity issues (unresolved references).",
     )
     _add_diagnostic_args(validate_parser)
     validate_parser.set_defaults(func=cmd_validate)
 
     convert_jsonfg_parser = subparsers.add_parser(
-        "convert-jsonfg", help="Convert an .xtf transfer to a JSON-FG FeatureCollection.",
+        "convert-jsonfg",
+        help="Convert an .xtf transfer to a JSON-FG FeatureCollection.",
     )
     convert_jsonfg_parser.add_argument("xtf", help="Path to the .xtf file to convert.")
     convert_jsonfg_parser.add_argument(
-        "--model", default=None,
+        "--model",
+        default=None,
         help="Path to the .ili file describing the expected schema. Omitted: auto-detected from the "
         "transfer's own HEADERSECTION/DATASECTION (requires --repo, see docs/model-resolution-strategy.md).",
     )
     convert_jsonfg_parser.add_argument(
-        "--repo", action="append", default=[], metavar="DIR",
+        "--repo",
+        action="append",
+        default=[],
+        metavar="DIR",
         help="Directory of .ili models to resolve the schema's IMPORTS (repeatable).",
     )
     convert_jsonfg_parser.add_argument(
-        "-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.",
+        "-o",
+        "--output",
+        default=None,
+        metavar="FILE",
+        help="Write to FILE instead of stdout.",
     )
     convert_jsonfg_parser.add_argument(
-        "--lang", default=None, metavar="CODE",
+        "--lang",
+        default=None,
+        metavar="CODE",
         help="Rename `featureType` and `properties` keys through a `TRANSLATION OF` model for this "
         "language (e.g. `fr`), found by name in --repo. The .xtf wire tags stay in the base language.",
     )
     convert_jsonfg_parser.add_argument(
-        "--feature-schema-url", default=None, metavar="URL",
+        "--feature-schema-url",
+        default=None,
+        metavar="URL",
         help="URL/path of the companion 'interlis convert' JSON Schema output for the same .ili model - "
         "when given, populates the JSON-FG 'featureSchema' member (clause 13). Omitted: 'featureSchema' is not emitted.",
     )
     convert_jsonfg_parser.add_argument(
-        "--include-child-rows", action="store_true",
+        "--include-child-rows",
+        action="store_true",
         help="Also emit one Feature per BAG/LIST OF occurrence, with its own 'featureType' matching a "
         "'interlis convert-sql' child table name (see docs/sql-conversion-strategy.md) - loaded into that same "
         "table by GDAL's own featureType-based table splitting, in the SAME 'ogr2ogr -append' as the main data. "

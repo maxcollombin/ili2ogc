@@ -7,6 +7,7 @@ attribute, not the class itself); class-level surfacing is the same
 generic mechanism, verified here with a synthetic fixture only (no real
 corpus example of a class-level meta-attribute found so far).
 """
+
 import warnings
 from pathlib import Path
 
@@ -30,8 +31,7 @@ def _build(src: str):
 
 
 def test_attribute_level_meta_attribute_surfaced_on_its_own_property():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS Datenbestand =
@@ -41,8 +41,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END Datenbestand;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = builder.symbol_table.resolve("Foo.T.Datenbestand")
     schema = class_to_json_schema(cls)
 
@@ -52,8 +51,7 @@ END Foo.
 
 
 def test_class_level_meta_attribute_surfaced_on_the_defs_entry():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     !!@ IDGeoIV=219.1
@@ -62,8 +60,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = builder.symbol_table.resolve("Foo.T.A")
     schema = class_to_json_schema(cls)
 
@@ -72,8 +69,7 @@ END Foo.
 
 def test_model_level_meta_attributes_surfaced_on_the_document():
     """The dominant real-corpus case (technicalContact/furtherInformation/IDGeoIV, ~230/236 occurrences) - model_to_json_schema's `model` parameter."""
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 !!@technicalContact=mailto:info@example.ch
 !!@furtherInformation=https://example.ch/docs
 MODEL Foo AT "http://x" VERSION "1" =
@@ -83,8 +79,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     model = builder.symbol_table.resolve("Foo")
     cls = builder.symbol_table.resolve("Foo.T.A")
     doc = model_to_json_schema([cls], model=model)
@@ -96,8 +91,7 @@ END Foo.
 
 
 def test_without_model_argument_document_stays_unmarked():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 !!@technicalContact=mailto:info@example.ch
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
@@ -106,8 +100,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = builder.symbol_table.resolve("Foo.T.A")
     doc = model_to_json_schema([cls])
 
@@ -115,8 +108,7 @@ END Foo.
 
 
 def test_no_meta_attributes_leaves_schema_unmarked():
-    builder = _build(
-        """INTERLIS 2.4;
+    builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
@@ -124,8 +116,7 @@ MODEL Foo AT "http://x" VERSION "1" =
     END A;
   END T;
 END Foo.
-"""
-    )
+""")
     cls = builder.symbol_table.resolve("Foo.T.A")
     schema = class_to_json_schema(cls)
 

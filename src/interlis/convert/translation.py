@@ -10,6 +10,7 @@ name map the builder aligned positionally (`InterlisModelBuilder._apply_pending_
 `convert-sql` identifier translation is a separate increment (a `CREATE
 VIEW` body bakes table/column names into text).
 """
+
 from __future__ import annotations
 
 import re
@@ -30,7 +31,7 @@ class Translation:
 
     language: str
     of: str
-    elements: dict[str, str]           # {base class/view/topic/domain short name: translated}
+    elements: dict[str, str]  # {base class/view/topic/domain short name: translated}
     attributes: dict[tuple[str, str], str]  # {(owner short name, attribute short name): translated}
 
     def element(self, name: str) -> str:
@@ -108,7 +109,7 @@ def _rename_refs(node: Any, tr: Translation) -> None:
     if isinstance(node, dict):
         ref = node.get("$ref")
         if isinstance(ref, str) and ref.startswith("#/$defs/"):
-            node["$ref"] = "#/$defs/" + tr.element(ref[len("#/$defs/"):])
+            node["$ref"] = "#/$defs/" + tr.element(ref[len("#/$defs/") :])
         for value in node.values():
             _rename_refs(value, tr)
     elif isinstance(node, list):

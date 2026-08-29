@@ -4,6 +4,7 @@ scripts/fetch_xtf_corpus.py) - simple, reference imbriquee
 (<Reference REF="..."/>), coordonnee (<COORD><C1>/<C2></COORD>) - via une
 fixture reduite (tests/fixtures/xtf/sample.xtf, extrait fidele d'un
 fichier reel telecharge, pas invente)."""
+
 from pathlib import Path
 
 from interlis.xtf.parse import parse_xtf
