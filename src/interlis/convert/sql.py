@@ -368,7 +368,13 @@ def _columns_for_class(
             columns.append(Column(col_name, scalar_type, nullable=not resolved.mandatory))
             continue
 
-        notes.append(_diag("SQL-ATTR-TYPE-UNMAPPED", f"{label}: unsupported type {resolved.type_kind!r}"))
+        if resolved.type_kind is None:
+            notes.append(_diag(
+                "BUILD-TYPE-UNRESOLVED",
+                f"{label}: attribute type not resolved by the model builder - provide the imported model via --repo",
+            ))
+        else:
+            notes.append(_diag("SQL-ATTR-TYPE-UNMAPPED", f"{label}: unsupported type {resolved.type_kind!r}"))
     return columns, foreign_keys, notes, child_specs, local_unique
 
 

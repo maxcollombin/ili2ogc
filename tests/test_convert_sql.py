@@ -349,14 +349,17 @@ END Foo.
     assert len(names) == len(set(names))
 
 
-def test_unique_constraint_referencing_an_unmapped_column_gets_dropped():
-    """`UNIQUE <attr>;` on a type Lot 1 never mapped to a column (e.g. INTERLIS.UUIDOID) - real corpus case ili_corpus/Axis_V1_1.ili, found via a live SQLite run ("no such column")."""
+def test_predefined_uuidoid_becomes_a_column_and_keeps_its_unique():
+    """`INTERLIS.UUIDOID` (a reserved-token predefined type) is now materialised as a real TEXT*36 column, so `UNIQUE DatabaseId;` stays a valid constraint instead of being dropped - real corpus case ili_corpus/Axis_V1_1.ili."""
     builder = _build(
         """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =
     CLASS A =
       DatabaseId : MANDATORY INTERLIS.UUIDOID;
+      HAli       : MANDATORY HALIGNMENT;
+      Flag       : INTERLIS.BOOLEAN;
+      Site       : INTERLIS.URI;
       UNIQUE DatabaseId;
     END A;
   END T;
@@ -366,8 +369,15 @@ END Foo.
     a = _resolved_class(builder, "Foo.T.A")
     tables = build_tables([a])
     table = _table(tables, "a")
-    assert table.unique_constraints == []
-    assert any("no mapped SQL type" in note for note in table.notes)
+    by_name = {c.name: c for c in table.columns}
+    assert by_name["databaseid"].sql_type == "varchar(36)"
+    assert not by_name["databaseid"].nullable
+    assert by_name["hali"].sql_type == "text" and not by_name["hali"].nullable
+    assert by_name["flag"].sql_type == "boolean" and by_name["flag"].nullable
+    assert by_name["site"].sql_type == "varchar(1023)"
+    assert [u.columns for u in table.unique_constraints] == [["databaseid"]]
+    assert not any("no mapped SQL type" in note for note in table.notes)
+    assert not any("BUILD-TYPE-UNRESOLVED" in note or "SQL-ATTR-TYPE-UNMAPPED" in note for note in table.notes)
 
 
 def test_reserved_keyword_class_name_gets_quoted():

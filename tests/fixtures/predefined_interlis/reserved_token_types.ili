@@ -1,0 +1,19 @@
+INTERLIS 2.4;
+
+!! Every predefined INTERLIS type whose name is a reserved lexer token, so
+!! it can only reach the builder as a sentinel: HALIGNMENT/VALIGNMENT via
+!! `alignmentType`, INTERLIS.BOOLEAN/URI/UUIDOID via `structureRef`.
+
+MODEL ReservedTokenTypes AT "https://example.org/reserved-token-types" VERSION "2026-08-29" =
+
+  TOPIC T =
+    CLASS Thing =
+      HAli   : MANDATORY HALIGNMENT;
+      VAli   : VALIGNMENT;
+      Flag   : MANDATORY INTERLIS.BOOLEAN;
+      Website: INTERLIS.URI;
+      ItemId : MANDATORY INTERLIS.UUIDOID;
+    END Thing;
+  END T;
+
+END ReservedTokenTypes.

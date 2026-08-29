@@ -184,5 +184,9 @@ structureRef:
         classRef, it does NOT construct an IlisMeta16.ModelData.ClassRef DataType wrapper (no metamodel.target
         block for this rule); the joined qualified name resolves directly to an existing IlisMeta16.ModelData.Class
         instance with Kind=Structure, looked up by name rather than newly constructed.
+        `INTERLIS.BOOLEAN` / `INTERLIS.URI` / `INTERLIS.UUIDOID` are the exception: those first-segment tokens
+        name predefined types, not a structure Class, so the reference never resolves. When such a structureRef
+        lands in an attribute Type slot, InterlisModelBuilder._resolve_predefined_type_sentinel replaces it
+        with a real BooleanType / TextType instead.
 
         '

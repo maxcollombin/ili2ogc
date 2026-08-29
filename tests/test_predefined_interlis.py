@@ -124,6 +124,55 @@ def test_qualified_xml_date_time_resolve_to_formattedtype():
         assert type_value.Format == expected
 
 
+def test_reserved_token_predefined_types_materialise_to_real_instances():
+    """Reserved-token predefined types materialise to real IlisMeta16 instances.
+
+    `HALIGNMENT`/`VALIGNMENT`/`INTERLIS.BOOLEAN`/`URI`/`UUIDOID` reach the
+    builder only as a sentinel (their names are reserved lexer tokens, so
+    no `DOMAIN` can declare them): `alignmentType` builds nothing and hands
+    an opaque `"INTERLIS.HALIGNMENT"` string, `structureRef` builds a
+    dangling `INTERLIS.<token>` reference. `_predefined_type` turns each
+    into a real IlisMeta16 instance so it flows through the normal
+    scalar/enum paths, and a leading `MANDATORY` survives (via a private
+    clone, like a named DOMAIN reference).
+
+    Values per eCH-0031 V2.1.0 Annex A / §3.8:
+    `HALIGNMENT (FINAL) = (Left, Center, Right) ORDERED;`,
+    `VALIGNMENT (FINAL) = (Top, Cap, Half, Base, Bottom) ORDERED;`,
+    `BOOLEAN` -> BooleanType (matching the bare `BOOLEAN` keyword),
+    `URI (FINAL) = TEXT*1023` -> TextType Kind=Uri,
+    `UUIDOID EXTENDS ANYOID = OID TEXT*36` -> TextType 36 chars.
+    """
+    from interlis.xtf.schema import enum_values
+
+    _, model = _build("reserved_token_types.ili", repository=None)
+    thing = model.Element[0].Element[0]
+    by_name = {a.Name: a.Type for a in thing.ClassAttribute}
+
+    hali = by_name["HAli"]
+    assert hali._qualified_class == "IlisMeta16.ModelData.EnumType"
+    assert hali.Mandatory is True
+    assert enum_values(hali) == {"Left", "Center", "Right"}
+
+    vali = by_name["VAli"]
+    assert vali._qualified_class == "IlisMeta16.ModelData.EnumType"
+    assert getattr(vali, "Mandatory", None) is not True
+    assert enum_values(vali) == {"Top", "Cap", "Half", "Base", "Bottom"}
+
+    flag = by_name["Flag"]
+    assert flag._qualified_class == "IlisMeta16.ModelData.BooleanType"
+    assert flag.Mandatory is True
+
+    website = by_name["Website"]
+    assert website._qualified_class == "IlisMeta16.ModelData.TextType"
+    assert website.Kind == "Uri"
+
+    item_id = by_name["ItemId"]
+    assert item_id._qualified_class == "IlisMeta16.ModelData.TextType"
+    assert item_id.Mandatory is True
+    assert item_id.MaxLength == 36
+
+
 def test_unqualified_reference_without_imports_unqualified_still_raises():
     # Regression guard : le bug corrige (has_prefix toujours True pour un nom
     # non qualifie) masquait TOUTE reference locale non resolue derriere un

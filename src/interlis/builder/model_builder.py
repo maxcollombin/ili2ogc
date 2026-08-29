@@ -99,6 +99,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
         # base model in build() AFTER resolve_all() - see
         # _apply_pending_translations.
         self._pending_translations: list[tuple[MetaInstance, str]] = []
+        # Real IlisMeta16 instances for the five predefined INTERLIS types
+        # whose names are reserved lexer tokens, so they can never be
+        # declared as a `DOMAIN` and reach the builder only as an opaque
+        # sentinel (a bare `"INTERLIS.HALIGNMENT"` string from
+        # `alignmentType`, or an `INTERLIS.<token>` `structureRef`
+        # ForwardRef that resolves to nothing). Materialised on demand by
+        # `_predefined_type`, one shared instance per token per builder.
+        self._predefined_type_cache: dict[str, MetaInstance] = {}
         self.repository.bind_builder_factory(self._make_sub_builder)
 
     def _make_sub_builder(self) -> "InterlisModelBuilder":
@@ -171,6 +179,92 @@ class InterlisModelBuilder(InterlisParserVisitor):
             }
             fields["Mandatory"] = True
             instance.Type = self.registry.new_instance(resolved._qualified_class, **fields)
+
+    # Reference Manual eCH-0031 V2.1.0 Annex A / §3.8: the predefined
+    # INTERLIS types whose names are reserved lexer tokens.
+    #   HALIGNMENT (FINAL) = (Left, Center, Right) ORDERED;
+    #   VALIGNMENT (FINAL) = (Top, Cap, Half, Base, Bottom) ORDERED;
+    #   BOOLEAN    (FINAL) = (false, true) ORDERED;   -> BooleanType, matching
+    #                        this builder's own handling of the bare BOOLEAN keyword
+    #   URI     (FINAL) = TEXT*1023;                  -> TextType Kind=Uri
+    #   UUIDOID EXTENDS ANYOID = OID TEXT*36;         -> TextType (36 chars)
+    _PREDEFINED_ENUM_ELEMENTS: dict[str, tuple[str, ...]] = {
+        "HALIGNMENT": ("Left", "Center", "Right"),
+        "VALIGNMENT": ("Top", "Cap", "Half", "Base", "Bottom"),
+    }
+
+    def _predefined_type(self, token: str) -> MetaInstance | None:
+        """Return the shared IlisMeta16 instance for a predefined `INTERLIS.<token>` type.
+
+        `token` is the bare segment (`HALIGNMENT`/`VALIGNMENT`/`BOOLEAN`/
+        `URI`/`UUIDOID`). One instance per token per builder - `Mandatory`
+        is never set here; an attribute needing it gets a private clone via
+        `_pending_mandatory_overrides`, the same mechanism as a named
+        DOMAIN reference.
+        """
+        cached = self._predefined_type_cache.get(token)
+        if cached is not None:
+            return cached
+        instance: MetaInstance | None = None
+        if token in self._PREDEFINED_ENUM_ELEMENTS:
+            instance = self.registry.new_instance("IlisMeta16.ModelData.EnumType")
+            instance.Name = token
+            instance.Order = "Ordered"
+            top = self.registry.new_instance("IlisMeta16.ModelData.EnumNode")
+            top.Name = "TOP"
+            self.attachment.attach(
+                instance, "TopNode", top, association="TopNode", role="TopNode", rule="<predefined>",
+            )
+            for element_name in self._PREDEFINED_ENUM_ELEMENTS[token]:
+                node = self.registry.new_instance("IlisMeta16.ModelData.EnumNode")
+                node.Name = element_name
+                self.attachment.attach(
+                    top, "Node", node, association="SubNode", role="Node", rule="<predefined>",
+                )
+        elif token == "BOOLEAN":
+            instance = self.registry.new_instance("IlisMeta16.ModelData.BooleanType")
+            instance.Name = "BOOLEAN"
+        elif token == "URI":
+            instance = self.registry.new_instance("IlisMeta16.ModelData.TextType")
+            instance.Name = "URI"
+            instance.Kind = "Uri"
+        elif token == "UUIDOID":
+            instance = self.registry.new_instance("IlisMeta16.ModelData.TextType")
+            instance.Name = "UUIDOID"
+            instance.Kind = "Text"
+            instance.MaxLength = 36
+        if instance is not None:
+            self._predefined_type_cache[token] = instance
+        return instance
+
+    def _resolve_predefined_type_sentinel(self, instance: MetaInstance, bag: dict[str, Any]) -> None:
+        """Replace a predefined-`INTERLIS`-token sentinel in an `attrTypeDef` bag with a real Type.
+
+        `bag["Type"]` reaches `_attach_unclaimed_results` as an opaque
+        `"INTERLIS.HALIGNMENT"`/`"INTERLIS.VALIGNMENT"` string (from
+        `alignmentType`, which builds no instance) or as an
+        `INTERLIS.BOOLEAN`/`URI`/`UUIDOID` `structureRef` ForwardRef (which
+        resolves to nothing - the name is not a real structure Class). Swap
+        in the materialised type so the rest of the bag loop attaches it
+        like any other; queue `_pending_mandatory_overrides` for a leading
+        `MANDATORY` (dropped here so the shared instance is never mutated).
+        """
+        type_value = bag.get("Type")
+        token: str | None = None
+        if isinstance(type_value, str) and type_value in ("INTERLIS.HALIGNMENT", "INTERLIS.VALIGNMENT"):
+            token = type_value.split(".", 1)[1]
+        elif isinstance(type_value, ForwardRef) and type_value.name in (
+            "INTERLIS.BOOLEAN", "INTERLIS.URI", "INTERLIS.UUIDOID",
+        ):
+            token = type_value.name.split(".", 1)[1]
+        if token is None:
+            return
+        synthesized = self._predefined_type(token)
+        if synthesized is None:
+            return
+        bag["Type"] = synthesized
+        if bag.pop("Mandatory", False) is True:
+            self._pending_mandatory_overrides.append(instance)
 
     @staticmethod
     def _ctx_line(ctx: Any) -> int | None:
@@ -2569,6 +2663,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 # produced alongside it in the same bag - attrTypeDef.
                 # Mandatory), retry on a sibling MetaInstance value from the
                 # same bag before giving up.
+                if child_rule == "attrTypeDef":
+                    self._resolve_predefined_type_sentinel(instance, value)
                 siblings = [v for v in value.values() if isinstance(v, MetaInstance)]
                 has_unresolved_sibling = any(isinstance(v, ForwardRef) for v in value.values())
                 for key, sub_value in value.items():

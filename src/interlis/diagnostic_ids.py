@@ -31,7 +31,7 @@ REGISTRY: dict[str, tuple[str, str]] = {
     # -- convert-sql: CREATE TABLE ---------------------------------------
     "SQL-STRUCT-NESTED-DEEP": ("A", "STRUCTURE nested more than one level deep is not flattened"),
     "SQL-STRUCT-ABSTRACT": ("A", "ABSTRACT structure attribute - subclass polymorphism not mapped to a table"),
-    "SQL-ATTR-TYPE-UNMAPPED": ("A", "attribute type outside the mapped scalar/geometry/reference/structure set"),
+    "SQL-ATTR-TYPE-UNMAPPED": ("A", "a RESOLVED attribute type has no column in the mapped scalar/geometry/reference/structure set"),
     "SQL-BAGLIST-ELEMENT-UNMAPPED": ("A", "BAG/LIST OF element type outside the mapped set"),
     "SQL-BAGLIST-ELEMENT-UNRESOLVED": ("C", "BAG/LIST OF element type did not resolve - provide its model via --repo"),
     "SQL-REF-TARGET-UNRESOLVED": ("C", "REFERENCE TO / role target did not resolve - provide its model via --repo/--catalog"),
@@ -64,6 +64,7 @@ REGISTRY: dict[str, tuple[str, str]] = {
     "JSONFG-VIEW-WHERE-UNSUPPORTED": ("B", "a VIEW WHERE clause needs arithmetic/function-call context the evaluator does not support"),
     "JSONFG-VIEW-INSPECTION-GAP": ("A", "an INSPECTION VIEW's '-> attribute' path was not built by the model builder"),
     # -- builder ----------------------------------------------------------
+    "BUILD-TYPE-UNRESOLVED": ("A", "the model builder produced no Type instance for an attribute (unresolved cross-model name, or a predefined type not yet materialised)"),
     "BUILD-SPEC-GAP-ALT-ABSENT": ("A", "a grammar alternative had no mapping rule and was treated as absent"),
     "BUILD-TRANSLATION-MISMATCH": ("B", "a TRANSLATION OF model's element count differs from its base - only the common prefix is aligned"),
     "BUILD-TRANSLATION-BASE-MISSING": ("C", "a TRANSLATION OF base model did not resolve - provide its directory via --repo"),

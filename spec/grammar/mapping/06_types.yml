@@ -14,6 +14,9 @@ alignmentType:
         it builds no new IlisMeta16 instance, only resolves to a reference to one of the predefined built-in
         enumeration types confirmed in ilismeta16-enumerations.yml (INTERLIS.HALIGNMENT / INTERLIS.VALIGNMENT).
         Consistent with target: null. Feeds the Type association end of whichever construct consumes baseType.
+        The reserved tokens cannot be declared as a DOMAIN, so the opaque resolved_type string is turned into
+        a real EnumType (Left/Center/Right, Top/Cap/Half/Base/Bottom - eCH-0031 Annex A) by
+        InterlisModelBuilder._resolve_predefined_type_sentinel when it reaches an attribute Type slot.
 
         '
   note: No direct IlisMeta16 instance expected. Selects between the built-in INTERLIS.HALIGNMENT or INTERLIS.VALIGNMENT
