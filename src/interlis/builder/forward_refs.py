@@ -14,7 +14,7 @@ model remains unfindable), the name becomes a documented
 UnresolvedNamedReference instead of an exception.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from interlis.builder.errors import BuildError, UnresolvedNamedReference

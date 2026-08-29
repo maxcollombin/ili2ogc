@@ -1893,7 +1893,6 @@ class InterlisModelBuilder(InterlisParserVisitor):
             return False
         fields = {**value.__dict__, **(value.model_extra or {})}
         return all(v is None or v == [] for k, v in fields.items() if not k.startswith("_"))
-        return instance
 
     @staticmethod
     def _accessor_names_in_source(source: dict) -> list[str]:

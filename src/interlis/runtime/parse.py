@@ -70,10 +70,10 @@ def parse_text(text: str):
 
 
 def _unquote_meta_attribute_value(value: str) -> str:
-    """Strip eCH-0117 SS4.1 String quoting/escapes, if present.
+    r"""Strip eCH-0117 SS4.1 String quoting/escapes, if present.
 
     `Value = Metaattributename | String` - a bare (unquoted) value is
-    returned as-is; a `"..."` value has its `\\"`/`\\\\`/`\\uXXXX` escapes
+    returned as-is; a `"..."` value has its `\"`/`\\`/`\uXXXX` escapes
     resolved.
     """
     if len(value) < 2 or value[0] != '"' or value[-1] != '"':
@@ -86,10 +86,10 @@ def _unquote_meta_attribute_value(value: str) -> str:
 
 
 def meta_attribute_comments(text: str) -> list[tuple[int, str, str]]:
-    """Return every eCH-0117 `!!@Name=Value` meta-attribute comment in `text`.
+    r"""Return every eCH-0117 `!!@Name=Value` meta-attribute comment in `text`.
 
     eCH-0117 ("Meta-attributs pour modeles INTERLIS") formalizes `!!@...`
-    as an INTERLIS line comment (`SingleLineComment : '!!' ~[\\r\\n]* ->
+    as an INTERLIS line comment (`SingleLineComment : '!!' ~[\r\n]* ->
     channel(HIDDEN);`, vendor/interlis-antlr4/InterlisLexer.g4) whose 3rd
     character is `@` - the grammar itself never sees these (they're on
     ANTLR's hidden channel, invisible to the 121 mapped parser rules), but

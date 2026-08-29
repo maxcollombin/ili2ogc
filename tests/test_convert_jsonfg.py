@@ -659,7 +659,7 @@ def test_without_schema_url_omits_feature_schema():
 
 
 def test_standalone_false_omits_feature_schema_even_with_schema_url():
-    """ "featureSchema" stays a root-object-only member here, same stance as "conformsTo" - never duplicated per nested Feature."""
+    """The "featureSchema" member stays root-object-only here, same stance as "conformsTo" - never duplicated per nested Feature."""
     builder = _build(_MODEL)
     cls = _resolved_class(builder, "A")
     obj = XtfObject(tid="obj-8", qualified_class="Foo.T.A", attributes={})
@@ -960,7 +960,6 @@ def test_child_row_features_list_of_structure_spreads_members_and_gets_seq():
 def test_child_row_features_never_produced_by_default():
     """`include_child_rows` is opt-in - zero behavior change for every existing caller (RULE: additive, not a silent behavior shift)."""
     builder = _build(_CHILD_ROWS_MODEL)
-    cls = _resolved_class(builder, "Parcel")
     obj = XtfObject(
         tid="p-3",
         qualified_class="Foo.T.Parcel",

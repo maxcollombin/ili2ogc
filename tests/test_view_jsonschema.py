@@ -15,7 +15,6 @@ from pathlib import Path
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.cli import _SUPPORTED_VIEW_FORMATION_KINDS
 from interlis.convert.jsonschema import class_to_json_schema, model_to_json_schema
-from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_text
 
 ROOT = Path(__file__).resolve().parent.parent

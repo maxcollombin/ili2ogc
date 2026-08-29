@@ -24,7 +24,6 @@ import pytest
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.convert.sql import build_tables, build_views, render_gpkg
-from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_file
 
 ROOT = Path(__file__).resolve().parent.parent

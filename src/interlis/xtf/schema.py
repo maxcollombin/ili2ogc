@@ -14,8 +14,8 @@ matches XtfObject.qualified_class exactly (same naming convention).
 
 from dataclasses import dataclass
 
-from interlis.builder.repository import ModelRepository
 from interlis.builder.forward_refs import SymbolTable
+from interlis.builder.repository import ModelRepository
 from interlis.metamodel.instance import MetaInstance
 
 

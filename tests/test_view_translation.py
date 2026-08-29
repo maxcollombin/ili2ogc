@@ -11,8 +11,6 @@ import json
 import warnings
 from pathlib import Path
 
-import pytest
-
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.cli import main

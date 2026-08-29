@@ -24,8 +24,8 @@ docs/dev-notes/xtf-validator-scope.md.
 
 from dataclasses import dataclass
 
-from interlis.builder.repository import ModelRepository
 from interlis.builder.forward_refs import SymbolTable
+from interlis.builder.repository import ModelRepository
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 from interlis.xtf.schema import (

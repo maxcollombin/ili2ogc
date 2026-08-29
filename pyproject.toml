@@ -82,13 +82,15 @@ extend-exclude = ["src/interlis/antlr", "vendor"]
 # I: import sorting. UP: pyupgrade on the >=3.10 floor. FIX/TD: no stray
 # TODO/FIXME left in the tree. D: pydocstyle - the project documents only
 # the non-obvious "why", so D100-D107 (a docstring on every public member)
-# stay off; D401/D403/D400/D415 (imperative mood / first-word case /
-# trailing period) also off - a naive autofix mangles identifiers and the
-# freeform style is deliberate.
+# stay off; D400/D401/D403/D415 (trailing period / imperative mood /
+# first-word case) also off - a naive autofix mangles identifiers and the
+# freeform style is deliberate; D205 off - this project's "one-line summary
+# then the why" convention keeps the summary on a single physical line even
+# past 88 chars, which fights the E501 wrap.
 select = ["E", "F", "W", "I", "UP", "FIX", "TD", "D"]
 ignore = [
     "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",
-    "D400", "D401", "D403", "D415",
+    "D205", "D400", "D401", "D403", "D415",
     "TD002", "TD003",  # no per-TODO author/issue-link requirement
 ]
 

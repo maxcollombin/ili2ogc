@@ -14,8 +14,6 @@ be reached)."""
 import warnings
 from pathlib import Path
 
-import pytest
-
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.runtime.parse import parse_text
 

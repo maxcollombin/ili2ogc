@@ -100,6 +100,8 @@ def resolve_source(
     if not source:
         return None
 
+    optional = bool(source.get("optional"))
+
     if source.get("kind") == "constant":
         return source.get("value")
 
@@ -138,7 +140,6 @@ def resolve_source(
         return _resolve_node(node, builder, rule)
 
     field = source.get("field")
-    optional = bool(source.get("optional"))
 
     # field: null alone -> value propagated by the enclosing rule, under the
     # SAME attribute key (e.g. interlis2def.iliVersion -> modeldef.iliVersion,

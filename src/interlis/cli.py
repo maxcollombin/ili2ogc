@@ -25,17 +25,17 @@ from interlis.convert import sql as _sql_mod
 from interlis.convert.jsonfg import transfer_to_feature_collection
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.convert.sql import build_tables, build_views, render_gpkg, render_postgresql
-from interlis.diagnostics import (
-    DiagnosticBag,
-    builder_warnings_to_diagnostics,
-    render_sarif,
-    render_text,
-)
 from interlis.convert.translation import (
     load_translation,
     rename_feature_collection,
     rename_json_schema,
     rename_sql_ddl,
+)
+from interlis.diagnostics import (
+    DiagnosticBag,
+    builder_warnings_to_diagnostics,
+    render_sarif,
+    render_text,
 )
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file

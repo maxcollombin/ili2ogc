@@ -497,7 +497,7 @@ def restriction_builder():
 
 
 def test_restriction_text_matching_first_candidate_has_no_issue(restriction_builder):
-    """ "Red" appartient au domaine inline de sColor - le 1er candidat de
+    """La valeur "Red" appartient au domaine inline de sColor - le 1er candidat de
     `RESTRICTION(sColor; sSize)`."""
     obj = XtfObject(tid="w1", qualified_class=WIDGET_CLASS, attributes=dict([_text_attr("Sel", "Red")]))
     basket = XtfBasket(bid="b1", qualified_topic="RestrictionTest.MainTopic", kind=None, endstate=None, objects=[obj])
@@ -507,7 +507,7 @@ def test_restriction_text_matching_first_candidate_has_no_issue(restriction_buil
 
 
 def test_restriction_text_matching_second_candidate_has_no_issue(restriction_builder):
-    """ "Small" appartient au domaine inline de sSize - le 2e candidat,
+    """La valeur "Small" appartient au domaine inline de sSize - le 2e candidat,
     PAS le 1er (regression Lot 41 : la segmentation SEMI-naive tronquait
     silencieusement `_build_domain_class_restriction` a son 1er candidat
     seulement, avant le fix de profondeur LPAR/RPAR)."""
@@ -519,7 +519,7 @@ def test_restriction_text_matching_second_candidate_has_no_issue(restriction_bui
 
 
 def test_restriction_text_matching_no_candidate_is_warning(restriction_builder):
-    """ "Purple" n'appartient a AUCUN des 2 domaines inline (sColor:
+    """La valeur "Purple" n'appartient a AUCUN des 2 domaines inline (sColor:
     Red/Blue, sSize: Small/Large) - les 2 candidats sont PLEINEMENT
     verifiables (enums inline, rien d'externe) -> `warning`, pas `info`."""
     obj = XtfObject(tid="w1", qualified_class=WIDGET_CLASS, attributes=dict([_text_attr("Sel", "Purple")]))
