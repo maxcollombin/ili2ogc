@@ -1,6 +1,7 @@
 INTERLIS 2.4;
 
-!! Minimal base model for the TRANSLATION OF / `--lang` overlay test.
+!! Minimal base model for the TRANSLATION OF / `--lang` overlay test -
+!! two classes, an association (embedded FK), and a PROJECTION view.
 
 MODEL Wanderwege_V1 (de)
   AT "mailto:test@example.org" VERSION "2026-08-29" =
@@ -20,6 +21,18 @@ MODEL Wanderwege_V1 (de)
       Standort : MANDATORY TEXT*40;
       Hoehe : 0 .. 5000;
     END Wegweiser;
+
+    ASSOCIATION Abschnitt_Wegweiser =
+      Wegabschnitt -- {1} Wegabschnitt;
+      wegweiser_von -- {0..*} Wegweiser;
+    END Abschnitt_Wegweiser;
+
+    VIEW Wegabschnitt_MitWegweiser
+      PROJECTION OF Wegabschnitt;
+      WHERE DEFINED(Wegabschnitt->wegweiser_von);
+      =
+      ALL OF Wegabschnitt;
+    END Wegabschnitt_MitWegweiser;
 
   END Netz;
 

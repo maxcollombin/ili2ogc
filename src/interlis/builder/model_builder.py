@@ -2342,17 +2342,28 @@ class InterlisModelBuilder(InterlisParserVisitor):
     _TRANSLATION_CHILD_COLLECTIONS = ("Element", "ClassAttribute", "EnumElement")
 
     def _apply_pending_translations(self) -> None:
-        """Align every `TRANSLATION OF` model against its base and record the name map on the translation model.
+        """Align every `TRANSLATION OF` model against its base, building an `IlisMeta16.ModelTranslation.Translation`.
 
-        Result: `model._translation = {"language", "of", "names"}` where
-        `names` maps a base element's fully-qualified name to its
-        translated short name (`<model>.<topic>.<class>` and
-        `<model>.<topic>.<class>.<attr>`, enumeration leaves included). A
-        `--lang` output overlay in the converters reads this, falling back
-        to the original name for anything not listed. A base that did not
-        resolve (not on `--repo`) is skipped with a warning; a structural
-        mismatch aligns the common prefix of that scope and warns, never
-        guesses (RULE #5).
+        A translation model re-declares the base's whole structure with
+        translated identifiers, matched POSITIONALLY (the grammar has no
+        `==` rename syntax; refman: the two models must "strukturell exakt
+        uebereinstimmen"). `_align_translation` walks
+        `Model.Element` / `Class.ClassAttribute` / `EnumType.EnumElement`
+        of both trees in parallel; every base element whose name changed
+        becomes one `METranslation` (`Of` = a real reference to that base
+        `MetaElement`, `TranslatedName` = the new name) on a single
+        `Translation` (`Language` = the translation model's own). This is
+        exactly `IlisMeta16.ModelTranslation` (IlisMeta16.ili's
+        `TOPIC ModelTranslation`) - a free-standing object referencing the
+        base, no `Model <-> Translation` association exists, so it is kept
+        reachable from Python as `model._translation_object` (same as how
+        `Import` instances are kept under a raw key).
+
+        Also derives the lookup maps the `--lang` converter overlay uses
+        (`model._translation`, `elements`/`attributes` by short name -
+        `convert/translation.py`). A base that did not resolve (not on
+        `--repo`) is skipped with a warning; a structural mismatch aligns
+        the common prefix of that scope and warns, never guesses (RULE #5).
         """
         pending, self._pending_translations = self._pending_translations, []
         for model, base_name in pending:
@@ -2367,7 +2378,21 @@ class InterlisModelBuilder(InterlisParserVisitor):
             names: dict[str, str] = {}
             elements: dict[str, str] = {}
             attributes: dict[tuple[str, str], str] = {}
-            self._align_translation(base, model, base.Name or base_name, None, names, elements, attributes)
+            pairs: list[tuple[MetaInstance, str]] = []
+            self._align_translation(base, model, base.Name or base_name, None, names, elements, attributes, pairs)
+
+            translation = self.registry.new_instance("IlisMeta16.ModelTranslation.Translation")
+            translation.Language = getattr(model, "Language", None)
+            # METranslation.Of is `REFERENCE TO (EXTERNAL) MetaElement` in
+            # IlisMeta16.ili, flattened to a NAME by the metamodel
+            # extraction - the base element's fully-qualified name.
+            translation.Translations = [
+                self.registry.new_instance(
+                    "IlisMeta16.ModelTranslation.METranslation", Of=base_qname, TranslatedName=translated_name,
+                )
+                for base_qname, translated_name in pairs
+            ]
+            model._translation_object = translation
             model._translation = {
                 "language": getattr(model, "Language", None),
                 "of": base.Name,
@@ -2395,12 +2420,14 @@ class InterlisModelBuilder(InterlisParserVisitor):
     def _align_translation(
         self, base: MetaInstance, translated: MetaInstance, base_qname: str, owner_name: str | None,
         names: dict[str, str], elements: dict[str, str], attributes: dict[tuple[str, str], str],
+        pairs: list[tuple[str, str]],
     ) -> None:
         b_name = getattr(base, "Name", None)
         t_name = getattr(translated, "Name", None)
         is_attr = base._qualified_class.rsplit(".", 1)[-1] == "AttrOrParam"
         if b_name is not None and t_name is not None and b_name != t_name:
             names[base_qname] = t_name
+            pairs.append((base_qname, t_name))
             if is_attr and owner_name is not None:
                 attributes[(owner_name, b_name)] = t_name
             elif not is_attr:
@@ -2419,7 +2446,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                 child_name = getattr(b_child, "Name", None)
                 self._align_translation(
                     b_child, t_child, f"{base_qname}.{child_name}" if child_name else base_qname,
-                    next_owner, names, elements, attributes,
+                    next_owner, names, elements, attributes, pairs,
                 )
 
     def _qualify_name(self, name: str) -> str:

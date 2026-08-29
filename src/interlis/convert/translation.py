@@ -13,6 +13,7 @@ VIEW` body bakes table/column names into text).
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass
 from typing import Any
 
@@ -128,3 +129,35 @@ def rename_feature_collection(collection: dict[str, Any], tr: Translation) -> di
         if isinstance(props, dict):
             feature["properties"] = {tr.attribute(owner, k): v for k, v in props.items()}
     return collection
+
+
+def rename_sql_ddl(ddl: str, tr: Translation) -> str:
+    """Rename every quoted identifier in a `render_postgresql` / `render_gpkg` DDL through the translation.
+
+    A `CREATE VIEW` body bakes table/column names into text and FK
+    constraints reference them by name, so the rename is a single pass
+    over the whole DDL rather than a per-object step. SQL identifiers here
+    are always lowercase and always `"..."`-quoted, and a positional
+    translation maps one base name to exactly one translated name
+    everywhere it occurs - a name that would translate two different ways
+    across classes (vanishingly rare) is left untranslated with a warning
+    rather than renamed ambiguously.
+    """
+    candidates: dict[str, set[str]] = {}
+    for name, translated in tr.elements.items():
+        candidates.setdefault(name.lower(), set()).add(translated.lower())
+    for (_owner, name), translated in tr.attributes.items():
+        candidates.setdefault(name.lower(), set()).add(translated.lower())
+    renames: dict[str, str] = {}
+    for original, translations in candidates.items():
+        if len(translations) == 1:
+            renames[original] = next(iter(translations))
+        else:
+            warnings.warn(
+                f"--lang: {original!r} translates inconsistently {sorted(translations)} - left untranslated in the SQL",
+                stacklevel=2,
+            )
+    if not renames:
+        return ddl
+    pattern = re.compile('"(' + "|".join(re.escape(k) for k in renames) + ')"')
+    return pattern.sub(lambda m: '"' + renames[m.group(1)] + '"', ddl)

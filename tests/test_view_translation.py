@@ -47,8 +47,17 @@ def test_positional_alignment_builds_the_name_map():
     assert tr["elements"]["Wegabschnitt"] == "TronconChemin"
     assert tr["elements"]["Netz"] == "Reseau"
     assert tr["elements"]["Wegkategorie"] == "CategorieChemin"
+    assert tr["elements"]["Wegabschnitt_MitWegweiser"] == "TronconChemin_AvecIndicateur"
     assert tr["attributes"][("Wegabschnitt", "Bezeichnung")] == "Designation"
     assert tr["attributes"][("Wegweiser", "Standort")] == "Emplacement"
+
+    # the formal IlisMeta16.ModelTranslation.Translation (IlisMeta16.ili's TOPIC ModelTranslation)
+    obj = model._translation_object
+    assert obj._qualified_class == "IlisMeta16.ModelTranslation.Translation"
+    assert obj.Language == "fr"
+    by_of = {me.Of: me.TranslatedName for me in obj.Translations}
+    assert by_of["Wanderwege_V1.Netz.Wegabschnitt"] == "TronconChemin"
+    assert by_of["Wanderwege_V1.Netz.Wegabschnitt.Bezeichnung"] == "Designation"
 
 
 def test_load_translation_finds_it_by_language_in_the_repo():
@@ -59,13 +68,30 @@ def test_load_translation_finds_it_by_language_in_the_repo():
     assert load_translation("Wanderwege_V1", "it", repo) is None
 
 
-def test_convert_lang_renames_defs_properties_and_required(capsys):
+def test_convert_lang_renames_defs_properties_required_and_view(capsys):
     assert main(["convert", str(FIX / "Wanderwege_V1.ili"), "--lang", "fr", "--repo", str(FIX)]) == 0
     schema = json.loads(capsys.readouterr().out)
-    assert set(schema["$defs"]) == {"TronconChemin", "Indicateur"}
+    assert {"TronconChemin", "Indicateur", "TronconChemin_AvecIndicateur"} <= set(schema["$defs"])
     troncon = schema["$defs"]["TronconChemin"]
     assert set(troncon["properties"]) == {"Designation", "Categorie", "TypeRevetement"}
     assert troncon["required"] == ["Designation", "Categorie"]
+
+
+def test_convert_sql_lang_renames_tables_columns_views_and_fk_refs(capsys):
+    assert main([
+        "convert-sql", str(FIX / "Wanderwege_V1.ili"),
+        "--dialect", "postgresql", "--lang", "fr", "--repo", str(FIX),
+    ]) == 0
+    ddl = capsys.readouterr().out
+    assert 'CREATE TABLE "tronconchemin"' in ddl
+    assert '"designation" varchar(40)' in ddl
+    assert 'CREATE VIEW "tronconchemin_avecindicateur"' in ddl
+    # the FK column and its REFERENCES target renamed consistently
+    assert 'FOREIGN KEY ("tronconchemin") REFERENCES "tronconchemin" ("id")' in ddl
+    # the view's WHERE EXISTS references the renamed child table + FK column
+    assert 'FROM "indicateur" "v1" WHERE "v1"."tronconchemin" = "tronconchemin"."id"' in ddl
+    for german in ("wegabschnitt", "wegweiser", "bezeichnung", "belagsart"):
+        assert f'"{german}"' not in ddl
 
 
 def test_convert_jsonfg_lang_renames_featuretype_and_property_keys_but_not_the_wire_values(capsys):

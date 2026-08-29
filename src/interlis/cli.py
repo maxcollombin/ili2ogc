@@ -21,7 +21,12 @@ from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.convert.sql import build_tables, build_views, render_gpkg, render_postgresql
-from interlis.convert.translation import load_translation, rename_feature_collection, rename_json_schema
+from interlis.convert.translation import (
+    load_translation,
+    rename_feature_collection,
+    rename_json_schema,
+    rename_sql_ddl,
+)
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
 from interlis.xtf.model_resolution import header_completeness, header_model_lookup, root_model_names
@@ -395,6 +400,14 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         class_table_names=class_table_names,
     ))
     ddl = render_gpkg(tables, sql_views) if args.dialect == "gpkg" else render_postgresql(tables, sql_views)
+    if args.lang:
+        root_names = builder.symbol_table.root_model_names() if hasattr(builder.symbol_table, "root_model_names") else []
+        base_name = next(iter(root_names), None) or path.stem
+        translation = load_translation(base_name, args.lang, repository)
+        if translation is None:
+            print(f"--lang {args.lang}: no TRANSLATION OF {base_name!r} for '{args.lang}' in --repo", file=sys.stderr)
+            return 1
+        ddl = rename_sql_ddl(ddl, translation)
     if args.output:
         Path(args.output).write_text(ddl, encoding="utf-8")
     else:
@@ -676,6 +689,12 @@ def main(argv: list[str] | None = None) -> int:
              "exist in this conversion's own output). Also required to turn a VIEW into a CREATE VIEW: pass the "
              "base model(s) the VIEW's JOIN OF/PROJECTION OF classes come from, else the VIEW is emitted as a "
              "-- NOTE - see docs/sql-conversion-strategy.md.",
+    )
+    convert_sql_parser.add_argument(
+        "--lang", default=None, metavar="CODE",
+        help="Rename tables/columns/views through a `TRANSLATION OF` model for this language (e.g. `fr`), "
+        "found by name in --repo. Identifier-level: a base name that would translate two different ways "
+        "across classes is left untranslated.",
     )
     convert_sql_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
     convert_sql_parser.set_defaults(func=cmd_convert_sql)

@@ -232,13 +232,16 @@ modeldef:
         `_register_unqualified_imports`) and, after `resolve_all()`,
         `_apply_pending_translations` resolves the base model (via `--repo`, network-free) and
         walks the two built element trees POSITIONALLY (the grammar has no `==` rename syntax;
-        refman: the two models must "strukturell exakt uebereinstimmen"), recording the name map
-        on `Model._translation` (`elements`/`attributes`). The transfer format is unchanged for a
-        translation model (refman SS4.3.3), so this only feeds the converters'' `--lang` output
-        overlay (`convert/translation.py`), never parsing. A formal
-        `IlisMeta16.ModelTranslation.Translation` instance is not built - `METranslation` is a
-        DataType, not a Class, and no `Model <-> Translation` association exists; the builder-side
-        artifact is sufficient for the one consumer (RULE #5).
+        refman: the two models must "strukturell exakt uebereinstimmen"), building one
+        `IlisMeta16.ModelTranslation.Translation` (`Language` + a `METranslation` per renamed
+        element, `Of` = the base element''s fully-qualified name - `REFERENCE TO (EXTERNAL)
+        MetaElement` in IlisMeta16.ili, flattened to a NAME by the metamodel extraction). Kept on
+        `model._translation_object` - `ModelTranslation.Translation` is a free-standing Class in
+        its own topic, no `Model <-> Translation` association exists (same as `Import` instances
+        kept under a raw key). The lookup maps the converters need (`model._translation`,
+        `elements`/`attributes` by short name) are derived alongside. The transfer format is
+        unchanged for a translation model (refman SS4.3.3), so this only feeds the converters''
+        `--lang` output overlay (`convert/translation.py`), never parsing.
 topicDef:
   grammar:
     rule: topicDef

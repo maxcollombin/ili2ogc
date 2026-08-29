@@ -24,6 +24,18 @@ MODEL CheminsPedestres_V1 (fr)
       Altitude : 0 .. 5000;
     END Indicateur;
 
+    ASSOCIATION Troncon_Indicateur =
+      TronconChemin -- {1} TronconChemin;
+      indicateur_de -- {0..*} Indicateur;
+    END Troncon_Indicateur;
+
+    VIEW TronconChemin_AvecIndicateur
+      PROJECTION OF TronconChemin;
+      WHERE DEFINED(TronconChemin->indicateur_de);
+      =
+      ALL OF TronconChemin;
+    END TronconChemin_AvecIndicateur;
+
   END Reseau;
 
 END CheminsPedestres_V1.
