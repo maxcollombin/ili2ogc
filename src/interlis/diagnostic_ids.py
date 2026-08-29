@@ -106,7 +106,8 @@ REGISTRY: dict[str, tuple[str, str]] = {
     # -- builder ----------------------------------------------------------
     "BUILD-TYPE-UNRESOLVED": (
         "A",
-        "the model builder produced no Type instance for an attribute (unresolved cross-model name, or a predefined type not yet materialised)",
+        "the model builder produced no Type instance for an attribute "
+        "(unresolved cross-model name, or a predefined type not yet materialised)",
     ),
     "BUILD-SPEC-GAP-ALT-ABSENT": ("A", "a grammar alternative had no mapping rule and was treated as absent"),
     "BUILD-TRANSLATION-MISMATCH": (

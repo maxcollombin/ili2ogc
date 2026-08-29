@@ -106,9 +106,8 @@ def test_local_uniqueness_builds_kind_and_uniquedef_from_the_real_corpus_shape()
     `_build_local_uniqueness_def` re-derives the correct split from the raw children instead, ignoring that internal
     choice entirely.
     """
-    cls = _class_with_constraint(
-        "UNIQUE (LOCAL) ASV: Datum;",  # reuses this fixture's own ASV/Datum attributes as stand-ins for a role hop + struct member
-    )
+    # reuses this fixture's own ASV/Datum attributes as stand-ins for a role hop + struct member
+    cls = _class_with_constraint("UNIQUE (LOCAL) ASV: Datum;")
     constraint = cls.Constraint[0]
     assert constraint._qualified_class.endswith("UniqueConstraint")
     assert constraint.Kind == "LocalU"

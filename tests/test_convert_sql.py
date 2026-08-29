@@ -292,8 +292,8 @@ def test_render_gpkg_geometry_column_and_metadata_rows():
     ddl = render_gpkg(build_tables([parcel]))
     assert '"geom" POINT NOT NULL' in ddl
     assert (
-        "INSERT INTO gpkg_contents (table_name, data_type, identifier, srs_id) VALUES ('parcel', 'features', 'parcel', 2056);"
-        in ddl
+        "INSERT INTO gpkg_contents (table_name, data_type, identifier, srs_id) "
+        "VALUES ('parcel', 'features', 'parcel', 2056);" in ddl
     )
     assert (
         "INSERT INTO gpkg_geometry_columns (table_name, column_name, geometry_type_name, srs_id, z, m) "
@@ -640,7 +640,8 @@ def test_unique_local_becomes_a_compound_unique_on_the_child_table():
     assert parent.notes == []
     assert child.unique_constraints == [
         UniqueConstraint(
-            "uq_countrynamestranslation_entries_countrynamestranslation_fk_c",  # truncated to 63 chars, same as every other identifier in this module
+            # truncated to 63 chars, same as every other identifier in this module
+            "uq_countrynamestranslation_entries_countrynamestranslation_fk_c",
             ["countrynamestranslation_fk", "code"],
         )
     ]

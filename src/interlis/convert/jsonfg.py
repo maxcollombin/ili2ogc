@@ -354,7 +354,10 @@ def _members_value(
 
 
 def _positions_from(node: RawNode, prefix: str) -> list[float] | None:
-    """Read `{prefix}1`, `{prefix}2`, ... as one position - shared by COORD (`C`) and an ARC's intermediate point (`A`)."""
+    """Read `{prefix}1`, `{prefix}2`, ... as one position.
+
+    Shared by COORD (`C`) and an ARC's intermediate point (`A`).
+    """
     components = _axis_components(node, prefix)
     if not components:
         return None
@@ -813,7 +816,10 @@ def _view_alias(base: MetaInstance) -> str | None:
 
 
 def _raw_node_value(node: RawNode) -> Any:
-    """One attribute occurrence -> a comparable value: a referenced OID, a nested dict, or a (numeric-coerced) scalar."""
+    """One attribute occurrence -> a comparable value.
+
+    A referenced OID, a nested dict, or a (numeric-coerced) scalar.
+    """
     ref_tid = _extract_reference(node)
     if ref_tid is not None:
         return ref_tid

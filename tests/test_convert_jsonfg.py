@@ -412,7 +412,10 @@ def test_polyline_straight_then_arc_then_straight_becomes_compound_curve():
 
 
 def test_custom_line_form_segment_falls_back_to_unsupported_property():
-    """A POLYLINE segment that's neither COORD nor ARC (a custom LINE FORM) stays out of scope - RULE #5, never guessed."""
+    """A POLYLINE segment that's neither COORD nor ARC (a custom LINE FORM) stays out of scope.
+
+    RULE #5, never guessed.
+    """
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ALine")
     custom = _wrap("CustomForm", _node("X", "1"))
@@ -474,7 +477,10 @@ def test_surface_arc_boundary_becomes_curve_polygon():
 
 
 def test_multipolyline_with_one_arc_part_becomes_multi_curve():
-    """One straight + one curved part in a MULTIPOLYLINE -> `MultiCurve`, every part a full geometry object (SS7.5.4)."""
+    """One straight + one curved part in a MULTIPOLYLINE -> `MultiCurve`.
+
+    Every part is a full geometry object (SS7.5.4).
+    """
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "AMultiLine")
     straight = _wrap("POLYLINE", _coord("0.0", "0.0"), _coord("1.0", "0.0"))
@@ -608,7 +614,10 @@ def test_multi_geometry_class_with_only_one_attribute_populated():
 
 
 def test_multi_geometry_class_with_mismatched_crs_gets_no_place():
-    """No real corpus evidence of this ever occurring - defensive coverage only (RULE #5: never guess which CRS wins)."""
+    """No real corpus evidence of this ever occurring.
+
+    Defensive coverage only (RULE #5: never guess which CRS wins).
+    """
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ATwoGeomsDiffCrs")
     obj = XtfObject(
@@ -1004,9 +1013,11 @@ def test_transfer_to_feature_collection_include_child_rows_appends_them():
     collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table, include_child_rows=True)
     feature_types = [f["featureType"] for f in collection["features"]]
     assert feature_types == ["Parcel", "parcel_tags", "parcel_tags"]
-    # Heterogeneous featureTypes - collection-level "featureType" correctly omitted (matches the pre-existing rule, not a new one).
+    # Heterogeneous featureTypes - collection-level "featureType" correctly omitted
+    # (matches the pre-existing rule, not a new one).
     assert "featureType" not in collection
-    # No longer duplicated on the parent too - convert/sql.py's "parcel" table has no "tags" column to receive it anyway.
+    # No longer duplicated on the parent too - convert/sql.py's "parcel" table has no
+    # "tags" column to receive it anyway.
     assert "Tags" not in collection["features"][0]["properties"]
 
 

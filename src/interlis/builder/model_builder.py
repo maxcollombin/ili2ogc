@@ -616,7 +616,11 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     None,
                 )
                 if class_token is None:
-                    continue  # unreachable in practice: a bare "STRING DOTDOT STRING" domainDef alternative parses via type_'s own alternative instead (ANTLR resolves the ambiguity there - see type.text_range_alt, spec/grammar/mapping/06_types.yml) - kept as a defensive no-op, not a real gap
+                    # Unreachable in practice: a bare "STRING DOTDOT STRING" domainDef
+                    # alternative parses via type_'s own alternative instead (ANTLR
+                    # resolves the ambiguity there - see type.text_range_alt,
+                    # spec/grammar/mapping/06_types.yml). A defensive no-op, not a real gap.
+                    continue
                 instance = self._build_domain_class_restriction(segment, rule_name)
                 if not isinstance(instance, MetaInstance):
                     continue

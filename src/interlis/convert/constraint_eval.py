@@ -175,7 +175,8 @@ def evaluate_expression(expr: MetaInstance, properties: dict[str, Any]) -> Any:
     if qualified.endswith("Constant"):
         return _evaluate_constant(expr)
     raise UnsupportedExpressionError(
-        f"expression node {qualified} needs THIS/PARENT/aggregate/function-call context beyond a single Feature's properties",
+        f"expression node {qualified} needs THIS/PARENT/aggregate/function-call context "
+        f"beyond a single Feature's properties",
     )
 
 

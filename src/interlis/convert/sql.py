@@ -393,7 +393,8 @@ def _columns_for_class(
                 notes.append(
                     _diag(
                         "SQL-REF-TARGET-UNRESOLVED",
-                        f"{label}: reference target not resolved - pass its model's directory to --repo, or the model file to --catalog",
+                        f"{label}: reference target not resolved - pass its model's directory "
+                        f"to --repo, or the model file to --catalog",
                     )
                 )
                 continue
@@ -430,7 +431,8 @@ def _columns_for_class(
             notes.append(
                 _diag(
                     "BUILD-TYPE-UNRESOLVED",
-                    f"{label}: attribute type not resolved by the model builder - provide the imported model via --repo",
+                    f"{label}: attribute type not resolved by the model builder - "
+                    f"provide the imported model via --repo",
                 )
             )
         else:
@@ -587,7 +589,10 @@ def _text_sql_literal(quoted_value: str) -> str:
 
 
 def _numeric_sql_literal(raw: str) -> str:
-    """Strip a leading `+` (not standard SQL numeric-literal syntax, unlike `-`) from a `Constant.Value` numeric token."""
+    """Strip a leading `+` from a `Constant.Value` numeric token.
+
+    `+` is not standard SQL numeric-literal syntax, unlike `-`.
+    """
     return raw[1:] if raw.startswith("+") else raw
 
 
@@ -664,8 +669,12 @@ def _expression_to_sql(expr: MetaInstance, column_names: set[str], renamed: dict
             return _text_sql_literal(value)
         if type_ == "Enumeration":
             return (
-                "'" + value.replace("'", "''") + "'"
-            )  # a plain dotted-path string (`_normalize_enumeration_const_value`), never quoted to begin with - matches EnumType's own `text` SQL column type
+                # a plain dotted-path string (`_normalize_enumeration_const_value`), never
+                # quoted to begin with - matches EnumType's own `text` SQL column type
+                "'"
+                + value.replace("'", "''")
+                + "'"
+            )
         raise _UnsupportedCheckExpression(f"constant of type {type_!r} is not supported")
     raise _UnsupportedCheckExpression(
         f"expression node {qualified} needs THIS/PARENT/aggregate/function-call context beyond one row",
@@ -1124,7 +1133,8 @@ class _ViewResolver:
         cls, table = self.by_alias[alias]
         cur_alias = alias
         if len(refs) == 1:
-            return f'"{cur_alias}"."{OID_COLUMN}"'  # a bare base reference denotes the object itself -> its identity column
+            # a bare base reference denotes the object itself -> its identity column
+            return f'"{cur_alias}"."{OID_COLUMN}"'
         for i, hop in enumerate(refs[1:], start=1):
             if hop is None:
                 raise _UnsupportedView("path element with no name")
@@ -1439,7 +1449,8 @@ def _resolve_view_bases(
         table = table_name_by_class_id.get(id(base_cls)) or _sql_identifier(getattr(base_cls, "Name", None) or "")
         if table not in tables_by_name:
             raise _UnsupportedView(
-                f"base table {table!r} not built - pass {getattr(base_cls, 'Name', '?')}'s model via --repo or --catalog",
+                f"base table {table!r} not built - pass "
+                f"{getattr(base_cls, 'Name', '?')}'s model via --repo or --catalog",
                 "SQL-VIEW-BASE-MISSING",
             )
         alias = (getattr(rbv, "Name", None) or getattr(base_cls, "Name", None) or "").lower()
@@ -1500,7 +1511,8 @@ def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> s
         for fk in table.foreign_keys:
             statements.append(
                 f"ALTER TABLE {_quote(table.name)} ADD CONSTRAINT {fk.name} "
-                f"FOREIGN KEY ({_quote_list(fk.columns)}) REFERENCES {_quote(fk.ref_table)} ({_quote_list(fk.ref_columns)});",
+                f"FOREIGN KEY ({_quote_list(fk.columns)}) "
+                f"REFERENCES {_quote(fk.ref_table)} ({_quote_list(fk.ref_columns)});",
             )
     statements += _render_views(views)
     return "\n".join(statements) + "\n"

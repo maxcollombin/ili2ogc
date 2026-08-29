@@ -275,7 +275,8 @@ def cmd_convert(args: argparse.Namespace) -> int:
         translation = load_translation(getattr(root_model, "Name", None) or "", args.lang, repository)
         if translation is None:
             print(
-                f"--lang {args.lang}: no TRANSLATION OF {getattr(root_model, 'Name', path.stem)!r} for '{args.lang}' in --repo",
+                f"--lang {args.lang}: no TRANSLATION OF "
+                f"{getattr(root_model, 'Name', path.stem)!r} for '{args.lang}' in --repo",
                 file=sys.stderr,
             )
             return 1
@@ -607,7 +608,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
     incomplete = [s for s in header_status if s.status not in ("builtin", "available")]
     if incomplete and not args.quiet:
         print(
-            f"Header models (HEADERSECTION/MODELS): {len(header_status) - len(incomplete)}/{len(header_status)} resolved"
+            f"Header models (HEADERSECTION/MODELS): "
+            f"{len(header_status) - len(incomplete)}/{len(header_status)} resolved"
         )
         for s in incomplete:
             label = {"missing": "not in --repo", "indexed_but_failed": "found but failed to build"}[s.status]
@@ -805,7 +807,10 @@ def main(argv: list[str] | None = None) -> int:
 
     convert_sql_parser = subparsers.add_parser(
         "convert-sql",
-        help="Convert an .ili model to SQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY/CHECK, and CREATE VIEW for Projection/Join VIEWs).",
+        help=(
+            "Convert an .ili model to SQL DDL (CREATE TABLE + UNIQUE/FOREIGN KEY/CHECK, "
+            "and CREATE VIEW for Projection/Join VIEWs)."
+        ),
     )
     convert_sql_parser.add_argument("file", help="Path to the .ili file to convert.")
     convert_sql_parser.add_argument(
@@ -929,7 +934,8 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="URL",
         help="URL/path of the companion 'interlis convert' JSON Schema output for the same .ili model - "
-        "when given, populates the JSON-FG 'featureSchema' member (clause 13). Omitted: 'featureSchema' is not emitted.",
+        "when given, populates the JSON-FG 'featureSchema' member (clause 13). "
+        "Omitted: 'featureSchema' is not emitted.",
     )
     convert_jsonfg_parser.add_argument(
         "--include-child-rows",
