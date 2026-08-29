@@ -1,1 +1,2 @@
-e323844ca386fbca23977636a5e6636b884c6692  # black reformat (line-length 120)
+# Reformat src/ and tests/ with black (line-length 120)
+592316bd676f1aa13754a5011eba6014314e4466
