@@ -2041,9 +2041,38 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     copy = self.registry.new_instance("IlisMeta16.ModelData.AttrOrParam")
                     copy.Name = attr.Name
                     self.attachment.attach(copy, "Type", attr.Type, association="AttrOrParamType", role="Type", rule="viewAttributes")
+                    copy.Derivates = [self._identity_view_path(all_of_name, attr.Name)]
                     self.attachment.attach(
                         view, "ClassAttribute", copy, association="ClassAttr", role="ClassAttribute", rule="viewAttributes",
                     )
+
+    def _identity_view_path(self, base_ref: str, attr_name: str) -> MetaInstance:
+        """Build the `<base> -> <attr>` identity `PathOrInspFactor` for one `ALL OF` view attribute.
+
+        `ALL OF <base>` re-exports each base attribute unchanged; a
+        consumer that projects a view by expression rather than by name
+        (`convert/sql.py`'s `CREATE VIEW` `SELECT`) needs the same
+        `Derivates` a `<attr> := <base> -> <attr>` redefinition would
+        carry. Shape and `Kind="ReferenceAttr"` throughout match a real
+        `Name := expression` path (see `_build_local_uniqueness_def` for
+        the same permissive `Kind` convention). `Type` is still set
+        directly from the base attribute, so this path is never walked for
+        type resolution - only for value projection.
+        """
+        factor = self.registry.new_instance("IlisMeta16.ModelData.PathOrInspFactor")
+        els: list[MetaInstance] = []
+        for ref in (base_ref, attr_name):
+            el = self.registry.new_instance("IlisMeta16.ModelData.PathEl")
+            el.Kind = "ReferenceAttr"
+            el.Ref = ref
+            els.append(el)
+        factor.PathEls = els
+        # Lets a converter tell an `ALL OF` pass-through from an explicit
+        # `Name := expression`: the former may drop an attribute it cannot
+        # project (e.g. a STRUCTURE with no single column) as a note, the
+        # latter was asked for by name and must fail loudly.
+        factor._all_of_identity = True
+        return factor
 
     @staticmethod
     def _all_of_base_names(va: ParserRuleContext) -> list[str]:
@@ -2344,6 +2373,21 @@ class InterlisModelBuilder(InterlisParserVisitor):
         """
         for child_rule, value in sweep_results:
             if value is None:
+                continue
+            if child_rule == "constraintDef":
+                # constraintDef is a Container dispatching to
+                # mandatoryConstraint/uniquenessConstraint/setConstraint/...
+                # - each of THOSE declares its own `parent:`
+                # (ClassConstraint/Constraint) and has already self-attached
+                # the built constraint. constraintDef itself has no
+                # `parent:`, so without this the same constraint gets
+                # attached a SECOND time below via
+                # find_association_connecting (View/Class <-> Constraint is a
+                # real association). A `classDef` never hits this - its
+                # `constraintDef`s sit under the `classOrStructureDef`
+                # wrapper - but `viewDef` has `constraintDef` as a direct
+                # child (a real corpus case: every DMAV `*_Gueltig` VIEW
+                # carries a view-level `UNIQUE CHxxxxxx:`).
                 continue
             if child_rule == "formationDef":
                 # viewDef-only: a pure dispatcher relaying to projection()/

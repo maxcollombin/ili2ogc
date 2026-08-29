@@ -19,9 +19,16 @@ VERSION "2023-12-04" =
                 ivs_linienobjekte_base->Role_ivs_objekte == ivs_objekte;
                 =
             ATTRIBUTE
+                !! Attribute names aligned to the published service
+                !! ch.astra.ivs-nat (ArcGIS REST ?f=json) - checked with
+                !! scripts/crosscheck_view_attributes.py. `ivs_signatur` is
+                !! MultilingualText in the base model; the service's
+                !! ivs_signatur / _de / _fr / _it columns are the language
+                !! split done by the publication layer, not by this VIEW.
+                !! The synthetic `id` is publication-added.
                 wkb_geometry := ivs_linienobjekte_lv95 -> ivs_geometrie;
                 ivs_nummer := ivs_objekte -> ivs_nummer;
-                ivs_signatur_label := ivs_signatur_linie -> ivs_deutsch;
+                ivs_signatur := ivs_signatur_linie -> ivs_deutsch;
                 ivs_kanton := ivs_kantone -> ivs_kanton;
                 ivs_sladatehist := ivs_streckenbeschriebe -> ivs_sladatehist;
                 ivs_sladatemorph := ivs_streckenbeschriebe -> ivs_sladatemorph;

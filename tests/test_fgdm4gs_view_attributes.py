@@ -76,7 +76,7 @@ def test_view_structure_builds_correctly(fname, view_name, base_count, kind):
         (
             "IVS_V3_d.ili", "ivs_nat",
             {
-                "wkb_geometry": "LineType", "ivs_nummer": "TextType", "ivs_signatur_label": "TextType",
+                "wkb_geometry": "LineType", "ivs_nummer": "TextType", "ivs_signatur": "TextType",
                 "ivs_kanton": None,  # external CHAdminCodes_V2.CHCantonCode - not loaded by this hermetic repository
                 "ivs_sladatehist": "FormattedType", "ivs_sladatemorph": "FormattedType",
                 "ivs_slabedeutung": "EnumType", "ivs_sortsla": "TextType", "ivs_slaname": "TextType",

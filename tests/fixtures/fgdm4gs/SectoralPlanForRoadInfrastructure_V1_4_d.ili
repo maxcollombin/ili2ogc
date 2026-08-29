@@ -3,36 +3,91 @@ MODEL BaseModel_SectoralPlans_LV95_V1_4_d
 AT "mailto:test@example.org"
 VERSION "2023-12-17" =
     IMPORTS BaseModel_SectoralPlans_LV95_V1_4, BaseModel_SectoralPlans_Catalogues_V1_4;
+        !! Attribute names and dimensions aligned to the published services
+        !! ch.astra.sachplan-infrastruktur-strasse_kraft (ArcGIS REST
+        !! ?f=json / GetFeatureInfo) - checked with
+        !! scripts/crosscheck_view_attributes.py. The base model keeps
+        !! Facility and PlanningMeasure as parallel classes; the published
+        !! ASTRA layer denormalises both into one wide table (type_geom
+        !! discriminates, other-type columns null). An INTERLIS UNION OF
+        !! needs identical branch signatures, so this stays two coherent
+        !! per-type VIEWs - view_sri = Anlagen, view_spm = planerische
+        !! Massnahmen, each a featureType of the same service.
+        !! Name/Description are LocalisationCH_V1.MultilingualText; the
+        !! service's _de/_fr/_it columns are the language split done by the
+        !! publication layer, not expressible in an INTERLIS VIEW (BAG
+        !! element access). The synthetic id / bgdi_created are
+        !! publication-added.
         TOPIC SPRI_d =
         DEPENDS ON BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_FacilityStatus;
         DEPENDS ON BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification;
         DEPENDS ON BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_FacilityKind;
+        DEPENDS ON BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_MeasureType;
+        DEPENDS ON BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_CoordinationLevel;
+        DEPENDS ON BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_PlanningStatus;
             VIEW view_sri
-                JOIN OF 
+                JOIN OF
                     BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.Facility,
                     BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_FacilityStatus.FacilityStatus,
                     BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_FacilityKind.FacilityKind,
                     BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.Object,
+                    BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.SectoralPlan,
                     BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.Document;
                 WHERE
                     Facility->Object == Object
                     AND
+                    Object->SectoralPlan == SectoralPlan
+                    AND
                     Document->Object == Object;
                     =
                 ATTRIBUTE
-                point_geometry := Facility -> Point;             !! point
-                polyline_geometry := Facility -> Line;           !! poyline 
-                polygone_geometry := Facility -> Surface;        !! polygone 
+                point_geometry := Facility -> Point;
+                polyline_geometry := Facility -> Line;
+                polygone_geometry := Facility -> Surface;
                 facname := Facility -> Name;
                 facstatus_tid := FacilityStatus -> StatusID;
                 facstatus_text := FacilityStatus -> Name;
                 fackind_tid := FacilityKind -> KindID;
                 fackind_text := FacilityKind -> Name;
-                description := Facility -> Description;        !! this attribute is ambiguous
+                description := Facility -> Description;
                 objname := Object -> Name;
-                validfrom := Document -> ModInfo;              !! this attribute is ambiguous; only the attribute validfrom is needed; this definition is proably wrong
+                plname := SectoralPlan -> Name;
+                validfrom := Facility -> ModInfo -> ValidFrom;
+                validuntil := Facility -> ModInfo -> ValidUntil;
                 doc_title := Document -> Title;
                 doc_web := Document -> Web;
             END view_sri;
-        END SPRI_d; 
+
+            VIEW view_spm
+                JOIN OF
+                    BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.PlanningMeasure,
+                    BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_MeasureType.MeasureType,
+                    BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_CoordinationLevel.CoordinationLevel,
+                    BaseModel_SectoralPlans_Catalogues_V1_4.Catalogue_PlanningStatus.PlanningStatus,
+                    BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.Facility,
+                    BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.Object,
+                    BaseModel_SectoralPlans_LV95_V1_4.SectoralPlans_WithLatestModification.SectoralPlan;
+                WHERE
+                    PlanningMeasure->Facility == Facility
+                    AND
+                    Facility->Object == Object
+                    AND
+                    Object->SectoralPlan == SectoralPlan;
+                    =
+                ATTRIBUTE
+                point_geometry := PlanningMeasure -> Point;
+                polyline_geometry := PlanningMeasure -> Line;
+                polygone_geometry := PlanningMeasure -> Surface;
+                meastype_tid := MeasureType -> TypeID;
+                meastype_text := MeasureType -> Name;
+                coordlevel_tid := CoordinationLevel -> CoordID;
+                coordlevel_text := CoordinationLevel -> Name;
+                plstatus_text := PlanningStatus -> Name;
+                description := PlanningMeasure -> Description;
+                objname := Object -> Name;
+                plname := SectoralPlan -> Name;
+                validfrom := PlanningMeasure -> ModInfo -> ValidFrom;
+                validuntil := PlanningMeasure -> ModInfo -> ValidUntil;
+            END view_spm;
+        END SPRI_d;
 END BaseModel_SectoralPlans_LV95_V1_4_d.

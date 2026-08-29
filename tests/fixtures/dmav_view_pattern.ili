@@ -1,0 +1,65 @@
+INTERLIS 2.4;
+
+!! Minimal, self-contained reproduction of the DMAV (Datenmodell der
+!! amtlichen Vermessung "Bund", swisstopo V+D) VIEW idiom - the shape a
+!! 2026 survey of the published DMAV_* / SIA405_Abwasser_* model families
+!! found to be the ONLY form real VIEW WHERE clauses use: PROJECTION OF one
+!! class, WHERE = nested DEFINED() over association hops joined by
+!! AND/OR/NOT, ending on a plain date attribute, plus a catalogue-numbered
+!! view-level UNIQUE. No arithmetic, no function call.
+!!
+!! Modelled on V_D/DMAV_Grundstuecke_V1_1.ili's `Grundstueck_Gueltig`
+!! (https://models.geo.admin.ch/V_D/, VERSION 2026-01-31), reduced and
+!! hermetic (no external IMPORTS). Like the real model, "Entstehung" and
+!! "Untergang" are two roles of a single mutation-tracking class
+!! (`GSNachfuehrung`) whose `Grundbucheintrag` is a nullable date - not a
+!! separate class - so `DEFINED(Grundstueck->Entstehung->Grundbucheintrag)`
+!! is an EXISTS over that class plus an `IS NOT NULL` on its date column.
+
+MODEL DMAV_ViewPattern_V1 (de)
+  AT "mailto:test@example.org" VERSION "2026-08-29" =
+
+  DOMAIN
+    NBIdent = TEXT*12;
+
+  TOPIC Grundstuecke =
+
+    CLASS GSNachfuehrung =
+      NBIdent : MANDATORY NBIdent;
+      Identifikator : MANDATORY TEXT*12;
+      GueltigerEintrag : MANDATORY TEXT*10;
+      Grundbucheintrag : TEXT*10;
+      UNIQUE CH040101: NBIdent, Identifikator;
+    END GSNachfuehrung;
+
+    CLASS Grundstueck =
+      NBIdent : MANDATORY NBIdent;
+      Nummer : MANDATORY TEXT*12;
+      EGRID : TEXT*14;
+    END Grundstueck;
+
+    ASSOCIATION Entstehung_Grundstueck =
+      Entstehung -- {1} GSNachfuehrung;
+      entstehendes_Grundstueck -- {0..*} Grundstueck;
+    END Entstehung_Grundstueck;
+
+    ASSOCIATION Untergang_Grundstueck =
+      Untergang -- {0..1} GSNachfuehrung;
+      untergehendes_Grundstueck -- {0..*} Grundstueck;
+    END Untergang_Grundstueck;
+
+    VIEW Grundstueck_Gueltig
+      PROJECTION OF Grundstueck;
+      WHERE DEFINED(Grundstueck->Entstehung)
+        AND DEFINED(Grundstueck->Entstehung->Grundbucheintrag)
+        AND (NOT(DEFINED(Grundstueck->Untergang))
+             OR NOT(DEFINED(Grundstueck->Untergang->Grundbucheintrag)));
+      =
+      ALL OF Grundstueck;
+      UNIQUE CH041101: NBIdent, Nummer;
+      UNIQUE CH041102: EGRID;
+    END Grundstueck_Gueltig;
+
+  END Grundstuecke;
+
+END DMAV_ViewPattern_V1.

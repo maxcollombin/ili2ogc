@@ -469,11 +469,16 @@ viewAttributes:
         RenamedBaseView (via BaseViewRef -> Class) whose attributes are all projected, without creating
         AttrOrParam instances or a dedicated metamodel flag
         - a pure syntax shortcut on the ModelBuilder side (at construction time, iterate the attributes
-        of the resolved BaseView Class and create one ClassAttr per attribute, empty Derivates).
+        of the resolved BaseView Class and create one ClassAttr per attribute).
         Implemented: `InterlisModelBuilder._expand_view_all_of` (only the FIRST "ALL OF Name;" per
         viewAttributes() - the grammar itself never supports a second one in the same call, see that
         method''s docstring for the real-corpus caveat found on multi-base JOIN OF views), own attributes
         of the matched RenamedBaseView.BaseView only (inherited via EXTENDS not walked, no evidence yet).
+        Each copied ClassAttr also gets a synthetic identity `Derivates` (a `PathOrInspFactor`
+        `<base-name> -> <attr>`, marked `_all_of_identity`) - the same shape a `<attr> := <base> -> <attr>`
+        redefinition carries, so a converter that projects a view by expression rather than by name
+        (`convert/sql.py`''s `CREATE VIEW` SELECT list) can emit a column for it. `Type` is still set
+        directly from the base attribute, so this path is never walked for type resolution.
 
         '
     bare_redefinition_list:

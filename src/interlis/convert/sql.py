@@ -56,8 +56,11 @@ from interlis.convert.jsonschema import _is_integer_range, _is_structure
 from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.schema import (
     ResolvedAttribute,
+    _class_related_base_class,
+    _role_is_multi,
     attributes_of,
     coord_axes,
+    is_class_compatible,
     line_coord_type,
     reference_target_class,
     resolve_attribute,
@@ -971,6 +974,98 @@ class _ViewResolver:
             cls, table, cur_alias = target, target_table, new_alias
         raise _UnsupportedView("unreachable")  # pragma: no cover
 
+    def defined_sql(self, factor: MetaInstance) -> str:
+        """Return a SQL boolean for `DEFINED(<base-alias> -> role -> role ...)` - an association-navigation existence test.
+
+        This is the DMAV `*_Gueltig` VIEW idiom: a `WHERE` built only from
+        nested `DEFINED()` over association-role paths. Each hop is a
+        2-role association; the hop becomes an `EXISTS (SELECT 1 FROM
+        <next> <v> WHERE <join> [AND <rest>])`, with `<join>` reading the
+        FK from whichever side actually carries it (the DMAV 1:0..1
+        associations embed it on the child). A path element that is a
+        scalar attribute, not a role, or a many-to-many association (no
+        embedded FK) demotes the whole VIEW (RULE #5).
+        """
+        if not factor._qualified_class.endswith("PathOrInspFactor") or getattr(factor, "Inspection", None):
+            raise _UnsupportedView("DEFINED(...) argument is not a plain association path")
+        refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
+        if len(refs) < 2 or refs[0] is None or refs[0].lower() not in self.by_alias:
+            raise _UnsupportedView("DEFINED(...) path root is not a base of this view")
+        cls, table = self.by_alias[refs[0].lower()]
+        return self._defined_step(cls, f'"{refs[0].lower()}"', table, refs[1:])
+
+    def _defined_step(self, cls: MetaInstance, cur_alias: str, cur_table: str, hops: list[str]) -> str:
+        hop, rest = hops[0], hops[1:]
+        if hop is None:
+            raise _UnsupportedView("DEFINED(...) path element has no name")
+        if not rest:
+            # A final scalar attribute: DEFINED(...->attr) == <attr> IS NOT NULL.
+            # The DMAV `*_Gueltig` idiom ends on `GSNachfuehrung.Grundbucheintrag`,
+            # a plain XMLDateTime, not another association hop.
+            col = _sql_identifier(hop)
+            if col in self._columns(cur_table):
+                return f'{cur_alias}."{col}" IS NOT NULL'
+        target_cls, target_table, fk_on_current, fk_col = self._resolve_association_hop(cls, hop)
+        self._counter += 1
+        v_quoted = f'"v{self._counter}"'
+        join = (
+            f'{v_quoted}."{OID_COLUMN}" = {cur_alias}."{fk_col}"'
+            if fk_on_current
+            else f'{v_quoted}."{fk_col}" = {cur_alias}."{OID_COLUMN}"'
+        )
+        tail = f" AND {self._defined_step(target_cls, v_quoted, target_table, rest)}" if rest else ""
+        return f'EXISTS (SELECT 1 FROM "{target_table}" {v_quoted} WHERE {join}{tail})'
+
+    def _resolve_association_hop(self, cls: MetaInstance, hop: str) -> tuple[MetaInstance, str, bool, str]:
+        """Find the 2-role association connecting `cls` to `hop`; return `(target class, target table, fk_on_current, fk_column)`.
+
+        FK placement mirrors `xtf.schema.embedded_roles_of` exactly (the
+        same `build_tables` used to make the columns): the FK sits on the
+        `> 1` role's target, else on the second-declared role's target,
+        and its column is named after the opposite role.
+        """
+        st = self.symbol_for(cls)
+        candidates = st.all_registered() if st is not None else []
+        for cand in candidates:
+            if not isinstance(cand, MetaInstance) or cand._qualified_class.rsplit(".", 1)[-1] != "Class":
+                continue
+            if getattr(cand, "Kind", None) != "Association":
+                continue
+            roles = [r for r in (getattr(cand, "Role", None) or []) if isinstance(r, MetaInstance)]
+            if len(roles) != 2:
+                continue
+            role_a, role_b = roles
+            tgt_a, tgt_b = _class_related_base_class(role_a), _class_related_base_class(role_b)
+            if tgt_a is None or tgt_b is None:
+                continue
+
+            def matches_hop(role: MetaInstance, tgt: MetaInstance) -> bool:
+                return getattr(role, "Name", None) == hop or getattr(tgt, "Name", None) == hop
+
+            if is_class_compatible(cls, tgt_a) and matches_hop(role_b, tgt_b):
+                near_role, far_role, far_tgt = role_a, role_b, tgt_b
+            elif is_class_compatible(cls, tgt_b) and matches_hop(role_a, tgt_a):
+                near_role, far_role, far_tgt = role_b, role_a, tgt_a
+            else:
+                continue
+
+            multi_a, multi_b = _role_is_multi(role_a), _role_is_multi(role_b)
+            if multi_a and multi_b:
+                raise _UnsupportedView(f"{hop!r}: a many-to-many association has no embedded FK to navigate")
+            if multi_a:
+                embed_on = tgt_a
+            elif multi_b:
+                embed_on = tgt_b
+            else:
+                embed_on = tgt_b
+            fk_on_current = is_class_compatible(cls, embed_on)
+            fk_col = _sql_identifier((far_role if fk_on_current else near_role).Name or "")
+            far_table = _sql_identifier(getattr(far_tgt, "Name", None) or "")
+            if far_table not in self.tables_by_name:
+                raise _UnsupportedView(f"navigation target table {far_table!r} not built - pass --catalog for its model")
+            return far_tgt, far_table, fk_on_current, fk_col
+        raise _UnsupportedView(f"cannot navigate {hop!r} from {getattr(cls, 'Name', None)!r} - no 2-role association found")
+
 
 def _view_constant_literal(node: MetaInstance) -> str:
     value, type_ = getattr(node, "Value", None), getattr(node, "Type", None)
@@ -989,16 +1084,39 @@ def _view_where_conjuncts(expr: MetaInstance | None, resolver: _ViewResolver) ->
         return []
     qname = expr._qualified_class.rsplit(".", 1)[-1]
     op = getattr(expr, "Operation", None)
-    subs = list(getattr(expr, "SubExpressions", None) or [])
     if qname == "CompoundExpr" and op == "And":
         out: list[str] = []
-        for sub in subs:
+        for sub in getattr(expr, "SubExpressions", None) or []:
             out.extend(_view_where_conjuncts(sub, resolver))
         return out
-    if qname == "CompoundExpr" and op in _SQL_RELATIONAL_OPERATORS and len(subs) == 2:
-        left = resolver.scalar_ref(subs[0])
-        right = resolver.scalar_ref(subs[1])
-        return [f"({left} {_SQL_RELATIONAL_OPERATORS[op]} {right})"]
+    return [_view_where_sql(expr, resolver)]
+
+
+def _view_where_sql(expr: MetaInstance, resolver: _ViewResolver) -> str:
+    """One View `Where` sub-expression as a parenthesised SQL boolean.
+
+    Same supported subset as `convert/constraint_eval.py` and
+    `convert/jsonfg.py`'s `evaluate_view` WHERE evaluation - relational
+    comparison of two paths, `And`/`Or`/`Not`, and `DEFINED()` over an
+    association path (`_ViewResolver.defined_sql`). Anything else (a
+    function call, arithmetic) demotes the whole VIEW (RULE #5).
+    """
+    qname = expr._qualified_class.rsplit(".", 1)[-1]
+    op = getattr(expr, "Operation", None)
+    if qname == "CompoundExpr":
+        subs = list(getattr(expr, "SubExpressions", None) or [])
+        if op == "And":
+            return "(" + " AND ".join(_view_where_sql(s, resolver) for s in subs) + ")"
+        if op == "Or":
+            return "(" + " OR ".join(_view_where_sql(s, resolver) for s in subs) + ")"
+        if op in _SQL_RELATIONAL_OPERATORS and len(subs) == 2:
+            return f"({resolver.scalar_ref(subs[0])} {_SQL_RELATIONAL_OPERATORS[op]} {resolver.scalar_ref(subs[1])})"
+    if qname == "UnaryExpr":
+        sub = getattr(expr, "SubExpression", None)
+        if op == "Not" and sub is not None:
+            return f"(NOT {_view_where_sql(sub, resolver)})"
+        if op == "Defined" and sub is not None:
+            return f"({resolver.defined_sql(sub)})"
     raise _UnsupportedView(f"WHERE operation {op!r} ({qname}) is not translatable to a SQL view predicate")
 
 
@@ -1036,14 +1154,25 @@ def build_views(
             bases = _resolve_view_bases(view, tables_by_name, table_name_by_class_id)
             resolver = _ViewResolver(bases, tables_by_name, symbol_for)
             select_items: list[str] = []
+            notes: list[str] = []
             for attr in getattr(view, "ClassAttribute", None) or []:
+                aname = getattr(attr, "Name", None)
                 derivates = getattr(attr, "Derivates", None) or []
                 if not derivates:
-                    raise _UnsupportedView(f"view attribute {getattr(attr, 'Name', None)!r} has no assigned expression")
-                out_col = _sql_identifier(getattr(attr, "Name", None) or "")
-                select_items.append(f'{resolver.scalar_ref(derivates[0])} AS "{out_col}"')
+                    raise _UnsupportedView(f"view attribute {aname!r} has no assigned expression")
+                out_col = _sql_identifier(aname or "")
+                try:
+                    select_items.append(f'{resolver.scalar_ref(derivates[0])} AS "{out_col}"')
+                except _UnsupportedView as exc:
+                    # An `ALL OF` pass-through re-exports every base attribute; one it
+                    # cannot project as a single column (a STRUCTURE, an unmapped type)
+                    # is dropped with a note. An explicit `Name := expression` was asked
+                    # for by name and still fails the whole VIEW.
+                    if not getattr(derivates[0], "_all_of_identity", False):
+                        raise
+                    notes.append(f"attribute {aname!r} not in the CREATE VIEW: {exc}")
             if not select_items:
-                raise _UnsupportedView("view has no ATTRIBUTE definitions")
+                raise _UnsupportedView("view has no projectable ATTRIBUTE definitions")
             where = _view_where_conjuncts(getattr(view, "Where", None), resolver)
             from_parts = [f'"{table}" "{alias}"' for alias, _cls, table in bases]
             from_parts += [f'"{table}" "{alias}"' for table, alias, _on in resolver.extra_joins]
@@ -1051,10 +1180,40 @@ def build_views(
             body = "SELECT\n    " + ",\n    ".join(select_items) + "\nFROM " + ", ".join(from_parts)
             if where:
                 body += "\nWHERE " + "\n  AND ".join(where)
-            result.append(SqlView(vname, body))
+            notes.extend(_view_constraint_notes(view))
+            result.append(SqlView(vname, body, notes))
         except _UnsupportedView as exc:
             result.append(SqlView(vname, None, [str(exc)]))
     return result
+
+
+def _view_constraint_notes(view: MetaInstance) -> list[str]:
+    """Return a `-- NOTE` per VIEW-level `UNIQUE` / `SET` / `EXISTENCE` constraint - a `CREATE VIEW` cannot carry them.
+
+    DMAV `*_Gueltig` views carry a catalogue-numbered `UNIQUE CHxxxxxx:`;
+    a few also carry `SET CONSTRAINT ... INTERLIS.areAreas(...)`. Neither
+    is expressible on a SQL view - surfaced here rather than dropped
+    silently (RULE #5); enforce downstream (a unique index on a
+    materialised view, an application check).
+    """
+    notes: list[str] = []
+    for constraint in getattr(view, "Constraint", None) or []:
+        qname = constraint._qualified_class.rsplit(".", 1)[-1]
+        label = repr(getattr(constraint, "Name", None)) if getattr(constraint, "Name", None) else "<unnamed>"
+        if qname == "UniqueConstraint":
+            cols = [
+                getattr(pe, "Ref", None)
+                for factor in getattr(constraint, "UniqueDef", None) or []
+                for pe in getattr(factor, "PathEls", None) or []
+            ]
+            notes.append(
+                f"VIEW-level UNIQUE {label} ({', '.join(c for c in cols if c)}) - a CREATE VIEW cannot enforce it",
+            )
+        elif qname in ("SetConstraint", "ExistenceConstraint"):
+            notes.append(f"VIEW-level {qname} {label} - a whole-population check no CREATE VIEW can carry")
+        else:
+            notes.append(f"VIEW-level CONSTRAINT {label} ({qname}) - not carried onto the CREATE VIEW")
+    return notes
 
 
 def _resolve_view_bases(
@@ -1085,9 +1244,9 @@ def _resolve_view_bases(
 def _render_views(views: tuple[SqlView, ...]) -> list[str]:
     statements: list[str] = []
     for view in views:
+        for note in view.notes:
+            statements.append(f"-- NOTE (view {view.name}): {note}")
         if view.body is None:
-            for note in view.notes:
-                statements.append(f"-- NOTE (view {view.name}): {note}")
             continue
         indented = view.body.replace("\n", "\n    ")
         statements.append(f'CREATE VIEW "{view.name}" AS\n    {indented};')

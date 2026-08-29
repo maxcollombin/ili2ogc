@@ -798,16 +798,39 @@ def _raw_node_value(node: RawNode) -> Any:
     return _try_number(node.text, node.text) if node.text is not None else None
 
 
-def _combo_properties(aliases: list[str | None], combo: list[XtfObject | None]) -> dict[str, _ObjView]:
+def _obj_view(obj: XtfObject, by_tid: dict[str, XtfObject], seen: frozenset[str]) -> _ObjView:
+    """One object as an `_ObjView`, with each reference attribute resolved to the target's own `_ObjView`.
+
+    Lets a view `WHERE` navigate an association hop
+    (`Grundstueck->Entstehung->Grundbucheintrag`, the DMAV `*_Gueltig`
+    idiom): the middle hop is a reference whose target object's attributes
+    must be reachable. A nested `_ObjView` still compares `==` to its OID,
+    so `... == Alias` identity tests keep working. `seen` breaks reference
+    cycles.
+    """
+    if obj.tid is not None and obj.tid in seen:
+        return _ObjView(obj.tid, {})
+    next_seen = seen | ({obj.tid} if obj.tid is not None else frozenset())
+    attrs: dict[str, Any] = {}
+    for name, nodes in obj.attributes.items():
+        if not nodes:
+            continue
+        value = _raw_node_value(nodes[0])
+        if isinstance(value, str) and value in by_tid:
+            attrs[name] = _obj_view(by_tid[value], by_tid, next_seen)
+        else:
+            attrs[name] = value
+    return _ObjView(obj.tid, attrs)
+
+
+def _combo_properties(
+    aliases: list[str | None], combo: list[XtfObject | None], by_tid: dict[str, XtfObject],
+) -> dict[str, _ObjView]:
     properties: dict[str, _ObjView] = {}
     for alias, obj in zip(aliases, combo):
         if alias is None:
             continue
-        if obj is None:  # an (OR NULL) base with no object in this combination
-            properties[alias] = _ObjView(None, {})
-            continue
-        attrs = {name: _raw_node_value(nodes[0]) for name, nodes in obj.attributes.items() if nodes}
-        properties[alias] = _ObjView(obj.tid, attrs)
+        properties[alias] = _ObjView(None, {}) if obj is None else _obj_view(obj, by_tid, frozenset())
     return properties
 
 
@@ -992,12 +1015,13 @@ def evaluate_view(
 
     where = getattr(view, "Where", None)
     aliases = [_view_alias(base) for base in bases]
+    by_tid = {obj.tid: obj for obj, _cls in resolved_objects if obj.tid is not None}
 
     def _passes_where(combo: list[XtfObject | None]) -> bool:
         if where is None:
             return True
         try:
-            return bool(evaluate_expression(where, _combo_properties(aliases, combo)))
+            return bool(evaluate_expression(where, _combo_properties(aliases, combo, by_tid)))
         except UnsupportedExpressionError as exc:
             raise ValueError(f"cannot evaluate view {view_name!r}: WHERE clause: {exc}") from exc
 

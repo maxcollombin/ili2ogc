@@ -105,13 +105,22 @@ View:
         Each ClassAttribute's assigned expression (Derivates[0], a
         PathOrInspFactor) resolves to "<base alias>"."<column>", AS its own
         Name. An intermediate hop through a REFERENCE TO/embedded role adds
-        a comma-joined table.
+        a comma-joined table. An ALL OF attribute whose synthetic identity
+        path resolves to no single column is dropped with a per-attribute
+        note (it was not named), not a whole-View demotion.
     where:
       source: {field: Where}
       note: >
-        And-joined relational comparisons of two plain paths become the
-        view's FROM comma-join predicates + WHERE clause. Anything else
-        demotes the whole View to a -- NOTE (RULE #5).
+        And/Or/Not of relational comparisons of two plain paths and
+        DEFINED(<base> -> role -> ...) are translated - the latter to an
+        EXISTS subquery over the association (FK read from whichever side
+        carries it, the DMAV *_Gueltig idiom). Anything else demotes the
+        whole View to a -- NOTE (RULE #5).
+    view_level_constraints:
+      note: >
+        A VIEW-level UNIQUE / SET / EXISTENCE constraint (on View.Constraint,
+        the ClassConstraint association shared with Class) is surfaced as a
+        -- NOTE - a CREATE VIEW cannot enforce it.
   not_mapped:
     Transient:
       note: "A transient view (never transferred) has no SQL representation - not emitted."

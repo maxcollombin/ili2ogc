@@ -12,17 +12,22 @@ MODEL Axis_LV95_V1_1_d (en)
           AxisSegment->rLinearReference == Sector; 
           =
         ATTRIBUTE
+          !! Attribute names aligned to the published service
+          !! ch.astra.nationalstrassenachsen (ArcGIS REST ?f=json /
+          !! GetFeatureInfo), per FGDM4GS report chapter 4 - checked with
+          !! scripts/crosscheck_view_attributes.py. The service's synthetic
+          !! `id` and geometry-type discriminator `type_geom` are added by
+          !! the publication layer, not derivable from the base model.
           wkb_geometry := AxisSegment -> Geometry;
-          Eigenumer := Axis -> Owner;
-          Segmentname := AxisSegment -> SegmentName;
-          Strassennummer := Axis -> AxisName;
-          Bezeichnung := Axis -> AxisNameLong;
-          Positionscode := Axis -> AxisPositionCode;
-          Type := Axis -> AxisType;
-          Bezugspunkt_Name := Sector -> SectorName;
-          Kilometerwert_km := Sector -> Km;
-          Sektorlange_m := Sector -> SectorLength;
-          Sequenz := Sector -> Sequence;
+          eigentuemer := Axis -> Owner;
+          segmentname := AxisSegment -> SegmentName;
+          strassennummer := Axis -> AxisName;
+          bezeichnung := Axis -> AxisNameLong;
+          positionscode := Axis -> AxisPositionCode;
+          name := Sector -> SectorName;
+          kilometerwert := Sector -> Km;
+          sektorlaenge := Sector -> SectorLength;
+          sortnr := Sector -> Sequence;
       END view_Axis;
     END Axis_d;
 END   Axis_LV95_V1_1_d.

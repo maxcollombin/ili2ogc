@@ -1,0 +1,30 @@
+# NOTICE
+
+Copied unmodified from the swisstopo model repository
+`https://models.geo.admin.ch/V_D/` (Datenmodell der amtlichen Vermessung
+"Bund" / DMAV, Eidgenössische Vermessungsdirektion V+D):
+
+- `DMAV_Grundstuecke_V1_1.ili`   VERSION "2026-01-31"
+- `DMAV_Bodenbedeckung_V1_1.ili` VERSION "2026-01-31"
+- `DMAVTYM_Geometrie_V1_0.ili`   VERSION "2024-05-15"  (TYPE MODEL)
+- `DMAVTYM_Topologie_V1_0.ili`   VERSION "2024-05-15"  (TYPE MODEL)
+- `DMAVTYM_Vermarkung_V1_0.ili`  VERSION "2024-05-15"  (TYPE MODEL)
+- `DMAVTYM_Qualitaet_V1_0.ili`   VERSION "2024-05-15"  (TYPE MODEL)
+- `DMAVTYM_Grafik_V1_0.ili`      VERSION "2024-05-15"  (TYPE MODEL)
+- `DMAVTYM_Modinfo_V1_0.ili`     VERSION "2024-05-15"  (TYPE MODEL)
+
+Real corpus material these fixtures preserve: every DMAV data topic
+defines its published extract as a `VIEW <Class>_Gueltig PROJECTION OF
+<Class>; WHERE DEFINED(...) ...; = ALL OF <Class>; UNIQUE CHxxxxxx: ...`
+- the only shape real VIEW `WHERE` clauses use (nested `DEFINED()` over
+association hops joined by `AND`/`OR`/`NOT`, ending on a plain date
+attribute of the shared `GSNachfuehrung` mutation class). Used to exercise
+`ALL OF` attribute projection, the `DEFINED()` -> `EXISTS (...)`
+`CREATE VIEW` translation, and the view-level `UNIQUE` note. The
+hermetic, self-contained reduction of the same idiom is
+`tests/fixtures/dmav_view_pattern.ili` (+ `tests/fixtures/xtf/dmav_view_pattern.xtf`).
+
+The full IMPORTS closure (`GeometryCHLV95_V2`, `Units`, `CoordSys`) is
+NOT vendored: it is only needed to type the geometry columns, not the
+VIEW attributes or their `WHERE`, so the models build here with just this
+directory as `--repo` (geometry attributes degrade to a `-- NOTE`).

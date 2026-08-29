@@ -126,15 +126,23 @@ concepts:
       `PathOrInspFactor`) becomes `"<base alias>"."<column>"`; an
       intermediate hop through a `REFERENCE TO`/embedded role adds a
       comma-joined table + its `fk = id` predicate (covers `PROJECTION OF`
-      an association navigating its roles). `Where` is walked for
-      `And`-joined relational comparisons of two plain paths (a bare base
-      reference denotes that row's `id`); anything else - a non-relational
-      predicate, a path through an unresolvable reference, an aggregate/
-      function node - demotes the WHOLE View to a `-- NOTE` (RULE #5),
-      never a half-built statement. Verified end-to-end (a real `CREATE
-      VIEW` executing and returning correct rows) against both a live
-      SQLite and a live PostgreSQL engine - see
-      docs/sql-conversion-strategy.md.
+      an association navigating its roles). An `ALL OF <base>` attribute
+      whose synthetic identity path resolves to no single column (a
+      STRUCTURE, an unmapped type) is dropped with a per-attribute
+      `-- NOTE`, not a demotion of the whole View - it was not asked for
+      by name. `Where` is walked for `And`/`Or`/`Not` of relational
+      comparisons of two plain paths and `DEFINED(<base> -> role -> ...)`
+      (a bare base reference denotes that row's `id`; a `DEFINED` over an
+      association becomes `EXISTS (SELECT 1 FROM <next> WHERE <fk join>
+      [AND <rest>])`, reading the FK from whichever side carries it, the
+      same as `build_tables`; the DMAV `*_Gueltig` idiom); anything else -
+      a path through an unresolvable reference, an aggregate/function node
+      - demotes the WHOLE View to a `-- NOTE` (RULE #5), never a half-built
+      statement. A VIEW-level `UNIQUE` / `SET` / `EXISTENCE` constraint (a
+      `CREATE VIEW` cannot carry it) is surfaced as a `-- NOTE` alongside
+      the view. Verified end-to-end (a real `CREATE VIEW` executing and
+      returning correct rows) against both a live SQLite and a live
+      PostgreSQL engine - see docs/sql-conversion-strategy.md.
 
   ObjectOID:
     qualified_name: IlisMeta16.ModelData.ObjectOID

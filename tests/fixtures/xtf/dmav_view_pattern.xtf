@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS" xmlns="http://www.interlis.ch/xtf/2.4/DMAV_ViewPattern_V1">
+  <ili:headersection sender="test-fixture" version="2.4">
+    <ili:models>
+      <ili:model>DMAV_ViewPattern_V1</ili:model>
+    </ili:models>
+  </ili:headersection>
+  <ili:datasection>
+    <Grundstuecke ili:bid="b1">
+
+      <!-- valid: has an Entstehung whose Grundbucheintrag is set; no Untergang -->
+      <GSNachfuehrung ili:tid="n1">
+        <NBIdent>CH0000001</NBIdent><Identifikator>D-100</Identifikator>
+        <GueltigerEintrag>2020-01-10</GueltigerEintrag><Grundbucheintrag>2020-02-14</Grundbucheintrag>
+      </GSNachfuehrung>
+      <Grundstueck ili:tid="g1">
+        <NBIdent>CH0000001</NBIdent><Nummer>100</Nummer><EGRID>CH100000000001</EGRID>
+        <Entstehung ili:ref="n1"/>
+      </Grundstueck>
+
+      <!-- excluded: its Untergang also has a Grundbucheintrag (parcel is gone) -->
+      <GSNachfuehrung ili:tid="n2e">
+        <NBIdent>CH0000001</NBIdent><Identifikator>D-200e</Identifikator>
+        <GueltigerEintrag>2019-01-10</GueltigerEintrag><Grundbucheintrag>2019-02-14</Grundbucheintrag>
+      </GSNachfuehrung>
+      <GSNachfuehrung ili:tid="n2u">
+        <NBIdent>CH0000001</NBIdent><Identifikator>D-200u</Identifikator>
+        <GueltigerEintrag>2022-01-10</GueltigerEintrag><Grundbucheintrag>2022-02-14</Grundbucheintrag>
+      </GSNachfuehrung>
+      <Grundstueck ili:tid="g2">
+        <NBIdent>CH0000001</NBIdent><Nummer>200</Nummer><EGRID>CH100000000002</EGRID>
+        <Entstehung ili:ref="n2e"/>
+        <Untergang ili:ref="n2u"/>
+      </Grundstueck>
+
+      <!-- excluded: Entstehung exists but its Grundbucheintrag is not set yet -->
+      <GSNachfuehrung ili:tid="n3">
+        <NBIdent>CH0000001</NBIdent><Identifikator>D-300</Identifikator>
+        <GueltigerEintrag>2024-01-10</GueltigerEintrag>
+      </GSNachfuehrung>
+      <Grundstueck ili:tid="g3">
+        <NBIdent>CH0000001</NBIdent><Nummer>300</Nummer><EGRID>CH100000000003</EGRID>
+        <Entstehung ili:ref="n3"/>
+      </Grundstueck>
+
+    </Grundstuecke>
+  </ili:datasection>
+</ili:transfer>

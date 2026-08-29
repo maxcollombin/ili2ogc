@@ -1,21 +1,35 @@
 # NOTICE
 
-Copied unmodified from `https://github.com/MediaComem/FGDM4GS`
+Sourced from `https://github.com/MediaComem/FGDM4GS`
 (WP2-WP3 work package, "Flat Geodata Models for Geoservices"), path
 `WP2-WP3/model/<ModelDir>/<file>`:
 
-- `Axis_V1_1_d.ili` (from `Axis_V1_1/`)
-- `IVS_V3_d.ili`, `IVS_V3.ili` (from `IVS_V2_1/`)
-- `Planungszonen_V2_d_A.ili`, `Planungszonen_V2_d_B.ili`, `Planungszonen_V2.ili`
-  (from `Planungszonen_V1_1/`)
-- `SectoralPlanForRoadInfrastructure_V1_4_d.ili` (from
-  `SectoralPlanForRoadInfrastructure_V1_4/`)
+- `IVS_V3.ili` (from `IVS_V2_1/`) - unmodified base model
+- `Planungszonen_V2.ili` (from `Planungszonen_V1_1/`) - unmodified base model
 
-These are the "_d" (data) derived models from the FGDM4GS project
-(HEIG-VD, `Rapport-FGDM4GS_v1-final.pdf`) - each `IMPORTS` a real Swiss
-federal MGDM and defines one `VIEW` (`PROJECTION OF`/`JOIN OF ... WHERE`)
-that flattens it for geoservice publication, per the report's own
-methodology (chapter 4). The companion "_gm" (graphic model) files in the
+The "_d" (data) derived models - `Axis_V1_1_d.ili` (from `Axis_V1_1/`),
+`IVS_V3_d.ili` (from `IVS_V2_1/`), `Planungszonen_V2_d_A.ili` /
+`Planungszonen_V2_d_B.ili` (from `Planungszonen_V1_1/`),
+`SectoralPlanForRoadInfrastructure_V1_4_d.ili` (from
+`SectoralPlanForRoadInfrastructure_V1_4/`) - started from the same repo
+but their `VIEW` attribute names and dimensions have since been ALIGNED
+to the actually published geoservice for each MGDM (ArcGIS REST `?f=json`
+/ GetFeatureInfo for federal data), checked with
+`scripts/crosscheck_view_attributes.py` (2026-08-29). `Axis_V1_1_d` and
+`IVS_V3_d` now match `ch.astra.nationalstrassenachsen` /
+`ch.astra.ivs-nat` field-for-field (bar the publication-added synthetic
+`id` and the `_de/_fr/_it` language split of a `MultilingualText`, which
+an INTERLIS VIEW cannot express). `SectoralPlanForRoadInfrastructure_V1_4_d`
+gained a second VIEW (`view_spm`) for the `PlanningMeasure` half that the
+published `ch.astra.sachplan-infrastruktur-strasse_kraft` layer
+denormalises into the same wide table. `Planungszonen_V2_d_*` are
+unchanged - no federal or geodienste service was found to check them
+against.
+
+These are derived models per the report's own methodology (chapter 4) -
+each `IMPORTS` a real Swiss federal MGDM and defines a `VIEW`
+(`PROJECTION OF`/`JOIN OF ... WHERE`) that flattens it for geoservice
+publication. The companion "_gm" (graphic model) files in the
 same repo are deliberately NOT vendored here - they add `StandardSymbology`
 `GRAPHIC` definitions for cartographic representation, a separate concern
 (backlog item 6, `.claude/PROGRESS.md`), not needed to exercise the VIEW
@@ -28,14 +42,13 @@ here as real, author-confirmed corpus material for testing VIEW
 construction, not redistributed for any other purpose.
 
 **Real corpus finding these fixtures exist to preserve** (2026-08-24):
-all 5 "_d" files exclusively use the `Name := expression` view attribute
+all "_d" files exclusively use the `Name := expression` view attribute
 redefinition form (`viewAttributes`'s `bare_redefinition_list`/
 `modifier_reassignment` alternative) - NONE use `ALL OF`. This form was
 previously `status: unresolved` in `InterlisModelBuilder` with "no real
-corpus evidence" noted (backlog item 8 Lot A2) - these 5 files are that
-evidence. Confirmed empirically: `View.RenamedBaseView`/`FormationKind`/
-`Where` build correctly for all 5, but `View.ClassAttribute` stays EMPTY
-(`0` for every file) - a real, high-value gap, see `.claude/PROGRESS.md`.
+corpus evidence" noted (backlog item 8 Lot A2) - these files are that
+evidence. `View.RenamedBaseView`/`FormationKind`/`Where` and, since item
+10, `View.ClassAttribute` all build correctly.
 
 **To build these against their full IMPORTS closure**, a repo directory
 also containing the base MGDMs they import is needed: `Axis_LV95_V1_1`
