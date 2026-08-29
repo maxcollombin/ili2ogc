@@ -50,9 +50,13 @@ conversions as the CLI's `convert`/`convert-jsonfg`. Pass a
 ## Development
 
 ```sh
-uv run python3 scripts/validate_spec.py   # spec/grammar/mapping/ vs. the metamodel
-uv run python3 -m pytest tests/
+uv run pytest                 # test suite
+uv run ruff check src/ tests/ # lint (also enforced in CI)
+uv run black src/ tests/      # format
 ```
+
+CI (`.github/workflows/ci.yml`) runs `ruff`, `black --check` and the test
+suite on Python 3.10/3.12/3.14.
 
 `spec/grammar/mapping/*.yml` and `mappings/ilismeta16-*.yml` (the
 IlisMeta16 metamodel) are the executable source of truth: `InterlisModelBuilder`
