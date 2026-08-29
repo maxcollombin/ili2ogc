@@ -173,3 +173,36 @@ def test_extends_cross_model_short_name_collision_resolves_to_imported_class():
     assert sup is not cls  # RULE #6 - le self-loop exact du bug
     assert sup.Name == "ModInfo"
     assert list(attributes_of(cls)) == ["LatestModification"]
+
+
+# --- `IMPORTS UNQUALIFIED` + short-name collision entre un modele de base
+# et son extension DANS LE MEME FICHIER (forme reelle de
+# Localisation_V1.MultilingualText / LocalisationCH_V1.MultilingualText,
+# importe non qualifie par WasserBase_Codelisten_V1_1 et consorts) : la
+# reference nue `Multiling` doit se lier a DerivedLoc.Multiling, PAS rester
+# UnresolvedNamedReference parce que la table du fichier partage porte
+# aussi BaseLoc.Multiling (meme nom court, meme kind `Class`). ---
+
+UNQUALIFIED_COLLISION_DIR = Path(__file__).parent / "fixtures/imports_unqualified_short_name_collision"
+
+
+def test_imports_unqualified_reference_resolves_to_the_named_model_not_its_same_named_base():
+    tree, errors = parse_file(UNQUALIFIED_COLLISION_DIR / "consumer.ili")
+    assert not errors, errors
+    repository = ModelRepository([UNQUALIFIED_COLLISION_DIR])
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+
+    from interlis.xtf.schema import attributes_of, resolve_class
+
+    cls = resolve_class(
+        "Consumer.T.Item", symbol_table=builder.symbol_table, repository=repository,
+    )
+    label_type = cls.ClassAttribute[0].Type
+    assert not isinstance(label_type, UnresolvedNamedReference)
+    assert label_type.Name == "Multiling"
+    # DerivedLoc.Multiling, not BaseLoc.Multiling: it carries the extension's
+    # own `Extra` on top of the inherited `Txt`.
+    assert list(attributes_of(label_type)) == ["Txt", "Extra"]

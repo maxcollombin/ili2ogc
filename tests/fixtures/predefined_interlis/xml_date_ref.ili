@@ -8,6 +8,7 @@ MODEL XmlDateRef AT "https://example.org/xml-date-ref" VERSION "2026-08-27" =
       Erstellungsdatum: INTERLIS.XMLDate;
       Uhrzeit: INTERLIS.XMLTime;
       Zeitstempel: INTERLIS.XMLDateTime;
+      Ili1Datum: INTERLIS.INTERLIS_1_DATE;
     END Thing;
   END T;
 

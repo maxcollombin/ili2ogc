@@ -1,0 +1,24 @@
+INTERLIS 2.4;
+
+!! Same shape as the real CHBase_Part2_LOCALISATION_V1.ili: a base TYPE
+!! MODEL and its extension in ONE file, both declaring a STRUCTURE of the
+!! same short name (`Multiling`). A bare `Multiling` reference resolved
+!! against this whole-file table finds TWO `Class`-kind candidates.
+
+TYPE MODEL BaseLoc (en) AT "https://example.org/baseloc" VERSION "2026-08-29" =
+
+  STRUCTURE Multiling =
+    Txt : MANDATORY TEXT*99;
+  END Multiling;
+
+END BaseLoc.
+
+TYPE MODEL DerivedLoc (en) AT "https://example.org/derivedloc" VERSION "2026-08-29" =
+
+  IMPORTS BaseLoc;
+
+  STRUCTURE Multiling EXTENDS BaseLoc.Multiling =
+    Extra : TEXT*10;
+  END Multiling;
+
+END DerivedLoc.

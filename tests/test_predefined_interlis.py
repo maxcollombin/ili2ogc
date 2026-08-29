@@ -122,6 +122,14 @@ def test_qualified_xml_date_time_resolve_to_formattedtype():
         assert not isinstance(type_value, UnresolvedNamedReference)
         assert type_value._qualified_class == "IlisMeta16.ModelData.FormattedType"
         assert type_value.Format == expected
+    # INTERLIS_1_DATE: an INTERLIS 1 compatibility date, `TEXT*8` (YYYYMMDD)
+    # per ili2c's own predefined model - a plain Name, resolves via the
+    # same domainRef path as GregorianYear, not a FORMAT.
+    ili1 = next(a for a in thing.ClassAttribute if a.Name == "Ili1Datum")
+    assert not isinstance(ili1.Type, UnresolvedNamedReference)
+    assert ili1.Type._qualified_class == "IlisMeta16.ModelData.TextType"
+    assert ili1.Type.Name == "INTERLIS_1_DATE"
+    assert str(ili1.Type.MaxLength) == "8"
 
 
 def test_reserved_token_predefined_types_materialise_to_real_instances():

@@ -1,0 +1,18 @@
+INTERLIS 2.4;
+
+!! `IMPORTS UNQUALIFIED DerivedLoc` + a bare `Multiling` reference: it must
+!! bind to DerivedLoc.Multiling, not stay unresolved because the shared
+!! derivedloc.ili table also holds BaseLoc.Multiling (same short name, both
+!! Class kind).
+
+MODEL Consumer AT "https://example.org/consumer" VERSION "2026-08-29" =
+
+  IMPORTS UNQUALIFIED DerivedLoc;
+
+  TOPIC T =
+    CLASS Item =
+      Label : MANDATORY Multiling;
+    END Item;
+  END T;
+
+END Consumer.

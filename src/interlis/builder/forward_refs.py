@@ -302,9 +302,18 @@ class ForwardRefResolver:
             )
         if repository is not None:
             for model_name in self.symbol_table.unqualified_imports:
-                found = repository.resolve_external(model_name, ref.name, kind_hint)
-                if found is not None:
-                    return found
+                # Try the name QUALIFIED with that model first: `IMPORTS
+                # UNQUALIFIED X` names X's namespace specifically, and X's
+                # own file can declare a base model of the same short name
+                # (e.g. `LocalisationCH_V1.MultilingualText EXTENDS
+                # Localisation_V1.MultilingualText` - both `Class` kind, so
+                # the bare-name lookup in the shared file table finds two
+                # candidates and gives up). A bare-name retry stays as the
+                # fallback for a name that is genuinely only short.
+                for candidate in (f"{model_name}.{ref.name}", ref.name):
+                    found = repository.resolve_external(model_name, candidate, kind_hint)
+                    if found is not None:
+                        return found
         return UnresolvedNamedReference(ref.name, reason="external_import")
 
     def _resolve_via_topic_extends(self, ref: ForwardRef, kind_hint, repository=None) -> Any | None:
