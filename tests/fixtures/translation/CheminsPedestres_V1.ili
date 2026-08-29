@@ -1,0 +1,29 @@
+INTERLIS 2.4;
+
+!! French TRANSLATION OF Wanderwege_V1 - re-declares the whole structure
+!! with translated identifiers, matched positionally to the base (the
+!! grammar has no rename syntax). The transfer format is unchanged.
+
+MODEL CheminsPedestres_V1 (fr)
+  AT "mailto:test@example.org" VERSION "2026-08-29"
+  TRANSLATION OF Wanderwege_V1 ["2026-08-29"] =
+
+  DOMAIN
+    CategorieChemin = (CheminPedestre, CheminDeRandonneeMontagne, CheminAlpin);
+
+  TOPIC Reseau =
+
+    CLASS TronconChemin =
+      Designation : MANDATORY TEXT*40;
+      Categorie : MANDATORY CategorieChemin;
+      TypeRevetement : TEXT*20;
+    END TronconChemin;
+
+    CLASS Indicateur =
+      Emplacement : MANDATORY TEXT*40;
+      Altitude : 0 .. 5000;
+    END Indicateur;
+
+  END Reseau;
+
+END CheminsPedestres_V1.

@@ -21,6 +21,7 @@ from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.convert.sql import build_tables, build_views, render_gpkg, render_postgresql
+from interlis.convert.translation import load_translation, rename_feature_collection, rename_json_schema
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
 from interlis.xtf.model_resolution import header_completeness, header_model_lookup, root_model_names
@@ -190,6 +191,12 @@ def cmd_convert(args: argparse.Namespace) -> int:
     # than guessing which MODEL the file-level metadata belongs to.
     root_model = root if isinstance(root, MetaInstance) and root._qualified_class.rsplit(".", 1)[-1] == "Model" else None
     schema = model_to_json_schema(classes + views, symbol_table=builder.symbol_table, model=root_model)
+    if args.lang:
+        translation = load_translation(getattr(root_model, "Name", None) or "", args.lang, repository)
+        if translation is None:
+            print(f"--lang {args.lang}: no TRANSLATION OF {getattr(root_model, 'Name', path.stem)!r} for '{args.lang}' in --repo", file=sys.stderr)
+            return 1
+        schema = rename_json_schema(schema, translation)
     text = json.dumps(schema, indent=2, ensure_ascii=False)
     if args.output:
         Path(args.output).write_text(text + "\n", encoding="utf-8")
@@ -595,6 +602,14 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         transfer, symbol_table=builder.symbol_table, repository=repository, views=views,
         schema_url=args.feature_schema_url, include_child_rows=args.include_child_rows,
     )
+    if args.lang:
+        root_names = builder.symbol_table.root_model_names() if hasattr(builder.symbol_table, "root_model_names") else []
+        base_name = next(iter(root_names), None) or model_path.stem
+        translation = load_translation(base_name, args.lang, repository)
+        if translation is None:
+            print(f"--lang {args.lang}: no TRANSLATION OF {base_name!r} for '{args.lang}' in --repo", file=sys.stderr)
+            return 1
+        collection = rename_feature_collection(collection, translation)
     text = json.dumps(collection, indent=2, ensure_ascii=False)
     if args.output:
         Path(args.output).write_text(text + "\n", encoding="utf-8")
@@ -624,6 +639,11 @@ def main(argv: list[str] | None = None) -> int:
     convert_parser.add_argument(
         "--repo", action="append", default=[], metavar="DIR",
         help="Directory of .ili models used to resolve references to imported models (IMPORTS) - repeatable.",
+    )
+    convert_parser.add_argument(
+        "--lang", default=None, metavar="CODE",
+        help="Rename output identifiers through a `TRANSLATION OF` model for this language (e.g. `fr`), "
+        "found by name in --repo. The input .ili and the transfer format are unchanged.",
     )
     convert_parser.add_argument("-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.")
     convert_parser.set_defaults(func=cmd_convert)
@@ -700,6 +720,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     convert_jsonfg_parser.add_argument(
         "-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout.",
+    )
+    convert_jsonfg_parser.add_argument(
+        "--lang", default=None, metavar="CODE",
+        help="Rename `featureType` and `properties` keys through a `TRANSLATION OF` model for this "
+        "language (e.g. `fr`), found by name in --repo. The .xtf wire tags stay in the base language.",
     )
     convert_jsonfg_parser.add_argument(
         "--feature-schema-url", default=None, metavar="URL",

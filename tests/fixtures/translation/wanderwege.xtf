@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS" xmlns="http://www.interlis.ch/xtf/2.4/Wanderwege_V1">
+  <ili:headersection sender="test-fixture" version="2.4">
+    <ili:models><ili:model>Wanderwege_V1</ili:model></ili:models>
+  </ili:headersection>
+  <ili:datasection>
+    <Netz ili:bid="b1">
+      <Wegabschnitt ili:tid="w1">
+        <Bezeichnung>Seeuferweg</Bezeichnung><Kategorie>Wanderweg</Kategorie><Belagsart>Naturbelag</Belagsart>
+      </Wegabschnitt>
+      <Wegweiser ili:tid="s1">
+        <Standort>Bahnhofplatz</Standort><Hoehe>512</Hoehe>
+      </Wegweiser>
+    </Netz>
+  </ili:datasection>
+</ili:transfer>

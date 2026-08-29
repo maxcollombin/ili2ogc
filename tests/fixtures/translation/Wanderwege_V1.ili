@@ -1,0 +1,26 @@
+INTERLIS 2.4;
+
+!! Minimal base model for the TRANSLATION OF / `--lang` overlay test.
+
+MODEL Wanderwege_V1 (de)
+  AT "mailto:test@example.org" VERSION "2026-08-29" =
+
+  DOMAIN
+    Wegkategorie = (Wanderweg, Bergwanderweg, AlpinWanderweg);
+
+  TOPIC Netz =
+
+    CLASS Wegabschnitt =
+      Bezeichnung : MANDATORY TEXT*40;
+      Kategorie : MANDATORY Wegkategorie;
+      Belagsart : TEXT*20;
+    END Wegabschnitt;
+
+    CLASS Wegweiser =
+      Standort : MANDATORY TEXT*40;
+      Hoehe : 0 .. 5000;
+    END Wegweiser;
+
+  END Netz;
+
+END Wanderwege_V1.
