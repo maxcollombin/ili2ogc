@@ -1,0 +1,448 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="windenergie_metadaten" 
+           type="ms:windenergie_metadatenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="windenergie_metadatenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="windenergie" minOccurs="0" type="string"/>
+          <element name="stand" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="windenergie_flaechen" 
+           type="ms:windenergie_flaechenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="windenergie_flaechenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="windenergie_linien" 
+           type="ms:windenergie_linienType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="windenergie_linienType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiCurvePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="windenergie_punkte" 
+           type="ms:windenergie_punkteType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="windenergie_punkteType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="wasserkraft_metadaten" 
+           type="ms:wasserkraft_metadatenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="wasserkraft_metadatenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="wasserkraft" minOccurs="0" type="string"/>
+          <element name="stand" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="wasserkraft_flaechen" 
+           type="ms:wasserkraft_flaechenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="wasserkraft_flaechenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="wasserkraft_linien" 
+           type="ms:wasserkraft_linienType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="wasserkraft_linienType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiCurvePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="wasserkraft_punkte" 
+           type="ms:wasserkraft_punkteType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="wasserkraft_punkteType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="solarenergie_metadaten" 
+           type="ms:solarenergie_metadatenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="solarenergie_metadatenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="solarenergie" minOccurs="0" type="string"/>
+          <element name="stand" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="solarenergie_flaechen" 
+           type="ms:solarenergie_flaechenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="solarenergie_flaechenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="solarenergie_linien" 
+           type="ms:solarenergie_linienType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="solarenergie_linienType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiCurvePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="solarenergie_punkte" 
+           type="ms:solarenergie_punkteType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="solarenergie_punkteType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="biomasse_metadaten" 
+           type="ms:biomasse_metadatenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="biomasse_metadatenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="biomasse" minOccurs="0" type="string"/>
+          <element name="stand" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="biomasse_flaechen" 
+           type="ms:biomasse_flaechenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="biomasse_flaechenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="biomasse_linien" 
+           type="ms:biomasse_linienType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="biomasse_linienType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiCurvePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="biomasse_punkte" 
+           type="ms:biomasse_punkteType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="biomasse_punkteType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="geothermie_metadaten" 
+           type="ms:geothermie_metadatenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="geothermie_metadatenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="geothermie" minOccurs="0" type="string"/>
+          <element name="stand" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="geothermie_flaechen" 
+           type="ms:geothermie_flaechenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="geothermie_flaechenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="geothermie_linien" 
+           type="ms:geothermie_linienType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="geothermie_linienType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiCurvePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="geothermie_punkte" 
+           type="ms:geothermie_punkteType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="geothermie_punkteType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="energieform" minOccurs="0" type="string"/>
+          <element name="objektbezeichnung" minOccurs="0" type="string"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="objektart" minOccurs="0" type="string"/>
+          <element name="genehmigungsdatum" minOccurs="0" type="string"/>
+          <element name="beschlussdatum_kanton" minOccurs="0" type="string"/>
+          <element name="weblink" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

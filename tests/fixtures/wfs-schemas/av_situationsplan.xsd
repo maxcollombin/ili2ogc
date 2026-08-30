@@ -1,0 +1,811 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="single_objects_surface_elements_underground" 
+           type="ms:single_objects_surface_elements_undergroundType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="single_objects_surface_elements_undergroundType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="gwr_egid" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="land_cover_surface" 
+           type="ms:land_cover_surfaceType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="land_cover_surfaceType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="gwr_egid" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="land_cover_surface_water" 
+           type="ms:land_cover_surface_waterType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="land_cover_surface_waterType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="land_cover_surface_project" 
+           type="ms:land_cover_surface_projectType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="land_cover_surface_projectType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="gwr_egid" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="single_objects_surface_elements_without_underground" 
+           type="ms:single_objects_surface_elements_without_undergroundType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="single_objects_surface_elements_without_undergroundType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="gwr_egid" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="land_cover_surface_building" 
+           type="ms:land_cover_surface_buildingType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="land_cover_surface_buildingType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="gwr_egid" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="land_cover_surface_project_buildings" 
+           type="ms:land_cover_surface_project_buildingsType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="land_cover_surface_project_buildingsType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="gwr_egid" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="single_objects_surface_elements_underground_outline" 
+           type="ms:single_objects_surface_elements_underground_outlineType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="single_objects_surface_elements_underground_outlineType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="gwr_egid" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="house_numbers_and_names" 
+           type="ms:house_numbers_and_namesType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="house_numbers_and_namesType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="text" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="pipelines_linear_elements" 
+           type="ms:pipelines_linear_elementsType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="pipelines_linear_elementsType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="betreiber" minOccurs="0" type="string"/>
+          <element name="medium" minOccurs="0" type="string"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="sichtbarkeit" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="pipeline_labels" 
+           type="ms:pipeline_labelsType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="pipeline_labelsType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="betreiber" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="single_objects_linear_elements" 
+           type="ms:single_objects_linear_elementsType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="single_objects_linear_elementsType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="single_objects_point_elements" 
+           type="ms:single_objects_point_elementsType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="single_objects_point_elementsType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="qualitaet" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="numbers_and_names" 
+           type="ms:numbers_and_namesType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="numbers_and_namesType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="text" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="locality_labels" 
+           type="ms:locality_labelsType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="locality_labelsType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="strassenname" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="house_addresses" 
+           type="ms:house_addressesType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="house_addressesType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="hausnummer" minOccurs="0" type="string"/>
+          <element name="gebaeudename" minOccurs="0" type="string"/>
+          <element name="gwr_egid" minOccurs="0" type="string"/>
+          <element name="gwr_edid" minOccurs="0" type="string"/>
+          <element name="strassenname" minOccurs="0" type="string"/>
+          <element name="plz" minOccurs="0" type="integer"/>
+          <element name="zusatzziffern" minOccurs="0" type="string"/>
+          <element name="ortschaftsname" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="field_name" 
+           type="ms:field_nameType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="field_nameType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="name" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="place_name" 
+           type="ms:place_nameType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="place_nameType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="name" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="terrain_name" 
+           type="ms:terrain_nameType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="terrain_nameType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="name" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="slide" 
+           type="ms:slideType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="slideType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="name" minOccurs="0" type="string"/>
+          <element name="gueltiger_eintrag" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="slide_name" 
+           type="ms:slide_nameType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="slide_nameType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="name" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="real_estate" 
+           type="ms:real_estateType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="real_estateType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="egris_egrid" minOccurs="0" type="string"/>
+          <element name="vollstaendigkeit" minOccurs="0" type="string"/>
+          <element name="flaeche" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="real_estate_project" 
+           type="ms:real_estate_projectType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="real_estate_projectType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="egris_egrid" minOccurs="0" type="string"/>
+          <element name="vollstaendigkeit" minOccurs="0" type="string"/>
+          <element name="flaeche" minOccurs="0" type="integer"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="dpr_and_mine" 
+           type="ms:dpr_and_mineType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="dpr_and_mineType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="egris_egrid" minOccurs="0" type="string"/>
+          <element name="vollstaendigkeit" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="flaeche" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="dpr_and_mine_project" 
+           type="ms:dpr_and_mine_projectType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="dpr_and_mine_projectType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="egris_egrid" minOccurs="0" type="string"/>
+          <element name="vollstaendigkeit" minOccurs="0" type="string"/>
+          <element name="art" minOccurs="0" type="string"/>
+          <element name="flaeche" minOccurs="0" type="integer"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="ownership_numbers" 
+           type="ms:ownership_numbersType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="ownership_numbersType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="dif" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="ownership_numbers_project" 
+           type="ms:ownership_numbers_projectType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="ownership_numbers_projectType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="ori" minOccurs="0" type="double"/>
+          <element name="loc" minOccurs="0" type="string"/>
+          <element name="dif" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="real_estate_helpline" 
+           type="ms:real_estate_helplineType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="real_estate_helplineType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="municipal_boundary" 
+           type="ms:municipal_boundaryType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="municipal_boundaryType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="name" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="district_boundary" 
+           type="ms:district_boundaryType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="district_boundaryType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="canton_boundary" 
+           type="ms:canton_boundaryType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="canton_boundaryType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="national_border" 
+           type="ms:national_borderType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="national_borderType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="boundary_points" 
+           type="ms:boundary_pointsType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="boundary_pointsType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="punktzeichen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="hfp3" 
+           type="ms:hfp3Type" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="hfp3Type">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="koordinate" minOccurs="0" type="string"/>
+          <element name="hoehe" minOccurs="0" type="double"/>
+          <element name="punktzeichen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="lfp3" 
+           type="ms:lfp3Type" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="lfp3Type">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="koordinate" minOccurs="0" type="string"/>
+          <element name="hoehe" minOccurs="0" type="double"/>
+          <element name="punktzeichen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="hfp2" 
+           type="ms:hfp2Type" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="hfp2Type">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="koordinate" minOccurs="0" type="string"/>
+          <element name="hoehe" minOccurs="0" type="double"/>
+          <element name="punktzeichen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="lfp2" 
+           type="ms:lfp2Type" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="lfp2Type">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="koordinate" minOccurs="0" type="string"/>
+          <element name="hoehe" minOccurs="0" type="double"/>
+          <element name="punktzeichen" minOccurs="0" type="string"/>
+          <element name="begehbar" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="hfp1" 
+           type="ms:hfp1Type" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="hfp1Type">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="koordinate" minOccurs="0" type="string"/>
+          <element name="hoehe" minOccurs="0" type="double"/>
+          <element name="punktzeichen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="lfp1" 
+           type="ms:lfp1Type" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="lfp1Type">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="kategorie" minOccurs="0" type="string"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="koordinate" minOccurs="0" type="string"/>
+          <element name="hoehe" minOccurs="0" type="double"/>
+          <element name="punktzeichen" minOccurs="0" type="string"/>
+          <element name="begehbar" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="boundary_territorial_points" 
+           type="ms:boundary_territorial_pointsType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="boundary_territorial_pointsType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="bfsnr" minOccurs="0" type="integer"/>
+          <element name="gueltigkeit" minOccurs="0" type="string"/>
+          <element name="punktzeichen" minOccurs="0" type="string"/>
+          <element name="hoheitsgrenzstein" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

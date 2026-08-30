@@ -1,0 +1,396 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="sammelereignis" 
+           type="ms:sammelereignisType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="sammelereignisType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_se_id" minOccurs="0" type="string"/>
+          <element name="ereignisname" minOccurs="0" type="string"/>
+          <element name="sammelereignisnummer" minOccurs="0" type="string"/>
+          <element name="ereignisdatum" minOccurs="0" type="string"/>
+          <element name="datumsgenauigkeit" minOccurs="0" type="string"/>
+          <element name="ereignisdatum_darstellung" minOccurs="0" type="string"/>
+          <element name="hauptprozess_wasser" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_rutschung" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_sturz" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_lawine" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_einsturz_absenkung" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_andere" minOccurs="0" type="boolean"/>
+          <element name="gewaessername" minOccurs="0" type="string"/>
+          <element name="meteo_bemerkungen" minOccurs="0" type="string"/>
+          <element name="schaeden_bemerkungen" minOccurs="0" type="string"/>
+          <element name="prozess_bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_wasser_ohne_detailinformationen" 
+           type="ms:prozessraum_wasser_ohne_detailinformationenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_wasser_ohne_detailinformationenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_wasser" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_wasser_oberflaechenabfluss_grundwasseraufstoss" 
+           type="ms:prozessraum_wasser_oberflaechenabfluss_grundwasseraufstossType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_wasser_oberflaechenabfluss_grundwasseraufstossType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_wasser" minOccurs="0" type="string"/>
+          <element name="max_ueberschwemmungstiefe_m" minOccurs="0" type="double"/>
+          <element name="max_ueberschwemmungstiefe_mao" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_wasser_ufererosion" 
+           type="ms:prozessraum_wasser_ufererosionType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_wasser_ufererosionType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_wasser" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_wasser_ueberschwemmung_uebermurung" 
+           type="ms:prozessraum_wasser_ueberschwemmung_uebermurungType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_wasser_ueberschwemmung_uebermurungType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_wasser" minOccurs="0" type="string"/>
+          <element name="ausloesung_gerinnergeometrie" minOccurs="0" type="boolean"/>
+          <element name="ausloesung_verklausung_schwemmgut" minOccurs="0" type="boolean"/>
+          <element name="ausloesung_verklausung_geschiebe" minOccurs="0" type="boolean"/>
+          <element name="ausloesung_geschiebeauflandung" minOccurs="0" type="boolean"/>
+          <element name="ausloesung_dammbruch" minOccurs="0" type="boolean"/>
+          <element name="ausloesung_kanalisation" minOccurs="0" type="boolean"/>
+          <element name="ausloesung_seeausbruch" minOccurs="0" type="boolean"/>
+          <element name="ausloesung_andere" minOccurs="0" type="boolean"/>
+          <element name="ausloesung_mao" minOccurs="0" type="string"/>
+          <element name="seeausbruchsvolumen_m3" minOccurs="0" type="integer"/>
+          <element name="seeausbruchsvolumen_mao" minOccurs="0" type="string"/>
+          <element name="kubatur_abgelagerte_feststoffe_m3" minOccurs="0" type="integer"/>
+          <element name="kubatur_abgelagerte_feststoffe_mao" minOccurs="0" type="string"/>
+          <element name="max_ueberschwemmungstiefe_m" minOccurs="0" type="double"/>
+          <element name="max_ueberschwemmungstiefe_mao" minOccurs="0" type="string"/>
+          <element name="murgang_ablagerungskubatur_m3" minOccurs="0" type="integer"/>
+          <element name="murgang_ablagerungskubatur_mao" minOccurs="0" type="string"/>
+          <element name="maximalabfluss_m3" minOccurs="0" type="double"/>
+          <element name="maximalabfluss_mao" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_rutschung" 
+           type="ms:prozessraum_rutschungType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_rutschungType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_rutschung" minOccurs="0" type="string"/>
+          <element name="bewegte_kubatur_m3" minOccurs="0" type="double"/>
+          <element name="bewegte_kubatur_mao" minOccurs="0" type="string"/>
+          <element name="max_ablagerungsmaechtigkeit_staubereich_m" minOccurs="0" type="double"/>
+          <element name="max_ablagerungsmaechtigkeit_staubereich_mao" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_sturz" 
+           type="ms:prozessraum_sturzType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_sturzType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_sturz" minOccurs="0" type="string"/>
+          <element name="abgelagerte_gesamtkubatur_m3" minOccurs="0" type="double"/>
+          <element name="abgelagerte_gesamtkubatur_mao" minOccurs="0" type="string"/>
+          <element name="anzahl_abgelagerte_steine_bloecke" minOccurs="0" type="string"/>
+          <element name="anzahl_abgelagerte_steine_bloecke_mao" minOccurs="0" type="string"/>
+          <element name="abmessung_groesster_block_achse_a_m" minOccurs="0" type="double"/>
+          <element name="abmessung_groesster_block_achse_b_m" minOccurs="0" type="double"/>
+          <element name="abmessung_groesster_block_achse_c_m" minOccurs="0" type="double"/>
+          <element name="abmessung_groesster_block_achse_a_b_c_mao" minOccurs="0" type="string"/>
+          <element name="form_des_groessten_blockes" minOccurs="0" type="string"/>
+          <element name="form_des_groessten_blockes_mao" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_lawine" 
+           type="ms:prozessraum_lawineType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_lawineType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_lawine" minOccurs="0" type="string"/>
+          <element name="ablagerungskubatur_m3" minOccurs="0" type="double"/>
+          <element name="ablagerungskubatur_mao" minOccurs="0" type="string"/>
+          <element name="max_ablagerungsmaechtigkeit_m" minOccurs="0" type="double"/>
+          <element name="max_ablagerungsmaechtigkeit_mao" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_ea_ohne_detailinformationen" 
+           type="ms:prozessraum_ea_ohne_detailinformationenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_ea_ohne_detailinformationenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_einsturz_absenkung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_einsturz" 
+           type="ms:prozessraum_einsturzType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_einsturzType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_einsturz" minOccurs="0" type="string"/>
+          <element name="einsturzflaeche_m2" minOccurs="0" type="integer"/>
+          <element name="einsturzflaeche_mao" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_absenkung" 
+           type="ms:prozessraum_absenkungType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_absenkungType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="teilprozess_absenkung" minOccurs="0" type="string"/>
+          <element name="absenkungsflaeche_m2" minOccurs="0" type="integer"/>
+          <element name="absenkungsflaeche_mao" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="prozessraum_anderer_prozess" 
+           type="ms:prozessraum_anderer_prozessType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="prozessraum_anderer_prozessType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="primaerschluessel_pr_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_di_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_di_pr_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="evidenz" minOccurs="0" type="string"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="name_anderer_prozess" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="basisinformationen" 
+           type="ms:basisinformationenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="basisinformationenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="primaerschluessel_bi_id" minOccurs="0" type="string"/>
+          <element name="fremdschluessel_se_id" minOccurs="0" type="string"/>
+          <element name="storme_nummer" minOccurs="0" type="string"/>
+          <element name="hauptprozess_wasser" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_rutschung" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_sturz" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_lawine" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_einsturz_absenkung" minOccurs="0" type="boolean"/>
+          <element name="hauptprozess_anderer" minOccurs="0" type="boolean"/>
+          <element name="massgebender_hauptprozess" minOccurs="0" type="string"/>
+          <element name="ereignisdatum" minOccurs="0" type="string"/>
+          <element name="datumsgenauigkeit" minOccurs="0" type="string"/>
+          <element name="ereignisdatum_darstellung" minOccurs="0" type="string"/>
+          <element name="ereignisdauer_tag" minOccurs="0" type="integer"/>
+          <element name="ereignisdauer_stunde" minOccurs="0" type="integer"/>
+          <element name="ereignisdauer_minute" minOccurs="0" type="integer"/>
+          <element name="ereignisdauer_mao" minOccurs="0" type="string"/>
+          <element name="erhebungsart" minOccurs="0" type="string"/>
+          <element name="gletscher" minOccurs="0" type="string"/>
+          <element name="name_der_lokalitaet" minOccurs="0" type="string"/>
+          <element name="gewaessername" minOccurs="0" type="string"/>
+          <element name="gletschername" minOccurs="0" type="string"/>
+          <element name="gemeinde" minOccurs="0" type="string"/>
+          <element name="bemerkungen_basisinformationen" minOccurs="0" type="string"/>
+          <element name="status_storme_objekt" minOccurs="0" type="string"/>
+          <element name="schaeden_an_menschen_tieren" minOccurs="0" type="string"/>
+          <element name="todesfaelle_an_menschen" minOccurs="0" type="string"/>
+          <element name="menschen_verletzt" minOccurs="0" type="string"/>
+          <element name="tote_oder_verletzte_tiere" minOccurs="0" type="string"/>
+          <element name="schaeden_an_sachwerten" minOccurs="0" type="string"/>
+          <element name="schaeden_an_infrastruktur_verbindungen" minOccurs="0" type="string"/>
+          <element name="schaeden_an_landwirtschaftsland_wald" minOccurs="0" type="string"/>
+          <element name="schaeden_aggregiert" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="bemerkungen_schaeden" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

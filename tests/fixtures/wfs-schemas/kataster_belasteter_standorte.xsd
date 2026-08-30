@@ -1,0 +1,97 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="belastete_standorte_flaechen" 
+           type="ms:belastete_standorte_flaechenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="belastete_standorte_flaechenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:MultiSurfacePropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="katasternummer" minOccurs="0" type="string"/>
+          <element name="url_standort" minOccurs="0" type="string"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="parzellennummern" minOccurs="0" type="string"/>
+          <element name="egrid" minOccurs="0" type="string"/>
+          <element name="standorttyp_code" minOccurs="0" type="string"/>
+          <element name="standorttyp" minOccurs="0" type="string"/>
+          <element name="inbetrieb" minOccurs="0" type="boolean"/>
+          <element name="inbetrieb_txt" minOccurs="0" type="string"/>
+          <element name="deponietypen_codes" minOccurs="0" type="string"/>
+          <element name="deponietypen" minOccurs="0" type="string"/>
+          <element name="nachsorge" minOccurs="0" type="boolean"/>
+          <element name="nachsorge_txt" minOccurs="0" type="string"/>
+          <element name="untersuchungsmassnahmen_codes" minOccurs="0" type="string"/>
+          <element name="untersuchungsmassnahmen" minOccurs="0" type="string"/>
+          <element name="statusaltlv_code" minOccurs="0" type="string"/>
+          <element name="statusaltlv" minOccurs="0" type="string"/>
+          <element name="ersteintrag" minOccurs="0" type="string"/>
+          <element name="letzteanpassung" minOccurs="0" type="string"/>
+          <element name="url_kbs_auszug" minOccurs="0" type="string"/>
+          <element name="bemerkung" minOccurs="0" type="string"/>
+          <element name="zustaendige_behoerde" minOccurs="0" type="string"/>
+          <element name="url_behoerde" minOccurs="0" type="string"/>
+          <element name="uid_behoerde" minOccurs="0" type="string"/>
+          <element name="katastername" minOccurs="0" type="string"/>
+          <element name="url_kataster" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="belastete_standorte_punkte" 
+           type="ms:belastete_standorte_punkteType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="belastete_standorte_punkteType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="katasternummer" minOccurs="0" type="string"/>
+          <element name="url_standort" minOccurs="0" type="string"/>
+          <element name="nbident" minOccurs="0" type="string"/>
+          <element name="parzellennummern" minOccurs="0" type="string"/>
+          <element name="egrid" minOccurs="0" type="string"/>
+          <element name="standorttyp_code" minOccurs="0" type="string"/>
+          <element name="standorttyp" minOccurs="0" type="string"/>
+          <element name="inbetrieb" minOccurs="0" type="boolean"/>
+          <element name="inbetrieb_txt" minOccurs="0" type="string"/>
+          <element name="deponietypen_codes" minOccurs="0" type="string"/>
+          <element name="deponietypen" minOccurs="0" type="string"/>
+          <element name="nachsorge" minOccurs="0" type="boolean"/>
+          <element name="nachsorge_txt" minOccurs="0" type="string"/>
+          <element name="untersuchungsmassnahmen_codes" minOccurs="0" type="string"/>
+          <element name="untersuchungsmassnahmen" minOccurs="0" type="string"/>
+          <element name="statusaltlv_code" minOccurs="0" type="string"/>
+          <element name="statusaltlv" minOccurs="0" type="string"/>
+          <element name="ersteintrag" minOccurs="0" type="string"/>
+          <element name="letzteanpassung" minOccurs="0" type="string"/>
+          <element name="url_kbs_auszug" minOccurs="0" type="string"/>
+          <element name="bemerkung" minOccurs="0" type="string"/>
+          <element name="zustaendige_behoerde" minOccurs="0" type="string"/>
+          <element name="url_behoerde" minOccurs="0" type="string"/>
+          <element name="uid_behoerde" minOccurs="0" type="string"/>
+          <element name="katastername" minOccurs="0" type="string"/>
+          <element name="url_kataster" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

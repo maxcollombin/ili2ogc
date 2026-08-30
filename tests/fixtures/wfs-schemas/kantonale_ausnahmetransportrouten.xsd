@@ -1,0 +1,55 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="route" 
+           type="ms:routeType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="routeType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="identifikator_kanton" minOccurs="0" type="string"/>
+          <element name="routentyp" minOccurs="0" type="string"/>
+          <element name="fahrbahnbreite" minOccurs="0" type="double"/>
+          <element name="lichte_hoehe" minOccurs="0" type="double"/>
+          <element name="gesamtgewicht" minOccurs="0" type="integer"/>
+          <element name="achslast" minOccurs="0" type="integer"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="obstacle" 
+           type="ms:obstacleType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="obstacleType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="beschreibung" minOccurs="0" type="string"/>
+          <element name="einschraenkung_fahrbahnbreite" minOccurs="0" type="double"/>
+          <element name="einschraenkung_lichte_hoehe" minOccurs="0" type="double"/>
+          <element name="einschraenkung_gesamtgewicht" minOccurs="0" type="integer"/>
+          <element name="einschraenkung_achslast" minOccurs="0" type="integer"/>
+          <element name="r_route_identifikator_kanton" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

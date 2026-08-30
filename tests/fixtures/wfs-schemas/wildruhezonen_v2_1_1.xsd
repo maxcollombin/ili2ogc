@@ -1,0 +1,62 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="wildruhezone" 
+           type="ms:wildruhezoneType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="wildruhezoneType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="nummer" minOccurs="0" type="string"/>
+          <element name="wildruhezone" minOccurs="0" type="string"/>
+          <element name="schutzstatus_code" minOccurs="0" type="string"/>
+          <element name="schutzstatus" minOccurs="0" type="string"/>
+          <element name="grundlage" minOccurs="0" type="string"/>
+          <element name="beschlussjahr" minOccurs="0" type="integer"/>
+          <element name="mutationsdatum" minOccurs="0" type="string"/>
+          <element name="mutationsgrund" minOccurs="0" type="string"/>
+          <element name="zusatzinformation" minOccurs="0" type="string"/>
+          <element name="online_information" minOccurs="0" type="string"/>
+          <element name="bestimmungen_code" minOccurs="0" type="string"/>
+          <element name="bestimmungen" minOccurs="0" type="string"/>
+          <element name="kantonale_bestimmungen" minOccurs="0" type="string"/>
+          <element name="schutzzeit" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="routennetz" 
+           type="ms:routennetzType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="routennetzType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="nummer_wildruhezone" minOccurs="0" type="string"/>
+          <element name="wildruhezone" minOccurs="0" type="string"/>
+          <element name="wegtyp_code" minOccurs="0" type="string"/>
+          <element name="wegtyp" minOccurs="0" type="string"/>
+          <element name="einschraenkung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

@@ -1,0 +1,937 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="synoptisches_gefahrenhinweisgebiet" 
+           type="ms:synoptisches_gefahrenhinweisgebietType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="synoptisches_gefahrenhinweisgebietType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hinweisprozess" minOccurs="0" type="string"/>
+          <element name="gefaehrdungshinweis" minOccurs="0" type="boolean"/>
+          <element name="gefahrengebiet_vorhanden" minOccurs="0" type="boolean"/>
+          <element name="methode" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="synoptisches_gefahrengebiet" 
+           type="ms:synoptisches_gefahrengebietType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="synoptisches_gefahrengebietType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="beurteilung_vollstaendig" minOccurs="0" type="string"/>
+          <element name="wasser" minOccurs="0" type="string"/>
+          <element name="rutschung" minOccurs="0" type="string"/>
+          <element name="sturz" minOccurs="0" type="string"/>
+          <element name="lawine" minOccurs="0" type="string"/>
+          <element name="maximale_gefahrenstufe" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gefahrenhinweisgebiet_wasser" 
+           type="ms:gefahrenhinweisgebiet_wasserType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gefahrenhinweisgebiet_wasserType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hinweisprozess" minOccurs="0" type="string"/>
+          <element name="gefaehrdungshinweis" minOccurs="0" type="boolean"/>
+          <element name="gefahrengebiet_vorhanden" minOccurs="0" type="boolean"/>
+          <element name="methode" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gefahrengebiet_wasser" 
+           type="ms:gefahrengebiet_wasserType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gefahrengebiet_wasserType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hauptprozess" minOccurs="0" type="string"/>
+          <element name="gefahrenstufe" minOccurs="0" type="string"/>
+          <element name="teilprozesse_vollstaendig" minOccurs="0" type="string"/>
+          <element name="prozessquellen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gefahrenhinweisgebiet_rutschung" 
+           type="ms:gefahrenhinweisgebiet_rutschungType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gefahrenhinweisgebiet_rutschungType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hinweisprozess" minOccurs="0" type="string"/>
+          <element name="gefaehrdungshinweis" minOccurs="0" type="boolean"/>
+          <element name="gefahrengebiet_vorhanden" minOccurs="0" type="boolean"/>
+          <element name="methode" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gefahrengebiet_ruschtung" 
+           type="ms:gefahrengebiet_ruschtungType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gefahrengebiet_ruschtungType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hauptprozess" minOccurs="0" type="string"/>
+          <element name="gefahrenstufe" minOccurs="0" type="string"/>
+          <element name="teilprozesse_vollstaendig" minOccurs="0" type="string"/>
+          <element name="prozessquellen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gefahrenhinweisgebiet_sturz" 
+           type="ms:gefahrenhinweisgebiet_sturzType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gefahrenhinweisgebiet_sturzType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hinweisprozess" minOccurs="0" type="string"/>
+          <element name="gefaehrdungshinweis" minOccurs="0" type="boolean"/>
+          <element name="gefahrengebiet_vorhanden" minOccurs="0" type="boolean"/>
+          <element name="methode" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gefahrengebiet_sturz" 
+           type="ms:gefahrengebiet_sturzType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gefahrengebiet_sturzType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hauptprozess" minOccurs="0" type="string"/>
+          <element name="gefahrenstufe" minOccurs="0" type="string"/>
+          <element name="teilprozesse_vollstaendig" minOccurs="0" type="string"/>
+          <element name="prozessquellen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gefahrenhinweisgebiet_lawine" 
+           type="ms:gefahrenhinweisgebiet_lawineType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gefahrenhinweisgebiet_lawineType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hinweisprozess" minOccurs="0" type="string"/>
+          <element name="gefaehrdungshinweis" minOccurs="0" type="boolean"/>
+          <element name="gefahrengebiet_vorhanden" minOccurs="0" type="boolean"/>
+          <element name="methode" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gefahrengebiet_lawine" 
+           type="ms:gefahrengebiet_lawineType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gefahrengebiet_lawineType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="hauptprozess" minOccurs="0" type="string"/>
+          <element name="gefahrenstufe" minOccurs="0" type="string"/>
+          <element name="teilprozesse_vollstaendig" minOccurs="0" type="string"/>
+          <element name="prozessquellen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="erhebungsgebiet_gefahrenkartierung" 
+           type="ms:erhebungsgebiet_gefahrenkartierungType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="erhebungsgebiet_gefahrenkartierungType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_ueberschwemmung" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_uebermurung" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_ufererosion" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_permanente_rutschung" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_spontane_rutschung" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_hangmure" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_stein_blockschlag" minOccurs="0" type="string"/>
+          <element name="erhebunsgstand_fels_bergsturz" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_eisschlag" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_einsturz" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_absenkung" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_fliesslawine" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_staublawine" minOccurs="0" type="string"/>
+          <element name="erhebungsstand_schneegleiten" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_wasser_jaehrlichkeit_0_30_jahre" 
+           type="ms:intensitaet_wasser_jaehrlichkeit_0_30_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_wasser_jaehrlichkeit_0_30_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_wasser_jaehrlichkeit_30_100_jahre" 
+           type="ms:intensitaet_wasser_jaehrlichkeit_30_100_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_wasser_jaehrlichkeit_30_100_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_wasser_jaehrlichkeit_100_300_jahre" 
+           type="ms:intensitaet_wasser_jaehrlichkeit_100_300_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_wasser_jaehrlichkeit_100_300_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_wasser_extremereignis" 
+           type="ms:intensitaet_wasser_extremereignisType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_wasser_extremereignisType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_0_30_jahre" 
+           type="ms:intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_0_30_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_0_30_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_300_100_jahre" 
+           type="ms:intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_300_100_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_300_100_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_100_300_jahre" 
+           type="ms:intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_100_300_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_ploetzlicher_rutschprozess_jaehrlichkeit_100_300_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_ploetzlicher_rutschprozess_extremereignis" 
+           type="ms:intensitaet_ploetzlicher_rutschprozess_extremereignisType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_ploetzlicher_rutschprozess_extremereignisType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_permanente_rutschung_ohne_angabe_einer_jaehrlichkeit" 
+           type="ms:intensitaet_permanente_rutschung_ohne_angabe_einer_jaehrlichkeitType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_permanente_rutschung_ohne_angabe_einer_jaehrlichkeitType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_sturz_jaehrlichkeit_0_30_jahre" 
+           type="ms:intensitaet_sturz_jaehrlichkeit_0_30_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_sturz_jaehrlichkeit_0_30_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_sturz_jaehrlichkeit_30_100_jahre" 
+           type="ms:intensitaet_sturz_jaehrlichkeit_30_100_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_sturz_jaehrlichkeit_30_100_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_sturz_jaehrlichkeit_100_300_jahre" 
+           type="ms:intensitaet_sturz_jaehrlichkeit_100_300_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_sturz_jaehrlichkeit_100_300_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_sturz_jaehrlichkeit_extremereignis" 
+           type="ms:intensitaet_sturz_jaehrlichkeit_extremereignisType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_sturz_jaehrlichkeit_extremereignisType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_lawine_jaehrlichkeit_0_30_jahre" 
+           type="ms:intensitaet_lawine_jaehrlichkeit_0_30_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_lawine_jaehrlichkeit_0_30_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_lawine_jaehrlichkeit_30_100_jahre" 
+           type="ms:intensitaet_lawine_jaehrlichkeit_30_100_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_lawine_jaehrlichkeit_30_100_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_lawine_jaehrlichkeit_100_300_jahre" 
+           type="ms:intensitaet_lawine_jaehrlichkeit_100_300_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_lawine_jaehrlichkeit_100_300_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_lawine_extremereignis" 
+           type="ms:intensitaet_lawine_extremereignisType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_lawine_extremereignisType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_einsturz_absenkung_jaehrlichkeit_0_30_jahre" 
+           type="ms:intensitaet_einsturz_absenkung_jaehrlichkeit_0_30_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_einsturz_absenkung_jaehrlichkeit_0_30_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_einsturz_absenkung_jaehrlichkeit_30_100_jahre" 
+           type="ms:intensitaet_einsturz_absenkung_jaehrlichkeit_30_100_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_einsturz_absenkung_jaehrlichkeit_30_100_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_einsturz_absenkung_jaehrlichkeit_100_300_jahre" 
+           type="ms:intensitaet_einsturz_absenkung_jaehrlichkeit_100_300_jahreType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_einsturz_absenkung_jaehrlichkeit_100_300_jahreType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_einsturz_absenkung_extremereignis" 
+           type="ms:intensitaet_einsturz_absenkung_extremereignisType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_einsturz_absenkung_extremereignisType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_einsturz_absenkung_ohne_angabe_einer_jaehrlichkeit" 
+           type="ms:intensitaet_einsturz_absenkung_ohne_angabe_einer_jaehrlichkeitType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_einsturz_absenkung_ohne_angabe_einer_jaehrlichkeitType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilprozess_bei_synoptischen_intensitaeten" minOccurs="0" type="string"/>
+          <element name="prozessquellen_in_teilprozessen_vollstaendig" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="ueberschwemmung_tiefe" 
+           type="ms:ueberschwemmung_tiefeType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="ueberschwemmung_tiefeType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilszenariowahrscheinlichkeit" minOccurs="0" type="double"/>
+          <element name="szenariobeschreibung" minOccurs="0" type="string"/>
+          <element name="prozessquelle" minOccurs="0" type="string"/>
+          <element name="bestimmungsmethode" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="ueberschwemmung_tiefe_ug_in_m" minOccurs="0" type="double"/>
+          <element name="ueberschwemmung_tiefe_og_in_m" minOccurs="0" type="double"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="ueberschwemmung_geschwindigkeit" 
+           type="ms:ueberschwemmung_geschwindigkeitType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="ueberschwemmung_geschwindigkeitType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilszenariowahrscheinlichkeit" minOccurs="0" type="double"/>
+          <element name="szenariobeschreibung" minOccurs="0" type="string"/>
+          <element name="prozessquelle" minOccurs="0" type="string"/>
+          <element name="bestimmungsmethode" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="ueberschwemmung_fliessgeschwindigkeit_ug_in_m_s" minOccurs="0" type="double"/>
+          <element name="ueberschwemmung_fliessgeschwindigkeit_og_in_m_s" minOccurs="0" type="double"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="ueberschwemmung_v_mal_h" 
+           type="ms:ueberschwemmung_v_mal_hType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="ueberschwemmung_v_mal_hType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilszenariowahrscheinlichkeit" minOccurs="0" type="double"/>
+          <element name="szenariobeschreibung" minOccurs="0" type="string"/>
+          <element name="prozessquelle" minOccurs="0" type="string"/>
+          <element name="bestimmungsmethode" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="ueberschwemmung_v_mal_h_ug_in_m2_s" minOccurs="0" type="double"/>
+          <element name="ueberschwemmung_v_mal_h_og_in_m2_s" minOccurs="0" type="double"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="uebermurung_hoehe" 
+           type="ms:uebermurung_hoeheType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="uebermurung_hoeheType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilszenariowahrscheinlichkeit" minOccurs="0" type="double"/>
+          <element name="szenariobeschreibung" minOccurs="0" type="string"/>
+          <element name="prozessquelle" minOccurs="0" type="string"/>
+          <element name="bestimmungsmethode" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="uebermurung_hoehe_ug_in_m" minOccurs="0" type="double"/>
+          <element name="uebermurung_hoehe_og_in_m" minOccurs="0" type="double"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="uebermurung_geschwindigkeit" 
+           type="ms:uebermurung_geschwindigkeitType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="uebermurung_geschwindigkeitType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="teilszenariowahrscheinlichkeit" minOccurs="0" type="double"/>
+          <element name="szenariobeschreibung" minOccurs="0" type="string"/>
+          <element name="prozessquelle" minOccurs="0" type="string"/>
+          <element name="bestimmungsmethode" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="uebermurung_geschwindigkeit_ug_in_m_s" minOccurs="0" type="double"/>
+          <element name="uebermurung_geschwindigkeit_og_in_m_s" minOccurs="0" type="double"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="intensitaet_pro_prozessquelle" 
+           type="ms:intensitaet_pro_prozessquelleType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="intensitaet_pro_prozessquelleType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="intensitaetsklasse" minOccurs="0" type="string"/>
+          <element name="kantonale_prozessbezeichnung" minOccurs="0" type="string"/>
+          <element name="jaehrlichkeit" minOccurs="0" type="integer"/>
+          <element name="extremszenario" minOccurs="0" type="boolean"/>
+          <element name="prozessquelle" minOccurs="0" type="string"/>
+          <element name="teilprozess_bei_intensitaeten_pro_prozessquelle" minOccurs="0" type="string"/>
+          <element name="teilszenariowahrscheinlichkeit" minOccurs="0" type="double"/>
+          <element name="szenariobeschreibung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="spezielles_gefahrenhinweisgebiet" 
+           type="ms:spezielles_gefahrenhinweisgebietType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="spezielles_gefahrenhinweisgebietType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="datenherr" minOccurs="0" type="string"/>
+          <element name="kommentar" minOccurs="0" type="string"/>
+          <element name="spezialprozess" minOccurs="0" type="string"/>
+          <element name="gefaehrdungshinweis" minOccurs="0" type="boolean"/>
+          <element name="methode" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

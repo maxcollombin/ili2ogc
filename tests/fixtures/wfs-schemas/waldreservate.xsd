@@ -1,0 +1,36 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="waldreservat" 
+           type="ms:waldreservatType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="waldreservatType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="obj_nummer" minOccurs="0" type="string"/>
+          <element name="name" minOccurs="0" type="string"/>
+          <element name="obj_gis_flaeche_ha" minOccurs="0" type="double"/>
+          <element name="obj_ges_flaeche_ha" minOccurs="0" type="double"/>
+          <element name="teilobj_nr" minOccurs="0" type="string"/>
+          <element name="obj_gis_teilobjekt_ha" minOccurs="0" type="double"/>
+          <element name="mcpfe_code" minOccurs="0" type="string"/>
+          <element name="mcpfe" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

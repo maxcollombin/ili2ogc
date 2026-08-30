@@ -1,0 +1,827 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="gewaesserschutzbereich_ao" 
+           type="ms:gewaesserschutzbereich_aoType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gewaesserschutzbereich_aoType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="gewaesserschutzbereich_au" 
+           type="ms:gewaesserschutzbereich_auType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="gewaesserschutzbereich_auType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_sm_nicht_in_kraft" 
+           type="ms:kuenftige_schutzzone_sm_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_sm_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_sm_in_kraft" 
+           type="ms:kuenftige_schutzzone_sm_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_sm_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_sh_nicht_in_kraft" 
+           type="ms:kuenftige_schutzzone_sh_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_sh_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_sh_in_kraft" 
+           type="ms:kuenftige_schutzzone_sh_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_sh_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_s3_nicht_in_kraft" 
+           type="ms:kuenftige_schutzzone_s3_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_s3_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_s3_in_kraft" 
+           type="ms:kuenftige_schutzzone_s3_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_s3_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_s2_nicht_in_kraft" 
+           type="ms:kuenftige_schutzzone_s2_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_s2_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_s2_in_kraft" 
+           type="ms:kuenftige_schutzzone_s2_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_s2_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_s1_nicht_in_kraft" 
+           type="ms:kuenftige_schutzzone_s1_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_s1_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="kuenftige_schutzzone_s1_in_kraft" 
+           type="ms:kuenftige_schutzzone_s1_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="kuenftige_schutzzone_s1_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzareal_nicht_in_kraft" 
+           type="ms:grundwasserschutzareal_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzareal_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzareal_in_kraft" 
+           type="ms:grundwasserschutzareal_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzareal_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_sm_nicht_in_kraft" 
+           type="ms:grundwasserschutzzone_sm_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_sm_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_sm_in_kraft" 
+           type="ms:grundwasserschutzzone_sm_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_sm_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_sh_nicht_in_kraft" 
+           type="ms:grundwasserschutzzone_sh_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_sh_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_sh_in_kraft" 
+           type="ms:grundwasserschutzzone_sh_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_sh_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="nicht_nach_bundesrecht_vorgesehener_schutzzonentyp_nicht_in_kraft" 
+           type="ms:nicht_nach_bundesrecht_vorgesehener_schutzzonentyp_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="nicht_nach_bundesrecht_vorgesehener_schutzzonentyp_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="nicht_nach_bundesrecht_vorgesehener_schutzzonentyp_in_kraft" 
+           type="ms:nicht_nach_bundesrecht_vorgesehener_schutzzonentyp_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="nicht_nach_bundesrecht_vorgesehener_schutzzonentyp_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="zustroembereich_zu_anstelle_einer_s3_oder_sm_nicht_in_kraft" 
+           type="ms:zustroembereich_zu_anstelle_einer_s3_oder_sm_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="zustroembereich_zu_anstelle_einer_s3_oder_sm_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="zustroembereich_zu_anstelle_einer_s3_oder_sm_in_kraft" 
+           type="ms:zustroembereich_zu_anstelle_einer_s3_oder_sm_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="zustroembereich_zu_anstelle_einer_s3_oder_sm_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_s3_nicht_in_kraft" 
+           type="ms:grundwasserschutzzone_s3_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_s3_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_s3_in_kraft" 
+           type="ms:grundwasserschutzzone_s3_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_s3_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_s2_nicht_in_kraft" 
+           type="ms:grundwasserschutzzone_s2_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_s2_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_s2_in_kraft" 
+           type="ms:grundwasserschutzzone_s2_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_s2_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_s1_nicht_in_kraft" 
+           type="ms:grundwasserschutzzone_s1_nicht_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_s1_nicht_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="grundwasserschutzzone_s1_in_kraft" 
+           type="ms:grundwasserschutzzone_s1_in_kraftType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundwasserschutzzone_s1_in_kraftType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="istaltrechtlich" minOccurs="0" type="boolean"/>
+          <element name="altrechtlich" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="rechtsstatus_de" minOccurs="0" type="string"/>
+          <element name="rechtskraftdatum" minOccurs="0" type="string"/>
+          <element name="bemerkungen_status" minOccurs="0" type="string"/>
+          <element name="kantonaler_status" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokumente" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="zustroembereich_zu" 
+           type="ms:zustroembereich_zuType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="zustroembereich_zuType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="zustroembereich_zo" 
+           type="ms:zustroembereich_zoType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="zustroembereich_zoType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="t_id" minOccurs="0" type="integer"/>
+          <element name="identifikator" minOccurs="0" type="string"/>
+          <element name="typ" minOccurs="0" type="string"/>
+          <element name="typ_de" minOccurs="0" type="string"/>
+          <element name="kantonale_typ_bezeichnung" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>

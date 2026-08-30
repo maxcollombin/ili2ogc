@@ -1,0 +1,117 @@
+<?xml version='1.0' encoding="UTF-8" ?>
+<schema
+   targetNamespace="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver" 
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.w3.org/2001/XMLSchema"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   elementFormDefault="qualified" version="0.1" >
+
+  <import namespace="http://www.opengis.net/gml/3.2"
+          schemaLocation="https://schemas.opengis.net/gml/3.2.1/gml.xsd" />
+
+  <element name="grundnutzung" 
+           type="ms:grundnutzungType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="grundnutzungType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="publiziertab" minOccurs="0" type="string"/>
+          <element name="publiziertbis" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ_kommunal_code" minOccurs="0" type="string"/>
+          <element name="typ_kommunal_bezeichnung" minOccurs="0" type="string"/>
+          <element name="typ_kantonal_code" minOccurs="0" type="string"/>
+          <element name="typ_kantonal_bezeichnung" minOccurs="0" type="string"/>
+          <element name="hauptnutzung_code" minOccurs="0" type="integer"/>
+          <element name="hauptnutzung_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokument" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="ueberlagernde_nutzungsplaninhalte_flaechenbezogene_festlegungen" 
+           type="ms:ueberlagernde_nutzungsplaninhalte_flaechenbezogene_festlegungenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="ueberlagernde_nutzungsplaninhalte_flaechenbezogene_festlegungenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="publiziertab" minOccurs="0" type="string"/>
+          <element name="publiziertbis" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ_kommunal_code" minOccurs="0" type="string"/>
+          <element name="typ_kommunal_bezeichnung" minOccurs="0" type="string"/>
+          <element name="typ_kantonal_code" minOccurs="0" type="string"/>
+          <element name="typ_kantonal_bezeichnung" minOccurs="0" type="string"/>
+          <element name="hauptnutzung_code" minOccurs="0" type="integer"/>
+          <element name="hauptnutzung_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokument" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="ueberlagernde_nutzungsplaninhalte_linienbezogene_festlegungen" 
+           type="ms:ueberlagernde_nutzungsplaninhalte_linienbezogene_festlegungenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="ueberlagernde_nutzungsplaninhalte_linienbezogene_festlegungenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="publiziertab" minOccurs="0" type="string"/>
+          <element name="publiziertbis" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ_kommunal_code" minOccurs="0" type="string"/>
+          <element name="typ_kommunal_bezeichnung" minOccurs="0" type="string"/>
+          <element name="typ_kantonal_code" minOccurs="0" type="string"/>
+          <element name="typ_kantonal_bezeichnung" minOccurs="0" type="string"/>
+          <element name="hauptnutzung_code" minOccurs="0" type="integer"/>
+          <element name="hauptnutzung_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokument" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+  <element name="ueberlagernde_nutzungsplaninhalte_punktbezogene_festlegungen" 
+           type="ms:ueberlagernde_nutzungsplaninhalte_punktbezogene_festlegungenType" 
+           substitutionGroup="gml:AbstractFeature" />
+
+  <complexType name="ueberlagernde_nutzungsplaninhalte_punktbezogene_festlegungenType">
+    <complexContent>
+      <extension base="gml:AbstractFeatureType">
+        <sequence>
+          <element name="wkb_geometry" type="gml:GeometryPropertyType" minOccurs="0" maxOccurs="1"/>
+          <element name="publiziertab" minOccurs="0" type="string"/>
+          <element name="publiziertbis" minOccurs="0" type="string"/>
+          <element name="rechtsstatus" minOccurs="0" type="string"/>
+          <element name="bemerkungen" minOccurs="0" type="string"/>
+          <element name="typ_kommunal_code" minOccurs="0" type="string"/>
+          <element name="typ_kommunal_bezeichnung" minOccurs="0" type="string"/>
+          <element name="typ_kantonal_code" minOccurs="0" type="string"/>
+          <element name="typ_kantonal_bezeichnung" minOccurs="0" type="string"/>
+          <element name="hauptnutzung_code" minOccurs="0" type="integer"/>
+          <element name="hauptnutzung_bezeichnung" minOccurs="0" type="string"/>
+          <element name="kanton" minOccurs="0" type="string"/>
+          <element name="dokument" minOccurs="0" type="string"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+
+</schema>
