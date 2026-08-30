@@ -169,6 +169,16 @@ MODEL Foo AT "http://x" VERSION "1" =
       PointA : MANDATORY Coord2D;
       PointB : MANDATORY Coord2DOther;
     END ATwoGeomsDiffCrs;
+    STRUCTURE CaptureInfo =
+      At : MANDATORY Coord2D;
+      Line : Line;
+      Recorded : INTERLIS.XMLDate;
+    END CaptureInfo;
+    CLASS AWithNestedGeom =
+      Geom : MANDATORY Coord2D;
+      Info : MANDATORY CaptureInfo;
+      LastChange : INTERLIS.XMLDateTime;
+    END AWithNestedGeom;
   END T;
 END Foo.
 """
@@ -647,6 +657,45 @@ def test_without_meta_capture_crs_is_unresolved():
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
     assert feature["properties"]["Geom"] == {"x-unsupported": "CoordType"}
+
+
+def test_nested_geometry_and_formatted_type_in_a_structure_and_top_level():
+    """A CoordType/LineType nested inside a STRUCTURE becomes a plain GeoJSON geometry object in `properties` (the
+    Feature's own `place` is still just the top-level `Geom`). A FormattedType value passes through as its ISO string,
+    nested or top-level.
+    """
+    builder = _build(_GEOM_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "AWithNestedGeom")
+    obj = XtfObject(
+        tid="w-1",
+        qualified_class="Foo.T.AWithNestedGeom",
+        attributes={
+            "Geom": [_wrap("Geom", _coord("2600000.0", "1200000.0"))],
+            "Info": [
+                _wrap(
+                    "Info",
+                    _wrap(
+                        "CaptureInfo",
+                        _wrap("At", _coord("2600500.0", "1200500.0")),
+                        _wrap(
+                            "Line",
+                            _wrap("POLYLINE", _coord("2600000.0", "1200000.0"), _coord("2601000.0", "1201000.0")),
+                        ),
+                        _node("Recorded", "2024-03-01"),
+                    ),
+                )
+            ],
+            "LastChange": [_node("LastChange", "2024-03-01T09:30:00")],
+        },
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {"type": "Point", "coordinates": [2600000.0, 1200000.0]}
+    assert "Geom" not in feature["properties"]  # the one that became `place`
+    info = feature["properties"]["Info"]
+    assert info["At"] == {"type": "Point", "coordinates": [2600500.0, 1200500.0]}
+    assert info["Line"]["type"] == "LineString"
+    assert info["Recorded"] == "2024-03-01"
+    assert feature["properties"]["LastChange"] == "2024-03-01T09:30:00"
 
 
 def test_standalone_false_omits_conforms_to():

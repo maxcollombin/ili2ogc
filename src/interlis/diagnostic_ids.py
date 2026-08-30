@@ -99,7 +99,7 @@ REGISTRY: dict[str, tuple[str, str]] = {
     ),
     "JSONSCHEMA-TYPE-UNSUPPORTED": ("A", "an attribute type is outside the mapped set - marked x-unsupported"),
     # -- convert-jsonfg (.xtf -> JSON-FG) --------------------------------
-    "JSONFG-TYPE-UNSUPPORTED": ("A", "an attribute value's type is outside the mapped set - marked x-unsupported"),
+    "JSONFG-TYPE-UNSUPPORTED": ("A", "an attribute value's type has no JSON-FG representation - marked x-unsupported"),
     "JSONFG-MULTIVALUE-UNRESOLVED": ("C", "a BAG/LIST OF element type did not resolve - provide its model via --repo"),
     "JSONFG-VIEW-BASE-MISSING": ("C", "a VIEW base model is not resolvable - provide it via --repo"),
     "JSONFG-VIEW-WHERE-UNSUPPORTED": (

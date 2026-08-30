@@ -14,10 +14,11 @@ already proven by xtf/validate.py) -> the referenced object's OID as a
 plain string; a genuine STRUCTURE (no findable REF) -> a nested JSON
 object, `BAG`/`LIST OF X` -> a JSON array, both recursively (same
 "resolve schema, dispatch per kind" logic as the root object, mirroring
-xtf/validate.py's own `_validate_attrs` recursion). CoordType/LineType
-NESTED inside a structure/list element still stays unsupported (no real
-corpus DATA evidence for it - the top-level Feature's own "place" is the
-only geometry shape built so far). A class with 2+ own+inherited
+xtf/validate.py's own `_validate_attrs` recursion). A CoordType/LineType
+NESTED inside a structure/list element becomes a plain GeoJSON geometry
+object in `properties` (the SAME `_coord_geometry`/`_line_geometry`
+builders as the top-level `place`, which stays the ONLY thing under
+`geometry`/`place`). A class with 2+ own+inherited
 geometry-typed attributes gets a single "place" of type
 `GeometryCollection` bundling every one of them (JSON-FG issue #134 added
 `GeometryCollection` to `place.json`'s allowed types - no separate
@@ -73,7 +74,7 @@ CONF_TYPES_SCHEMAS = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/c
 CONF_CIRCULAR_ARCS = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/conf/circular-arcs"
 CRS_URI_PREFIX = "http://www.opengis.net/def/crs/EPSG/0/"
 
-_SCALAR_KINDS = {"NumType", "TextType", "EnumType", "BooleanType"}
+_SCALAR_KINDS = {"NumType", "TextType", "EnumType", "BooleanType", "FormattedType", "BlackboxType"}
 _GEOMETRY_KINDS = {"CoordType", "LineType"}
 # JSON-FG Part 1 Core §7.5 (conformance class "circular-arcs") - geometry
 # "type" values that require CONF_CIRCULAR_ARCS to be declared in
@@ -96,6 +97,9 @@ def _scalar_value(resolved: ResolvedAttribute, node: RawNode) -> Any:
     if text is None:
         return None
     kind = resolved.type_kind
+    # FormattedType (an ISO date/time string on the wire) and BlackboxType
+    # (the inner XML/base64 text) both pass through verbatim - matches the
+    # `type: string` their own JSON Schema `$defs` entry declares.
     if kind == "NumType":
         # Same integer-vs-number heuristic already used for this SAME
         # attribute's JSON Schema (convert/jsonschema.py) - keeps a
@@ -123,6 +127,19 @@ def _attribute_value(
     kind = resolved.type_kind
     if kind in _SCALAR_KINDS:
         return _scalar_value(resolved, raw_nodes[0])
+    if kind in _GEOMETRY_KINDS and raw_nodes:
+        # A CoordType/LineType NESTED inside a STRUCTURE or a BAG/LIST
+        # element - the Feature's own `place` is a separate, top-level
+        # attribute (`_place_and_crs`). A nested one has nowhere native to
+        # go in JSON-FG, so it becomes a plain GeoJSON geometry object in
+        # `properties` (reusing the SAME `_coord_geometry`/`_line_geometry`
+        # builders, no parallel coordinate parsing) rather than a
+        # `x-unsupported` marker - real corpus DATA has this (nested
+        # `CaptureMethod` geometry, SIA405 symbol positions, ...).
+        geometry = (
+            _coord_geometry(resolved, raw_nodes[0]) if kind == "CoordType" else _line_geometry(resolved, raw_nodes[0])
+        )
+        return geometry
     if kind == "MultiValue":
         return _multi_value(resolved, raw_nodes, symbol_table=symbol_table)
     if kind in _REFERENCE_TYPE_KINDS:
@@ -146,12 +163,7 @@ def _attribute_value(
             return _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=already_unwrapped)
     # Same "unknown" fallback as convert/jsonschema.py's _attribute_schema,
     # for an unresolved Type (type_kind is None - e.g. an external/
-    # unqualified reference not loaded via --repo). Also covers CoordType/
-    # LineType NESTED inside a structure/list element (as opposed to the
-    # top-level Feature's own geometry attribute, handled separately via
-    # "place") - no real corpus DATA shows this occurring, so it stays
-    # unsupported rather than reusing the "place" geometry shape without
-    # evidence (RULE #7).
+    # unqualified reference not loaded via --repo).
     return {"x-unsupported": kind or "unknown"}
 
 
@@ -260,10 +272,9 @@ def _child_row_features(obj: XtfObject, cls: MetaInstance, *, symbol_table: Symb
     (`"<parent OID>_<attr name>_<index>"`) - a `STRUCTURE`/scalar
     occurrence has no OID of its own on the wire. `"geometry"` stays
     `null` like every other Feature this module produces (no WGS84
-    reprojection) - a geometry-typed `BAG`/`LIST` element has no real data
-    path today regardless (`_attribute_value` doesn't dispatch
-    CoordType/LineType for a nested occurrence at all, a PRE-EXISTING,
-    separately documented gap, RULE #7 - no real corpus evidence for it).
+    reprojection); a geometry-typed `BAG`/`LIST` element's `"value"` is a
+    plain GeoJSON geometry object (`_attribute_value` dispatches
+    CoordType/LineType through `_coord_geometry`/`_line_geometry`).
     """
     features: list[dict[str, Any]] = []
     if obj.tid is None:
@@ -726,9 +737,11 @@ def object_to_feature(
         result = _place_and_crs(resolved_attrs[geom_name], raw_nodes[0])
         if result is not None:
             resolved_geometries.append((geom_name, *result))
+    placed_names: set[str] = set()
     if len(resolved_geometries) == 1:
         geom_name, place, crs_uri = resolved_geometries[0]
         properties.pop(geom_name, None)
+        placed_names.add(geom_name)
     elif len(resolved_geometries) >= 2:
         crs_values = {crs for _, _, crs in resolved_geometries}
         if len(crs_values) == 1:
@@ -736,6 +749,17 @@ def object_to_feature(
             crs_uri = crs_values.pop()
             for geom_name, _, _ in resolved_geometries:
                 properties.pop(geom_name, None)
+                placed_names.add(geom_name)
+
+    # A top-level geometry attribute that could NOT become `place` (no
+    # resolvable CRS, a custom LINE FORM, or a CRS mismatch across several)
+    # keeps the `x-unsupported` marker it always had - `_attribute_value`'s
+    # GeoJSON-object output is for a NESTED geometry only, where there is
+    # no `place` alternative. Resolving the top-level no-CRS case is a
+    # separate concern (docs/jsonfg-conversion-strategy.md).
+    for name in geometry_names:
+        if name in properties and name not in placed_names:
+            properties[name] = {"x-unsupported": resolved_attrs[name].type_kind}
 
     feature: dict[str, Any] = {"type": "Feature"}
     if standalone:
