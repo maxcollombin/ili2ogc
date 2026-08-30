@@ -1,0 +1,88 @@
+{
+  "fruchtfolgeflaechen": {
+    "fruchtfolgeflaeche": {
+      "best_class": "Fruchtfolgeflaeche",
+      "matched": [
+        "anrechenbar",
+        "bemerkung"
+      ],
+      "missing_in_model": [
+        "bemerkung_qualitaet_kantonal",
+        "bezeichnung_qualitaet_kantonal",
+        "code_qualitaet_kantonal"
+      ]
+    }
+  },
+  "waldreservate": {
+    "waldreservat": {
+      "best_class": "Waldreservat",
+      "matched": [
+        "name",
+        "obj_nummer"
+      ],
+      "missing_in_model": [
+        "mcpfe",
+        "mcpfe_code",
+        "obj_ges_flaeche_ha",
+        "obj_gis_flaeche_ha",
+        "obj_gis_teilobjekt_ha",
+        "teilobj_nr"
+      ]
+    }
+  },
+  "wildruhezonen_v2_1_1": {
+    "wildruhezone": {
+      "best_class": "Wildruhezone",
+      "matched": [
+        "beschlussjahr",
+        "grundlage",
+        "mutationsdatum",
+        "mutationsgrund",
+        "schutzstatus"
+      ],
+      "missing_in_model": [
+        "bestimmungen",
+        "bestimmungen_code",
+        "kantonale_bestimmungen",
+        "nummer",
+        "online_information",
+        "schutzstatus_code",
+        "schutzzeit",
+        "wildruhezone",
+        "zusatzinformation"
+      ]
+    },
+    "routennetz": {
+      "best_class": "Routennetz",
+      "matched": [
+        "einschraenkung",
+        "wegtyp"
+      ],
+      "missing_in_model": [
+        "nummer_wildruhezone",
+        "wegtyp_code",
+        "wildruhezone"
+      ]
+    }
+  },
+  "npl_laermempfindlichkeitsstufen": {
+    "laermempfindlichkeitsstufen": {
+      "best_class": "Typ",
+      "matched": [
+        "abkuerzung",
+        "aufgestuft",
+        "bemerkungen",
+        "bezeichnung",
+        "code",
+        "empfindlichkeitsstufe",
+        "verbindlichkeit"
+      ],
+      "missing_in_model": [
+        "dokument",
+        "publiziertab",
+        "publiziertbis",
+        "rechtsstatus"
+      ]
+    }
+  }
+}

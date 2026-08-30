@@ -1,0 +1,16 @@
+# NOTICE
+
+Unmodified base MGDM models (Minimale Geodatenmodelle des Bundes),
+retrieved from the official model repositories
+(`models.geo.admin.ch` / `models.kgk-cgc.ch`):
+
+- `Fruchtfolgeflaechen_V1.ili` — Geobasisdatensatz Nr. 68
+- `Waldreservate_V2_0.ili` — Geobasisdatensatz Nr. 159
+- `Wildruhezonen_V2_1.ili` — Geobasisdatensatz Nr. 121
+- `Laermempfindlichkeitsstufen_V1_2.ili` — Nutzungsplanung, Geobasisdatensatz Nr. 73
+
+Used by `tests/test_view_wfs_crosscheck.py` to pin the attribute set the
+model builder extracts from real production models against the frozen
+geodienste WFS publication schemas in `tests/fixtures/wfs-schemas/`. They
+build standalone (their `IMPORTS` of the standard geometry / localisation
+/ catalogue models are not needed for attribute-name extraction).
