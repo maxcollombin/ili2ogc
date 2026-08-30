@@ -181,9 +181,14 @@ UniqueConstraint:
       note: >
         Kind=GlobalU (source: {field: Kind}) AND every UniqueDef path
         (PathOrInspFactor.PathEls) a SINGLE PathEl maps to UNIQUE (...) on
-        the Class's own table - 2+ PathEls means "->" navigation to
-        another table (Kind is always "ReferenceAttr" regardless of hop
-        position, path length is the real signal) and stays backlog.
+        the Class's own table. A two-PathEl path X->Sub maps too when X is
+        one of the Class's own BAG/LIST OF STRUCTURE attributes: a plain
+        UNIQUE (sub, ...) on the <parent>_<X> child table with no
+        <parent>_fk prefix (the global form of the LocalU mapping). A
+        two-PathEl path whose first hop is a real REFERENCE TO/role stays
+        backlog - a SQL-UNIQUE-CROSS-REF -- NOTE (Kind is always
+        "ReferenceAttr" regardless of hop position; the child-table match
+        is the real signal).
         Kind=LocalU maps too: each UniqueDef path [role_hop, sub_attr]
         becomes a compound UNIQUE (<parent>_fk, sub_attr, ...) on the
         matching BAG/LIST OF child table, including the dominant real

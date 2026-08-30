@@ -533,6 +533,50 @@ def test_list_of_structure_child_table_has_seq_and_flattened_columns():
     assert names["text"].sql_type == "varchar(100)" and not names["text"].nullable
 
 
+_STRUCT_GLOBAL_UNIQUE_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Entry =
+      Code : MANDATORY TEXT*10;
+      Lang : TEXT*2;
+    END Entry;
+    CLASS Dictionary =
+      Name : MANDATORY TEXT*40;
+      Entries : LIST {0..*} OF Entry;
+      UNIQUE Entries->Code;
+    END Dictionary;
+    CLASS Glossary =
+      Name : MANDATORY TEXT*40;
+      Entries : LIST {0..*} OF Entry;
+      UNIQUE Entries->Code, Entries->Lang;
+    END Glossary;
+  END T;
+END Foo.
+"""
+
+
+def test_global_unique_over_a_structure_subattribute_becomes_a_child_table_unique():
+    """`UNIQUE Entries->Code;` (global, not `(LOCAL)`) is a plain `UNIQUE (code)` on the `dictionary_entries` child
+    table - no `<parent>_fk` prefix, so `Code` is unique across every parent.
+    """
+    builder = _build(_STRUCT_GLOBAL_UNIQUE_MODEL)
+    dictionary = _resolved_class(builder, "Foo.T.Dictionary")
+    tables = build_tables([dictionary], symbol_table=builder.symbol_table)
+    child = _table(tables, "dictionary_entries")
+    assert [uc.columns for uc in child.unique_constraints] == [["code"]]
+    assert not _table(tables, "dictionary").unique_constraints
+    assert not any("SQL-UNIQUE" in n for n in _table(tables, "dictionary").notes)
+
+
+def test_compound_global_unique_over_a_structure_groups_the_subattributes():
+    """`UNIQUE Entries->Code, Entries->Lang;` is one compound `UNIQUE (code, lang)` on the child table."""
+    builder = _build(_STRUCT_GLOBAL_UNIQUE_MODEL)
+    glossary = _resolved_class(builder, "Foo.T.Glossary")
+    tables = build_tables([glossary], symbol_table=builder.symbol_table)
+    child = _table(tables, "glossary_entries")
+    assert [uc.columns for uc in child.unique_constraints] == [["code", "lang"]]
+
+
 _ABSTRACT_STRUCT_MODEL = """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =

@@ -246,9 +246,17 @@ concepts:
       `Kind=GlobalU` (own `UniqueConstraint.Kind` enumeration -
       GlobalU/BasketU/LocalU) AND every `UniqueDef` path a SINGLE `PathEl`
       (a plain own-column reference) maps to a real `UNIQUE (...)`
-      constraint on the Class's own table - 2+ `PathEl`s means the path
-      crossed a role/reference (e.g. `Owner->Code`) to ANOTHER table's
-      attribute. `PathEl.Kind` is ALWAYS `"ReferenceAttr"` regardless of
+      constraint on the Class's own table. A two-`PathEl` path
+      (`X->Y`) is either a structure step or a role/reference hop -
+      `PathEl.Kind` does not tell them apart, so `build_tables` decides by
+      whether `X` matches one of the Class's own `BAG`/`LIST OF STRUCTURE`
+      attributes: if it does, `UNIQUE X->Sub` (and compound
+      `UNIQUE X->A, X->B`) becomes a plain `UNIQUE (sub, ...)` on the
+      `<parent>_<X>` child table WITHOUT the `<parent>_fk` prefix (the
+      global counterpart of the `Kind=LocalU` mapping below); otherwise `X`
+      is a real `REFERENCE TO`/role navigation to ANOTHER table's column
+      and the whole constraint is a `SQL-UNIQUE-CROSS-REF` `-- NOTE`.
+      `PathEl.Kind` is ALWAYS `"ReferenceAttr"` regardless of
       hop position (confirmed empirically, 2026-08-27: `Owner->Code`
       produces `[('ReferenceAttr','Owner'), ('ReferenceAttr','Code')]`, no
       distinct Kind for the intermediate role step) - path LENGTH, not
@@ -276,11 +284,12 @@ concepts:
       child table) - see docs/sql-conversion-strategy.md for the full
       derivation and real-corpus verification.
 
-      Any `->` cross-reference path (~10% - not expressible as a plain
-      SQL table constraint at all, a constraint can't reference ANOTHER
-      table's column) stays `status: backlog` within this SAME concept
-      entry (not separately mapped) - surfaced as a `-- NOTE` comment,
-      never silently dropped nor forced into a wrong/partial constraint.
+      A `->` path that navigates a real `REFERENCE TO`/role to ANOTHER
+      table's column (a constraint or index cannot reference another
+      table) stays `status: backlog` within this SAME concept entry -
+      surfaced as a `SQL-UNIQUE-CROSS-REF` `-- NOTE` naming the shape a
+      BEFORE INSERT/UPDATE trigger would need, never silently dropped nor
+      forced into a wrong/partial constraint.
 
   Constraint:
     qualified_name: IlisMeta16.ModelData.Constraint

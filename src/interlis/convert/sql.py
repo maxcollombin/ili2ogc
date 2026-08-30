@@ -852,16 +852,32 @@ def _check_constraints_for_class(
     return result, notes
 
 
-def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[list[UniqueConstraint], list[str]]:
-    """Return `(constraints, notes)` for `cls`'s own `UniqueConstraint`s - simple `Kind=GlobalU`, no `->` navigation,
-    only.
+def _unique_constraints_for_class(
+    cls: MetaInstance, table_name: str
+) -> tuple[list[UniqueConstraint], list[str], dict[str, list[list[str]]]]:
+    """Return `(constraints, notes, struct_global_unique)` for `cls`'s own `Kind=GlobalU` `UniqueConstraint`s.
 
-    `Kind=LocalU` is handled separately by `_local_unique_constraints_for_class`
-    (a different SQL shape entirely - scoped to a `BAG`/`LIST OF STRUCTURE`
-    child table, not this table) - silently skipped here, never noted twice.
+    `constraints`: plain `UNIQUE (...)` over own columns (every path a single
+    own-attribute hop).
+
+    `struct_global_unique`: `{struct attr: [[sub-attr column, ...], ...]}` for a
+    `UNIQUE X->Y` (or compound `UNIQUE X->Y, X->Z`) where `X` is this class's
+    own `BAG`/`LIST OF STRUCTURE` attribute - the global (not `(LOCAL)`, so no
+    per-parent scoping) counterpart of `_local_unique_constraints_for_class`.
+    `build_tables` turns each group into a `UNIQUE` on the `<parent>_<attr>`
+    child table, WITHOUT the `<parent>_fk` prefix. A first hop that never
+    matches a child table is a real `->` reference/role navigation and gets a
+    `SQL-UNIQUE-CROSS-REF` note there.
+
+    `Kind=LocalU` is handled by `_local_unique_constraints_for_class` (skipped
+    here, never noted twice). `Kind` on every `PathEl` is always
+    "ReferenceAttr" regardless of whether the hop is a role or a structure
+    step (confirmed empirically 2026-08-27), so path LENGTH plus the child-
+    table match in `build_tables` are the only real signals.
     """
     result: list[UniqueConstraint] = []
     notes: list[str] = []
+    struct_global_unique: dict[str, list[list[str]]] = {}
     for constraint in getattr(cls, "Constraint", None) or []:
         if not constraint._qualified_class.endswith("UniqueConstraint"):
             continue
@@ -872,33 +888,49 @@ def _unique_constraints_for_class(cls: MetaInstance, table_name: str) -> tuple[l
         if kind != "GlobalU" or not path_defs:
             notes.append(_diag("SQL-UNIQUE-BASKET", f"UNIQUE ({kind}): basket-scoped UNIQUE not supported yet"))
             continue
-        columns: list[str] = []
-        supported = True
+        own_columns: list[str] = []
+        two_hop: list[tuple[str, str]] = []  # (raw first-hop attr name, sql sub-column)
+        bad = False
         for path in path_defs:
             path_els = getattr(path, "PathEls", None) or []
-            # A single PathEl means a plain own-attribute reference; 2+
-            # means the path crossed a role/reference (e.g. `Owner->Code`)
-            # to ANOTHER table's attribute - `Kind` itself is always
-            # "ReferenceAttr" on every hop (confirmed empirically,
-            # 2026-08-27: `Owner->Code` produces PathEls=[('ReferenceAttr',
-            # 'Owner'), ('ReferenceAttr', 'Code')], never a distinct Kind
-            # for the intermediate role step), so path LENGTH is the only
-            # real signal here - same permissive Kind set as
-            # `constraint_eval.py`'s own `_resolve_path`.
-            if len(path_els) != 1 or getattr(path_els[0], "Kind", None) not in ("ReferenceAttr", "Attribute"):
+            if any(getattr(pe, "Kind", None) not in ("ReferenceAttr", "Attribute") for pe in path_els):
+                bad = True
+                break
+            refs = [getattr(pe, "Ref", None) or "" for pe in path_els]
+            if len(refs) == 1:
+                own_columns.append(_sql_identifier(refs[0]))
+            elif len(refs) == 2:
+                two_hop.append((refs[0], _sql_identifier(refs[1])))
+            else:
+                bad = True
+                break
+        if bad or (own_columns and two_hop):
+            # 3+ hops, an unexpected PathEl kind, or a mix of an own column
+            # and a navigated one in the SAME constraint - not one plain
+            # UNIQUE and not one child-table UNIQUE either.
+            notes.append(
+                _diag(
+                    "SQL-UNIQUE-CROSS-REF",
+                    "UNIQUE across a '->' reference - not expressible as a plain SQL table constraint",
+                )
+            )
+            continue
+        if two_hop:
+            first_hops = {h[0] for h in two_hop}
+            if len(first_hops) != 1:
                 notes.append(
                     _diag(
                         "SQL-UNIQUE-CROSS-REF",
-                        "UNIQUE across a '->' reference - not expressible as a plain SQL table constraint",
+                        "UNIQUE mixing several '->' navigations in one constraint - not expressible in SQL",
                     )
                 )
-                supported = False
-                break
-            columns.append(_sql_identifier(getattr(path_els[0], "Ref", None) or ""))
-        if supported and columns:
-            name = _truncate_identifier(_sql_identifier(f"uq_{table_name}_{'_'.join(columns)}"))
-            result.append(UniqueConstraint(name, columns))
-    return result, notes
+                continue
+            struct_global_unique.setdefault(two_hop[0][0], []).append([h[1] for h in two_hop])
+            continue
+        if own_columns:
+            name = _truncate_identifier(_sql_identifier(f"uq_{table_name}_{'_'.join(own_columns)}"))
+            result.append(UniqueConstraint(name, own_columns))
+    return result, notes, struct_global_unique
 
 
 def _local_unique_constraints_for_class(cls: MetaInstance) -> tuple[dict[str, list[list[str]]], list[str]]:
@@ -1050,7 +1082,7 @@ def build_tables(
             cls, home_table
         )
         renamed = _avoid_identity_collision(columns)
-        unique_constraints, unique_notes = _unique_constraints_for_class(cls, table_name)
+        unique_constraints, unique_notes, struct_global_unique = _unique_constraints_for_class(cls, table_name)
         for unique in unique_constraints:
             unique.columns = [renamed.get(c, c) for c in unique.columns]
         column_names = {c.name for c in columns}
@@ -1117,6 +1149,23 @@ def build_tables(
                 name = _truncate_identifier(_sql_identifier(f"uq_{child_table.name}_{'_'.join(full_columns)}"))
                 child_table.unique_constraints.append(UniqueConstraint(name, full_columns))
 
+            # `UNIQUE <this attr>->Sub` (global, no per-parent scoping): a
+            # plain UNIQUE over the child table's own sub-attribute columns.
+            for group_columns in struct_global_unique.pop(attr_name, []):
+                remapped = [child_renamed.get(c, c) for c in group_columns]
+                missing = [c for c in remapped if c not in child_column_names]
+                if missing:
+                    cols = ", ".join(group_columns)
+                    child_table.notes.append(
+                        _diag(
+                            "SQL-UNIQUE-COL-UNMAPPED",
+                            f"UNIQUE {attr_name}->({cols}): column(s) {missing} have no mapped SQL type",
+                        )
+                    )
+                    continue
+                name = _truncate_identifier(_sql_identifier(f"uq_{child_table.name}_{'_'.join(remapped)}"))
+                child_table.unique_constraints.append(UniqueConstraint(name, remapped))
+
             tables.append(child_table)
 
         # An ABSTRACT structure attribute (single-valued or BAG/LIST OF):
@@ -1170,6 +1219,21 @@ def build_tables(
             parent_table.notes.append(
                 _diag("SQL-UNIQUE-LOCAL-UNSUPPORTED", f"UNIQUE (LOCAL) {attr_name}: no matching BAG/LIST OF attribute")
             )
+
+        # `UNIQUE X->Y` whose first hop `X` is not a `BAG`/`LIST OF STRUCTURE`
+        # attribute of this class: a real `REFERENCE TO`/role navigation to
+        # another table's column (or an abstract structure split across
+        # subtype tables). No single table/index constraint expresses it -
+        # a BEFORE INSERT/UPDATE trigger would.
+        for attr_name, groups in struct_global_unique.items():
+            for group_columns in groups:
+                parent_table.notes.append(
+                    _diag(
+                        "SQL-UNIQUE-CROSS-REF",
+                        f"UNIQUE {attr_name}->({', '.join(group_columns)}): navigates a '->' reference to another "
+                        "table - needs a trigger, not a table constraint",
+                    )
+                )
 
     # 3rd real bug found the same way (PostgreSQL, live `psycopg`-free
     # verification against a real `postgis/postgis` container, 2026-08-27):
