@@ -107,6 +107,10 @@ REGISTRY: dict[str, tuple[str, str]] = {
         "a VIEW WHERE clause needs arithmetic/function-call context the evaluator does not support",
     ),
     "JSONFG-VIEW-INSPECTION-GAP": ("A", "an INSPECTION VIEW's '-> attribute' path was not built by the model builder"),
+    "JSONFG-VIEW-FORMATION-UNSUPPORTED": (
+        "B",
+        "an AGGREGATION VIEW column is a user FUNCTION over the implicit AGGREGATES bag - needs a function engine",
+    ),
     # -- builder ----------------------------------------------------------
     "BUILD-TYPE-UNRESOLVED": (
         "A",

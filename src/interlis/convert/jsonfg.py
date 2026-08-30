@@ -1450,6 +1450,8 @@ def view_skip_diagnostic(view: MetaInstance, *, file: str | None = None):
         rule, sev, hlp = "JSONFG-VIEW-WHERE-UNSUPPORTED", "note", None
     elif "INSPECTION path" in reason:
         rule, sev, hlp = "JSONFG-VIEW-INSPECTION-GAP", "note", None
+    elif "function engine" in reason:
+        rule, sev, hlp = "JSONFG-VIEW-FORMATION-UNSUPPORTED", "note", None
     else:
         rule, sev, hlp = "JSONFG-VIEW-BASE-MISSING", "warning", "pass the base model's directory to --repo"
     return Diagnostic(sev, rule, f"VIEW {name!r} skipped: {reason}", Location(file=file, element_path=name), help=hlp)
