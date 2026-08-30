@@ -32,10 +32,13 @@ from interlis.convert.translation import (
     rename_sql_ddl,
 )
 from interlis.diagnostics import (
+    Diagnostic,
     DiagnosticBag,
+    Location,
     builder_warnings_to_diagnostics,
     render_sarif,
     render_text,
+    severity_for_class,
 )
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
@@ -426,10 +429,14 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
             and instance._qualified_class.rsplit(".", 1)[-1] == "View"
             and getattr(instance, "FormationKind", None) not in _SUPPORTED_VIEW_FORMATION_KINDS
         ):
-            print(
-                f"note: VIEW {getattr(instance, 'Name', '?')} (FormationKind="
-                f"{getattr(instance, 'FormationKind', None)}) is not translated to CREATE VIEW",
-                file=sys.stderr,
+            bag.add(
+                Diagnostic(
+                    severity_for_class("A"),
+                    "SQL-VIEW-FORMATION-UNSUPPORTED",
+                    f"VIEW {getattr(instance, 'Name', '?')} (FormationKind="
+                    f"{getattr(instance, 'FormationKind', None)}) is not translated to CREATE VIEW",
+                    Location(file=str(path), element_path=getattr(instance, "Name", None)),
+                )
             )
 
     # `id(cls) -> its OWN symbol table`, for every `--catalog` class - see

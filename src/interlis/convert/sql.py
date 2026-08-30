@@ -85,6 +85,8 @@ docs/sql-conversion-strategy.md for the full investigation.
 
 _GEOMETRY_KINDS = {"CoordType", "LineType"}
 _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL's own identifier length limit - a real ceiling, not an arbitrary one.
+# STRUCTURE-in-STRUCTURE levels flattened inline as `<a>_<b>_<c>` columns; a STRUCTURE deeper than this is a `-- NOTE`.
+_MAX_STRUCT_FLATTEN_DEPTH = 2
 
 
 def _sql_identifier(name: str) -> str:
@@ -302,27 +304,28 @@ def _columns_for_class(
     symbol_table: SymbolTable | None,
     *,
     prefix: str = "",
+    depth: int = 0,
 ) -> tuple[list[Column], list[ForeignKey], list[str], list[tuple[str, MetaInstance]], dict[str, list[list[str]]]]:
     """Return `(columns, foreign_keys, notes, child_specs, local_unique)` for `cls`'s own+inherited members, flattening
-    one level of STRUCTURE nesting inline.
+    up to `_MAX_STRUCT_FLATTEN_DEPTH` levels of STRUCTURE nesting inline.
 
-    `prefix` is only ever non-empty on the recursive call flattening a
-    STRUCTURE attribute (`"<attr>_"`) - used both to build flattened column
-    names AND to detect/refuse a second level of nesting (RULE #7: not
-    attempted without a policy for it, see
+    `prefix` is non-empty on the recursive call flattening a STRUCTURE
+    attribute (`"<attr>_"`, or `"<attr>_<subattr>_"` at the second level) -
+    it builds the flattened column names. `depth` counts how many STRUCTURE
+    levels have already been entered; a STRUCTURE found at
+    `depth == _MAX_STRUCT_FLATTEN_DEPTH` is refused with a `-- NOTE` rather
+    than flattened into an ever-deeper column name (RULE #7: bounded, see
     mappings/ilismeta16-to-sql-rules.yml's StructureNesting entry).
 
     `child_specs` is `[(label, MultiValue instance), ...]` for every
-    `BAG`/`LIST OF` member found either at the TOP level OR while
-    flattening a STRUCTURE one level deep (`label` already carries the
-    `"<struct_attr>_"` prefix in the latter case, e.g.
+    `BAG`/`LIST OF` member found at the TOP level or while flattening a
+    STRUCTURE (`label` carries the full `"<struct_attr>_"` /
+    `"<struct_attr>_<sub_attr>_"` prefix in the nested case, e.g.
     `"zustaendige_behoerde_entries"`) - built into a related child table by
     `_build_child_table` (called from `build_tables`, which alone knows the
     already-used table names to disambiguate against). A `BAG`/`LIST OF`
-    found NESTED TWO levels deep (inside a STRUCTURE reached from another
-    flattened STRUCTURE) can't occur here: STRUCTURE-in-STRUCTURE is itself
-    refused one check below, so `prefix` is never more than one hop by the
-    time a `MultiValue` is seen.
+    reached through one or two flattened STRUCTURE levels still becomes one
+    child table keyed by the parent's OID.
 
     `local_unique` is the SAME shape `_local_unique_constraints_for_class`
     returns, merged up from any nested STRUCTURE's OWN `Kind=LocalU`
@@ -357,10 +360,11 @@ def _columns_for_class(
             continue
 
         if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
-            if prefix:
+            if depth >= _MAX_STRUCT_FLATTEN_DEPTH:
                 notes.append(
                     _diag(
-                        "SQL-STRUCT-NESTED-DEEP", f"{label}: STRUCTURE nested more than one level deep - not flattened"
+                        "SQL-STRUCT-NESTED-DEEP",
+                        f"{label}: STRUCTURE nested more than {_MAX_STRUCT_FLATTEN_DEPTH} levels deep - not flattened",
                     )
                 )
                 continue
@@ -372,15 +376,18 @@ def _columns_for_class(
                     )
                 )
                 continue
-            sub_columns, sub_fks, sub_notes, sub_child_specs, _sub_local_unique = _columns_for_class(
+            sub_columns, sub_fks, sub_notes, sub_child_specs, sub_local_unique = _columns_for_class(
                 resolved.type_instance,
                 symbol_table,
                 prefix=f"{label}_",
+                depth=depth + 1,
             )
             columns.extend(sub_columns)
             foreign_keys.extend(sub_fks)
             notes.extend(sub_notes)
             child_specs.extend(sub_child_specs)
+            for nested_key, nested_groups in sub_local_unique.items():
+                local_unique.setdefault(nested_key, []).extend(nested_groups)
             struct_local_unique, struct_local_unique_notes = _local_unique_constraints_for_class(resolved.type_instance)
             for role_attr, groups in struct_local_unique.items():
                 local_unique.setdefault(f"{label}_{role_attr}", []).extend(groups)
@@ -556,17 +563,19 @@ def _path_to_column(path_els: list[MetaInstance]) -> str:
     """Resolve a `CONSTRAINT` path (`PathOrInspFactor.PathEls`) to the flattened SQL column name it maps to.
 
     Same scope as `constraint_eval.py`'s own `_resolve_path`: a `CONSTRAINT`
-    never navigates beyond one nested `STRUCTURE` in the SAME object (never
-    through a `REFERENCE TO`/role - confirmed empirically there, docstring
-    "STRUCTURE nesting" only) - so 1 hop is a plain own column, 2 hops is
-    the SAME `<attr>_<subattr>` flattened name `_columns_for_class` already
-    builds for one level of STRUCTURE nesting (RULE #1: same join, not a
-    parallel convention). 3+ hops would need a second nesting level, out of
-    Lot 1 scope everywhere else in this module - rejected the same way.
+    navigates only nested `STRUCTURE` hops in the SAME object (never through
+    a `REFERENCE TO`/role) - so 1 hop is a plain own column, and 2 or 3 hops
+    are the SAME `<attr>_<subattr>[_<subsubattr>]` flattened name
+    `_columns_for_class` builds for up to `_MAX_STRUCT_FLATTEN_DEPTH` levels
+    of STRUCTURE nesting (RULE #1: same join, not a parallel convention).
+    More hops than that would need a deeper nesting level, refused the same
+    way it is everywhere else in this module. The caller checks the result
+    against the real column set, so a path that lands on a column that was
+    NOT flattened degrades to a `-- NOTE`, never a broken `CHECK`.
     """
-    if len(path_els) not in (1, 2):
+    if len(path_els) not in (1, 2, 3):
         raise _UnsupportedCheckExpression(
-            f"path with {len(path_els)} hops needs more than one level of STRUCTURE nesting"
+            f"path with {len(path_els)} hops needs more than {_MAX_STRUCT_FLATTEN_DEPTH} levels of STRUCTURE nesting"
         )
     refs = []
     for path_el in path_els:

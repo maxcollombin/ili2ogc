@@ -111,6 +111,57 @@ def test_structure_attribute_flattened_one_level():
     assert "location" not in names
 
 
+_NESTED_STRUCT_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Country =
+      Code : TEXT*2;
+      Name : TEXT*40;
+    END Country;
+    STRUCTURE Address =
+      Street : TEXT*50;
+      Country : Country;
+    END Address;
+    STRUCTURE Contact =
+      Phone : TEXT*20;
+      Address : Address;
+    END Contact;
+    CLASS Person =
+      FullName : MANDATORY TEXT*80;
+      Home : Address;
+      Work : Contact;
+    END Person;
+  END T;
+END Foo.
+"""
+
+
+def test_structure_flattened_two_levels_deep():
+    """A STRUCTURE reached through one other flattened STRUCTURE (single-valued, the real corpus idiom - `Axis`'s
+    `AxisSegmentGeometry.CaptureMethod`) is flattened too, up to `_MAX_STRUCT_FLATTEN_DEPTH` (2).
+    """
+    builder = _build(_NESTED_STRUCT_MODEL)
+    person = _resolved_class(builder, "Foo.T.Person")
+    tables = build_tables([person])
+    table = _table(tables, "person")
+    names = {c.name for c in table.columns}
+    assert {"home_street", "home_country_code", "home_country_name"} <= names
+    assert "home_country" not in names
+    assert not any("NESTED-DEEP" in note and "Home" in note for note in table.notes)
+
+
+def test_structure_three_levels_deep_is_a_note_not_flattened():
+    """A THIRD nested level is still a `-- NOTE` (RULE #5), never an ever-deeper column name."""
+    builder = _build(_NESTED_STRUCT_MODEL)
+    person = _resolved_class(builder, "Foo.T.Person")
+    tables = build_tables([person])
+    table = _table(tables, "person")
+    names = {c.name for c in table.columns}
+    assert {"work_phone", "work_address_street"} <= names
+    assert not any(n.startswith("work_address_country") for n in names)
+    assert any("SQL-STRUCT-NESTED-DEEP" in note and "work_address_country" in note.lower() for note in table.notes)
+
+
 def test_reference_becomes_fk_column_and_constraint():
     builder = _build(_MODEL)
     owner = _resolved_class(builder, "Foo.T.Owner")

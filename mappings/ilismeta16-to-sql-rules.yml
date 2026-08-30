@@ -112,8 +112,9 @@ concepts:
     note: >
       A `View` with `FormationKind` `Projection` or `Join` (the same
       `_SUPPORTED_VIEW_FORMATION_KINDS` filter the JSON Schema/JSON-FG
-      pipelines use - `Union`/`Aggregation`/`Inspection` are noted, not
-      translated) becomes `CREATE VIEW <name> AS SELECT <attr := path> ...
+      pipelines use - `Union`/`Aggregation`/`Inspection` get a
+      `SQL-VIEW-FORMATION-UNSUPPORTED` diagnostic, not translated) becomes
+      `CREATE VIEW <name> AS SELECT <attr := path> ...
       FROM <base tables + navigated join tables, comma-joined> WHERE
       <translated Where predicates>` (`convert/sql.py`'s `build_views`).
 
@@ -173,13 +174,14 @@ concepts:
     status: mapped
     note: >
       A `Class(Kind=Structure)`-typed attribute is flattened INLINE onto
-      the SAME table, ONE level only (`<attr>_<subattr>` columns) - not a
-      separate related table (unlike a `BAG`/`LIST OF STRUCTURE`, see
-      MultiValue below, which genuinely needs one for cardinality reasons).
-      A structure nested a SECOND level deep (a flattened sub-attribute
-      that is itself a STRUCTURE) is NOT further flattened in Lot 1 -
-      surfaced as a `-- NOTE` comment (RULE #5) rather than silently
-      dropped or produced with an ambiguous column name. Same known
+      the SAME table (`<attr>_<subattr>` columns), up to two nested
+      STRUCTURE levels deep (`<attr>_<subattr>_<subsubattr>`,
+      `_MAX_STRUCT_FLATTEN_DEPTH`) - not a separate related table (unlike a
+      `BAG`/`LIST OF STRUCTURE`, see MultiValue below, which genuinely
+      needs one for cardinality reasons). The real corpus nests
+      single-valued catalogue-reference wrappers at the second level; a
+      third level is surfaced as a `-- NOTE` comment (RULE #5) rather than
+      silently dropped or produced with an ambiguous column name. Same known
       metamodel limitation as the JSON Schema pipeline
       (mappings/ilismeta16-to-jsonschema-rules.yml's StructureNesting
       entry): `MANDATORY` on a structure-typed attribute is never captured
@@ -259,8 +261,9 @@ concepts:
       matching `BAG`/`LIST OF` child table - scoped per parent, not the
       whole table. The dominant real idiom - a small STRUCTURE wrapping the
       `BAG`/`LIST` AND declaring `UNIQUE (LOCAL)` on itself, then embedded
-      one level into a Class - is mapped too: `_columns_for_class` merges
-      the STRUCTURE's own `UniqueDef`s into the SAME lookup, qualified with
+      into a Class (one or two flattened levels) - is mapped too:
+      `_columns_for_class` merges the STRUCTURE's own `UniqueDef`s (and any
+      from a deeper flattened level) into the SAME lookup, qualified with
       the STRUCTURE attribute's own name (e.g. `UNIQUE (LOCAL) LocalisedText:
       Language;` on `MultilingualUri`, embedded as `URL_Behoerde`, becomes
       `UNIQUE (<parent>_fk, language)` on the `<parent>_url_behoerde_localisedtext`

@@ -98,7 +98,7 @@ View:
   sql:
     formation_kind:
       source: {field: FormationKind}
-      note: "Projection/Join -> CREATE VIEW; Union/Aggregation/Inspection -> a diagnostic note, not translated (same _SUPPORTED_VIEW_FORMATION_KINDS filter as the JSON Schema/JSON-FG pipelines)."
+      note: "Projection/Join -> CREATE VIEW; Union/Aggregation/Inspection -> a SQL-VIEW-FORMATION-UNSUPPORTED diagnostic, not translated (same _SUPPORTED_VIEW_FORMATION_KINDS filter as the JSON Schema/JSON-FG pipelines)."
     select_list:
       rule: "one SELECT item per ClassAttribute (via the ClassAttr association, shared with Class)"
       note: >
@@ -144,8 +144,8 @@ StructureNesting:
   qualified_name: IlisMeta16.ModelData.Class
   sql:
     flattened_columns:
-      rule: "<attr>_<subattr> columns on the SAME table, one level only"
-      note: "See mappings/ilismeta16-to-sql-rules.yml's StructureNesting entry for the one-level limit and the inherited MANDATORY-not-captured gap."
+      rule: "<attr>_<subattr>[_<subsubattr>] columns on the SAME table, up to two nested STRUCTURE levels (_MAX_STRUCT_FLATTEN_DEPTH)"
+      note: "See mappings/ilismeta16-to-sql-rules.yml's StructureNesting entry for the depth limit and the inherited MANDATORY-not-captured gap."
 
 ReferenceType:
   qualified_name: IlisMeta16.ModelData.ReferenceType

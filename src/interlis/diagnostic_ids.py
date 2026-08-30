@@ -88,6 +88,10 @@ REGISTRY: dict[str, tuple[str, str]] = {
         "B",
         "a VIEW-level UNIQUE/SET/EXISTENCE/CONSTRAINT cannot be carried onto a CREATE VIEW",
     ),
+    "SQL-VIEW-FORMATION-UNSUPPORTED": (
+        "A",
+        "a UNION/AGGREGATION/INSPECTION VIEW is not translated to CREATE VIEW (only PROJECTION/JOIN are)",
+    ),
     # -- convert (.ili -> JSON Schema) -------------------------------------
     "JSONSCHEMA-CLASS-UNRESOLVED": (
         "C",
