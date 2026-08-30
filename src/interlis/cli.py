@@ -197,10 +197,12 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
-_SUPPORTED_VIEW_FORMATION_KINDS = ("Projection", "Join")
-# convert-sql additionally renders UNION OF as `... UNION ALL ...` (see
-# docs/view-formation-support.md); JSON Schema / JSON-FG scope is unchanged.
-_SQL_VIEW_FORMATION_KINDS = ("Projection", "Join", "Union")
+# All five `View` formation laws are translated by every converter - see
+# docs/view-formation-support.md for the per-kind semantics and the parts
+# that stay a `-- NOTE` (an AGGREGATION whose columns are user-FUNCTION
+# results over the implicit AGGREGATES bag, a geometry INSPECTION).
+_SUPPORTED_VIEW_FORMATION_KINDS = ("Projection", "Join", "Union", "Aggregation", "Inspection")
+_SQL_VIEW_FORMATION_KINDS = _SUPPORTED_VIEW_FORMATION_KINDS
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
@@ -212,19 +214,17 @@ def cmd_convert(args: argparse.Namespace) -> int:
     `x-unsupported` marker rather than being silently dropped.
 
     Every `Class` becomes its own `$defs` entry, as before. A `VIEW` is
-    ALSO a root, restricted to `FormationKind in {Projection, Join}`
-    (`_SUPPORTED_VIEW_FORMATION_KINDS`, backlog item 8's Lot B scope,
-    `.claude/PROGRESS.md` - matches the FGDM4GS report's own §4.4.2/4.4.3
-    prioritization; `Union`/`Aggregation`/`Inspection` Views are excluded
-    from this CLI's root selection rather than converted, a deliberate
-    scope decision, not a silent drop of supported data). `View` extends
+    ALSO a root, for every `FormationKind`
+    (`_SUPPORTED_VIEW_FORMATION_KINDS` - Projection/Join/Union/Aggregation/
+    Inspection, see docs/view-formation-support.md). `View` extends
     `Class` in the metamodel (`ilismeta16-classes.yml`) and its
     `ClassAttribute` list is populated the same way (backlog item 8's
     Lot A2) - `class_to_json_schema`/`model_to_json_schema` need no View-
     specific code at all, confirmed empirically: a View's flattened
-    (`JOIN OF`-joined, or `PROJECTION OF`-selected) attribute set already
-    produces a correct JSON Schema `$defs` entry through the exact same
-    path as a plain Class.
+    attribute set (whatever the formation law) already produces a correct
+    JSON Schema `$defs` entry through the exact same path as a plain
+    Class. `x-crud` is GET-only for every derived View except a plain
+    `PROJECTION OF` (`_crud_operations`).
     """
     path = Path(args.file)
     if not path.exists():
@@ -392,9 +392,14 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     `--dialect postgresql`'s default, which uses a separate `ALTER TABLE
     ... ADD CONSTRAINT` pass for `FOREIGN KEY` only - `UNIQUE`/`CHECK` are
     inline in both dialects). `Kind=Class` roots become a `CREATE TABLE`;
-    `Projection`/`Join` `View`s become a `CREATE VIEW` (same
-    `_SUPPORTED_VIEW_FORMATION_KINDS` filter as `cmd_convert` -
-    `Union`/`Aggregation`/`Inspection` are noted, not translated). A View's
+    every `View` becomes a `CREATE VIEW` - Projection/Join as
+    `SELECT ... FROM <bases> WHERE`, Union as `SELECT ... UNION ALL ...`,
+    Inspection as a `SELECT` over the child table `build_tables` already
+    emits for the inspected `BAG`/`LIST OF` attribute, Aggregation as
+    `SELECT ... GROUP BY <key>`. A branch that can't be translated
+    faithfully (an AGGREGATION column that is a user-FUNCTION call over the
+    implicit `AGGREGATES` bag, a geometry INSPECTION) demotes that whole
+    View to a `-- NOTE` (docs/view-formation-support.md). A View's
     base classes live in an IMPORTED model, so pass that model via
     `--catalog` too - a View whose base table isn't in this conversion, or
     whose `Where`/`ATTRIBUTE` expressions fall outside the translatable
@@ -456,20 +461,16 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
             and instance._qualified_class.rsplit(".", 1)[-1] == "View"
             and getattr(instance, "FormationKind", None) not in _SQL_VIEW_FORMATION_KINDS
         ):
+            # Every known FormationKind is now handled by `build_views`
+            # (a real CREATE VIEW, or a `-- NOTE` from inside it when a
+            # branch is untranslatable). This only fires for a View whose
+            # `FormationKind` the builder never set at all.
             kind = str(getattr(instance, "FormationKind", None))
-            reason = {
-                "Aggregation": "AGGREGATION OF collapses a population; its useful attributes are "
-                "function results over the implicit AGGREGATES bag, and user FUNCTION bodies are "
-                "not translated",
-                "Inspection": "INSPECTION OF explodes a structure attribute - its rows are the "
-                "child table already emitted for that BAG/LIST OF attribute; a geometry inspection "
-                "(SurfaceBoundary/SurfaceEdge) is a geometry decomposition, not a table",
-            }.get(kind, "not translated to CREATE VIEW")
             bag.add(
                 Diagnostic(
                     severity_for_class("A"),
                     "SQL-VIEW-FORMATION-UNSUPPORTED",
-                    f"VIEW {getattr(instance, 'Name', '?')} (FormationKind={kind}): {reason}",
+                    f"VIEW {getattr(instance, 'Name', '?')} (FormationKind={kind}): not translated to CREATE VIEW",
                     Location(file=str(path), element_path=getattr(instance, "Name", None)),
                 )
             )

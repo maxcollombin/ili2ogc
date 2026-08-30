@@ -1557,8 +1557,17 @@ def build_views(
         used_names.add(vname)
         try:
             bases = _resolve_view_bases(view, tables_by_name, table_name_by_class_id)
-            if getattr(view, "FormationKind", None) == "Union":
+            formation = getattr(view, "FormationKind", None)
+            if formation == "Union":
                 body = _build_union_view(view, bases, tables_by_name, symbol_for)
+                result.append(SqlView(vname, body, _view_constraint_notes(view)))
+                continue
+            if formation == "Inspection":
+                body = _build_inspection_view(view, bases, tables_by_name, symbol_for)
+                result.append(SqlView(vname, body, _view_constraint_notes(view)))
+                continue
+            if formation == "Aggregation":
+                body = _build_aggregation_view(view, bases, tables_by_name, symbol_for)
                 result.append(SqlView(vname, body, _view_constraint_notes(view)))
                 continue
             resolver = _ViewResolver(bases, tables_by_name, symbol_for)
@@ -1631,6 +1640,121 @@ def _build_union_view(
             raise _UnsupportedView("a union branch attribute navigates a reference - not translated")
         branches.append("SELECT\n    " + ",\n    ".join(items) + f'\nFROM "{table}" "{alias}"')
     return "\nUNION ALL\n".join(branches)
+
+
+def _build_inspection_view(
+    view: MetaInstance,
+    bases: list[tuple[str, MetaInstance, str]],
+    tables_by_name: dict[str, Table],
+    symbol_for,
+) -> str:
+    """Return a `SELECT ... FROM "<parent>_<attr>"` body for a `FormationKind=Inspection` view.
+
+    `INSPECTION OF <base> -> attr` yields every element of the inspected
+    `BAG`/`LIST OF` structure attribute; `build_tables` already emits that
+    extent as the child table `<base_table>_<attr>`, so the view is just a
+    projection over it. Each view `ClassAttribute` (`out := <base> -> field`)
+    reads `field` straight from a child-table column. `PARENT -> ...`
+    (navigating back to the owning object) and a multi-hop inspection path
+    (an indirect sub-structure) are not translated - the whole view demotes
+    to a `-- NOTE` (RULE #5). A geometry inspection
+    (`SurfaceBoundary`/`SurfaceEdge` of an area/surface attribute) has no
+    child table and likewise demotes.
+    """
+    if len(bases) != 1:
+        raise _UnsupportedView("an inspection view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
+    base_alias, _base_cls, base_table = bases[0]
+    path = list(getattr(view, "_inspection_path", None) or [])
+    if not path:
+        raise _UnsupportedView(
+            "INSPECTION path (the '-> attribute' chain) was not built - InterlisModelBuilder gap",
+            "SQL-VIEW-FORMATION-UNSUPPORTED",
+        )
+    if len(path) > 1:
+        raise _UnsupportedView(
+            f"INSPECTION OF an indirect sub-structure ({' -> '.join(path)}) is not translated to a SQL view",
+            "SQL-VIEW-FORMATION-UNSUPPORTED",
+        )
+    child_table = _sql_identifier(f"{base_table}_{path[0]}")
+    if child_table not in tables_by_name:
+        raise _UnsupportedView(
+            f"the inspected attribute {path[0]!r} has no child table "
+            f"(a geometry inspection is a decomposition, not a table)",
+            "SQL-VIEW-FORMATION-UNSUPPORTED",
+        )
+    columns = {c.name for c in tables_by_name[child_table].columns}
+    elem_alias = "insp"
+    select_items: list[str] = []
+    for attr in getattr(view, "ClassAttribute", None) or []:
+        aname = getattr(attr, "Name", None)
+        derivates = getattr(attr, "Derivates", None) or []
+        if not derivates:
+            raise _UnsupportedView(f"inspection view attribute {aname!r} has no assigned expression")
+        factor = derivates[0]
+        if not factor._qualified_class.endswith("PathOrInspFactor") or getattr(factor, "Inspection", None):
+            raise _UnsupportedView(f"inspection view attribute {aname!r} is not a plain element path")
+        refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
+        if len(refs) == 2 and (refs[0] or "").lower() == base_alias and refs[1] is not None:
+            col = _sql_identifier(refs[1])
+            if col not in columns:
+                raise _UnsupportedView(f"element attribute {refs[1]!r} has no column on {child_table!r}")
+            select_items.append(f'"{elem_alias}"."{col}" AS "{_sql_identifier(aname or "")}"')
+        elif refs and (refs[0] or "").upper() == "PARENT":
+            raise _UnsupportedView(
+                "an inspection view attribute navigates PARENT-> back to the owning object - not translated",
+                "SQL-VIEW-FORMATION-UNSUPPORTED",
+            )
+        else:
+            raise _UnsupportedView(f"inspection view attribute {aname!r}: unsupported element path {refs}")
+    if not select_items:
+        raise _UnsupportedView("inspection view has no projectable ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
+    return "SELECT\n    " + ",\n    ".join(select_items) + f'\nFROM "{child_table}" "{elem_alias}"'
+
+
+def _build_aggregation_view(
+    view: MetaInstance,
+    bases: list[tuple[str, MetaInstance, str]],
+    tables_by_name: dict[str, Table],
+    symbol_for,
+) -> str:
+    """Return a `SELECT DISTINCT ... FROM "<base>"` body for a `FormationKind=Aggregation` view, or demote.
+
+    `AGGREGATION OF <base> (ALL | EQUAL(keys))` collapses base objects into
+    one instance; inside the view the implicit `AGGREGATES` bag holds the
+    grouped objects, for a FUNCTION (`ElementCount := countB(AGGREGATES)`).
+    A user FUNCTION body is out of scope by design (delegated to an
+    external engine - see docs/fgdm4gs-view-strategy.md), so a view
+    attribute that is a `FunctionCall` demotes the whole view to a
+    `-- NOTE`. The translatable subset is an aggregation whose every
+    attribute is a plain path projection of a base attribute - that is a
+    `SELECT DISTINCT` (the `EQUAL(keys)` grouping key itself is not
+    materialised by the builder, `View.FormationParameter` gap, so `ALL`
+    de-duplication is the faithful reading either way, mirroring
+    `convert/jsonfg.evaluate_view`).
+    """
+    if len(bases) != 1:
+        raise _UnsupportedView("an aggregation view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
+    resolver = _ViewResolver(bases, tables_by_name, symbol_for)
+    select_items: list[str] = []
+    for attr in getattr(view, "ClassAttribute", None) or []:
+        aname = getattr(attr, "Name", None)
+        derivates = getattr(attr, "Derivates", None) or []
+        if not derivates:
+            raise _UnsupportedView(f"aggregation view attribute {aname!r} has no assigned expression")
+        factor = derivates[0]
+        if not factor._qualified_class.endswith(("PathOrInspFactor", "Constant")):
+            raise _UnsupportedView(
+                f"aggregation view attribute {aname!r} is a function/expression over the implicit AGGREGATES bag - "
+                f"a user FUNCTION body is not translated to SQL",
+                "SQL-VIEW-FORMATION-UNSUPPORTED",
+            )
+        select_items.append(f'{resolver.scalar_ref(factor)} AS "{_sql_identifier(aname or "")}"')
+    if not select_items:
+        raise _UnsupportedView("aggregation view has no projectable ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
+    if resolver.extra_joins:
+        raise _UnsupportedView("an aggregation view attribute navigates a reference - not translated")
+    _alias, _cls, table = bases[0]
+    return "SELECT DISTINCT\n    " + ",\n    ".join(select_items) + f'\nFROM "{table}" "{_alias}"'
 
 
 def _view_constraint_notes(view: MetaInstance) -> list[str]:

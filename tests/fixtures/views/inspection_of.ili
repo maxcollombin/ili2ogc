@@ -1,0 +1,32 @@
+INTERLIS 2.3;
+
+!! The canonical INSPECTION OF example from the INTERLIS 2 reference
+!! manual (refhb24 "Inspektionssicht"), also quoted verbatim in the
+!! FGDM4GS report (HEIG-VD 2024) chapter 4.2. An inspection view yields
+!! the set of all structure elements (`BAG OF` / `LIST OF`, or the
+!! boundary of an area/surface) belonging to a direct or indirect
+!! sub-structure attribute of an object class - it explodes a nested
+!! list so its elements can be seen individually. Used here to pin the
+!! .ili -> JSON Schema / JSON-FG / CREATE VIEW translation of
+!! `FormationKind=Inspection`.
+
+MODEL TestInspection AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    STRUCTURE A =
+      Attr1: TEXT*20;
+    END A;
+
+    CLASS B =
+      Attr2: BAG OF A;
+    END B;
+
+    VIEW VB
+      INSPECTION OF TestInspection.Base.B -> Attr2;
+      =
+      ATTRIBUTE
+        Attr1: TEXT*20 := B -> Attr1;
+    END VB;
+  END Base;
+
+END TestInspection.

@@ -136,10 +136,16 @@ def test_model_to_json_schema_accepts_views_alongside_classes():
     assert set(schema["$defs"]["VJ"]["properties"]) == {"Attr1", "Attr3"}
 
 
-def test_cli_formation_kind_filter_includes_projection_and_join_excludes_union():
-    """Mirrors cli.cmd_convert's own root-selection filter (Lot B scope,
-    .claude/PROGRESS.md item 8) without invoking the full CLI."""
-    assert _SUPPORTED_VIEW_FORMATION_KINDS == ("Projection", "Join")
+def test_cli_formation_kind_filter_includes_every_kind():
+    """cli.cmd_convert selects a VIEW root for every FormationKind - see
+    docs/view-formation-support.md."""
+    assert set(_SUPPORTED_VIEW_FORMATION_KINDS) == {
+        "Projection",
+        "Join",
+        "Union",
+        "Aggregation",
+        "Inspection",
+    }
 
     vp = _view(_build(PROJECTION_SRC), "VP")
     vj = _view(_build(JOIN_SRC), "VJ")
@@ -147,4 +153,14 @@ def test_cli_formation_kind_filter_includes_projection_and_join_excludes_union()
 
     assert vp.FormationKind in _SUPPORTED_VIEW_FORMATION_KINDS
     assert vj.FormationKind in _SUPPORTED_VIEW_FORMATION_KINDS
-    assert vu.FormationKind not in _SUPPORTED_VIEW_FORMATION_KINDS
+    assert vu.FormationKind in _SUPPORTED_VIEW_FORMATION_KINDS
+
+
+def test_union_view_converts_to_one_schema_with_the_union_attribute():
+    builder = _build(UNION_SRC)
+    view = _view(builder, "VU")
+    schema = class_to_json_schema(view)
+    assert schema["title"] == "VU"
+    assert set(schema["properties"]) == {"Attr"}
+    # a merge view is not 1:1 with a single base - GET-only
+    assert schema["x-crud"] == ["GET"]

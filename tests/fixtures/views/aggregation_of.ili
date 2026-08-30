@@ -1,0 +1,33 @@
+INTERLIS 2.3;
+
+!! The canonical AGGREGATION OF example from the INTERLIS 2 reference
+!! manual (refhb24 "Aggregationssicht"), also quoted verbatim in the
+!! FGDM4GS report (HEIG-VD 2024) chapter 4.2. An aggregation view
+!! collapses all base instances (`ALL`) or those sharing a required
+!! attribute combination (`EQUAL(...)`) into one; inside the view the
+!! implicit `AGGREGATES` BAG holds the grouped objects, for passing to a
+!! FUNCTION. Used here to pin the .ili -> JSON Schema / JSON-FG /
+!! CREATE VIEW translation of `FormationKind=Aggregation`.
+
+CONTRACTED MODEL TestAggregation AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    CLASS B =
+      Attr1: TEXT*20;
+    END B;
+  END Base;
+
+  FUNCTION countB(elements: BAG OF TestAggregation.Base.B): NUMERIC;
+
+  TOPIC Aggregation =
+    DEPENDS ON TestAggregation.Base;
+
+    VIEW VB2
+      AGGREGATION OF TestAggregation.Base.B EQUAL(B->Attr1);
+      =
+      ATTRIBUTE
+        ElementCount: 0 .. 10000 := countB(AGGREGATES);
+    END VB2;
+  END Aggregation;
+
+END TestAggregation.

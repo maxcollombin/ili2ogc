@@ -61,23 +61,26 @@ def _crud_operations(class_instance: MetaInstance) -> tuple[str, ...] | None:
 
     `None` for `Kind in ("Structure", "Association")` - nested/embedded
     content is never its own collection, CRUD semantics don't apply.
-    `Kind == "View"` with `FormationKind == "Join"`: GET-only - see
+    A `View` is GET-only for every `FormationKind` EXCEPT a plain
+    `PROJECTION OF` (1:1 with its single base, the direct equivalent of a
+    single-table SQL view, so writes map straight back) - see
     .claude/PROGRESS.md item 8 Lot D's decision, by direct analogy with
     SQL view updatability (the report's own pipeline, chapter 6 step 2a,
     materializes `JOIN OF` as a real multi-table database VIEW via
     `ili2db` - PostgreSQL/PostGIS, GeoPackage and ESRI FileGDB all require
     a SINGLE source relation, or `INSTEAD OF` triggers INTERLIS provides
-    no metadata to generate, for a view to be automatically updatable).
-    Every other case - a plain `Class`, or a `PROJECTION OF` View (1:1
-    with its single base, the direct equivalent of a single-table SQL
-    view) - gets full CRUD: OGC API Features - Part 4 doesn't require
-    every collection to be writable, a provider declares per-collection
-    which HTTP methods it supports (unsupported ones simply answer 405).
+    no metadata to generate, for a view to be automatically updatable; a
+    Union/Aggregation/Inspection view has no single writable target
+    either).
+    A plain `Class` gets full CRUD: OGC API Features - Part 4 doesn't
+    require every collection to be writable, a provider declares
+    per-collection which HTTP methods it supports (unsupported ones simply
+    answer 405).
     """
     kind = getattr(class_instance, "Kind", None)
     if kind not in ("Class", "View"):
         return None
-    if kind == "View" and getattr(class_instance, "FormationKind", None) == "Join":
+    if kind == "View" and getattr(class_instance, "FormationKind", None) != "Projection":
         return _READ_ONLY
     return _FULL_CRUD
 

@@ -1,0 +1,33 @@
+INTERLIS 2.3;
+
+!! The canonical UNION OF example from the INTERLIS 2 reference manual
+!! (refhb24 "Vereinigungssicht"), also quoted verbatim in the FGDM4GS
+!! report (HEIG-VD 2024) chapter 4.2. A union view merges structurally
+!! compatible base classes into one; each union-view attribute is
+!! assigned the compatible attribute of every base
+!! (`Attr1 := C1->Attr1, C2->Attr2`). Used here to pin the .ili -> JSON
+!! Schema / JSON-FG / CREATE VIEW translation of `FormationKind=Union`.
+
+MODEL TestUnion AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    CLASS C1 =
+      Attr1: TEXT*10;
+    END C1;
+    CLASS C2 =
+      Attr2: TEXT*30;
+    END C2;
+  END Base;
+
+  TOPIC Union =
+    DEPENDS ON TestUnion.Base;
+
+    VIEW CC
+      UNION OF C1 ~ TestUnion.Base.C1, C2 ~ TestUnion.Base.C2;
+      =
+      ATTRIBUTE
+        Attr1: TEXT*30 := C1->Attr1, C2->Attr2;
+    END CC;
+  END Union;
+
+END TestUnion.

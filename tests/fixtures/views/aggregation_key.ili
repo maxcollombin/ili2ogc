@@ -1,0 +1,30 @@
+INTERLIS 2.3;
+
+!! A translatable AGGREGATION OF variant: every view attribute is a plain
+!! projection of a base attribute (no FUNCTION over the implicit
+!! AGGREGATES bag), so the aggregation collapses to a `SELECT DISTINCT`
+!! (SQL) / one Feature per distinct row (JSON-FG). The reference-manual
+!! canonical form with `countB(AGGREGATES)` is in `aggregation_of.ili` -
+!! that one needs a function engine and is deliberately left as a NOTE.
+
+MODEL TestAggregationKey AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    CLASS Parcel =
+      Municipality: TEXT*40;
+      Zone: TEXT*20;
+    END Parcel;
+  END Base;
+
+  TOPIC Aggregation =
+    DEPENDS ON TestAggregationKey.Base;
+
+    VIEW MunicipalityList
+      AGGREGATION OF TestAggregationKey.Base.Parcel EQUAL(Parcel -> Municipality);
+      =
+      ATTRIBUTE
+        Municipality: TEXT*40 := Parcel -> Municipality;
+    END MunicipalityList;
+  END Aggregation;
+
+END TestAggregationKey.

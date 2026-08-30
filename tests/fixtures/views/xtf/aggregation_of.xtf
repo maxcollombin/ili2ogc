@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS" xmlns="http://www.interlis.ch/xtf/2.4/TestAggregation">
+  <ili:headersection sender="test-fixture" version="2.4">
+    <ili:models>
+      <ili:model>TestAggregation</ili:model>
+    </ili:models>
+  </ili:headersection>
+  <ili:datasection>
+    <Base ili:bid="b1">
+      <B ili:tid="o1"><Attr1>red</Attr1></B>
+      <B ili:tid="o2"><Attr1>red</Attr1></B>
+      <B ili:tid="o3"><Attr1>blue</Attr1></B>
+    </Base>
+  </ili:datasection>
+</ili:transfer>

@@ -926,10 +926,13 @@ def unsupported_view_reason(view: MetaInstance) -> str | None:
     """Return why `evaluate_view` can't evaluate `view`, or `None` if it can.
 
     Reused by `cli.cmd_convert_jsonfg` to print a clear diagnostic for
-    every VIEW it skips instead of a silent omission. The only remaining
+    every VIEW it skips instead of a silent omission. The remaining
     reasons are a genuinely unavailable base model (RULE #9 - provide it
-    via `--repo`) and a `WHERE` construct outside the CONSTRAINT
-    evaluator's scope (arithmetic / function call).
+    via `--repo`), a `WHERE` construct outside the CONSTRAINT evaluator's
+    scope (arithmetic / function call), and an AGGREGATION whose columns
+    are user-FUNCTION results over the implicit `AGGREGATES` bag (needs a
+    function engine - out of scope by design, see
+    docs/fgdm4gs-view-strategy.md).
     """
     kind = getattr(view, "FormationKind", None)
     if kind not in ("Projection", "Join", "Union", "Aggregation", "Inspection"):
@@ -943,6 +946,14 @@ def unsupported_view_reason(view: MetaInstance) -> str | None:
         return "base model not resolvable - pass it via --repo (see docs/model-resolution-strategy.md)"
     if kind == "Inspection" and not _inspection_path(view):
         return "INSPECTION path (the '-> attribute' chain) was not built - InterlisModelBuilder gap"
+    if kind == "Aggregation":
+        for attr in getattr(view, "ClassAttribute", None) or []:
+            for factor in getattr(attr, "Derivates", None) or []:
+                if not factor._qualified_class.endswith(("PathOrInspFactor", "Constant")):
+                    return (
+                        f"AGGREGATION attribute {getattr(attr, 'Name', None)!r} is a FUNCTION over the implicit "
+                        "AGGREGATES bag - needs a function engine (out of scope)"
+                    )
     where = getattr(view, "Where", None)
     if where is not None and (reason := _view_where_unsupported(where)) is not None:
         return f"WHERE clause: {reason}"
@@ -1000,6 +1011,39 @@ def _merge_join_combo(combo: list[XtfObject | None], view_name: str) -> XtfObjec
         if obj.tid is not None:
             tid_parts.append(obj.tid)
     return XtfObject(tid="_".join(tid_parts) or None, qualified_class=view_name, attributes=attributes)
+
+
+def _union_projected_object(view: MetaInstance, base_index: int, n_bases: int, obj: XtfObject) -> XtfObject:
+    """Re-key one UNION-base object's wire attributes under the union-view attribute names.
+
+    An explicit union assignment gives every attribute one source per base,
+    in base declaration order (`Attr := C1->A, C2->B`): base `i`'s objects
+    carry `A` on the wire, so `A` is copied to `Attr` for base `i` and `B`
+    to `Attr` for base `i+1`, letting `object_to_feature` (which reads by
+    the view's own attribute names) emit the union attribute whatever base
+    an object came from. An `ALL OF <base>` union attribute has a single
+    identity source and the base objects already carry it under the right
+    name - it is left as a straight pass-through. A source that is not a
+    plain one-hop path into that base is skipped for that object, the same
+    best-effort the JOIN pooling takes.
+    """
+    remapped: dict[str, list[RawNode]] = dict(obj.attributes)
+    for attr in getattr(view, "ClassAttribute", None) or []:
+        out_name = getattr(attr, "Name", None)
+        derivates = getattr(attr, "Derivates", None) or []
+        # only a genuine per-base assignment (one Derivates entry per base)
+        if out_name is None or len(derivates) != n_bases or base_index >= len(derivates):
+            continue
+        factor = derivates[base_index]
+        if not factor._qualified_class.endswith("PathOrInspFactor") or getattr(factor, "Inspection", None):
+            continue
+        refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
+        source = refs[-1] if len(refs) == 2 and refs[-1] else (refs[0] if len(refs) == 1 else None)
+        remapped.pop(out_name, None)
+        if source and source in obj.attributes:
+            remapped[out_name] = obj.attributes[source]
+    qname = getattr(view, "Name", None) or obj.qualified_class
+    return XtfObject(tid=obj.tid, qualified_class=qname, attributes=remapped)
 
 
 def _inspection_path(view: MetaInstance) -> list[str]:
@@ -1098,9 +1142,15 @@ def evaluate_view(
         )
 
     if kind == "Union":
+        n_bases = len(bases)
         return [
-            object_to_feature(obj, view, standalone=standalone, symbol_table=symbol_table)
-            for objs in objects_by_base
+            object_to_feature(
+                _union_projected_object(view, base_index, n_bases, obj),
+                view,
+                standalone=standalone,
+                symbol_table=symbol_table,
+            )
+            for base_index, objs in enumerate(objects_by_base)
             for obj in objs
         ]
 

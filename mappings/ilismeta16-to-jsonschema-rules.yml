@@ -284,19 +284,13 @@ concepts:
       path as a plain `Class`'s. Confirmed empirically (no code change
       required in this module for Lot B).
 
-      Restricted at the CLI level (`cli.cmd_convert`,
-      `_SUPPORTED_VIEW_FORMATION_KINDS`) to `FormationKind in {Projection,
-      Join}` - matches the FGDM4GS report's own prioritization (§4.4.2
-      "vue de type projection", §4.4.3 "vue de type jonction... à
-      préférer"); `Union`/`Aggregation`/`Inspection` Views are excluded
-      from CLI root selection rather than converted (a deliberate,
-      documented scope decision - a View's `ClassAttribute` mechanism
-      itself is FORMATION-KIND-AGNOSTIC, so nothing technical prevents
-      converting them too, but Aggregation/Inspection carry different
-      semantics - e.g. a computed `ElementCount`, a flattened
-      list-of-structure-inspection - not yet investigated for whether the
-      plain "flatten ClassAttribute into properties" shape still fits;
-      revisit only if a real need surfaces, RULE #7).
+      Every `FormationKind` is selected as a root (`cli.cmd_convert`,
+      `_SUPPORTED_VIEW_FORMATION_KINDS` - Projection/Join/Union/Aggregation/
+      Inspection). A View's `ClassAttribute` mechanism is
+      FORMATION-KIND-AGNOSTIC, so a Union/Aggregation/Inspection view's
+      declared attribute set produces a correct `$def` through the same
+      path; `x-crud` is GET-only for every derived View except a plain
+      `PROJECTION OF` (`_crud_operations`). See docs/view-formation-support.md.
 
   ObjectOID:
     qualified_name: IlisMeta16.ModelData.ObjectOID

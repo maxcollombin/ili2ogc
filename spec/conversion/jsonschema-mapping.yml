@@ -218,8 +218,9 @@ View:
         _apply_pending_view_all_of (ATTRIBUTE ALL OF <base>;) or the
         already-generic attributeDef handling - see
         mappings/ilismeta16-to-jsonschema-rules.yml, View, for the full
-        rationale and the FormationKind restriction applied at the CLI
-        level (cli.cmd_convert, _SUPPORTED_VIEW_FORMATION_KINDS).
+        rationale. Every FormationKind is selected as a root
+        (cli.cmd_convert, _SUPPORTED_VIEW_FORMATION_KINDS); x-crud is
+        GET-only for every derived View except a plain PROJECTION OF.
     required:
       source: {function: "resolve_attribute(attr).mandatory"}
       note: "Same mechanism as Class.required above, applied to View.ClassAttribute."
