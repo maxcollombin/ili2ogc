@@ -24,8 +24,10 @@ already uses (no parallel resolution logic) - `render_postgresql`/
 `render_gpkg` are the two renderers over that IR.
 
 Scope (see mappings/ilismeta16-to-sql-rules.yml for the full, per-concept
-rationale): scalar/geometry columns, one level of flattened STRUCTURE
-nesting, FOREIGN KEY from REFERENCE TO/embedded roles, UNIQUE from the
+rationale): scalar/geometry columns, up to two levels of flattened
+STRUCTURE nesting, one child table per concrete subclass of an ABSTRACT
+STRUCTURE attribute (`concrete_structure_subclasses`, mirroring the JSON
+Schema `anyOf`), FOREIGN KEY from REFERENCE TO/embedded roles, UNIQUE from the
 simple (Kind=GlobalU, no `->` navigation) constraint form, `BAG`/`LIST OF`
 -> a related child table with its own `UNIQUE (LOCAL)` support
 (`_local_unique_constraints_for_class` - scoped to that child table via
@@ -39,7 +41,7 @@ e.g. `<class>_<struct_attr>_entries`), and CHECK from a
 row-local `MANDATORY CONSTRAINT` (`_expression_to_sql`, same supported
 `Expression` subset as `constraint_eval.py`'s `evaluate_expression` -
 relational/logical operators, `DEFINED(...)`, plain attribute paths up to
-one STRUCTURE hop). ABSTRACT structure polymorphism, cross-reference
+one STRUCTURE hop). Cross-reference
 (`->`) and basket-scoped UNIQUE, the percentage-based plausibility form,
 and any `CONSTRAINT` needing `THIS`/`PARENT`/aggregate/function-call/
 arithmetic context are all deliberately out of scope - never silently
@@ -64,6 +66,7 @@ from interlis.xtf.schema import (
     _class_related_base_class,
     _role_is_multi,
     attributes_of,
+    concrete_structure_subclasses,
     coord_axes,
     is_class_compatible,
     line_coord_type,
@@ -87,6 +90,17 @@ _GEOMETRY_KINDS = {"CoordType", "LineType"}
 _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL's own identifier length limit - a real ceiling, not an arbitrary one.
 # STRUCTURE-in-STRUCTURE levels flattened inline as `<a>_<b>_<c>` columns; a STRUCTURE deeper than this is a `-- NOTE`.
 _MAX_STRUCT_FLATTEN_DEPTH = 2
+
+
+def _dedup_name(base: str, used: set[str]) -> str:
+    """Return `base`, or `base_2`/`base_3`/... if already in `used`; records the result in `used`."""
+    name = base
+    suffix = 2
+    while name in used:
+        name = f"{base}_{suffix}"
+        suffix += 1
+    used.add(name)
+    return name
 
 
 def _sql_identifier(name: str) -> str:
@@ -305,9 +319,16 @@ def _columns_for_class(
     *,
     prefix: str = "",
     depth: int = 0,
-) -> tuple[list[Column], list[ForeignKey], list[str], list[tuple[str, MetaInstance]], dict[str, list[list[str]]]]:
-    """Return `(columns, foreign_keys, notes, child_specs, local_unique)` for `cls`'s own+inherited members, flattening
-    up to `_MAX_STRUCT_FLATTEN_DEPTH` levels of STRUCTURE nesting inline.
+) -> tuple[
+    list[Column],
+    list[ForeignKey],
+    list[str],
+    list[tuple[str, MetaInstance]],
+    dict[str, list[list[str]]],
+    list[tuple[str, MetaInstance, bool, bool]],
+]:
+    """Return `(columns, foreign_keys, notes, child_specs, local_unique, abstract_specs)` for `cls`'s own+inherited
+    members, flattening up to `_MAX_STRUCT_FLATTEN_DEPTH` levels of STRUCTURE nesting inline.
 
     `prefix` is non-empty on the recursive call flattening a STRUCTURE
     attribute (`"<attr>_"`, or `"<attr>_<subattr>_"` at the second level) -
@@ -335,12 +356,22 @@ def _columns_for_class(
     `"<struct_attr>_"` prefix as the matching `child_specs` label, so
     `build_tables` can look them up together without knowing they came
     from a nested STRUCTURE at all.
+
+    `abstract_specs` is `[(label, abstract STRUCTURE class, ordered,
+    from_multivalue), ...]` for an attribute whose (element) type is an
+    ABSTRACT structure - `build_tables` emits one child table per concrete
+    subclass found in the symbol table (`concrete_structure_subclasses`),
+    mirroring the JSON Schema pipeline's `anyOf`. `from_multivalue`
+    distinguishes a `BAG`/`LIST OF <abstract>` from a single-valued
+    ABSTRACT structure attribute, only to pick the right `-- NOTE` id when
+    no concrete subclass is in the conversion.
     """
     columns: list[Column] = []
     foreign_keys: list[ForeignKey] = []
     notes: list[str] = []
     child_specs: list[tuple[str, MetaInstance]] = []
     local_unique: dict[str, list[list[str]]] = {}
+    abstract_specs: list[tuple[str, MetaInstance, bool, bool]] = []
     members = schema_members_of(cls, symbol_table) if symbol_table is not None else attributes_of(cls)
     for name, attr in members.items():
         resolved = resolve_attribute(attr)
@@ -348,7 +379,8 @@ def _columns_for_class(
         col_name = _sql_identifier(label)
 
         if resolved.type_kind == "MultiValue":
-            if not isinstance(resolved.type_instance, MetaInstance):
+            multi_value = resolved.type_instance
+            if not isinstance(multi_value, MetaInstance):
                 notes.append(
                     _diag(
                         "SQL-BAGLIST-ELEMENT-UNRESOLVED",
@@ -356,7 +388,16 @@ def _columns_for_class(
                     )
                 )
                 continue
-            child_specs.append((label, resolved.type_instance))
+            element = getattr(multi_value, "BaseType", None)
+            is_abstract_struct = (
+                isinstance(element, MetaInstance)
+                and _is_structure(element)
+                and bool(getattr(element, "Abstract", False))
+            )
+            if is_abstract_struct:
+                abstract_specs.append((label, element, bool(getattr(multi_value, "Ordered", False)), True))
+                continue
+            child_specs.append((label, multi_value))
             continue
 
         if resolved.type_kind == "Class" and _is_structure(resolved.type_instance):
@@ -369,14 +410,9 @@ def _columns_for_class(
                 )
                 continue
             if bool(getattr(resolved.type_instance, "Abstract", False)):
-                notes.append(
-                    _diag(
-                        "SQL-STRUCT-ABSTRACT",
-                        f"{label}: ABSTRACT structure - subclass polymorphism not mapped to a table",
-                    )
-                )
+                abstract_specs.append((label, resolved.type_instance, False, False))
                 continue
-            sub_columns, sub_fks, sub_notes, sub_child_specs, sub_local_unique = _columns_for_class(
+            sub_columns, sub_fks, sub_notes, sub_child_specs, sub_local_unique, sub_abstract_specs = _columns_for_class(
                 resolved.type_instance,
                 symbol_table,
                 prefix=f"{label}_",
@@ -386,6 +422,7 @@ def _columns_for_class(
             foreign_keys.extend(sub_fks)
             notes.extend(sub_notes)
             child_specs.extend(sub_child_specs)
+            abstract_specs.extend(sub_abstract_specs)
             for nested_key, nested_groups in sub_local_unique.items():
                 local_unique.setdefault(nested_key, []).extend(nested_groups)
             struct_local_unique, struct_local_unique_notes = _local_unique_constraints_for_class(resolved.type_instance)
@@ -444,7 +481,7 @@ def _columns_for_class(
             )
         else:
             notes.append(_diag("SQL-ATTR-TYPE-UNMAPPED", f"{label}: unsupported type {resolved.type_kind!r}"))
-    return columns, foreign_keys, notes, child_specs, local_unique
+    return columns, foreign_keys, notes, child_specs, local_unique, abstract_specs
 
 
 def _build_child_table(
@@ -504,8 +541,10 @@ def _build_child_table(
 
     if base_kind == "Class" and _is_structure(base_type):
         if bool(getattr(base_type, "Abstract", False)):
+            # An abstract element is routed to `abstract_specs` by `_columns_for_class`
+            # (one child table per concrete subclass) - never reaches here.
             return None, {}, "BAG/LIST OF an ABSTRACT structure - subclass polymorphism not mapped to a table"
-        sub_columns, sub_fks, sub_notes, _sub_child_specs, _sub_local_unique = _columns_for_class(
+        sub_columns, sub_fks, sub_notes, _sub_child_specs, _sub_local_unique, _sub_abstract = _columns_for_class(
             base_type, symbol_table
         )
         columns.extend(sub_columns)
@@ -541,6 +580,43 @@ def _build_child_table(
 
     renamed = _avoid_identity_collision(columns)
     return Table(name=child_table_name, columns=columns, foreign_keys=foreign_keys, notes=notes), renamed, None
+
+
+def _structure_child_table(
+    parent_table: str,
+    table_name: str,
+    struct_cls: MetaInstance,
+    symbol_table: SymbolTable | None,
+    *,
+    ordered: bool,
+) -> tuple[Table, dict[str, str]]:
+    """One child table holding instances of a concrete STRUCTURE `struct_cls`.
+
+    Used for an ABSTRACT structure attribute's concrete subclasses (one
+    table per subclass, `concrete_structure_subclasses`) - same shape as
+    `_build_child_table`'s own STRUCTURE branch (a `<parent>_fk` back to the
+    parent, `seq` when `ordered`, then the structure's own flattened
+    columns), factored out so `build_tables` can call it per subclass.
+    """
+    fk_column = _sql_identifier(f"{parent_table}_fk")
+    columns: list[Column] = [Column(fk_column, "text", nullable=False)]
+    foreign_keys: list[ForeignKey] = [
+        ForeignKey(
+            _truncate_identifier(_sql_identifier(f"fk_{table_name}_{fk_column}")),
+            [fk_column],
+            parent_table,
+            [OID_COLUMN],
+        )
+    ]
+    if ordered:
+        columns.append(Column("seq", "integer", nullable=False))
+    sub_columns, sub_fks, sub_notes, _sub_child_specs, _sub_local_unique, _sub_abstract = _columns_for_class(
+        struct_cls, symbol_table
+    )
+    columns.extend(sub_columns)
+    foreign_keys.extend(sub_fks)
+    renamed = _avoid_identity_collision(columns)
+    return Table(name=table_name, columns=columns, foreign_keys=foreign_keys, notes=list(sub_notes)), renamed
 
 
 class _UnsupportedCheckExpression(Exception):
@@ -950,6 +1026,12 @@ def build_tables(
     """
     tables = []
     used_table_names: set[str] = set()
+    # For abstract-STRUCTURE subclass discovery: the root table plus every
+    # distinct per-class table (--catalog / folded-in models) - a concrete
+    # subclass can be registered in a different model's table than the
+    # abstract base it extends.
+    _distinct_catalog_tables = {id(t): t for t in (class_symbol_tables or {}).values()}.values()
+    scan_symbol_tables: list[SymbolTable] = [st for st in [symbol_table, *_distinct_catalog_tables] if st is not None]
     for cls in classes:
         if getattr(cls, "Kind", None) != "Class":
             continue
@@ -964,7 +1046,9 @@ def build_tables(
             class_table_names[id(cls)] = table_name
 
         home_table = (class_symbol_tables or {}).get(id(cls), symbol_table)
-        columns, foreign_keys, notes, child_specs, nested_local_unique = _columns_for_class(cls, home_table)
+        columns, foreign_keys, notes, child_specs, nested_local_unique, abstract_specs = _columns_for_class(
+            cls, home_table
+        )
         renamed = _avoid_identity_collision(columns)
         unique_constraints, unique_notes = _unique_constraints_for_class(cls, table_name)
         for unique in unique_constraints:
@@ -1034,6 +1118,50 @@ def build_tables(
                 child_table.unique_constraints.append(UniqueConstraint(name, full_columns))
 
             tables.append(child_table)
+
+        # An ABSTRACT structure attribute (single-valued or BAG/LIST OF):
+        # one child table per concrete subclass reachable in the symbol
+        # table, mirroring the JSON Schema pipeline's `anyOf`. The table
+        # name (`<parent>_<attr>_<subclass>`) is the discriminant - no
+        # extra `kind` column. No subclass in the conversion -> a `-- NOTE`.
+        for attr_name, abstract_cls, ordered, from_multivalue in abstract_specs:
+            subclasses = concrete_structure_subclasses(abstract_cls, home_table, *scan_symbol_tables)
+            if not subclasses:
+                if from_multivalue:
+                    rule, kind = "SQL-BAGLIST-ELEMENT-UNMAPPED", "BAG/LIST OF an ABSTRACT structure"
+                else:
+                    rule, kind = "SQL-STRUCT-ABSTRACT", "ABSTRACT structure"
+                parent_table.notes.append(
+                    _diag(
+                        rule,
+                        f"{attr_name}: {kind} - no concrete subclass in this conversion to build a "
+                        f"table per subtype (provide the model that defines them via --repo/--catalog)",
+                    )
+                )
+                continue
+            groups_for_attr = local_unique.pop(attr_name, [])
+            fk_column = _sql_identifier(f"{table_name}_fk")
+            for sub in subclasses:
+                sub_name = _sql_identifier(getattr(sub, "Name", None) or "")
+                child_name = _dedup_name(_sql_identifier(f"{table_name}_{attr_name}_{sub_name}"), used_table_names)
+                child_table, child_renamed = _structure_child_table(
+                    table_name, child_name, sub, home_table, ordered=ordered
+                )
+                child_column_names = {c.name for c in child_table.columns}
+                for group_columns in groups_for_attr:
+                    full_columns = [fk_column, *(child_renamed.get(c, c) for c in group_columns)]
+                    missing = [c for c in full_columns if c not in child_column_names]
+                    if missing:
+                        child_table.notes.append(
+                            _diag(
+                                "SQL-UNIQUE-COL-UNMAPPED",
+                                f"UNIQUE (LOCAL) {attr_name}: column(s) {missing} have no mapped SQL type",
+                            )
+                        )
+                        continue
+                    name = _truncate_identifier(_sql_identifier(f"uq_{child_table.name}_{'_'.join(full_columns)}"))
+                    child_table.unique_constraints.append(UniqueConstraint(name, full_columns))
+                tables.append(child_table)
 
         # Any UNIQUE (LOCAL) whose role hop never matched a real BAG/LIST OF
         # attribute on this class (typo, or a role path this project's

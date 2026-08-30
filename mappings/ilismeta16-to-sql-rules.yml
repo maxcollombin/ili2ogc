@@ -224,14 +224,20 @@ concepts:
 
   Inheritance:
     qualified_name: IlisMeta16.ModelData.Class
-    status: backlog
+    status: mapped
     note: >
-      ABSTRACT structure polymorphism (the JSON Schema pipeline's `anyOf`
-      case) has no natural single-table SQL equivalent (table-per-hierarchy
-      vs. table-per-subtype are both real, materially different design
-      choices) - deferred. An attribute whose STRUCTURE target is ABSTRACT
-      is surfaced as a `-- NOTE` comment carrying the stable diagnostic id
-      `SQL-STRUCT-ABSTRACT` (see docs/converter-limitations.md).
+      ABSTRACT structure polymorphism maps table-per-subtype: an attribute
+      (single-valued or `BAG`/`LIST OF`) whose STRUCTURE target is ABSTRACT
+      becomes one child table per concrete subclass
+      (`xtf.schema.concrete_structure_subclasses`, the same set the JSON
+      Schema pipeline's `anyOf` enumerates), named
+      `<parent>_<attr>_<subclass>` (the table name is the discriminant, no
+      extra `kind` column), each with a `<parent>_fk` back to the parent
+      (`seq` too for a `LIST`). When no concrete subclass shares
+      `convert-sql`'s identity graph (a folded-in dependency-model library
+      class, e.g. `Dictionaries_V1.Dictionary.Entries`) the attribute is a
+      `-- NOTE` carrying `SQL-STRUCT-ABSTRACT` /
+      `SQL-BAGLIST-ELEMENT-UNMAPPED` (see docs/converter-limitations.md).
 
   UniqueConstraint:
     qualified_name: IlisMeta16.ModelData.UniqueConstraint

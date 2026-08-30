@@ -30,13 +30,13 @@ from __future__ import annotations
 
 REGISTRY: dict[str, tuple[str, str]] = {
     # -- convert-sql: CREATE TABLE ---------------------------------------
-    "SQL-STRUCT-NESTED-DEEP": ("A", "STRUCTURE nested more than one level deep is not flattened"),
-    "SQL-STRUCT-ABSTRACT": ("A", "ABSTRACT structure attribute - subclass polymorphism not mapped to a table"),
+    "SQL-STRUCT-NESTED-DEEP": ("A", "STRUCTURE nested more than two levels deep is not flattened"),
+    "SQL-STRUCT-ABSTRACT": ("A", "ABSTRACT structure attribute with no concrete subclass in scope for a table"),
     "SQL-ATTR-TYPE-UNMAPPED": (
         "A",
         "a RESOLVED attribute type has no column in the mapped scalar/geometry/reference/structure set",
     ),
-    "SQL-BAGLIST-ELEMENT-UNMAPPED": ("A", "BAG/LIST OF element type outside the mapped set"),
+    "SQL-BAGLIST-ELEMENT-UNMAPPED": ("A", "BAG/LIST OF an ABSTRACT structure with no concrete subclass in scope"),
     "SQL-BAGLIST-ELEMENT-UNRESOLVED": ("C", "BAG/LIST OF element type did not resolve - provide its model via --repo"),
     "SQL-REF-TARGET-UNRESOLVED": (
         "C",

@@ -147,6 +147,13 @@ StructureNesting:
       rule: "<attr>_<subattr>[_<subsubattr>] columns on the SAME table, up to two nested STRUCTURE levels (_MAX_STRUCT_FLATTEN_DEPTH)"
       note: "See mappings/ilismeta16-to-sql-rules.yml's StructureNesting entry for the depth limit and the inherited MANDATORY-not-captured gap."
 
+Inheritance:
+  qualified_name: IlisMeta16.ModelData.Class
+  sql:
+    table_per_subtype:
+      rule: "an ABSTRACT STRUCTURE attribute (single or BAG/LIST OF) -> one <parent>_<attr>_<subclass> child table per concrete subclass, each with a <parent>_fk (and seq for LIST)"
+      note: "Subclass set = xtf.schema.concrete_structure_subclasses (same as the JSON Schema anyOf). No concrete subclass in convert-sql's identity graph -> a -- NOTE (SQL-STRUCT-ABSTRACT / SQL-BAGLIST-ELEMENT-UNMAPPED). See mappings/ilismeta16-to-sql-rules.yml's Inheritance entry."
+
 ReferenceType:
   qualified_name: IlisMeta16.ModelData.ReferenceType
   sql:

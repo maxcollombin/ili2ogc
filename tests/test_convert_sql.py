@@ -533,6 +533,79 @@ def test_list_of_structure_child_table_has_seq_and_flattened_columns():
     assert names["text"].sql_type == "varchar(100)" and not names["text"].nullable
 
 
+_ABSTRACT_STRUCT_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Shape (ABSTRACT) =
+      Label : TEXT*20;
+    END Shape;
+    STRUCTURE Circle EXTENDS Shape =
+      Radius : MANDATORY 0.0 .. 1000.0;
+    END Circle;
+    STRUCTURE Square EXTENDS Shape =
+      Side : MANDATORY 0.0 .. 1000.0;
+    END Square;
+    CLASS Drawing =
+      Name : MANDATORY TEXT*40;
+      Cover : Shape;
+      Shapes : LIST {0..*} OF Shape;
+    END Drawing;
+  END T;
+END Foo.
+"""
+
+
+def test_abstract_structure_attribute_becomes_one_child_table_per_concrete_subclass():
+    """`Cover : Shape` (single-valued ABSTRACT) and `Shapes : LIST OF Shape` each expand to one child table per concrete
+    subclass (`drawing_cover_circle`/`_square`, `drawing_shapes_circle`/`_square`), mirroring the JSON Schema `anyOf`.
+    """
+    builder = _build(_ABSTRACT_STRUCT_MODEL)
+    drawing = _resolved_class(builder, "Foo.T.Drawing")
+    tables = build_tables([drawing], symbol_table=builder.symbol_table)
+    names = {t.name for t in tables}
+    assert {
+        "drawing_cover_circle",
+        "drawing_cover_square",
+        "drawing_shapes_circle",
+        "drawing_shapes_square",
+    } <= names
+    parent = _table(tables, "drawing")
+    assert not any(c.name.startswith("cover") for c in parent.columns)  # nothing inlined on the parent
+    assert not any("ABSTRACT" in note for note in parent.notes)
+
+    cover_circle = _table(tables, "drawing_cover_circle")
+    cols = {c.name: c for c in cover_circle.columns}
+    assert cols["drawing_fk"].sql_type == "text" and not cols["drawing_fk"].nullable
+    assert "radius" in cols and "label" in cols  # the subclass's own + inherited columns
+    assert not any(c.name == "seq" for c in cover_circle.columns)  # single-valued - no ordering column
+    assert cover_circle.foreign_keys[0].ref_table == "drawing"
+
+    shapes_square = _table(tables, "drawing_shapes_square")
+    assert any(c.name == "seq" for c in shapes_square.columns)  # LIST - ordered
+
+
+def test_abstract_structure_without_a_concrete_subclass_is_a_note():
+    """No concrete subclass reachable -> a `-- NOTE` (RULE #5), never a silent drop or a broken table."""
+    builder = _build("""INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Shape (ABSTRACT) =
+      Label : TEXT*20;
+    END Shape;
+    CLASS Drawing =
+      Name : MANDATORY TEXT*40;
+      Shapes : BAG {0..*} OF Shape;
+    END Drawing;
+  END T;
+END Foo.
+""")
+    drawing = _resolved_class(builder, "Foo.T.Drawing")
+    tables = build_tables([drawing], symbol_table=builder.symbol_table)
+    parent = _table(tables, "drawing")
+    assert any("SQL-BAGLIST-ELEMENT-UNMAPPED" in note and "no concrete subclass" in note for note in parent.notes)
+    assert not any(t.name.startswith("drawing_shapes") for t in tables)
+
+
 def test_render_gpkg_child_table_inline_fk_and_no_topological_sort_needed():
     builder = _build(_CHILD_TABLE_MODEL)
     parcel = _resolved_class(builder, "Foo.T.Parcel")

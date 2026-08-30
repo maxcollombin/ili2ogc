@@ -20,9 +20,9 @@ from interlis.metamodel.instance import MetaInstance
 from interlis.xtf.schema import (
     ResolvedAttribute,
     attributes_of,
+    concrete_structure_subclasses,
     coord_axes,
     enum_values,
-    is_class_compatible,
     line_coord_type,
     reference_external_status,
     reference_target_class,
@@ -329,31 +329,9 @@ def _is_structure(type_instance: MetaInstance | None) -> bool:
     return type_instance is not None and getattr(type_instance, "Kind", None) == "Structure"
 
 
-def _concrete_subclasses(abstract_class: MetaInstance, symbol_table: SymbolTable) -> list[MetaInstance]:
-    """Every concrete (non-abstract) STRUCTURE subclass of an ABSTRACT one.
-
-    `Inheritance`/`Super` is a forward-only pointer (child -> parent, see
-    `xtf.schema.attributes_of`/`is_class_compatible`) - there is no reverse
-    "subclasses of" link, so finding them means scanning every registered
-    Class and keeping the ones for which `is_class_compatible` holds.
-    Abstract intermediates are excluded: eCH-0031 SS3.6.4
-    ("Strukturattribute") - only concrete structures (or their own further
-    concrete extensions) are valid transferred structure elements, an
-    abstract one never is.
-    """
-    seen: set[int] = set()
-    result: list[MetaInstance] = []
-    for candidate in symbol_table.all_registered():
-        if not isinstance(candidate, MetaInstance) or candidate._qualified_class.rsplit(".", 1)[-1] != "Class":
-            continue
-        if candidate is abstract_class or id(candidate) in seen:
-            continue
-        if getattr(candidate, "Kind", None) != "Structure" or bool(getattr(candidate, "Abstract", False)):
-            continue
-        if is_class_compatible(candidate, abstract_class):
-            seen.add(id(candidate))
-            result.append(candidate)
-    return result
+# `_concrete_subclasses` moved to `xtf.schema.concrete_structure_subclasses`
+# (shared with `convert/sql.py`'s abstract-structure child tables).
+_concrete_subclasses = concrete_structure_subclasses
 
 
 def _class_ref_or_marker(

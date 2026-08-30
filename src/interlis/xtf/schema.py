@@ -361,6 +361,47 @@ def is_class_compatible(actual: MetaInstance, declared: MetaInstance) -> bool:
     return False
 
 
+def concrete_structure_subclasses(
+    abstract_class: MetaInstance, *symbol_tables: SymbolTable | None
+) -> list[MetaInstance]:
+    """Every concrete (non-abstract) STRUCTURE subclass of an ABSTRACT one, across every given symbol table.
+
+    `Inheritance`/`Super` is a forward-only pointer (child -> parent), so
+    there is no reverse "subclasses of" link - finding them means scanning
+    every registered Class and keeping the ones for which
+    `is_class_compatible` holds (an identity walk up `Super`). Abstract
+    intermediates are excluded: eCH-0031 SS3.6.4 - only a concrete structure
+    is ever a valid transferred structure element.
+
+    Several symbol tables are accepted so the scan can reach a subclass that
+    lives in a different model than its abstract base (e.g.
+    `AdministrativeUnits_V1.CountryName EXTENDS Dictionaries_V1...Entry`).
+    The match is still by identity, so it only succeeds when both come from
+    ONE build (the JSON Schema pipeline, or a same-model `convert-sql`);
+    `convert-sql` building each model with its own builder can leave the
+    root's `Super` chain and a folded-in abstract as different instances -
+    a real limitation, not closed here. Deduplicated by identity, sorted by
+    name.
+    """
+    seen: set[int] = set()
+    result: list[MetaInstance] = []
+    for symbol_table in symbol_tables:
+        if symbol_table is None:
+            continue
+        for candidate in symbol_table.all_registered():
+            if not isinstance(candidate, MetaInstance) or candidate._qualified_class.rsplit(".", 1)[-1] != "Class":
+                continue
+            if candidate is abstract_class or id(candidate) in seen:
+                continue
+            if getattr(candidate, "Kind", None) != "Structure" or bool(getattr(candidate, "Abstract", False)):
+                continue
+            if is_class_compatible(candidate, abstract_class):
+                seen.add(id(candidate))
+                result.append(candidate)
+    result.sort(key=lambda c: getattr(c, "Name", None) or "")
+    return result
+
+
 def restriction_candidates(resolved: ResolvedAttribute) -> list[MetaInstance]:
     """Return every candidate class of a `CLASS RESTRICTION(A; B; C)`.
 
