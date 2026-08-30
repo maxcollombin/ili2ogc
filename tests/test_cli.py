@@ -277,6 +277,48 @@ def test_convert_sql_auto_includes_a_views_base_model_from_repo(tmp_path, capsys
     assert "-- NOTE (view v_seg)" not in ddl
 
 
+_LIBRARY_MODEL = """INTERLIS 2.4;
+MODEL Lib AT "http://y" VERSION "1" =
+  TOPIC T =
+    STRUCTURE Label =
+      Text : MANDATORY TEXT*80;
+    END Label;
+    CLASS Dictionary =
+      Language : MANDATORY TEXT*2;
+      Entries : LIST OF Label;
+    END Dictionary;
+  END T;
+END Lib.
+"""
+
+_CONSUMER_MODEL = """INTERLIS 2.4;
+MODEL Consumer AT "http://x" VERSION "1" =
+  IMPORTS Lib;
+  TOPIC T =
+    CLASS Road =
+      Name : MANDATORY Lib.T.Label;
+    END Road;
+  END T;
+END Consumer.
+"""
+
+
+def test_convert_sql_folds_in_a_referenced_structure_but_not_an_unreferenced_library_class(tmp_path, capsys):
+    """--repo fold-in is now the actual dependency closure: `Lib.Label` is referenced (gets a table); `Lib.Dictionary`
+    is only in the same imported model and nothing references it - no dead `dictionary` table.
+    """
+    (tmp_path / "Lib.ili").write_text(_LIBRARY_MODEL, encoding="utf-8")
+    consumer = tmp_path / "Consumer.ili"
+    consumer.write_text(_CONSUMER_MODEL, encoding="utf-8")
+
+    assert main(["convert-sql", str(consumer), "--repo", str(tmp_path)]) == 0
+    ddl = capsys.readouterr().out
+    assert 'CREATE TABLE "road" (' in ddl
+    # the referenced structure, flattened onto `road` or as a child table:
+    assert '"name_text"' in ddl or 'CREATE TABLE "road_name_label"' in ddl
+    assert 'CREATE TABLE "dictionary"' not in ddl  # unreferenced library class - not folded
+
+
 # --- shared diagnostics core (Lot 2): --output-format / --report / --strict / exit codes ---
 
 _MODEL_WITH_UNSUPPORTED_CHECK = """INTERLIS 2.4;

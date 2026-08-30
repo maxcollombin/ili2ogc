@@ -293,18 +293,22 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
 
 def _fold_in_dependency_models(classes, views, root_table, repository, class_symbol_tables) -> None:
-    """Append every already-resolved imported model's classes this conversion depends on to `classes` (in place).
+    """Append the imported-model classes this conversion actually depends on to `classes` (in place).
 
-    "Depends on" = a VIEW base class, or the target of a cross-model
+    "Depends on" = a VIEW base class, or the cross-model target of a
     REFERENCE TO/embedded role, that lives in an IMPORTED model rather than
-    the root file. Only models `builder.build()` already pulled in via
-    `--repo` (`repository.loaded_models()`) are considered - never the
-    whole `--repo` index, and never a model nothing here references (so a
-    geometry/units helper model imported only for a domain stays out).
-    Mirrors what `--catalog` does, without the caller naming each file.
+    the root file - PLUS the STRUCTURE-containment closure of those
+    (a nested structure needs its own table too). Only models
+    `builder.build()` already pulled in via `--repo`
+    (`repository.loaded_models()`) are considered. A base class reached only
+    through inheritance is NOT folded: SQL is table-per-concrete-class with
+    the base's columns inlined, so an abstract library base (e.g.
+    `Dictionaries_V1.Dictionary`) would only produce a dead table. Mirrors
+    `--catalog`, without the caller naming each file.
     """
     if repository is None:
         return
+    from interlis.convert.jsonschema import _nested_class
     from interlis.xtf.schema import reference_target_class, resolve_attribute, schema_members_of
 
     needed_ids: set[int] = {
@@ -327,27 +331,47 @@ def _fold_in_dependency_models(classes, views, root_table, repository, class_sym
     if not needed_ids:
         return
 
+    loaded: dict[int, tuple[MetaInstance, object]] = {}
+    for model_table in repository.loaded_models().values():
+        for instance in model_table.all_registered():
+            if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class":
+                loaded.setdefault(id(instance), (instance, model_table))
+
     already_ids = {id(c) for c in classes}
     # A model already supplied via --catalog is built by a SEPARATE builder,
     # so its classes are different instances than repository.loaded_models()'s
     # - dedup by Name too, so --catalog + this path don't both add it.
     already_names = {getattr(c, "Name", None) for c in classes}
-    for model_table in repository.loaded_models().values():
-        model_classes = [
-            instance
-            for instance in model_table.all_registered()
-            if isinstance(instance, MetaInstance) and instance._qualified_class.rsplit(".", 1)[-1] == "Class"
-        ]
-        if not any(id(c) in needed_ids for c in model_classes):
+
+    keep: dict[int, MetaInstance] = {}
+    queue: list[MetaInstance] = [loaded[i][0] for i in needed_ids if i in loaded]
+    while queue:
+        cls = queue.pop()
+        if id(cls) in keep or id(cls) in already_ids:
             continue
-        if any(getattr(c, "Name", None) in already_names for c in model_classes):
-            continue  # this model is already in the conversion (typically via --catalog)
-        for instance in model_classes:
-            if id(instance) in already_ids:
-                continue
-            already_ids.add(id(instance))
-            classes.append(instance)
-            class_symbol_tables.setdefault(id(instance), model_table)
+        keep[id(cls)] = cls
+        model_table = loaded.get(id(cls), (None, root_table))[1]
+        try:
+            members = schema_members_of(cls, model_table)
+        except Exception:  # noqa: BLE001 - a resolution quirk must never break the conversion
+            continue
+        for attr in members.values():
+            resolved = resolve_attribute(attr)
+            nested = _nested_class(resolved)
+            if isinstance(nested, MetaInstance):
+                queue.append(nested)
+            if resolved.type_kind in ("Class", "ReferenceType"):
+                target = reference_target_class(resolved)
+                if isinstance(target, MetaInstance):
+                    queue.append(target)
+
+    for instance_id, instance in keep.items():
+        if getattr(instance, "Name", None) in already_names:
+            continue  # already in the conversion (typically via --catalog)
+        already_ids.add(instance_id)
+        classes.append(instance)
+        if instance_id in loaded:
+            class_symbol_tables.setdefault(instance_id, loaded[instance_id][1])
 
 
 def cmd_convert_sql(args: argparse.Namespace) -> int:
