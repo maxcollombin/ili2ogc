@@ -198,6 +198,9 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 _SUPPORTED_VIEW_FORMATION_KINDS = ("Projection", "Join")
+# convert-sql additionally renders UNION OF as `... UNION ALL ...` (see
+# docs/view-formation-support.md); JSON Schema / JSON-FG scope is unchanged.
+_SQL_VIEW_FORMATION_KINDS = ("Projection", "Join", "Union")
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
@@ -445,20 +448,28 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         for instance in builder.symbol_table.all_registered()
         if isinstance(instance, MetaInstance)
         and instance._qualified_class.rsplit(".", 1)[-1] == "View"
-        and getattr(instance, "FormationKind", None) in _SUPPORTED_VIEW_FORMATION_KINDS
+        and getattr(instance, "FormationKind", None) in _SQL_VIEW_FORMATION_KINDS
     ]
     for instance in builder.symbol_table.all_registered():
         if (
             isinstance(instance, MetaInstance)
             and instance._qualified_class.rsplit(".", 1)[-1] == "View"
-            and getattr(instance, "FormationKind", None) not in _SUPPORTED_VIEW_FORMATION_KINDS
+            and getattr(instance, "FormationKind", None) not in _SQL_VIEW_FORMATION_KINDS
         ):
+            kind = str(getattr(instance, "FormationKind", None))
+            reason = {
+                "Aggregation": "AGGREGATION OF collapses a population; its useful attributes are "
+                "function results over the implicit AGGREGATES bag, and user FUNCTION bodies are "
+                "not translated",
+                "Inspection": "INSPECTION OF explodes a structure attribute - its rows are the "
+                "child table already emitted for that BAG/LIST OF attribute; a geometry inspection "
+                "(SurfaceBoundary/SurfaceEdge) is a geometry decomposition, not a table",
+            }.get(kind, "not translated to CREATE VIEW")
             bag.add(
                 Diagnostic(
                     severity_for_class("A"),
                     "SQL-VIEW-FORMATION-UNSUPPORTED",
-                    f"VIEW {getattr(instance, 'Name', '?')} (FormationKind="
-                    f"{getattr(instance, 'FormationKind', None)}) is not translated to CREATE VIEW",
+                    f"VIEW {getattr(instance, 'Name', '?')} (FormationKind={kind}): {reason}",
                     Location(file=str(path), element_path=getattr(instance, "Name", None)),
                 )
             )

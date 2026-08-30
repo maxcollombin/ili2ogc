@@ -98,7 +98,7 @@ View:
   sql:
     formation_kind:
       source: {field: FormationKind}
-      note: "Projection/Join -> CREATE VIEW; Union/Aggregation/Inspection -> a SQL-VIEW-FORMATION-UNSUPPORTED diagnostic, not translated (same _SUPPORTED_VIEW_FORMATION_KINDS filter as the JSON Schema/JSON-FG pipelines)."
+      note: "Projection/Join -> CREATE VIEW ... SELECT; Union -> SELECT ... UNION ALL SELECT ... (one branch per base, UNION ALL not UNION); Aggregation/Inspection -> a SQL-VIEW-FORMATION-UNSUPPORTED diagnostic, not translated. JSON Schema/JSON-FG keep the narrower Projection/Join filter."
     select_list:
       rule: "one SELECT item per ClassAttribute (via the ClassAttr association, shared with Class)"
       note: >

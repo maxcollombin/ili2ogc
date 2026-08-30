@@ -140,6 +140,58 @@ def test_join_view_executes_against_real_sqlite():
     assert proj == [("Main St",), ("Main St",), ("Side St",)]
 
 
+_UNION_MODEL = """INTERLIS 2.4;
+MODEL Test AT "http://x" VERSION "1" =
+  TOPIC Base =
+    CLASS C1 = Attr1 : TEXT*10; END C1;
+    CLASS C2 = Attr2 : TEXT*30; END C2;
+  END Base;
+  TOPIC Union =
+    DEPENDS ON Test.Base;
+    VIEW CC
+      UNION OF C1 ~ Test.Base.C1, C2 ~ Test.Base.C2;
+      =
+      ATTRIBUTE
+        MergedAttr : TEXT*30 := C1 -> Attr1, C2 -> Attr2;
+    END CC;
+  END Union;
+END Test.
+"""
+
+
+def _split_union():
+    tree, errors = parse_text(_UNION_MODEL)
+    assert not errors, errors
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+    return _split(builder)
+
+
+def test_union_view_is_a_union_all_of_per_branch_projections():
+    _tables, sql_views = _split_union()
+    view = _view(sql_views, "cc")
+    assert view.body is not None, view.notes
+    assert view.body.count("UNION ALL") == 1
+    assert '"c1"."attr1" AS "mergedattr"' in view.body
+    assert '"c2"."attr2" AS "mergedattr"' in view.body
+    assert 'FROM "c1" "c1"' in view.body and 'FROM "c2" "c2"' in view.body
+
+
+def test_union_view_executes_against_real_sqlite():
+    tables, sql_views = _split_union()
+    schema = render_gpkg(tables).split("\nINSERT INTO gpkg_contents")[0]
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(schema)
+    view = _view(sql_views, "cc")
+    conn.execute(f'CREATE VIEW "{view.name}" AS {view.body}')
+    conn.execute("INSERT INTO c1 (id, attr1) VALUES ('a', 'x')")
+    conn.execute("INSERT INTO c2 (id, attr2) VALUES ('b', 'y')")
+    rows = sorted(r[0] for r in conn.execute("SELECT mergedattr FROM cc"))
+    assert rows == ["x", "y"]
+
+
 def test_unbuilt_base_table_demotes_the_view_to_a_note():
     """A VIEW built without its base classes among `tables` yields a note, not a broken CREATE VIEW."""
     builder = _build_model()

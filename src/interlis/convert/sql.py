@@ -1557,6 +1557,10 @@ def build_views(
         used_names.add(vname)
         try:
             bases = _resolve_view_bases(view, tables_by_name, table_name_by_class_id)
+            if getattr(view, "FormationKind", None) == "Union":
+                body = _build_union_view(view, bases, tables_by_name, symbol_for)
+                result.append(SqlView(vname, body, _view_constraint_notes(view)))
+                continue
             resolver = _ViewResolver(bases, tables_by_name, symbol_for)
             select_items: list[str] = []
             notes: list[str] = []
@@ -1590,6 +1594,43 @@ def build_views(
         except _UnsupportedView as exc:
             result.append(SqlView(vname, None, [_diag(exc.rule, str(exc))]))
     return result
+
+
+def _build_union_view(
+    view: MetaInstance,
+    bases: list[tuple[str, MetaInstance, str]],
+    tables_by_name: dict[str, Table],
+    symbol_for,
+) -> str:
+    """Return a `SELECT ... UNION ALL SELECT ...` body for a `FormationKind=Union` view.
+
+    Each union-view `ClassAttribute` carries one `Derivates` entry per base
+    (`Attr := C1->A, C2->B`), in base declaration order; branch `i` projects
+    every attribute's `Derivates[i]` from base `i` alone. `UNION ALL`, not
+    `UNION` - INTERLIS union is a merge (two base objects that project equal
+    rows stay two rows), not a set operation. Any branch expression that is
+    not a plain path/constant (a function, an unmapped type, a reference
+    hop) demotes the whole view (RULE #5).
+    """
+    attrs = getattr(view, "ClassAttribute", None) or []
+    if not attrs:
+        raise _UnsupportedView("union view has no ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
+    branches: list[str] = []
+    for branch_index, (alias, cls, table) in enumerate(bases):
+        resolver = _ViewResolver([(alias, cls, table)], tables_by_name, symbol_for)
+        items: list[str] = []
+        for attr in attrs:
+            aname = getattr(attr, "Name", None)
+            derivates = getattr(attr, "Derivates", None) or []
+            if len(derivates) != len(bases):
+                raise _UnsupportedView(
+                    f"union attribute {aname!r}: {len(derivates)} assigned expression(s) for {len(bases)} bases"
+                )
+            items.append(f'{resolver.scalar_ref(derivates[branch_index])} AS "{_sql_identifier(aname or "")}"')
+        if resolver.extra_joins:
+            raise _UnsupportedView("a union branch attribute navigates a reference - not translated")
+        branches.append("SELECT\n    " + ",\n    ".join(items) + f'\nFROM "{table}" "{alias}"')
+    return "\nUNION ALL\n".join(branches)
 
 
 def _view_constraint_notes(view: MetaInstance) -> list[str]:

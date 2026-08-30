@@ -110,13 +110,21 @@ concepts:
     qualified_name: IlisMeta16.ModelData.View
     status: mapped
     note: >
-      A `View` with `FormationKind` `Projection` or `Join` (the same
-      `_SUPPORTED_VIEW_FORMATION_KINDS` filter the JSON Schema/JSON-FG
-      pipelines use - `Union`/`Aggregation`/`Inspection` get a
-      `SQL-VIEW-FORMATION-UNSUPPORTED` diagnostic, not translated) becomes
+      A `View` with `FormationKind` `Projection` or `Join` becomes
       `CREATE VIEW <name> AS SELECT <attr := path> ...
       FROM <base tables + navigated join tables, comma-joined> WHERE
       <translated Where predicates>` (`convert/sql.py`'s `build_views`).
+      `Union` becomes `SELECT <branch-1 exprs> FROM c1 UNION ALL SELECT
+      <branch-2 exprs> FROM c2 ...` (`_build_union_view`) - one branch per
+      base, each projecting that base's `Derivates[i]` for every
+      union-view attribute; `UNION ALL`, not `UNION`, since INTERLIS union
+      is a merge. `Aggregation`/`Inspection` get a
+      `SQL-VIEW-FORMATION-UNSUPPORTED` diagnostic, not translated (an
+      aggregation view's content is user `FUNCTION` results over
+      `AGGREGATES`; an inspection view's rows are the child table
+      `build_tables` already emits for the inspected `BAG`/`LIST OF`
+      attribute). JSON Schema / JSON-FG keep the narrower Projection/Join
+      filter.
 
       Its base classes (`RenamedBaseView.BaseView`) live in an IMPORTED
       model, so that model must be part of the same conversion
