@@ -36,10 +36,12 @@ same repo are deliberately NOT vendored here - they add `StandardSymbology`
 mapping itself.
 
 The repo has no declared license (`license: null` via the GitHub API,
-checked 2026-08-24). The report and this repo share an author
-(`test@example.org`) with this project's own user - vendored
-here as real, author-confirmed corpus material for testing VIEW
-construction, not redistributed for any other purpose.
+checked 2026-08-24). The report and this repo share an author with this
+project's own maintainer - vendored here as real, author-confirmed corpus
+material for testing VIEW construction, not redistributed for any other
+purpose. The `AT` model-repository URI of each "_d" file has been
+replaced with a generic `mailto:test@example.org` placeholder (it plays
+no role in the tests).
 
 **Real corpus finding these fixtures exist to preserve** (2026-08-24):
 all "_d" files exclusively use the `Name := expression` view attribute
