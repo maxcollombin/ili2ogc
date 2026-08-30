@@ -93,10 +93,18 @@ MODEL Foo AT "http://x" VERSION "1" =
     STRUCTURE PlainWrapper =
       Sub : TEXT*10;
     END PlainWrapper;
+    STRUCTURE sCode =
+      Code : ( aa, bb );
+    END sCode;
+    STRUCTURE sOther =
+      Other : ( xx, yy );
+    END sOther;
+    DOMAIN RestrictedCode = CLASS RESTRICTION ( sCode; sOther );
     CLASS Holder =
       DirectRef : REFERENCE TO Item;
       CatalogRef : ItemRef;
       NoRefStruct : PlainWrapper;
+      Restricted : RestrictedCode;
     END Holder;
   END T;
 END Foo.
@@ -234,7 +242,11 @@ def test_missing_tid_omits_id():
     assert "id" not in feature
 
 
-def test_out_of_scope_attribute_gets_marker_not_dropped():
+def test_reference_node_flattened_to_leaf_text_yields_the_text():
+    """A reference/CLASS-RESTRICTION node an exporter flattened to leaf text (`<Ref>obj-1</Ref>`, no `REF` attribute)
+    yields that text - the OID/code string, mirroring the JSON Schema pipeline's `type: string` for the same construct,
+    not an `x-unsupported` marker.
+    """
     builder = _build(_MODEL)
     cls = _resolved_class(builder, "A")
     obj = XtfObject(
@@ -243,7 +255,7 @@ def test_out_of_scope_attribute_gets_marker_not_dropped():
         attributes={"Ref": [_node("Ref", "obj-1")]},
     )
     feature = object_to_feature(obj, cls)
-    assert feature["properties"]["Ref"] == {"x-unsupported": "ReferenceType"}
+    assert feature["properties"]["Ref"] == "obj-1"
 
 
 def test_unknown_attribute_name_skipped():
@@ -891,6 +903,21 @@ def test_catalog_reference_structure_becomes_string_oid():
     )
     feature = object_to_feature(obj, cls)
     assert feature["properties"]["CatalogRef"] == "tgt-2"
+
+
+def test_class_restriction_domain_flattened_on_the_wire_becomes_a_string():
+    """`DOMAIN X = CLASS RESTRICTION (...)` (real corpus: RoadTrafficCensus_V1_1's `Owner`/`Canton`) that an exporter
+    flattened to a leaf scalar (`<Restricted>aa</Restricted>`) becomes that string, like the JSON Schema `type: string`.
+    """
+    builder = _build(_REF_MODEL)
+    cls = _resolved_class(builder, "Holder")
+    obj = XtfObject(
+        tid="h-3",
+        qualified_class="Foo.T.Holder",
+        attributes={"Restricted": [_node("Restricted", "aa")]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["properties"]["Restricted"] == "aa"
 
 
 def test_genuine_structure_without_ref_recurses_into_nested_object():

@@ -161,6 +161,16 @@ def _attribute_value(
         # content instead of falling through to the marker below.
         if kind == "Class" and getattr(resolved.type_instance, "Kind", None) == "Structure":
             return _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=already_unwrapped)
+        # A `CLASS`/`STRUCTURE RESTRICTION` domain attribute whose exporter
+        # flattened the value to a leaf scalar (real corpus:
+        # RoadTrafficCensus_V1_1's `Owner`/`Canton`, `DOMAIN Owner = CLASS
+        # RESTRICTION (...)`, on the wire as `<Owner>CH</Owner>`) - mirror
+        # the JSON Schema pipeline, which emits `{"type": "string",
+        # "x-reference-target": ...}` for the same construct: return the
+        # text as a string rather than an `x-unsupported` marker.
+        leaf = raw_nodes[0] if raw_nodes else None
+        if leaf is not None and not leaf.children and leaf.text is not None:
+            return leaf.text
     # Same "unknown" fallback as convert/jsonschema.py's _attribute_schema,
     # for an unresolved Type (type_kind is None - e.g. an external/
     # unqualified reference not loaded via --repo).
