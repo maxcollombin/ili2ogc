@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "conformsTo": [
+    "http://www.opengis.net/spec/json-fg-1/1.0/conf/core",
+    "http://www.opengis.net/spec/json-fg-1/1.0/conf/types-schemas"
+  ],
+  "features": [
+    {
+      "type": "Feature",
+      "id": "w1",
+      "featureType": "Wegabschnitt",
+      "geometry": null,
+      "properties": {
+        "Bezeichnung": "Seeuferweg",
+        "Kategorie": "Wanderweg",
+        "Belagsart": "Naturbelag"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "s1",
+      "featureType": "Wegweiser",
+      "geometry": null,
+      "properties": {
+        "Standort": "Bahnhofplatz",
+        "Hoehe": 512
+      }
+    }
+  ]
+}

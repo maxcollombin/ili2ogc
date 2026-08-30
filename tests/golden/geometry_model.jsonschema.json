@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Point": {
+      "type": "object",
+      "properties": {
+        "Pos": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 100.0
+            },
+            {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 200.0
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "title": "Point",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "MultiPoint": {
+      "type": "object",
+      "properties": {
+        "Pos": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 100.0
+              },
+              {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 200.0
+              }
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      },
+      "title": "MultiPoint",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Way": {
+      "type": "object",
+      "properties": {
+        "Geom": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 100.0
+              },
+              {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 200.0
+              }
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      },
+      "title": "Way",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "DirectedWay": {
+      "type": "object",
+      "properties": {
+        "Geom": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 100.0
+              },
+              {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 200.0
+              }
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      },
+      "title": "DirectedWay",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "MultiWay": {
+      "type": "object",
+      "properties": {
+        "Geom": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 100.0
+                },
+                {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 200.0
+                }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      },
+      "title": "MultiWay",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Zone": {
+      "type": "object",
+      "properties": {
+        "Geom": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 100.0
+                },
+                {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 200.0
+                }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "x-boundary-order": "outer-first"
+        }
+      },
+      "title": "Zone",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    }
+  }
+}

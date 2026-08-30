@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Person": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "type": "string"
+        },
+        "BirthYear": {
+          "type": "integer",
+          "minimum": 1800,
+          "maximum": 2100
+        },
+        "Kind": {
+          "type": "string",
+          "enum": [
+            "Adult",
+            "Child"
+          ]
+        },
+        "Employer": {
+          "type": "string",
+          "x-reference-target": "Company"
+        }
+      },
+      "title": "Person",
+      "required": [
+        "Name"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Company": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "type": "string"
+        }
+      },
+      "title": "Company",
+      "required": [
+        "Name"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "WorksFor": {
+      "type": "object",
+      "properties": {},
+      "title": "WorksFor"
+    }
+  }
+}

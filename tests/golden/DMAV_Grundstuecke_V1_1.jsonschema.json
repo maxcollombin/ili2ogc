@@ -1,0 +1,752 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-meta": {
+    "technicalContact": "mailto:dmav@swisstopo.ch",
+    "furtherInformation": "https://www.cadastre-manual.admin.ch/de/modelldokumentation-dmav",
+    "IDGeoIV": "228.4"
+  },
+  "$defs": {
+    "Liegenschaft": {
+      "type": "object",
+      "properties": {
+        "NummerTeilgrundstueck": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Geometrie": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "x-boundary-order": "outer-first"
+        },
+        "Fiktiv": {
+          "type": "boolean"
+        },
+        "Flaechenmass": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999999
+        },
+        "Streitig": {
+          "x-unsupported": "unknown"
+        },
+        "Qualitaetsstandard": {
+          "type": "string",
+          "enum": [
+            "AV93",
+            "PN"
+          ]
+        },
+        "Grundstueck": {
+          "type": "string",
+          "x-reference-target": "Grundstueck"
+        }
+      },
+      "title": "Liegenschaft",
+      "required": [
+        "Fiktiv",
+        "Flaechenmass",
+        "Geometrie",
+        "Qualitaetsstandard"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "SelbstaendigesDauerndesRecht": {
+      "type": "object",
+      "properties": {
+        "NummerTeilgrundstueck": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Geometrie": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "x-boundary-order": "outer-first"
+        },
+        "Flaechenmass": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999999
+        },
+        "Streitig": {
+          "x-unsupported": "unknown"
+        },
+        "IstBaurecht": {
+          "type": "boolean"
+        },
+        "Grundstueck": {
+          "type": "string",
+          "x-reference-target": "Grundstueck"
+        }
+      },
+      "title": "SelbstaendigesDauerndesRecht",
+      "required": [
+        "Flaechenmass",
+        "Geometrie"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Bergwerk": {
+      "type": "object",
+      "properties": {
+        "NummerTeilgrundstueck": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Geometrie": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "x-boundary-order": "outer-first"
+        },
+        "Flaechenmass": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999999
+        },
+        "Streitig": {
+          "x-unsupported": "unknown"
+        },
+        "Grundstueck": {
+          "type": "string",
+          "x-reference-target": "Grundstueck"
+        }
+      },
+      "title": "Bergwerk",
+      "required": [
+        "Flaechenmass",
+        "Geometrie"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "GSNachfuehrung": {
+      "type": "object",
+      "properties": {
+        "NBIdent": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Identifikator": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Beschreibung": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "Perimeter": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "x-boundary-order": "outer-first"
+        },
+        "Mutationsart": {
+          "type": "string",
+          "enum": [
+            "AbschlussProjektmutation",
+            "Normal",
+            "Projektmutation"
+          ]
+        },
+        "GueltigerEintrag": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "Grundbucheintrag": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "title": "GSNachfuehrung",
+      "required": [
+        "Beschreibung",
+        "GueltigerEintrag",
+        "Identifikator",
+        "Mutationsart",
+        "NBIdent"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Grenzpunkt": {
+      "type": "object",
+      "properties": {
+        "NBIdent": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Nummer": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Geometrie": {
+          "x-unsupported": "unknown"
+        },
+        "Hoehengeometrie": {
+          "type": "number",
+          "minimum": -200.0,
+          "maximum": 5000.0
+        },
+        "Lagegenauigkeit": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 7.0
+        },
+        "IstLagezuverlaessig": {
+          "type": "boolean"
+        },
+        "Hoehengenauigkeit": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 7.0
+        },
+        "IstHoehenzuverlaessig": {
+          "type": "boolean"
+        },
+        "Punktzeichen": {
+          "type": "string",
+          "enum": [
+            "Bolzen",
+            "Kreuz",
+            "Kunststoffzeichen",
+            "Pfahl",
+            "Rohr",
+            "Stein",
+            "unversichert",
+            "weitere"
+          ]
+        },
+        "IstHoheitsgrenzpunkt": {
+          "type": "boolean"
+        },
+        "IstHoheitsgrenzsteinAlt": {
+          "type": "boolean"
+        },
+        "IstExaktDefiniert": {
+          "type": "boolean"
+        },
+        "SymbolOri": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 399.9
+        },
+        "Entstehung": {
+          "type": "string",
+          "x-reference-target": "GSNachfuehrung"
+        },
+        "Untergang": {
+          "type": "string",
+          "x-reference-target": "GSNachfuehrung"
+        }
+      },
+      "title": "Grenzpunkt",
+      "required": [
+        "IstExaktDefiniert",
+        "IstHoheitsgrenzpunkt",
+        "IstHoheitsgrenzsteinAlt",
+        "IstLagezuverlaessig",
+        "Lagegenauigkeit",
+        "Punktzeichen"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Entstehung_Grenzpunkt": {
+      "type": "object",
+      "properties": {},
+      "title": "Entstehung_Grenzpunkt"
+    },
+    "Untergang_Grenzpunkt": {
+      "type": "object",
+      "properties": {},
+      "title": "Untergang_Grenzpunkt"
+    },
+    "Grundstueck": {
+      "type": "object",
+      "properties": {
+        "NBIdent": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Nummer": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "EGRID": {
+          "type": "string",
+          "maxLength": 14
+        },
+        "IstStreitig": {
+          "type": "boolean"
+        },
+        "IstVollstaendig": {
+          "type": "boolean"
+        },
+        "Grundstuecksart": {
+          "type": "string",
+          "enum": [
+            "Bergwerk",
+            "Liegenschaft",
+            "SelbstaendigesDauerndesRecht"
+          ]
+        },
+        "Textposition": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Textposition"
+          },
+          "minItems": 0,
+          "x-ordered": false
+        },
+        "Fiktiv": {
+          "type": "boolean"
+        },
+        "Gesamtflaechenmass": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999999
+        },
+        "Entstehung": {
+          "type": "string",
+          "x-reference-target": "GSNachfuehrung"
+        },
+        "Untergang": {
+          "type": "string",
+          "x-reference-target": "GSNachfuehrung"
+        }
+      },
+      "title": "Grundstueck",
+      "required": [
+        "Fiktiv",
+        "Grundstuecksart",
+        "IstStreitig",
+        "IstVollstaendig",
+        "NBIdent",
+        "Nummer"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Entstehung_Grundstueck": {
+      "type": "object",
+      "properties": {},
+      "title": "Entstehung_Grundstueck"
+    },
+    "Untergang_Grundstueck": {
+      "type": "object",
+      "properties": {},
+      "title": "Untergang_Grundstueck"
+    },
+    "GrundstueckLiegenschaft": {
+      "type": "object",
+      "properties": {},
+      "title": "GrundstueckLiegenschaft"
+    },
+    "GrundstueckSelbstaendigesDauerndesRecht": {
+      "type": "object",
+      "properties": {},
+      "title": "GrundstueckSelbstaendigesDauerndesRecht"
+    },
+    "GrundstueckBergwerk": {
+      "type": "object",
+      "properties": {},
+      "title": "GrundstueckBergwerk"
+    },
+    "Grenzpunkt_Gueltig": {
+      "type": "object",
+      "properties": {
+        "NBIdent": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Nummer": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Geometrie": {
+          "x-unsupported": "unknown"
+        },
+        "Hoehengeometrie": {
+          "type": "number",
+          "minimum": -200.0,
+          "maximum": 5000.0
+        },
+        "Lagegenauigkeit": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 7.0
+        },
+        "IstLagezuverlaessig": {
+          "type": "boolean"
+        },
+        "Hoehengenauigkeit": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 7.0
+        },
+        "IstHoehenzuverlaessig": {
+          "type": "boolean"
+        },
+        "Punktzeichen": {
+          "type": "string",
+          "enum": [
+            "Bolzen",
+            "Kreuz",
+            "Kunststoffzeichen",
+            "Pfahl",
+            "Rohr",
+            "Stein",
+            "unversichert",
+            "weitere"
+          ]
+        },
+        "IstHoheitsgrenzpunkt": {
+          "type": "boolean"
+        },
+        "IstHoheitsgrenzsteinAlt": {
+          "type": "boolean"
+        },
+        "IstExaktDefiniert": {
+          "type": "boolean"
+        },
+        "SymbolOri": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 399.9
+        }
+      },
+      "title": "Grenzpunkt_Gueltig",
+      "required": [
+        "IstExaktDefiniert",
+        "IstHoheitsgrenzpunkt",
+        "IstHoheitsgrenzsteinAlt",
+        "IstLagezuverlaessig",
+        "Lagegenauigkeit",
+        "Punktzeichen"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Grundstueck_Gueltig": {
+      "type": "object",
+      "properties": {
+        "NBIdent": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Nummer": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "EGRID": {
+          "type": "string",
+          "maxLength": 14
+        },
+        "IstStreitig": {
+          "type": "boolean"
+        },
+        "IstVollstaendig": {
+          "type": "boolean"
+        },
+        "Grundstuecksart": {
+          "type": "string",
+          "enum": [
+            "Bergwerk",
+            "Liegenschaft",
+            "SelbstaendigesDauerndesRecht"
+          ]
+        },
+        "Textposition": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Textposition"
+          },
+          "minItems": 0,
+          "x-ordered": false
+        },
+        "Fiktiv": {
+          "type": "boolean"
+        },
+        "Gesamtflaechenmass": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999999
+        }
+      },
+      "title": "Grundstueck_Gueltig",
+      "required": [
+        "Fiktiv",
+        "Grundstuecksart",
+        "IstStreitig",
+        "IstVollstaendig",
+        "NBIdent",
+        "Nummer"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Liegenschaft_Gueltig": {
+      "type": "object",
+      "properties": {
+        "NummerTeilgrundstueck": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Geometrie": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "x-boundary-order": "outer-first"
+        },
+        "Fiktiv": {
+          "type": "boolean"
+        },
+        "Flaechenmass": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999999
+        },
+        "Streitig": {
+          "x-unsupported": "unknown"
+        },
+        "Qualitaetsstandard": {
+          "type": "string",
+          "enum": [
+            "AV93",
+            "PN"
+          ]
+        }
+      },
+      "title": "Liegenschaft_Gueltig",
+      "required": [
+        "Fiktiv",
+        "Flaechenmass",
+        "Geometrie",
+        "Qualitaetsstandard"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "SelbstaendigesDauerndesRecht_Gueltig": {
+      "type": "object",
+      "properties": {
+        "NummerTeilgrundstueck": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Geometrie": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "x-boundary-order": "outer-first"
+        },
+        "Flaechenmass": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999999
+        },
+        "Streitig": {
+          "x-unsupported": "unknown"
+        },
+        "IstBaurecht": {
+          "type": "boolean"
+        }
+      },
+      "title": "SelbstaendigesDauerndesRecht_Gueltig",
+      "required": [
+        "Flaechenmass",
+        "Geometrie"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Bergwerk_Gueltig": {
+      "type": "object",
+      "properties": {
+        "NummerTeilgrundstueck": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Geometrie": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "x-boundary-order": "outer-first"
+        },
+        "Flaechenmass": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999999
+        },
+        "Streitig": {
+          "x-unsupported": "unknown"
+        }
+      },
+      "title": "Bergwerk_Gueltig",
+      "required": [
+        "Flaechenmass",
+        "Geometrie"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Textposition": {
+      "type": "object",
+      "properties": {
+        "Position": {
+          "x-unsupported": "unknown"
+        },
+        "Orientierung": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 399.9
+        },
+        "DarstellungIn": {
+          "type": "string",
+          "enum": [
+            "Basisplan",
+            "PlanFuerDasGrundbuch"
+          ]
+        },
+        "Textgroesse": {
+          "type": "string",
+          "enum": [
+            "Gross",
+            "Klein",
+            "Mittel"
+          ]
+        },
+        "HReferenzpunkt": {
+          "type": "string",
+          "enum": [
+            "Center",
+            "Left",
+            "Right"
+          ]
+        },
+        "VReferenzpunkt": {
+          "type": "string",
+          "enum": [
+            "Base",
+            "Bottom",
+            "Cap",
+            "Half",
+            "Top"
+          ]
+        },
+        "Hinweisstrich": {
+          "x-unsupported": "unknown"
+        }
+      },
+      "title": "Textposition"
+    }
+  }
+}

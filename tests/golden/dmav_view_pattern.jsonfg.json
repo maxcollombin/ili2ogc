@@ -1,0 +1,104 @@
+{
+  "type": "FeatureCollection",
+  "conformsTo": [
+    "http://www.opengis.net/spec/json-fg-1/1.0/conf/core",
+    "http://www.opengis.net/spec/json-fg-1/1.0/conf/types-schemas"
+  ],
+  "features": [
+    {
+      "type": "Feature",
+      "id": "n1",
+      "featureType": "GSNachfuehrung",
+      "geometry": null,
+      "properties": {
+        "NBIdent": "CH0000001",
+        "Identifikator": "D-100",
+        "GueltigerEintrag": "2020-01-10",
+        "Grundbucheintrag": "2020-02-14"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "g1",
+      "featureType": "Grundstueck",
+      "geometry": null,
+      "properties": {
+        "NBIdent": "CH0000001",
+        "Nummer": "100",
+        "EGRID": "CH100000000001",
+        "Entstehung": "n1"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "n2e",
+      "featureType": "GSNachfuehrung",
+      "geometry": null,
+      "properties": {
+        "NBIdent": "CH0000001",
+        "Identifikator": "D-200e",
+        "GueltigerEintrag": "2019-01-10",
+        "Grundbucheintrag": "2019-02-14"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "n2u",
+      "featureType": "GSNachfuehrung",
+      "geometry": null,
+      "properties": {
+        "NBIdent": "CH0000001",
+        "Identifikator": "D-200u",
+        "GueltigerEintrag": "2022-01-10",
+        "Grundbucheintrag": "2022-02-14"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "g2",
+      "featureType": "Grundstueck",
+      "geometry": null,
+      "properties": {
+        "NBIdent": "CH0000001",
+        "Nummer": "200",
+        "EGRID": "CH100000000002",
+        "Entstehung": "n2e",
+        "Untergang": "n2u"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "n3",
+      "featureType": "GSNachfuehrung",
+      "geometry": null,
+      "properties": {
+        "NBIdent": "CH0000001",
+        "Identifikator": "D-300",
+        "GueltigerEintrag": "2024-01-10"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "g3",
+      "featureType": "Grundstueck",
+      "geometry": null,
+      "properties": {
+        "NBIdent": "CH0000001",
+        "Nummer": "300",
+        "EGRID": "CH100000000003",
+        "Entstehung": "n3"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "g1",
+      "featureType": "Grundstueck_Gueltig",
+      "geometry": null,
+      "properties": {
+        "NBIdent": "CH0000001",
+        "Nummer": "100",
+        "EGRID": "CH100000000001"
+      }
+    }
+  ]
+}

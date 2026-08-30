@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Plain": {
+      "type": "object",
+      "properties": {
+        "Val": {
+          "type": "string"
+        }
+      },
+      "title": "Plain",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "NoOwnOid": {
+      "type": "object",
+      "properties": {
+        "Val": {
+          "type": "string"
+        }
+      },
+      "title": "NoOwnOid",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Inherits": {
+      "type": "object",
+      "properties": {
+        "Val": {
+          "type": "string"
+        }
+      },
+      "title": "Inherits",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "OwnDomain": {
+      "type": "object",
+      "properties": {
+        "Val": {
+          "type": "string"
+        }
+      },
+      "title": "OwnDomain",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Opted": {
+      "type": "object",
+      "properties": {
+        "Val": {
+          "type": "string"
+        }
+      },
+      "title": "Opted",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Combined": {
+      "type": "object",
+      "properties": {
+        "Val": {
+          "type": "string"
+        }
+      },
+      "title": "Combined",
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    }
+  }
+}

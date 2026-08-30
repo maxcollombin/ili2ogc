@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Wegabschnitt": {
+      "type": "object",
+      "properties": {
+        "Bezeichnung": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "Kategorie": {
+          "type": "string",
+          "enum": [
+            "AlpinWanderweg",
+            "Bergwanderweg",
+            "Wanderweg"
+          ]
+        },
+        "Belagsart": {
+          "type": "string",
+          "maxLength": 20
+        }
+      },
+      "title": "Wegabschnitt",
+      "required": [
+        "Bezeichnung",
+        "Kategorie"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Wegweiser": {
+      "type": "object",
+      "properties": {
+        "Standort": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "Hoehe": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "Wegabschnitt": {
+          "type": "string",
+          "x-reference-target": "Wegabschnitt"
+        }
+      },
+      "title": "Wegweiser",
+      "required": [
+        "Standort"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Abschnitt_Wegweiser": {
+      "type": "object",
+      "properties": {},
+      "title": "Abschnitt_Wegweiser"
+    },
+    "Wegabschnitt_MitWegweiser": {
+      "type": "object",
+      "properties": {
+        "Bezeichnung": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "Kategorie": {
+          "type": "string",
+          "enum": [
+            "AlpinWanderweg",
+            "Bergwanderweg",
+            "Wanderweg"
+          ]
+        },
+        "Belagsart": {
+          "type": "string",
+          "maxLength": 20
+        }
+      },
+      "title": "Wegabschnitt_MitWegweiser",
+      "required": [
+        "Bezeichnung",
+        "Kategorie"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    }
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "GSNachfuehrung": {
+      "type": "object",
+      "properties": {
+        "NBIdent": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Identifikator": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "GueltigerEintrag": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "Grundbucheintrag": {
+          "type": "string",
+          "maxLength": 10
+        }
+      },
+      "title": "GSNachfuehrung",
+      "required": [
+        "GueltigerEintrag",
+        "Identifikator",
+        "NBIdent"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Grundstueck": {
+      "type": "object",
+      "properties": {
+        "NBIdent": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Nummer": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "EGRID": {
+          "type": "string",
+          "maxLength": 14
+        },
+        "Entstehung": {
+          "type": "string",
+          "x-reference-target": "GSNachfuehrung"
+        },
+        "Untergang": {
+          "type": "string",
+          "x-reference-target": "GSNachfuehrung"
+        }
+      },
+      "title": "Grundstueck",
+      "required": [
+        "NBIdent",
+        "Nummer"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    "Entstehung_Grundstueck": {
+      "type": "object",
+      "properties": {},
+      "title": "Entstehung_Grundstueck"
+    },
+    "Untergang_Grundstueck": {
+      "type": "object",
+      "properties": {},
+      "title": "Untergang_Grundstueck"
+    },
+    "Grundstueck_Gueltig": {
+      "type": "object",
+      "properties": {
+        "NBIdent": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "Nummer": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "EGRID": {
+          "type": "string",
+          "maxLength": 14
+        }
+      },
+      "title": "Grundstueck_Gueltig",
+      "required": [
+        "NBIdent",
+        "Nummer"
+      ],
+      "x-crud": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    }
+  }
+}
