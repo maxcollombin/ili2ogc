@@ -4,7 +4,7 @@
     "http_status": 200,
     "byte_size": 19315,
     "sha256": "5bb72dd1ae928c76aa540717dd1036f85e0dbf10509c634516c0eabe4043332f",
-    "fetched_at": "2026-08-30T07:26:28Z",
+    "fetched_at": "2026-08-31T15:28:59Z",
     "ok": true
   },
   "av_situationsplan": {
@@ -12,7 +12,7 @@
     "http_status": 200,
     "byte_size": 33905,
     "sha256": "f8b1e03da064df5035e4b21e4941d8fbe90a753aba01eb2c7e60c9ab2be58c64",
-    "fetched_at": "2026-08-30T07:26:29Z",
+    "fetched_at": "2026-08-31T15:29:01Z",
     "ok": true
   },
   "avc": {
@@ -20,7 +20,7 @@
     "http_status": 200,
     "byte_size": 19321,
     "sha256": "4166e7554a479889aceb03148ab460f53d523da308a09c1c81b73c4bafe11d8b",
-    "fetched_at": "2026-08-30T07:26:30Z",
+    "fetched_at": "2026-08-31T15:29:02Z",
     "ok": true
   },
   "fruchtfolgeflaechen": {
@@ -28,7 +28,7 @@
     "http_status": 200,
     "byte_size": 1456,
     "sha256": "4b3f78557f0c789c27d788802f3d209717aaf77c44ffceb97801ef642a58f75e",
-    "fetched_at": "2026-08-30T07:26:30Z",
+    "fetched_at": "2026-08-31T15:29:03Z",
     "ok": true
   },
   "gefahrenkarten_v1_3_0": {
@@ -36,7 +36,7 @@
     "http_status": 200,
     "byte_size": 48783,
     "sha256": "2e98209efcc872723db54fb75c51a821e8fd2bd5bea8d5038e89f3e37accae6f",
-    "fetched_at": "2026-08-30T07:26:31Z",
+    "fetched_at": "2026-08-31T15:29:04Z",
     "ok": true
   },
   "kantonale_ausnahmetransportrouten": {
@@ -44,7 +44,7 @@
     "http_status": 200,
     "byte_size": 2366,
     "sha256": "1ec125452889e3507bbed654a3286c7e01296798f03a1c338ba284fb39c048ee",
-    "fetched_at": "2026-08-30T07:26:32Z",
+    "fetched_at": "2026-08-31T15:29:06Z",
     "ok": true
   },
   "kataster_belasteter_standorte": {
@@ -52,7 +52,7 @@
     "http_status": 200,
     "byte_size": 5376,
     "sha256": "a7f8ffe2bc2e6ab67ded31e2faa4dda31415dc96a45a992362738cddd84e13ab",
-    "fetched_at": "2026-08-30T07:26:33Z",
+    "fetched_at": "2026-08-31T15:29:07Z",
     "ok": true
   },
   "luftbild": {
@@ -60,7 +60,7 @@
     "http_status": 200,
     "byte_size": 0,
     "sha256": null,
-    "fetched_at": "2026-08-30T07:27:04Z",
+    "fetched_at": "2026-08-31T15:29:08Z",
     "ok": false
   },
   "lwb_bewirtschaftungseinheit": {
@@ -68,7 +68,7 @@
     "http_status": 200,
     "byte_size": 3236,
     "sha256": "7afd37ca660bb533b65e814282c484f6f3ece6a2f6bbe039516e5bcb83dce000",
-    "fetched_at": "2026-08-30T07:26:35Z",
+    "fetched_at": "2026-08-31T15:29:09Z",
     "ok": true
   },
   "lwb_biodiversitaetsfoerderflaechen": {
@@ -76,7 +76,7 @@
     "http_status": 200,
     "byte_size": 3200,
     "sha256": "c391cc7172d8aa4dd432455770dfca74fde8f46d49592a2adbae52d54813d366",
-    "fetched_at": "2026-08-30T07:26:36Z",
+    "fetched_at": "2026-08-31T15:29:11Z",
     "ok": true
   },
   "lwb_nutzungsflaechen": {
@@ -84,7 +84,7 @@
     "http_status": 200,
     "byte_size": 2293,
     "sha256": "b787d9182e2326bf47e037fa02fb1c8bc69d529df549273b5cf03e5406d07826",
-    "fetched_at": "2026-08-30T07:26:37Z",
+    "fetched_at": "2026-08-31T15:29:12Z",
     "ok": true
   },
   "lwb_perimeter_ln_sf": {
@@ -92,7 +92,7 @@
     "http_status": 200,
     "byte_size": 1265,
     "sha256": "e63ae4ee36b72a31854a51029bbf27081e16bfa88184163eb98660d21ce4a30d",
-    "fetched_at": "2026-08-30T07:26:38Z",
+    "fetched_at": "2026-08-31T15:29:13Z",
     "ok": true
   },
   "lwb_perimeter_terrassenreben": {
@@ -100,7 +100,7 @@
     "http_status": 200,
     "byte_size": 1304,
     "sha256": "7b643c4c89aaf497abd8f6c3f62eef8bce19cbf503a3595afdff3d8c50e63ab9",
-    "fetched_at": "2026-08-30T07:26:38Z",
+    "fetched_at": "2026-08-31T15:29:14Z",
     "ok": true
   },
   "lwb_rebbaukataster": {
@@ -108,7 +108,7 @@
     "http_status": 200,
     "byte_size": 1206,
     "sha256": "e69c888722fb5adfecf681c2c22d6dada9ef86d467c64979bf2dd5c16cd56c32",
-    "fetched_at": "2026-08-30T07:26:39Z",
+    "fetched_at": "2026-08-31T15:29:16Z",
     "ok": true
   },
   "naturereigniskataster_v1_0_0": {
@@ -116,7 +116,7 @@
     "http_status": 200,
     "byte_size": 22379,
     "sha256": "0e4036fdba73e55e4aa1bcf49b0fdcc96d50feadc22c0c67182de959267b67c6",
-    "fetched_at": "2026-08-30T07:26:40Z",
+    "fetched_at": "2026-08-31T15:29:17Z",
     "ok": true
   },
   "npl_laermempfindlichkeitsstufen": {
@@ -124,7 +124,7 @@
     "http_status": 200,
     "byte_size": 1790,
     "sha256": "c9dfe4a714bbcbd03d2d74aa5b031965ecddd5a30bd0a3ff984a65265d17fe74",
-    "fetched_at": "2026-08-30T07:26:41Z",
+    "fetched_at": "2026-08-31T15:29:18Z",
     "ok": true
   },
   "npl_nutzungsplanung": {
@@ -132,7 +132,7 @@
     "http_status": 200,
     "byte_size": 6156,
     "sha256": "6b78c4727ce59a3306e1ae52286e73951335d85d836d87a75901bc2ba58a303f",
-    "fetched_at": "2026-08-30T07:26:42Z",
+    "fetched_at": "2026-08-31T15:29:19Z",
     "ok": true
   },
   "npl_waldabstandslinien": {
@@ -140,7 +140,7 @@
     "http_status": 200,
     "byte_size": 1619,
     "sha256": "7f3268396c92a5f06a7ada36b3255eeab34ec1c58a5c83e437b3e5d17f295ea7",
-    "fetched_at": "2026-08-30T07:26:43Z",
+    "fetched_at": "2026-08-31T15:29:21Z",
     "ok": true
   },
   "npl_waldgrenzen": {
@@ -148,7 +148,7 @@
     "http_status": 200,
     "byte_size": 1658,
     "sha256": "f375635e48eee219fdd930e0c7b9e5ab8a179328f5a8941b80337b8862b7cc9e",
-    "fetched_at": "2026-08-30T07:26:44Z",
+    "fetched_at": "2026-08-31T15:29:22Z",
     "ok": true
   },
   "planerischer_gewaesserschutz_v1_1_1": {
@@ -156,7 +156,7 @@
     "http_status": 200,
     "byte_size": 42764,
     "sha256": "e98749d856a8d4c09e7fb4178daebea79788fc03d902979c8d31bbed1bfb477a",
-    "fetched_at": "2026-08-30T07:26:45Z",
+    "fetched_at": "2026-08-31T15:29:23Z",
     "ok": true
   },
   "richtplanung_erneuerbare_energien_v1_0_0": {
@@ -164,7 +164,7 @@
     "http_status": 200,
     "byte_size": 20303,
     "sha256": "73b34d3ce7159fe80093e46fea855addeba5567553d91a790b8f10ecc2610891",
-    "fetched_at": "2026-08-30T07:26:46Z",
+    "fetched_at": "2026-08-31T15:29:25Z",
     "ok": true
   },
   "stromversorgungssicherheit_netzgebiete_v1_2_0": {
@@ -172,7 +172,7 @@
     "http_status": 200,
     "byte_size": 3708,
     "sha256": "ad4aea6b8a4b26133110a6af9c443a2968b5cb00e8651151802cc3333e2a4159",
-    "fetched_at": "2026-08-30T07:26:46Z",
+    "fetched_at": "2026-08-31T15:29:26Z",
     "ok": true
   },
   "waldreservate": {
@@ -180,7 +180,7 @@
     "http_status": 200,
     "byte_size": 1542,
     "sha256": "4a8bbd4970b45993805f8decb8a43a49b969b6a601ae1b32608853f7be04cfac",
-    "fetched_at": "2026-08-30T07:26:47Z",
+    "fetched_at": "2026-08-31T15:29:28Z",
     "ok": true
   },
   "wildruhezonen_v2_1_1": {
@@ -188,7 +188,7 @@
     "http_status": 200,
     "byte_size": 2821,
     "sha256": "28d2135fcff5f89bd8e80684663c932739a4f3bcc38b036ddcbaea6113ed5f83",
-    "fetched_at": "2026-08-30T07:26:48Z",
+    "fetched_at": "2026-08-31T15:29:29Z",
     "ok": true
   }
 }
