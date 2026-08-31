@@ -10,7 +10,8 @@ reproduction of that idiom, modelled on
 - `PROJECTION OF` a single class with `ALL OF <class>` re-export
 - a `WHERE` that navigates two association hops through a shared
   mutation-tracking class (`Grundstueck->Entstehung->Grundbucheintrag`)
-- catalogue-numbered view-level `UNIQUE` (`CH041101` / `CH041102`)
+- catalogue-numbered view-level `UNIQUE` (`CH041101` / `CH041102`),
+  translated to a `BEFORE INSERT`/`BEFORE UPDATE` trigger
 - `.ili -> CREATE VIEW` (`convert/sql.py`) and `.xtf -> JSON-FG`
   (`convert/jsonfg.py`) end to end
 """
@@ -19,6 +20,8 @@ import json
 import sqlite3
 import warnings
 from pathlib import Path
+
+import pytest
 
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.jsonfg import evaluate_view, unsupported_view_reason
@@ -105,9 +108,19 @@ def test_convert_sql_emits_a_real_create_view_with_exists_predicates():
     # EXISTS over the shared mutation class plus an IS NOT NULL on its date
     assert 'EXISTS (SELECT 1 FROM "gsnachfuehrung"' in v.body
     assert '"grundbucheintrag" IS NOT NULL' in v.body
-    # the view-level UNIQUE is surfaced as a note, never carried onto the CREATE VIEW
-    assert any("VIEW-level UNIQUE 'CH041101'" in n for n in v.notes)
+    # the view-level UNIQUE is now a real BEFORE INSERT/UPDATE trigger, not a dropped note
+    assert not v.notes
+    assert {t.label for t in v.triggers} == {"CH041101", "CH041102"}
+    assert next(t for t in v.triggers if t.label == "CH041101").columns == ["nbident", "nummer"]
     assert "UNIQUE" not in v.body
+
+
+def _executable_gpkg_schema(tables, sql_views) -> str:
+    """`render_gpkg`'s full output minus the GeoPackage bootstrap rows (`gpkg_contents`/... need a real .gpkg
+    container, not a bare `:memory:` database) - keeps `CREATE TABLE`/`CREATE VIEW`/`CREATE TRIGGER` intact.
+    """
+    full = render_gpkg(tables, tuple(sql_views))
+    return "\n".join(line for line in full.splitlines() if not line.startswith(("INSERT INTO gpkg_", "-- TODO:")))
 
 
 def test_convert_sql_create_view_executes_and_filters_against_live_sqlite():
@@ -115,10 +128,8 @@ def test_convert_sql_create_view_executes_and_filters_against_live_sqlite():
     classes = _registered(builder, "Class")
     tables = build_tables(classes, symbol_table=builder.symbol_table)
     sql_views = build_views(_registered(builder, "View"), tables, symbol_table=builder.symbol_table)
-    schema = render_gpkg(tables).split("\nINSERT INTO gpkg_contents")[0]
     conn = sqlite3.connect(":memory:")
-    conn.executescript(schema)
-    conn.execute(f'CREATE VIEW "{sql_views[0].name}" AS {sql_views[0].body}')
+    conn.executescript(_executable_gpkg_schema(tables, sql_views))
     conn.executescript("""
         INSERT INTO grundstueck (id, nbident, nummer, egrid, entstehung, untergang) VALUES
           ('g1','CH1','100','E1','n1',NULL),
@@ -131,6 +142,42 @@ def test_convert_sql_create_view_executes_and_filters_against_live_sqlite():
           ('n3','CH1','D-300','2024-01-10',NULL);
     """)
     assert sorted(r[0] for r in conn.execute("SELECT nummer FROM grundstueck_gueltig")) == ["100"]
+
+
+def test_view_level_unique_trigger_enforces_uniqueness_only_among_valid_rows_live():
+    """The `CH041101` trigger rejects a duplicate NBIdent/Nummer among rows the view's WHERE actually admits, but
+    lets two INVALID (not-yet-`Gueltig`) rows share a key - matching plain SQL `UNIQUE`, not a blanket table check.
+    """
+    builder = _build()
+    classes = _registered(builder, "Class")
+    tables = build_tables(classes, symbol_table=builder.symbol_table)
+    sql_views = build_views(_registered(builder, "View"), tables, symbol_table=builder.symbol_table)
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_executable_gpkg_schema(tables, sql_views))
+    conn.executescript("""
+        INSERT INTO gsnachfuehrung (id, nbident, identifikator, gueltigereintrag, grundbucheintrag) VALUES
+          ('n1','CH1','D-100','2020-01-10','2020-02-14'),
+          ('n2e','CH1','D-200e','2019-01-10','2019-02-14'),
+          ('n2u','CH1','D-200u','2022-01-10','2022-02-14');
+        INSERT INTO grundstueck (id, nbident, nummer, egrid, entstehung, untergang) VALUES
+          ('g1','CH1','100','E1','n1',NULL),
+          ('g2','CH1','200','E2','n2e','n2u'),
+          ('g6','CH1','999','E6','n1',NULL);
+    """)
+    # a duplicate of a VALID row (g1) is rejected
+    with pytest.raises(sqlite3.IntegrityError, match="CH041101"):
+        conn.execute(
+            "INSERT INTO grundstueck (id, nbident, nummer, egrid, entstehung, untergang) "
+            "VALUES ('g4','CH1','100','E4','n1',NULL)"
+        )
+    # a row that shares a key with g2 but is itself INVALID (untergang defined) is accepted - g2 is not "in the view"
+    conn.execute(
+        "INSERT INTO grundstueck (id, nbident, nummer, egrid, entstehung, untergang) "
+        "VALUES ('g5','CH1','200','E5','n2e','n2u')"
+    )
+    # an UPDATE that turns a VALID row into a duplicate of another VALID row is rejected too
+    with pytest.raises(sqlite3.IntegrityError, match="CH041101"):
+        conn.execute("UPDATE grundstueck SET nummer = '100' WHERE id = 'g6'")
 
 
 def test_xtf_to_jsonfg_flattens_the_view_and_applies_the_where_filter():

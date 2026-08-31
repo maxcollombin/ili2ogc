@@ -16,8 +16,6 @@ CREATE TABLE "grundstueck" (
 );
 ALTER TABLE "grundstueck" ADD CONSTRAINT fk_grundstueck_entstehung FOREIGN KEY ("entstehung") REFERENCES "gsnachfuehrung" ("id");
 ALTER TABLE "grundstueck" ADD CONSTRAINT fk_grundstueck_untergang FOREIGN KEY ("untergang") REFERENCES "gsnachfuehrung" ("id");
--- NOTE (view grundstueck_gueltig): [SQL-VIEW-CONSTRAINT-DROPPED] VIEW-level UNIQUE 'CH041101' (NBIdent, Nummer) - a CREATE VIEW cannot enforce it
--- NOTE (view grundstueck_gueltig): [SQL-VIEW-CONSTRAINT-DROPPED] VIEW-level UNIQUE 'CH041102' (EGRID) - a CREATE VIEW cannot enforce it
 CREATE VIEW "grundstueck_gueltig" AS
     SELECT
         "grundstueck"."nbident" AS "nbident",
@@ -27,3 +25,23 @@ CREATE VIEW "grundstueck_gueltig" AS
     WHERE ("grundstueck"."entstehung" IS NOT NULL)
       AND (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v1" WHERE "v1"."id" = "grundstueck"."entstehung" AND "v1"."grundbucheintrag" IS NOT NULL))
       AND ((NOT ("grundstueck"."untergang" IS NOT NULL)) OR (NOT (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v2" WHERE "v2"."id" = "grundstueck"."untergang" AND "v2"."grundbucheintrag" IS NOT NULL))));
+CREATE OR REPLACE FUNCTION "uq_grundstueck_gueltig_ch041101_check"() RETURNS trigger AS $$
+BEGIN
+    IF ((NEW."nbident" IS NOT NULL AND NEW."nummer" IS NOT NULL) AND (NEW."entstehung" IS NOT NULL) AND (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v1" WHERE "v1"."id" = NEW."entstehung" AND "v1"."grundbucheintrag" IS NOT NULL)) AND ((NOT (NEW."untergang" IS NOT NULL)) OR (NOT (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v2" WHERE "v2"."id" = NEW."untergang" AND "v2"."grundbucheintrag" IS NOT NULL))))) AND EXISTS (SELECT 1 FROM "grundstueck" "grundstueck" WHERE "grundstueck"."id" <> NEW."id" AND "grundstueck"."nbident" = NEW."nbident" AND "grundstueck"."nummer" = NEW."nummer" AND ("grundstueck"."entstehung" IS NOT NULL) AND (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v1" WHERE "v1"."id" = "grundstueck"."entstehung" AND "v1"."grundbucheintrag" IS NOT NULL)) AND ((NOT ("grundstueck"."untergang" IS NOT NULL)) OR (NOT (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v2" WHERE "v2"."id" = "grundstueck"."untergang" AND "v2"."grundbucheintrag" IS NOT NULL))))) THEN
+        RAISE EXCEPTION 'view "grundstueck_gueltig": UNIQUE CH041101 (nbident, nummer) violated';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER "uq_grundstueck_gueltig_ch041101_trg" BEFORE INSERT OR UPDATE ON "grundstueck"
+    FOR EACH ROW EXECUTE FUNCTION "uq_grundstueck_gueltig_ch041101_check"();
+CREATE OR REPLACE FUNCTION "uq_grundstueck_gueltig_ch041102_check"() RETURNS trigger AS $$
+BEGIN
+    IF ((NEW."egrid" IS NOT NULL) AND (NEW."entstehung" IS NOT NULL) AND (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v1" WHERE "v1"."id" = NEW."entstehung" AND "v1"."grundbucheintrag" IS NOT NULL)) AND ((NOT (NEW."untergang" IS NOT NULL)) OR (NOT (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v2" WHERE "v2"."id" = NEW."untergang" AND "v2"."grundbucheintrag" IS NOT NULL))))) AND EXISTS (SELECT 1 FROM "grundstueck" "grundstueck" WHERE "grundstueck"."id" <> NEW."id" AND "grundstueck"."egrid" = NEW."egrid" AND ("grundstueck"."entstehung" IS NOT NULL) AND (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v1" WHERE "v1"."id" = "grundstueck"."entstehung" AND "v1"."grundbucheintrag" IS NOT NULL)) AND ((NOT ("grundstueck"."untergang" IS NOT NULL)) OR (NOT (EXISTS (SELECT 1 FROM "gsnachfuehrung" "v2" WHERE "v2"."id" = "grundstueck"."untergang" AND "v2"."grundbucheintrag" IS NOT NULL))))) THEN
+        RAISE EXCEPTION 'view "grundstueck_gueltig": UNIQUE CH041102 (egrid) violated';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER "uq_grundstueck_gueltig_ch041102_trg" BEFORE INSERT OR UPDATE ON "grundstueck"
+    FOR EACH ROW EXECUTE FUNCTION "uq_grundstueck_gueltig_ch041102_check"();

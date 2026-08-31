@@ -233,6 +233,36 @@ class SqlView:
     `None` when the View could not be translated - `notes` then says why (RULE #5).
     """
     notes: list[str] = field(default_factory=list)
+    triggers: list[UniqueViewTrigger] = field(default_factory=list)
+    """A `CREATE VIEW` carries no constraint of its own - a VIEW-level `UNIQUE` that resolves to plain columns of a
+    single base table (no reference-hop `extra_joins`, no geometry column) becomes one of these instead of a
+    `-- NOTE`, see `_view_unique_constraint_ddl`.
+    """
+
+
+@dataclass
+class UniqueViewTrigger:
+    """A VIEW-level `UniqueConstraint` translated into a `BEFORE INSERT`/`BEFORE UPDATE` trigger on its base table.
+
+    Dialect-neutral (`where`/`columns` reference only the base table's own
+    alias/columns, no dialect syntax) - `_render_view_unique_triggers_postgresql`/
+    `_render_view_unique_triggers_gpkg` each wrap the SAME predicate
+    (`_view_unique_trigger_predicate`) in their own `CREATE TRIGGER` form:
+    PostgreSQL needs a separate PL/pgSQL function; SQLite/GPKG needs two
+    triggers (one per INSERT/UPDATE), since a single `CREATE TRIGGER`
+    cannot combine both events.
+    """
+
+    view_name: str
+    label: str
+    base_table: str
+    alias: str
+    columns: list[str]
+    where: list[str]
+    """The view's own `WHERE` conjuncts, still qualified with `alias` - reused both as-is (to test whether an
+    EXISTING other row is itself part of the view) and with `alias` substituted for the trigger row reference (to
+    test whether the row being written is itself part of the view), see `_view_unique_trigger_predicate`.
+    """
 
 
 def _srid(coord_type: MetaInstance | None) -> str | None:
@@ -1658,6 +1688,7 @@ def build_views(
             resolver = _ViewResolver(bases, tables_by_name, symbol_for, assoc_near_roles)
             select_items: list[str] = []
             notes: list[str] = []
+            attr_col: dict[str, str] = {}
             for attr in getattr(view, "ClassAttribute", None) or []:
                 aname = getattr(attr, "Name", None)
                 derivates = getattr(attr, "Derivates", None) or []
@@ -1665,7 +1696,9 @@ def build_views(
                     raise _UnsupportedView(f"view attribute {aname!r} has no assigned expression")
                 out_col = _sql_identifier(aname or "")
                 try:
-                    select_items.append(f'{resolver.scalar_ref(derivates[0])} AS "{out_col}"')
+                    col_ref = resolver.scalar_ref(derivates[0])
+                    select_items.append(f'{col_ref} AS "{out_col}"')
+                    attr_col[(aname or "").lower()] = col_ref
                 except _UnsupportedView as exc:
                     # An `ALL OF` pass-through re-exports every base attribute; one it
                     # cannot project as a single column (a STRUCTURE, an unmapped type)
@@ -1677,14 +1710,17 @@ def build_views(
             if not select_items:
                 raise _UnsupportedView("view has no projectable ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
             where = _view_where_conjuncts(getattr(view, "Where", None), resolver)
+            constraint_notes, triggers = _view_unique_constraint_ddl(
+                view, vname, bases, tables_by_name, attr_col, where, extra_joins_present=bool(resolver.extra_joins)
+            )
             from_parts = [f'"{table}" "{alias}"' for alias, _cls, table in bases]
             from_parts += [f'"{table}" "{alias}"' for table, alias, _on in resolver.extra_joins]
             where += [on for _t, _a, on in resolver.extra_joins]
             body = "SELECT\n    " + ",\n    ".join(select_items) + "\nFROM " + ", ".join(from_parts)
             if where:
                 body += "\nWHERE " + "\n  AND ".join(where)
-            notes.extend(_view_constraint_notes(view))
-            result.append(SqlView(vname, body, notes))
+            notes.extend(constraint_notes)
+            result.append(SqlView(vname, body, notes, triggers))
         except _UnsupportedView as exc:
             result.append(SqlView(vname, None, [_diag(exc.rule, str(exc))]))
     return result
@@ -2094,6 +2130,85 @@ def _view_constraint_notes(view: MetaInstance) -> list[str]:
     return notes
 
 
+def _view_unique_constraint_ddl(
+    view: MetaInstance,
+    vname: str,
+    bases: list[tuple[str, MetaInstance, str]],
+    tables_by_name: dict[str, Table],
+    attr_col: dict[str, str],
+    where: list[str],
+    *,
+    extra_joins_present: bool,
+) -> tuple[list[str], list[UniqueViewTrigger]]:
+    """Return `(notes, triggers)` for every VIEW-level `Constraint` of a PROJECTION/JOIN view (`Union`/`Aggregation`/
+    `Inspection` still go through `_view_constraint_notes` unchanged - no real corpus case combines them with a
+    view-level `UNIQUE`).
+
+    A `UniqueConstraint` whose key is a plain view attribute (found in
+    `attr_col`, i.e. resolves to a bare `"<alias>"."<col>"` with no
+    reference-hop join) on a SINGLE-base view with no `extra_joins`
+    becomes a real `UniqueViewTrigger` instead of a dropped note - the
+    real corpus case (DMAV `*_Gueltig`, `UNIQUE CHxxxxxx:` on
+    `Grundstueck_Gueltig`/`Grenzpunkt_Gueltig`). A geometry-typed key
+    column stays a note: SQL `=` is bounding-box equality on a PostGIS
+    `geometry`, not exact equality, and would silently accept two
+    distinct overlapping-bbox geometries as "unique" - dialect-ambiguous
+    correctness, not attempted (RULE #5). `SetConstraint`/
+    `ExistenceConstraint` (`INTERLIS.areAreas(...)`, a whole-population
+    topology check) stay notes too - same "no engine for a spatial/
+    aggregate function" stance as the arithmetic `WHERE` guard.
+    """
+    notes: list[str] = []
+    triggers: list[UniqueViewTrigger] = []
+    single_base = bases[0] if len(bases) == 1 and not extra_joins_present else None
+    for constraint in getattr(view, "Constraint", None) or []:
+        qname = constraint._qualified_class.rsplit(".", 1)[-1]
+        label = repr(getattr(constraint, "Name", None)) if getattr(constraint, "Name", None) else "<unnamed>"
+        if qname != "UniqueConstraint":
+            reason = (
+                "a whole-population check no CREATE VIEW/TRIGGER can carry"
+                if qname in ("SetConstraint", "ExistenceConstraint")
+                else f"not carried onto the CREATE VIEW ({qname})"
+            )
+            notes.append(_diag("SQL-VIEW-CONSTRAINT-DROPPED", f"VIEW-level {qname} {label} - {reason}"))
+            continue
+        cols = [
+            getattr(pe, "Ref", None)
+            for factor in getattr(constraint, "UniqueDef", None) or []
+            for pe in getattr(factor, "PathEls", None) or []
+        ]
+        trigger: UniqueViewTrigger | None = None
+        if single_base is not None:
+            alias, _cls, table = single_base
+            table_columns = {c.name: c for c in tables_by_name[table].columns}
+            columns: list[str] = []
+            ok = True
+            for factor in getattr(constraint, "UniqueDef", None) or []:
+                pathels = getattr(factor, "PathEls", None) or []
+                col = _sql_identifier(pathels[0].Ref or "") if len(pathels) == 1 else None
+                sql_expr = attr_col.get((pathels[0].Ref or "").lower()) if len(pathels) == 1 else None
+                if col is None or sql_expr != f'"{alias}"."{col}"' or table_columns.get(col) is None:
+                    ok = False
+                    break
+                if table_columns[col].geometry_type is not None:
+                    ok = False
+                    break
+                columns.append(col)
+            if ok and columns:
+                trigger = UniqueViewTrigger(vname, label.strip("'"), table, alias, columns, list(where))
+        if trigger is not None:
+            triggers.append(trigger)
+            continue
+        notes.append(
+            _diag(
+                "SQL-VIEW-CONSTRAINT-DROPPED",
+                f"VIEW-level UNIQUE {label} ({', '.join(c for c in cols if c)}) - a CREATE VIEW cannot enforce it, "
+                "and it is outside the single-base/plain-column subset a BEFORE INSERT/UPDATE trigger can",
+            )
+        )
+    return notes, triggers
+
+
 def _association_embedding(assoc_cls: MetaInstance) -> tuple[MetaInstance, str, str] | None:
     """Return `(carrier_class, near_role_name, far_role_name)` for a 2-role embedded `ASSOCIATION`.
 
@@ -2202,6 +2317,92 @@ def _render_views(views: tuple[SqlView, ...]) -> list[str]:
     return statements
 
 
+def _view_unique_trigger_predicate(trig: UniqueViewTrigger, new_ref: str) -> tuple[str, str]:
+    """Return `(new_is_in_the_view, a_duplicate_exists)` SQL booleans for `trig` - `new_ref` is the trigger row
+    reference (`"NEW"` in both dialects).
+
+    `new_is_in_the_view` reapplies the view's own `WHERE` to the row being
+    written (its base-table alias substituted for `new_ref`) - without
+    this, a not-yet-valid row (e.g. `DEFINED(...->Entstehung)` still
+    false) would be wrongly rejected just for sharing a key with an
+    already-valid row. `a_duplicate_exists` re-queries the base table
+    (not the `CREATE VIEW` itself - simpler, and avoids depending on the
+    view exposing its own identity column) for another row, excluding
+    `new_ref` itself, that matches the key AND still satisfies the SAME
+    `WHERE` (an existing row that has since become invalid no longer
+    counts as a duplicate).
+    """
+    substituted = [w.replace(f'"{trig.alias}".', f"{new_ref}.") for w in trig.where]
+    not_null = " AND ".join(f'{new_ref}."{c}" IS NOT NULL' for c in trig.columns)
+    new_is_in_the_view = " AND ".join([f"({not_null})", *substituted])
+    key_match = " AND ".join(f'"{trig.alias}"."{c}" = {new_ref}."{c}"' for c in trig.columns)
+    conditions = [f'"{trig.alias}"."{OID_COLUMN}" <> {new_ref}."{OID_COLUMN}"', key_match, *trig.where]
+    duplicate_exists = (
+        f'EXISTS (SELECT 1 FROM "{trig.base_table}" "{trig.alias}" WHERE ' + " AND ".join(conditions) + ")"
+    )
+    return new_is_in_the_view, duplicate_exists
+
+
+def _view_unique_trigger_message(trig: UniqueViewTrigger) -> str:
+    return f'view "{trig.view_name}": UNIQUE {trig.label} ({", ".join(trig.columns)}) violated'.replace("'", "''")
+
+
+def _render_view_unique_triggers_postgresql(views: tuple[SqlView, ...]) -> list[str]:
+    """Render each `SqlView.triggers` entry as a PL/pgSQL trigger function + `CREATE TRIGGER`.
+
+    A single `BEFORE INSERT OR UPDATE` trigger covers both events -
+    PostgreSQL, unlike SQLite, allows combining them in one `CREATE
+    TRIGGER`.
+    """
+    statements: list[str] = []
+    for view in views:
+        for trig in view.triggers:
+            new_ok, duplicate_exists = _view_unique_trigger_predicate(trig, "NEW")
+            base = _truncate_identifier(_sql_identifier(f"uq_{trig.view_name}_{trig.label}"))
+            fn_name, trg_name = f"{base}_check", f"{base}_trg"
+            statements.append(
+                f"CREATE OR REPLACE FUNCTION {_quote(fn_name)}() RETURNS trigger AS $$\n"
+                "BEGIN\n"
+                f"    IF ({new_ok}) AND {duplicate_exists} THEN\n"
+                f"        RAISE EXCEPTION '{_view_unique_trigger_message(trig)}';\n"
+                "    END IF;\n"
+                "    RETURN NEW;\n"
+                "END;\n"
+                "$$ LANGUAGE plpgsql;"
+            )
+            statements.append(
+                f"CREATE TRIGGER {_quote(trg_name)} BEFORE INSERT OR UPDATE ON {_quote(trig.base_table)}\n"
+                f"    FOR EACH ROW EXECUTE FUNCTION {_quote(fn_name)}();"
+            )
+    return statements
+
+
+def _render_view_unique_triggers_gpkg(views: tuple[SqlView, ...]) -> list[str]:
+    """Render each `SqlView.triggers` entry as two SQLite `CREATE TRIGGER` statements (INSERT + UPDATE).
+
+    SQLite's trigger event is singular (`INSERT`/`UPDATE`/`DELETE`) -
+    unlike PostgreSQL's `BEFORE INSERT OR UPDATE`, it cannot be combined
+    into one `CREATE TRIGGER`.
+    """
+    statements: list[str] = []
+    for view in views:
+        for trig in view.triggers:
+            new_ok, duplicate_exists = _view_unique_trigger_predicate(trig, "NEW")
+            base = _truncate_identifier(_sql_identifier(f"uq_{trig.view_name}_{trig.label}"))
+            message = _view_unique_trigger_message(trig)
+            for event in ("INSERT", "UPDATE"):
+                trg_name = _truncate_identifier(f"{base}_{event.lower()}")
+                statements.append(
+                    f"CREATE TRIGGER {_quote(trg_name)}\n"
+                    f"BEFORE {event} ON {_quote(trig.base_table)}\n"
+                    f"WHEN ({new_ok}) AND {duplicate_exists}\n"
+                    "BEGIN\n"
+                    f"    SELECT RAISE(ABORT, '{message}');\n"
+                    "END;"
+                )
+    return statements
+
+
 def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
     """Render `tables` as PostgreSQL DDL text - `CREATE TABLE` (with inline `UNIQUE`) then `ALTER TABLE ... ADD
     CONSTRAINT ... FOREIGN KEY`.
@@ -2237,6 +2438,7 @@ def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> s
                 f"REFERENCES {_quote(fk.ref_table)} ({_quote_list(fk.ref_columns)});",
             )
     statements += _render_views(views)
+    statements += _render_view_unique_triggers_postgresql(views)
     return "\n".join(statements) + "\n"
 
 
@@ -2332,6 +2534,7 @@ def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
             f"VALUES ('EPSG:{srid}', {srid}, 'EPSG', {srid}, 'undefined');",
         )
     statements += _render_views(views)
+    statements += _render_view_unique_triggers_gpkg(views)
     return "\n".join(statements) + "\n"
 
 

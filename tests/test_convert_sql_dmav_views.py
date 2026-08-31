@@ -9,8 +9,10 @@ makes that shape produce an executable `CREATE VIEW`:
   identity `Derivates`, so `build_views` can project it;
 - `WHERE DEFINED(a->role->attr)` becomes an `EXISTS (SELECT 1 FROM ...)`
   over the association, reading the FK from whichever side carries it;
-- the view-level `UNIQUE CHxxxxxx:` is surfaced as a `-- NOTE` (a SQL
-  view cannot enforce it), never dropped.
+- a plain-column view-level `UNIQUE CHxxxxxx:` becomes a `BEFORE INSERT`/
+  `BEFORE UPDATE` trigger on the base table (a `CREATE VIEW` itself
+  cannot enforce it); one navigating a nested/geometry attribute, or a
+  `SetConstraint`/`ExistenceConstraint`, stays a `-- NOTE` - never dropped.
 
 The hermetic, network-free reduction is `tests/test_view_dmav_pattern.py`.
 """
@@ -61,7 +63,7 @@ def test_every_dmav_gueltig_view_is_a_real_create_view(model, expected_views):
         assert v.body.startswith("SELECT")
 
 
-def test_grundstueck_gueltig_where_becomes_an_exists_chain_and_the_unique_is_a_note():
+def test_grundstueck_gueltig_where_becomes_an_exists_chain_and_the_unique_is_a_trigger():
     sql_views, _tables = _views_and_tables("DMAV_Grundstuecke_V1_1.ili")
     view = next(v for v in sql_views if v.name == "grundstueck_gueltig")
     # `DEFINED(Grundstueck->Entstehung->Grundbucheintrag)` - a hop through the
@@ -70,15 +72,32 @@ def test_grundstueck_gueltig_where_becomes_an_exists_chain_and_the_unique_is_a_n
     assert '"grundbucheintrag" IS NOT NULL' in view.body
     assert "NOT (EXISTS" in view.body  # the `NOT(DEFINED(...->Untergang->...))` branch
     assert "UNIQUE" not in view.body  # never carried onto the CREATE VIEW
-    assert any("VIEW-level UNIQUE 'CH041101'" in n and "NBIdent, Nummer" in n for n in view.notes)
+    # both plain-column view-level UNIQUE constraints became real triggers, not notes
+    assert {(t.label, tuple(t.columns)) for t in view.triggers} == {
+        ("CH041101", ("nbident", "nummer")),
+        ("CH041102", ("egrid",)),
+    }
 
 
-def test_dmav_create_views_compile_against_a_real_sqlite_engine():
-    """The generated `CREATE VIEW` text is valid SQL, not just Python-assembled - run it."""
+def test_grenzpunkt_gueltig_geometry_unique_and_liegenschaft_gueltig_set_stay_notes():
+    """A geometry-typed key (`Grenzpunkt.Geometrie` is a nested `Coord2`, not a single column) and a whole-population
+    `SetConstraint` (`INTERLIS.areAreas`) are outside a trigger's reach - unlike a plain-column UNIQUE.
+    """
+    sql_views, _tables = _views_and_tables("DMAV_Grundstuecke_V1_1.ili")
+    grenzpunkt = next(v for v in sql_views if v.name == "grenzpunkt_gueltig")
+    liegenschaft = next(v for v in sql_views if v.name == "liegenschaft_gueltig")
+    assert not grenzpunkt.triggers
+    assert any("VIEW-level UNIQUE 'CH040601'" in n for n in grenzpunkt.notes)
+    assert not liegenschaft.triggers
+    assert any("VIEW-level SetConstraint 'CH041501'" in n for n in liegenschaft.notes)
+
+
+def test_dmav_create_views_and_unique_triggers_compile_against_a_real_sqlite_engine():
+    """The generated `CREATE VIEW`/`CREATE TRIGGER` text is valid SQL, not just Python-assembled - run it."""
     sql_views, tables = _views_and_tables("DMAV_Grundstuecke_V1_1.ili")
-    schema = render_gpkg(tables).split("\nINSERT INTO gpkg_contents")[0]
+    full = render_gpkg(tables, tuple(sql_views))
+    schema = "\n".join(line for line in full.splitlines() if not line.startswith(("INSERT INTO gpkg_", "-- TODO:")))
     conn = sqlite3.connect(":memory:")
     conn.executescript(schema)
     for v in sql_views:
-        conn.execute(f'CREATE VIEW "{v.name}" AS {v.body}')
         conn.execute(f'SELECT * FROM "{v.name}"').fetchall()  # empty tables, but the plan compiles
