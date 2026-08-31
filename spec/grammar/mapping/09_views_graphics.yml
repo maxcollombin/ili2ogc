@@ -63,9 +63,12 @@ condSignParamAssignment:
       source:
         field: expression
         index: 0
+        optional: true
       note: confirmed IlisMeta16.ModelData.CondSignParamAssignment.own.Where (Expression, 0..1) - optional
         leading '(WHERE)? expression' clause (WHERE token itself has no accessor confirmed effect other
-        than being an optional lead-in word before the same expression()).
+        than being an optional lead-in word before the same expression()); the whole clause (not just
+        WHERE) is optional, so the binding must be too - confirmed empirically (a real `(Sign := ...)`
+        with no leading WHERE/expression raised a BuildError before this fix).
     Assignments:
       source:
         field: signParamAssignment
@@ -117,8 +120,11 @@ drawingRule:
       source:
         field: classRef
         index: 0
+        optional: true
       note: 'optional ''OF classRef()'' clause - confirmed IlisMeta16.ModelData.SignClass: DrawingRule
-        <-> Class (restricts the drawing rule to a specific class).'
+        <-> Class (restricts the drawing rule to a specific class); the ''(OF classRef)?'' group is
+        optional at the grammar level, so the binding must be too (confirmed empirically: a real
+        DrawingRule with no leading ''OF'' raised a BuildError before this fix).'
   note: Symbol parameters
 enumAssignment:
   grammar:
@@ -246,8 +252,10 @@ graphicDef:
       source:
         field: viewableRef
         index: 0
-      note: 'confirmed IlisMeta16.ModelData.GraphicBase: Graphic <-> Base:Class - BASED ON viewableRef()
-        clause.'
+        optional: true
+      note: 'confirmed IlisMeta16.ModelData.GraphicBase: Graphic <-> Base:Class - "BASED ON viewableRef"
+        clause, optional per the grammar ((BASED_ON viewableRef)?) and the Reference Manual (["BASED"
+        "ON" ViewableRef]) - a Graphic can also extend another Graphic (EXTENDS) without its own base.'
 graphicRef:
   grammar:
     rule: graphicRef
