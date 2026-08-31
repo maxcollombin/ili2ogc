@@ -127,7 +127,13 @@ concepts:
       `attr`'s element structure) walks the matching chain of child
       tables `_build_nested_child_tables` now also emits; a `PARENT->`
       attribute (single-hop only) joins the child table back to the base
-      table on the same `<parent>_fk` column it already carries.
+      table on the same `<parent>_fk` column it already carries. A
+      single-hop geometry `Inspection` over a SURFACE/AREA attribute
+      (conceptually `SurfaceBoundary`/`SurfaceEdge`, eCH-0031 SS3.15) has
+      no child table but IS translated too -> `SELECT ST_Boundary(<geom
+      col>) FROM <base>` (`_build_geometry_inspection_view`, one row per
+      base object; `ST_Boundary` is PostGIS/OGC SFA SQL, needs SpatiaLite
+      to execute against `render_gpkg`'s plain SQLite).
       `Aggregation` -> `SELECT [DISTINCT] <plain key projections |
       COUNT(*)> FROM <base> [GROUP BY <key>]` (`_build_aggregation_view`):
       `EQUAL(key)` (stashed by the builder as `view._aggregation_key`,
@@ -142,10 +148,10 @@ concepts:
       whole View to a `-- NOTE` (`SQL-VIEW-FORMATION-UNSUPPORTED`),
       as does mixing a standard-function column into an `ALL` aggregation
       alongside a plain column (no grouping key to make that well-defined).
-      Other cases demoted the same way: a geometry `Inspection`
-      (`SurfaceBoundary`/`SurfaceEdge` - a decomposition, not a table), an
-      `Inspection` path nesting more than one level deep. See
-      docs/view-formation-support.md.
+      An `Inspection` path nesting more than one level deep, or a
+      LINE/POLYLINE geometry attribute (a different conceptual
+      decomposition, `LineGeometry`/`LineSegment` - out of scope), still
+      demotes the same way. See docs/view-formation-support.md.
 
       Its base classes (`RenamedBaseView.BaseView`) live in an IMPORTED
       model, so that model must be part of the same conversion

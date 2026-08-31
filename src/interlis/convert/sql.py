@@ -1760,12 +1760,18 @@ def _build_inspection_view(
     the child table (`RULE #1`: reuses that naming, does not invent a new
     join convention) - only supported for a single-hop path, since a
     multi-hop child table's FK points at the INTERMEDIATE table, not the
-    base table. A geometry inspection (`SurfaceBoundary`/`SurfaceEdge` of
-    an area/surface attribute) has no child table and likewise demotes.
+    base table. A single-hop geometry inspection over a SURFACE/AREA
+    attribute (`INSPECTION OF <class> -> surfaceAttr`, conceptually
+    `SurfaceBoundary`/`SurfaceEdge`, eCH-0031 SS3.15) has no child table
+    either, but IS translated - delegated to
+    `_build_geometry_inspection_view` (`ST_Boundary` of the base table's
+    own geometry column, one row per base object, no `Lines`/`SurfaceEdge`
+    sub-structure). A LINE/POLYLINE geometry, or a path nesting more than
+    one level deep, still has no child table at all and demotes.
     """
     if len(bases) != 1:
         raise _UnsupportedView("an inspection view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
-    base_alias, _base_cls, base_table = bases[0]
+    base_alias, base_cls, base_table = bases[0]
     path = list(getattr(view, "_inspection_path", None) or [])
     if not path:
         raise _UnsupportedView(
@@ -1774,13 +1780,21 @@ def _build_inspection_view(
         )
     child_table = base_table
     for hop in path:
-        child_table = _sql_identifier(f"{child_table}_{hop}")
-        if child_table not in tables_by_name:
-            raise _UnsupportedView(
-                f"the inspected attribute {' -> '.join(path)!r} has no child table "
-                f"(a geometry inspection is a decomposition, or the path nests more than one level deep)",
-                "SQL-VIEW-FORMATION-UNSUPPORTED",
-            )
+        candidate = _sql_identifier(f"{child_table}_{hop}")
+        if candidate in tables_by_name:
+            child_table = candidate
+            continue
+        if child_table == base_table and len(path) == 1:
+            geom_col = _geometry_inspection_column(base_cls, hop, base_table, tables_by_name, symbol_for)
+            if geom_col is not None:
+                return _build_geometry_inspection_view(view, base_alias, base_table, hop, geom_col)
+        raise _UnsupportedView(
+            f"the inspected attribute {' -> '.join(path)!r} has no child table "
+            f"(a geometry inspection over a SURFACE/AREA attribute decomposes to its own boundary "
+            f"instead - see _build_geometry_inspection_view - a LINE/POLYLINE geometry or a path "
+            f"nesting more than one level deep still has no child table at all)",
+            "SQL-VIEW-FORMATION-UNSUPPORTED",
+        )
     columns = {c.name for c in tables_by_name[child_table].columns}
     base_columns = {c.name for c in tables_by_name[base_table].columns} if base_table in tables_by_name else set()
     fk_col = _sql_identifier(f"{base_table}_fk")
@@ -1830,6 +1844,85 @@ def _build_inspection_view(
             f'\nJOIN "{base_table}" "{base_alias}" ON "{elem_alias}"."{fk_col}" = "{base_alias}"."{OID_COLUMN}"'
         )
     return "SELECT\n    " + ",\n    ".join(select_items) + f"\n{from_clause}"
+
+
+def _geometry_inspection_column(
+    base_cls: MetaInstance,
+    attr_name: str,
+    base_table: str,
+    tables_by_name: dict[str, Table],
+    symbol_for,
+) -> str | None:
+    """Return `attr_name`'s SQL column name on `base_table` if it's a single-valued SURFACE/AREA-`Kind` geometry
+    attribute, else `None`.
+
+    The shape `_build_inspection_view` delegates to
+    `_build_geometry_inspection_view` for. `Kind in ("Surface", "Area")`
+    only - a `Polyline`/`DirectedPolyline` LINE attribute has a different
+    conceptual decomposition (`LineGeometry`/`LineSegment`, eCH-0031
+    SS3.15) not covered here.
+    """
+    st = symbol_for(base_cls)
+    members = schema_members_of(base_cls, st) if st is not None else attributes_of(base_cls)
+    attr = members.get(attr_name)
+    if attr is None:
+        return None
+    resolved = resolve_attribute(attr)
+    if resolved.type_kind != "LineType" or getattr(resolved.type_instance, "Kind", None) not in ("Surface", "Area"):
+        return None
+    col = _sql_identifier(attr_name)
+    if base_table not in tables_by_name or col not in {c.name for c in tables_by_name[base_table].columns}:
+        return None
+    return col
+
+
+def _build_geometry_inspection_view(
+    view: MetaInstance,
+    base_alias: str,
+    base_table: str,
+    geom_attr_name: str,
+    geom_col: str,
+) -> str:
+    """Return a `SELECT ST_Boundary(...) FROM "<base>"` body for a single-hop geometry `INSPECTION`.
+
+    `INSPECTION OF <class> -> surfaceAttr` conceptually yields one
+    `SurfaceBoundary` (`Lines: LIST OF SurfaceEdge`, eCH-0031 SS3.15) per
+    surface - decomposed here as ONE row per base object whose geometry
+    IS that boundary (`ST_Boundary`, OGC SFA), the pragmatic reading a
+    `GRAPHIC ... BASED ON` an inspection view actually needs (drawing the
+    boundary - see docs/view-formation-support.md), rather than the full
+    nested `Lines`/`SurfaceEdge` structure - out of scope, eCH-0031 itself
+    calls the geometric INSPECTION structures "a conceptual description
+    only... generating views belongs to a separate conformance level".
+    `ST_Boundary` is OGC SFA / PostGIS SQL - correct against
+    `render_postgresql`'s output, but needs SpatiaLite loaded to actually
+    EXECUTE against `render_gpkg`'s plain SQLite (both renderers emit the
+    SAME dialect-agnostic VIEW body via `_render_views` - this module has
+    no per-renderer VIEW SQL yet). Only a view attribute reading the SAME
+    inspected geometry attribute back (`out := <base> -> <attr>`) is
+    translatable - there is no further sub-structure to select from
+    (RULE #5).
+    """
+    select_items: list[str] = []
+    for attr in getattr(view, "ClassAttribute", None) or []:
+        aname = getattr(attr, "Name", None)
+        derivates = getattr(attr, "Derivates", None) or []
+        if not derivates:
+            raise _UnsupportedView(f"inspection view attribute {aname!r} has no assigned expression")
+        factor = derivates[0]
+        if not factor._qualified_class.endswith("PathOrInspFactor") or getattr(factor, "Inspection", None):
+            raise _UnsupportedView(f"inspection view attribute {aname!r} is not a plain element path")
+        refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
+        if len(refs) == 2 and (refs[0] or "").lower() == base_alias and refs[1] == geom_attr_name:
+            select_items.append(f'ST_Boundary("{base_alias}"."{geom_col}") AS "{_sql_identifier(aname or "")}"')
+        else:
+            raise _UnsupportedView(
+                f"geometry inspection view attribute {aname!r}: only the inspected geometry's own "
+                f"boundary ({geom_attr_name!r}) is selectable - no further sub-structure is translated"
+            )
+    if not select_items:
+        raise _UnsupportedView("inspection view has no projectable ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
+    return "SELECT\n    " + ",\n    ".join(select_items) + f'\nFROM "{base_table}" "{base_alias}"'
 
 
 def _build_aggregation_view(

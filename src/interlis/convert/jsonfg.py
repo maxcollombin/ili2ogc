@@ -1245,6 +1245,96 @@ def _inspection_target(
     return (current if ok else None), (is_multi if ok else False), hop_is_multi
 
 
+def _surface_boundary_geometry(attr_node: RawNode) -> dict[str, Any] | None:
+    """Decompose a SURFACE/AREA attribute occurrence into its boundary, as GeoJSON `LineString` (1 ring) /
+    `MultiLineString` (2+ rings, e.g. a polygon with holes).
+
+    The eCH-0031 SS3.15 geometric `INSPECTION` decomposition
+    (conceptually `SurfaceBoundary`/`SurfaceEdge`), read as plain geometry
+    rather than the full nested `Lines`/`SurfaceEdge` structure - same
+    scope decision as `convert/sql.py`'s `_build_geometry_inspection_view`
+    (see its own docstring). An arc-containing ring (`_read_surface`'s
+    `CurvePolygon` shape) is out of scope - no real corpus evidence
+    combines the two - and returns `None` (the caller drops the
+    attribute, RULE #5).
+    """
+    child = attr_node.children[0] if attr_node.children else None
+    if child is None:
+        return None
+    rings = _read_surface(child)
+    if not isinstance(rings, list) or not rings or any(isinstance(r, dict) for r in rings):
+        return None
+    if len(rings) == 1:
+        return {"type": "LineString", "coordinates": rings[0]}
+    return {"type": "MultiLineString", "coordinates": rings}
+
+
+def _single_hop_surface_attr(base_view: MetaInstance, path: list[str], symbol_table: SymbolTable | None) -> str | None:
+    """Return `path[0]` when it names a single-valued SURFACE/AREA attribute directly on `base_view`, else `None`.
+
+    The shape `_evaluate_inspection` special-cases into boundary
+    decomposition (`_evaluate_geometry_inspection`) instead of trying to
+    resolve an element type - `_inspection_target` fails for a geometry
+    leaf (not `Kind in (Class, Structure)`), which previously left this
+    silently producing wrong (empty/garbage) Features rather than a
+    diagnostic (confirmed: `unsupported_view_reason` never rejected this
+    shape either - it only checks the path was built at all).
+    """
+    if len(path) != 1:
+        return None
+    members = schema_members_of(base_view, symbol_table) if symbol_table is not None else attributes_of(base_view)
+    attr = members.get(path[0])
+    if attr is None:
+        return None
+    resolved = resolve_attribute(attr)
+    if resolved.type_kind != "LineType" or getattr(resolved.type_instance, "Kind", None) not in ("Surface", "Area"):
+        return None
+    return path[0]
+
+
+def _evaluate_geometry_inspection(
+    view: MetaInstance,
+    base_objects: list[XtfObject],
+    geom_attr_name: str,
+    standalone: bool,
+    symbol_table: SymbolTable,
+) -> list[dict[str, Any]]:
+    """One Feature per base object for a single-hop SURFACE/AREA geometry `INSPECTION`.
+
+    Builds the envelope via `object_to_feature(base_obj, view, ...)` (the
+    same call `PROJECTION`/`JOIN` use, id/featureType/conformsTo all
+    correct) then overwrites each `properties[attr]` that reads the
+    inspected geometry attribute back (`out := <base> -> <attr>`, the
+    ONLY translatable shape here - mirrors
+    `convert/sql.py:_build_geometry_inspection_view`) with the decomposed
+    boundary (`_surface_boundary_geometry`) as a plain GeoJSON geometry
+    VALUE, same convention as a nested CoordType/LineType attribute
+    elsewhere in this module - never auto-promoted to `place` (this is a
+    DERIVED value, not the object's own designated geometry).
+    `object_to_feature` itself cannot populate it: `obj.attributes` is
+    keyed by the BASE object's own attribute name (`geom_attr_name`), not
+    necessarily the view attribute's (possibly renamed) own name.
+    """
+    out_names = []
+    for attr in getattr(view, "ClassAttribute", None) or []:
+        derivates = getattr(attr, "Derivates", None) or []
+        if len(derivates) != 1:
+            continue
+        refs = [getattr(el, "Ref", None) for el in (getattr(derivates[0], "PathEls", None) or [])]
+        if len(refs) == 2 and refs[1] == geom_attr_name:
+            out_names.append(getattr(attr, "Name", None) or "")
+    features: list[dict[str, Any]] = []
+    for base_obj in base_objects:
+        feature = object_to_feature(base_obj, view, standalone=standalone, symbol_table=symbol_table)
+        nodes = base_obj.attributes.get(geom_attr_name) or []
+        boundary = _surface_boundary_geometry(nodes[0]) if nodes else None
+        if boundary is not None:
+            for out_name in out_names:
+                feature["properties"][out_name] = boundary
+        features.append(feature)
+    return features
+
+
 def _evaluate_inspection(
     view: MetaInstance,
     base_view: MetaInstance,
@@ -1266,8 +1356,14 @@ def _evaluate_inspection(
     `_inspection_target`) says whether hop `path[k-1]`'s own wrapper must
     be expanded into its occurrences before searching THEM for `path[k]`'s
     tag - a plain (non-multi) intermediate structure attribute is its own
-    element, so its children are searched directly instead.
+    element, so its children are searched directly instead. A single-hop
+    SURFACE/AREA geometry attribute is a DIFFERENT shape entirely
+    (`_single_hop_surface_attr`) - no element type to resolve at all,
+    delegated to `_evaluate_geometry_inspection`.
     """
+    geom_attr = _single_hop_surface_attr(base_view, path, symbol_table)
+    if geom_attr is not None:
+        return _evaluate_geometry_inspection(view, base_objects, geom_attr, standalone, symbol_table)
     element_type, is_multi, hop_is_multi = _inspection_target(base_view, path, symbol_table)
     features: list[dict[str, Any]] = []
     for base_obj in base_objects:

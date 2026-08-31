@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS" xmlns="http://www.interlis.ch/xtf/2.4/TestInspectionSurface">
+  <ili:headersection sender="test-fixture" version="2.4">
+    <ili:models>
+      <ili:model>TestInspectionSurface</ili:model>
+    </ili:models>
+  </ili:headersection>
+  <ili:datasection>
+    <Base ili:bid="b1">
+      <Zone ili:tid="z1">
+        <Name>Zone A</Name>
+        <Geometrie>
+          <SURFACE>
+            <BOUNDARY>
+              <POLYLINE>
+                <COORD><C1>2600000.0</C1><C2>1200000.0</C2></COORD>
+                <COORD><C1>2600100.0</C1><C2>1200000.0</C2></COORD>
+                <COORD><C1>2600100.0</C1><C2>1200100.0</C2></COORD>
+                <COORD><C1>2600000.0</C1><C2>1200000.0</C2></COORD>
+              </POLYLINE>
+            </BOUNDARY>
+          </SURFACE>
+        </Geometrie>
+      </Zone>
+    </Base>
+  </ili:datasection>
+</ili:transfer>

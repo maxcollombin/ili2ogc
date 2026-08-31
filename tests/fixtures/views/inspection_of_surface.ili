@@ -1,0 +1,31 @@
+INTERLIS 2.3;
+
+!! INSPECTION OF a single-hop SURFACE attribute - eCH-0031 SS3.15's
+!! conceptual `SurfaceBoundary`/`SurfaceEdge` decomposition, read here as
+!! the surface's own boundary (real corpus shape: FGDM4GS
+!! `PZ_GrafikModell_V` inspects `Planungszonen_V2.Planungszone.Geometrie`,
+!! a `SURFACE ... Einzelflaeche`, to draw its boundary via `GRAPHIC ...
+!! BASED ON`) - pins `convert/sql.py:_build_geometry_inspection_view`.
+
+MODEL TestInspectionSurface AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    DOMAIN
+      !!@CRS=EPSG:2056
+      Coord2 = COORD 2500000.000 .. 2900000.000, 1000000.000 .. 1400000.000;
+      Flaeche = SURFACE WITH (STRAIGHTS) VERTEX Coord2 WITHOUT OVERLAPS>0.001;
+
+    CLASS Zone =
+      Name: TEXT*40;
+      Geometrie: MANDATORY Flaeche;
+    END Zone;
+
+    VIEW ZoneBoundary
+      INSPECTION OF TestInspectionSurface.Base.Zone -> Geometrie;
+      =
+      ATTRIBUTE
+        Boundary := Zone -> Geometrie;
+    END ZoneBoundary;
+  END Base;
+
+END TestInspectionSurface.

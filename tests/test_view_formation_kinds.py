@@ -9,11 +9,14 @@ navigate a REFERENCE TO hop (`_key_reference`), or that use a standard
 `INTERLIS.objectCount`/`elementCount(AGGREGATES)` column alongside
 `EQUAL(key)` (`_count`) or `ALL` (`_count_all`) - a USER function
 (`countB`, the reference manual's own example) stays untranslated either
-way; `INSPECTION OF` adding a `PARENT->` view attribute (`_parent`) or an
-indirect multi-hop path (`_nested`); `UNION OF` with a branch attribute
-navigating a REFERENCE TO hop (`_reference`); `PROJECTION OF` an embedded
-2-role ASSOCIATION (`projection_of_association.ili`, self-contained shape
-of the real `Planungszonen_V2_d_B.ili`/`TypPZ_Planungszone`).
+way; `INSPECTION OF` adding a `PARENT->` view attribute (`_parent`), an
+indirect multi-hop path (`_nested`), or a single-hop SURFACE geometry
+attribute decomposed to its boundary (`inspection_of_surface.ili`,
+`!!@CRS`-annotated - `_build` below wires `meta_attributes` in for it);
+`UNION OF` with a branch attribute navigating a REFERENCE TO hop
+(`_reference`); `PROJECTION OF` an embedded 2-role ASSOCIATION
+(`projection_of_association.ili`, self-contained shape of the real
+`Planungszonen_V2_d_B.ili`/`TypPZ_Planungszone`).
 
 What each converter is expected to do per kind is documented in
 docs/view-formation-support.md; this test pins it:
@@ -39,7 +42,7 @@ from interlis.convert.jsonfg import evaluate_view, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.convert.sql import build_tables, build_views, render_gpkg
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_file
+from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
 from interlis.xtf.parse import parse_xtf
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -49,12 +52,13 @@ FIXTURES = ROOT / "tests" / "fixtures" / "views"
 
 
 def _build(name: str):
-    tree, errors = parse_file(FIXTURES / f"{name}.ili")
+    path = FIXTURES / f"{name}.ili"
+    tree, errors = parse_file(path)
     assert not errors, f"unexpected syntax errors in {name}.ili: {errors}"
     builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        builder.build(tree)
+        builder.build(tree, meta_attributes=meta_attribute_comments_in_file(path))
     return builder
 
 
@@ -196,6 +200,35 @@ def test_inspection_sql_resolves_an_indirect_multi_hop_path_via_a_nested_child_t
 def test_inspection_jsonfg_resolves_an_indirect_multi_hop_path_too():
     feats = _features(_build("inspection_of_nested"), "inspection_of_nested")
     assert [f["properties"]["Attr4"] for f in feats] == ["alpha", "beta"]
+
+
+def test_inspection_sql_resolves_a_single_hop_surface_geometry_to_its_boundary():
+    builder = _build("inspection_of_surface")
+    tables, views = _sql_views(builder)
+    (v,) = views
+    assert v.body is not None
+    assert v.body == 'SELECT\n    ST_Boundary("zone"."geometrie") AS "boundary"\nFROM "zone" "zone"'
+    # ST_Boundary is OGC SFA/PostGIS SQL - CREATE VIEW compiles against plain
+    # SQLite (lazy function resolution) but SELECT-ing from it needs SpatiaLite
+    # loaded, not available in this hermetic test - see the function's own
+    # docstring and docs/sql-conversion-strategy.md.
+    con = _run_ddl(tables, views)
+    (name,) = con.execute("SELECT name FROM sqlite_master WHERE type='view' AND name='zoneboundary'").fetchone()
+    assert name == "zoneboundary"
+
+
+def test_inspection_jsonfg_resolves_a_single_hop_surface_geometry_to_its_boundary():
+    feats = _features(_build("inspection_of_surface"), "inspection_of_surface")
+    (feature,) = feats
+    assert feature["properties"]["Boundary"] == {
+        "type": "LineString",
+        "coordinates": [
+            [2600000.0, 1200000.0],
+            [2600100.0, 1200000.0],
+            [2600100.0, 1200100.0],
+            [2600000.0, 1200000.0],
+        ],
+    }
 
 
 # --- AGGREGATION OF -----------------------------------------------------
