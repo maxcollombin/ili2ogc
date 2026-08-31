@@ -1682,9 +1682,13 @@ def _build_union_view(
     (`Attr := C1->A, C2->B`), in base declaration order; branch `i` projects
     every attribute's `Derivates[i]` from base `i` alone. `UNION ALL`, not
     `UNION` - INTERLIS union is a merge (two base objects that project equal
-    rows stay two rows), not a set operation. Any branch expression that is
-    not a plain path/constant (a function, an unmapped type, a reference
-    hop) demotes the whole view (RULE #5).
+    rows stay two rows), not a set operation. A branch attribute navigating
+    a reference hop (`Attr := C1->Role->Field`) joins the target table into
+    that BRANCH's own `FROM`, same `resolver.extra_joins` machinery
+    PROJECTION/JOIN already use - each branch resolves independently (its
+    own `_ViewResolver`), so one branch's join never leaks into another's.
+    Any branch expression that is not a plain path/constant (a function, an
+    unmapped type) demotes the whole view (RULE #5).
     """
     attrs = getattr(view, "ClassAttribute", None) or []
     if not attrs:
@@ -1701,9 +1705,13 @@ def _build_union_view(
                     f"union attribute {aname!r}: {len(derivates)} assigned expression(s) for {len(bases)} bases"
                 )
             items.append(f'{resolver.scalar_ref(derivates[branch_index])} AS "{_sql_identifier(aname or "")}"')
-        if resolver.extra_joins:
-            raise _UnsupportedView("a union branch attribute navigates a reference - not translated")
-        branches.append("SELECT\n    " + ",\n    ".join(items) + f'\nFROM "{table}" "{alias}"')
+        from_parts = [f'"{table}" "{alias}"']
+        from_parts += [f'"{t}" "{a}"' for t, a, _on in resolver.extra_joins]
+        branch = "SELECT\n    " + ",\n    ".join(items) + "\nFROM " + ", ".join(from_parts)
+        join_conditions = [on for _t, _a, on in resolver.extra_joins]
+        if join_conditions:
+            branch += "\nWHERE " + "\n  AND ".join(join_conditions)
+        branches.append(branch)
     return "\nUNION ALL\n".join(branches)
 
 
@@ -1822,7 +1830,9 @@ def _build_aggregation_view(
     `SELECT DISTINCT` (the `EQUAL(keys)` grouping key itself is not
     materialised by the builder, `View.FormationParameter` gap, so `ALL`
     de-duplication is the faithful reading either way, mirroring
-    `convert/jsonfg.evaluate_view`).
+    `convert/jsonfg.evaluate_view`). An attribute navigating a reference
+    hop (`Attr := <base>->Role->Field`) joins the target table in, same
+    `resolver.extra_joins` machinery PROJECTION/JOIN already use.
     """
     if len(bases) != 1:
         raise _UnsupportedView("an aggregation view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
@@ -1843,10 +1853,14 @@ def _build_aggregation_view(
         select_items.append(f'{resolver.scalar_ref(factor)} AS "{_sql_identifier(aname or "")}"')
     if not select_items:
         raise _UnsupportedView("aggregation view has no projectable ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
-    if resolver.extra_joins:
-        raise _UnsupportedView("an aggregation view attribute navigates a reference - not translated")
     _alias, _cls, table = bases[0]
-    return "SELECT DISTINCT\n    " + ",\n    ".join(select_items) + f'\nFROM "{table}" "{_alias}"'
+    from_parts = [f'"{table}" "{_alias}"']
+    from_parts += [f'"{t}" "{a}"' for t, a, _on in resolver.extra_joins]
+    body = "SELECT DISTINCT\n    " + ",\n    ".join(select_items) + "\nFROM " + ", ".join(from_parts)
+    join_conditions = [on for _t, _a, on in resolver.extra_joins]
+    if join_conditions:
+        body += "\nWHERE " + "\n  AND ".join(join_conditions)
+    return body
 
 
 def _view_constraint_notes(view: MetaInstance) -> list[str]:

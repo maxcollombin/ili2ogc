@@ -1,0 +1,32 @@
+INTERLIS 2.3;
+
+!! Same translatable AGGREGATION OF shape as aggregation_key.ili, but the
+!! projected attribute navigates a REFERENCE TO hop
+!! (Parcel -> Municipality -> Name) instead of reading a plain own
+!! attribute - pins the SQL translation's JOIN
+!! (`convert/sql.py:_build_aggregation_view`, `_ViewResolver.extra_joins`).
+
+MODEL TestAggregationKeyReference AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    CLASS Municipality =
+      Name: TEXT*40;
+    END Municipality;
+    CLASS Parcel =
+      Municipality: REFERENCE TO Municipality;
+      Zone: TEXT*20;
+    END Parcel;
+  END Base;
+
+  TOPIC Aggregation =
+    DEPENDS ON TestAggregationKeyReference.Base;
+
+    VIEW MunicipalityList
+      AGGREGATION OF TestAggregationKeyReference.Base.Parcel EQUAL(Parcel -> Municipality);
+      =
+      ATTRIBUTE
+        MunicipalityName: TEXT*40 := Parcel -> Municipality -> Name;
+    END MunicipalityList;
+  END Aggregation;
+
+END TestAggregationKeyReference.

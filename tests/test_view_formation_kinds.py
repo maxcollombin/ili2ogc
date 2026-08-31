@@ -2,10 +2,13 @@
 
 `tests/fixtures/views/*.ili` are the reference-manual canonical examples
 for `UNION OF`, `AGGREGATION OF` and `INSPECTION OF` (also quoted in the
-FGDM4GS report, HEIG-VD 2024, chapter 4.2), plus one translatable
-`AGGREGATION OF` variant whose columns are plain key projections rather
-than a FUNCTION over the implicit `AGGREGATES` bag, and one `INSPECTION
-OF` variant adding a `PARENT->` view attribute.
+FGDM4GS report, HEIG-VD 2024, chapter 4.2), plus a few translatable
+variants: `AGGREGATION OF` with columns that are plain key projections
+rather than a FUNCTION over the implicit `AGGREGATES` bag (`_key`) or
+that navigate a REFERENCE TO hop (`_key_reference`); `INSPECTION OF`
+adding a `PARENT->` view attribute (`_parent`) or an indirect multi-hop
+path (`_nested`); `UNION OF` with a branch attribute navigating a
+REFERENCE TO hop (`_reference`).
 
 What each converter is expected to do per kind is documented in
 docs/view-formation-support.md; this test pins it:
@@ -114,6 +117,20 @@ def test_union_jsonfg_concatenates_and_remaps_each_base():
     assert {f["featureType"] for f in feats} == {"CC"}
 
 
+def test_union_sql_joins_a_branch_attribute_that_navigates_a_reference():
+    builder = _build("union_of_reference")
+    tables, views = _sql_views(builder)
+    (cc,) = views
+    assert cc.body is not None
+    assert 'FROM "c1" "c1", "d" "j1_d"' in cc.body
+    assert '"c1"."refd" = "j1_d"."id"' in cc.body
+    con = _run_ddl(tables, views)
+    con.execute('INSERT INTO "d" ("id", "name") VALUES (1, ?)', ("delta",))
+    con.execute('INSERT INTO "c1" ("id", "refd") VALUES (1, 1)')
+    con.execute('INSERT INTO "c2" ("id", "attr2") VALUES (1, ?)', ("gamma",))
+    assert sorted(r[0] for r in con.execute('SELECT "attr1" FROM "cc"')) == ["delta", "gamma"]
+
+
 # --- INSPECTION OF -------------------------------------------------------
 
 
@@ -219,3 +236,20 @@ def test_aggregation_projection_only_sql_is_select_distinct_and_runs():
 def test_aggregation_projection_only_jsonfg_deduplicates():
     feats = _features(_build("aggregation_key"), "aggregation_key")
     assert sorted(f["properties"]["Municipality"] for f in feats) == ["Lausanne", "Renens"]
+
+
+def test_aggregation_sql_joins_an_attribute_that_navigates_a_reference():
+    builder = _build("aggregation_key_reference")
+    tables, views = _sql_views(builder)
+    (v,) = views
+    assert v.body is not None and v.body.startswith("SELECT DISTINCT")
+    assert 'FROM "parcel" "parcel", "municipality" "j1_municipality"' in v.body
+    con = _run_ddl(tables, views)
+    con.execute('INSERT INTO "municipality" ("id", "name") VALUES (1, ?)', ("Lausanne",))
+    con.execute('INSERT INTO "municipality" ("id", "name") VALUES (2, ?)', ("Renens",))
+    con.executemany(
+        'INSERT INTO "parcel" ("id", "municipality", "zone") VALUES (?, ?, ?)',
+        [(1, 1, "A"), (2, 1, "B"), (3, 2, "A")],
+    )
+    rows = sorted(r[0] for r in con.execute('SELECT "municipalityname" FROM "municipalitylist"'))
+    assert rows == ["Lausanne", "Renens"]

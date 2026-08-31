@@ -1,0 +1,33 @@
+INTERLIS 2.3;
+
+!! Same UNION OF shape as union_of.ili, but one branch's attribute
+!! navigates a REFERENCE TO hop (C1->RefD->Name) instead of reading a
+!! plain own attribute - pins the SQL translation's per-branch JOIN
+!! (`convert/sql.py:_build_union_view`, `_ViewResolver.extra_joins`).
+
+MODEL TestUnionReference AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    CLASS D =
+      Name: TEXT*30;
+    END D;
+    CLASS C1 =
+      RefD: REFERENCE TO D;
+    END C1;
+    CLASS C2 =
+      Attr2: TEXT*30;
+    END C2;
+  END Base;
+
+  TOPIC Union =
+    DEPENDS ON TestUnionReference.Base;
+
+    VIEW CC
+      UNION OF C1 ~ TestUnionReference.Base.C1, C2 ~ TestUnionReference.Base.C2;
+      =
+      ATTRIBUTE
+        Attr1: TEXT*30 := C1->RefD->Name, C2->Attr2;
+    END CC;
+  END Union;
+
+END TestUnionReference.
