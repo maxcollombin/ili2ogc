@@ -1,0 +1,8 @@
+INTERLIS 2.3;
+MODEL ExtBase AT "http://x" VERSION "1" =
+  TOPIC T1 =
+    CLASS C =
+      attr1: TEXT*10;
+    END C;
+  END T1;
+END ExtBase.

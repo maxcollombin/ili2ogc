@@ -391,6 +391,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         if rule_name == "classDef":
             self._attach_class_oid(instance, ctx)
+            self._fix_class_extended_super(instance, ctx)
         elif rule_name == "modeldef":
             self._register_translation_of(instance, ctx)
         elif rule_name == "unitDef":
@@ -2107,6 +2108,85 @@ class InterlisModelBuilder(InterlisParserVisitor):
         self._merge_bag_into_instance(factor, bag, "existenceConstraint")
         instance.Attr = factor
 
+    def _fix_class_extended_super(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Resolve `Super` for `CLASS X (EXTENDED)` reopening a same-named class from the enclosing TOPIC's base.
+
+        Real corpus gap (item 13's VIEW-corpus pipeline, `ISOS_V2.ili`):
+        `TOPIC ISOS EXTENDS ISOS_V2.ISOSBase = CLASS Ortsbild (EXTENDED) =
+        <additional attrs> ... END Ortsbild; ... END ISOS;` - eCH-0031
+        V2.1.0 SS3.5.2, exact citation: "Erweitert z.B. ein Thema T2 das
+        Thema T1, das die Klasse C enthaelt, gibt es mit C (EXTENDED)
+        innerhalb von T2 nur eine Klasse, naemlich C" (there is only ONE
+        class C, not two). `classDef.Super` (this file's own declarative
+        binding, `spec/grammar/mapping/03_classes_and_structures.yml`)
+        only fires for an EXPLICIT `EXTENDS classOrStructureRef` clause -
+        `(EXTENDED)` has no such clause at all (its target is implicit:
+        the same-named class in the topic named by the ENCLOSING topic's
+        own `EXTENDS`), so it was silently left with no `Super` at all -
+        confirmed empirically (`getattr(cls, "Super", None) is None`,
+        `attributes_of(cls)` returning only the reopening's OWN attrs) -
+        any VIEW/converter reading the reopened class's inherited
+        attributes (`name`/`id`/`kantone` in the real case) found nothing.
+
+        Approximates "one class C" as ordinary single inheritance (`Super`
+        -> the base topic's class) rather than a true single merged
+        instance: reuses the EXISTING, already-correct `attributes_of`/
+        `schema_members_of` Super-chain walk (own-then-inherited) for
+        free, and - deliberately - lets `xtf.schema.is_class_compatible`
+        keep a real object's WIRE TAG as the disambiguator between "has
+        the extension" and "doesn't": confirmed on the real `.xtf`
+        (`ch.bak.bundesinventar-schuetzenswerte-ortsbilder`) that objects
+        tagged with the base topic's qualified name (1101, no extension
+        data) and the extending topic's (151, WITH it) are two, wholly
+        DISJOINT sets (0 TID/own-`id`-attribute overlap) - a real
+        producer's tagging choice, not an artifact to paper over. A
+        `PROJECTION OF` the extended class must therefore see only the
+        151 - a merge into a single instance (indistinguishable from the
+        base by name) would need a parallel mechanism to keep that split,
+        for no added benefit to any converter in this project.
+
+        `self._current_topic_extends_hint(ctx)` (already built for
+        `topicDef.Super`/generic unqualified-name resolution across a
+        `TOPIC EXTENDS`, `docs/dev-notes/topicdef-super-binding-investigation.md`)
+        supplies the raw EXTENDS text (e.g. `"ISOS_V2.ISOSBase"`) - the
+        `Super` reference is built ALREADY FULLY QUALIFIED
+        (`f"{hint}.{name}"`, e.g. `"ISOS_V2.ISOSBase.Ortsbild"`) rather
+        than a bare short name resolved generically: a bare `name` (this
+        class's own short name, e.g. `"Ortsbild"`) is deliberately
+        AMBIGUOUS in this exact file (two classes are genuinely named
+        that - the base one AND this very reopening), and
+        `SymbolTable.resolve`'s short-name fallback can, in the ABSENCE
+        of a second candidate (e.g. no `--repo`, so the base class was
+        never built at all), resolve straight back to THIS SAME instance -
+        confirmed empirically as a real self-loop before this fix (`Super
+        is instance`). A fully qualified name never risks this: it either
+        matches `_qualified[name]` exactly (this file, or - `graceful=True`
+        (like the explicit `EXTENDS` case) - via `ModelRepository` for a
+        base topic in an imported file, mirroring the real corpus case
+        `ISOS_V2.ili`) or resolves to nothing (`UnresolvedNamedReference`,
+        never a crash, RULE #5) - it can never accidentally re-select the
+        very instance being built. No hint, or a same-file/unqualified
+        `TOPIC EXTENDS` (hint without a `.`) - no real corpus evidence for
+        the latter (RULE #7, all 3 real occurrences found are qualified) -
+        leaves `Super` unset rather than guessing.
+        """
+        if getattr(instance, "Super", None) is not None:
+            return  # an explicit `EXTENDS classOrStructureRef` already won - mutually exclusive per spec
+        if not ca.is_present(ctx, "EXTENDED"):
+            return
+        name = getattr(instance, "Name", None)
+        hint = self._current_topic_extends_hint(ctx)
+        if not name or not hint or "." not in hint:
+            return
+        ref = ForwardRef(
+            name=f"{hint}.{name}",
+            resolves_to_hint=["Class"],
+            rule="classDef",
+            graceful=True,
+        )
+        self.attachment.attach(instance, "Super", ref, association="Inheritance", role="Super", rule="classDef")
+        self.forward_refs.register_pending(ref, instance, "Super")
+
     def _set_join_or_null(self, view: MetaInstance, join_ctx: ParserRuleContext) -> None:
         """Set `RenamedBaseView.OrNull` for every base of a `JOIN OF` carrying a trailing `(OR NULL)`.
 
@@ -2586,14 +2666,15 @@ class InterlisModelBuilder(InterlisParserVisitor):
         `tests/fixtures/fgdm4gs/Planungszonen_V2_d_B.ili` - `Planungszone`
         is a role of the `TypPZ_Planungszone` association, not an
         attribute). Only the LAST `PathEl` may resolve `Type` (a role alone
-        has none); own attributes only, no EXTENDS walk (same "no real
-        corpus evidence yet" stance as `_apply_pending_view_all_of`) - a
-        real corpus survey of all 5 `tests/fixtures/fgdm4gs/` models
-        confirmed every referenced attribute is OWN on its class, none
-        inherited. An expression that isn't a plain path (no real corpus
-        example), or a path that fails to resolve at any hop, leaves
-        `Type` unset - same graceful-degradation stance as everywhere else
-        in this builder (RULE #5), not a crash.
+        has none); `_find_class_attribute` walks own-then-`Super` (real
+        corpus case, `ISOS_V2.ili`'s `name := Ortsbild -> name`, `name`
+        only declared on the base topic's `Ortsbild` before `(EXTENDED)`
+        reopens it - see that method's own docstring, supersedes the
+        former "own attributes only, no EXTENDS walk" stance). An
+        expression that isn't a plain path (no real corpus example), or a
+        path that fails to resolve at any hop, leaves `Type` unset - same
+        graceful-degradation stance as everywhere else in this builder
+        (RULE #5), not a crash.
         """
         pending, self._pending_view_bare_attrs = self._pending_view_bare_attrs, []
         for view, attr, expr in pending:
@@ -2639,9 +2720,32 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
     @staticmethod
     def _find_class_attribute(cls_or_assoc: MetaInstance, name: str) -> MetaInstance | None:
-        for attr in getattr(cls_or_assoc, "ClassAttribute", None) or []:
-            if attr.Name == name:
-                return attr
+        """Own attribute by name, then inherited via the `Super` chain (`EXTENDS`/`(EXTENDED)`).
+
+        Real corpus evidence found - the `_fix_class_extended_super`
+        gap fix (`ISOS_V2.ili`'s `TOPIC ISOS EXTENDS ISOS_V2.ISOSBase =
+        CLASS Ortsbild (EXTENDED) = ...`) makes `Super` resolve for a
+        reopened class, but a VIEW attribute assigned from one of the
+        BASE topic's attributes (`name := Ortsbild -> name`, `name` only
+        declared on `ISOSBase.Ortsbild`) still failed to resolve `Type`
+        without this walk - own-only was previously a deliberate,
+        evidence-based stance (see this method's former docstring/
+        `_resolve_view_attribute_type`, "no real corpus evidence yet" -
+        all 5 `tests/fixtures/fgdm4gs/` models only reference OWN
+        attributes), now superseded by this real corpus case. Own wins
+        over inherited on a name collision (checked before ascending to
+        `Super`) - same precedence `xtf.schema.attributes_of` documents
+        for the general case; a local walk here (not a call to that
+        function) avoids a builder -> xtf import for a two-line loop.
+        """
+        current: MetaInstance | None = cls_or_assoc
+        seen: set[int] = set()
+        while isinstance(current, MetaInstance) and id(current) not in seen:
+            seen.add(id(current))
+            for attr in getattr(current, "ClassAttribute", None) or []:
+                if attr.Name == name:
+                    return attr
+            current = getattr(current, "Super", None)
         return None
 
     @staticmethod

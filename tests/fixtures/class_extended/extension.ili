@@ -1,0 +1,17 @@
+INTERLIS 2.3;
+MODEL ExtDerived AT "http://x" VERSION "1" =
+  IMPORTS ExtBase;
+  TOPIC T2 EXTENDS ExtBase.T1 =
+    CLASS C (EXTENDED) =
+      attr2: TEXT*10;
+    END C;
+
+    VIEW view_c
+      PROJECTION OF C;
+      =
+      ATTRIBUTE
+        a1 := C -> attr1;
+        a2 := C -> attr2;
+    END view_c;
+  END T2;
+END ExtDerived.

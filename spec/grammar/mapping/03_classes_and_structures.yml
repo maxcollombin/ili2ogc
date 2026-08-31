@@ -41,7 +41,14 @@ classDef:
         (ilismeta16-associations.yml: `Sub {0..*} <-> Super {0..1}`, `ExtendableME`) - Class
         EXTENDS ExtendableME (ilismeta16-classes.yml). Deliberate scope: feeds ONLY
         the Super link itself, does not automatically roll up inherited attributes - see
-        `xtf/schema.py:attributes_of` for the transitive resolution on the XTF validator side.'
+        `xtf/schema.py:attributes_of` for the transitive resolution on the XTF validator side.
+        `CLASS X (EXTENDED)` (Properties, `Abstract` binding below) reopening a same-named class from
+        the enclosing `TOPIC ... EXTENDS ...`''s base topic has NO `classOrStructureRef` at all (its
+        target is implicit - eCH-0031 V2.1.0 SS3.5.2: "gibt es mit C (EXTENDED) innerhalb von T2 nur eine
+        Klasse, naemlich C") - this declarative binding therefore never fires for it; a separate
+        procedural fixup, `InterlisModelBuilder._fix_class_extended_super` (dispatched for `classDef`
+        right after `_attach_class_oid`), resolves `Super` for that case instead, real corpus evidence
+        `ISOS_V2.ili`/`CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili` - see that method''s own docstring.'
     own_oid_clause:
       target: IlisMeta16.ModelData.ObjectOID
       note: 'classDef''s own `(OID AS (Name | Name DOT Name | [INTERLIS DOT] UUIDOID) | NO OID) SEMI`
