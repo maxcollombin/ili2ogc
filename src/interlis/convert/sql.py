@@ -1426,6 +1426,35 @@ class _ViewResolver:
     def _columns(self, table_name: str) -> set[str]:
         return {c.name for c in self.tables_by_name[table_name].columns}
 
+    def _flattened_struct_column(self, resolved: ResolvedAttribute, col: str, table: str) -> str | None:
+        """Resolve a VIEW attribute naming a single-valued STRUCTURE to its ONE flattened column, or `None`.
+
+        `build_tables`/`_columns_for_class` flattens a single-valued
+        non-abstract STRUCTURE inline (`"<attr>_<subattr>"`, up to
+        `_MAX_STRUCT_FLATTEN_DEPTH` levels) - `scalar_ref`'s bare
+        single-hop lookup doesn't know that convention, so a VIEW
+        attribute naming the STRUCTURE itself (`Name := Class -> Struct`,
+        not `Class -> Struct -> SubField`) always failed even though the
+        base table has a real column for it. Real corpus idiom this
+        unblocks: eCH-0031's `MandatoryCatalogueReference` (a STRUCTURE
+        wrapping exactly one `Reference : REFERENCE TO` attribute, e.g.
+        `RichtplanungErneuerbareEnergien_V1.Katalog_Energieform.EnergieformRef`)
+        - only handled when the STRUCTURE flattens to EXACTLY one column,
+        since a bare struct-typed hop is otherwise ambiguous about which
+        of several flattened columns it means.
+        """
+        if resolved.type_kind != "Class" or not _is_structure(resolved.type_instance):
+            return None
+        if bool(getattr(resolved.type_instance, "Abstract", False)):
+            return None
+        sub_columns, *_ = _columns_for_class(
+            resolved.type_instance, self.symbol_for(resolved.type_instance), prefix=f"{col}_", depth=1
+        )
+        if len(sub_columns) != 1:
+            return None
+        flattened = sub_columns[0].name
+        return flattened if flattened in self._columns(table) else None
+
     def scalar_ref(self, factor: MetaInstance) -> str:
         """Return `"alias"."column"` for a `PathOrInspFactor`, registering any JOINs its intermediate reference hops
         need.
@@ -1462,7 +1491,10 @@ class _ViewResolver:
             col = _sql_identifier(hop)
             if is_last:
                 if col not in self._columns(table):
-                    raise _UnsupportedView(f"{hop!r} has no mapped column on table {table!r}")
+                    flattened = self._flattened_struct_column(resolved, col, table)
+                    if flattened is None:
+                        raise _UnsupportedView(f"{hop!r} has no mapped column on table {table!r}")
+                    col = flattened
                 return f'"{cur_alias}"."{col}"'
             target = reference_target_class(resolved) if resolved.type_kind in ("Class", "ReferenceType") else None
             if target is None:

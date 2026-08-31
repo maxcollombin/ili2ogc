@@ -140,6 +140,74 @@ def test_join_view_executes_against_real_sqlite():
     assert proj == [("Main St",), ("Main St",), ("Side St",)]
 
 
+_CATALOG_REF_MODEL = """INTERLIS 2.4;
+MODEL CatalogRefView AT "http://x" VERSION "1" =
+  TOPIC Base =
+    CLASS Kind (ABSTRACT) = END Kind;
+    CLASS Wind EXTENDS CatalogRefView.Base.Kind = END Wind;
+    STRUCTURE KindRef =
+      Reference : MANDATORY REFERENCE TO (EXTERNAL) CatalogRefView.Base.Kind;
+    END KindRef;
+    CLASS Item =
+      Kind : MANDATORY CatalogRefView.Base.KindRef;
+      Label : TEXT*40;
+    END Item;
+  END Base;
+  TOPIC Derived =
+    DEPENDS ON CatalogRefView.Base;
+    VIEW ItemView
+      PROJECTION OF Item;
+      =
+      ATTRIBUTE
+        kind_ref := Item -> Kind;
+        label := Item -> Label;
+    END ItemView;
+  END Derived;
+END CatalogRefView.
+"""
+
+
+def _split_catalog_ref():
+    tree, errors = parse_text(_CATALOG_REF_MODEL)
+    assert not errors, errors
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+    return _split(builder)
+
+
+def test_view_attribute_naming_a_flattened_struct_resolves_to_its_one_column():
+    """`Name := Class -> StructAttr` resolves to the STRUCTURE's own flattened column, not a bare (missing) one.
+
+    Real corpus idiom: eCH-0031's `MandatoryCatalogueReference` (a
+    single-valued STRUCTURE wrapping exactly one `REFERENCE TO` attribute)
+    - `build_tables` flattens `Item.Kind` to a column named
+    `kind_reference` (`_columns_for_class`'s `"<attr>_<subattr>"`
+    convention), but a VIEW attribute naming the STRUCTURE itself
+    (`kind_ref := Item -> Kind`, not `Item -> Kind -> Reference`) used to
+    always demote the whole VIEW - see `_ViewResolver._flattened_struct_column`.
+    """
+    _tables, sql_views = _split_catalog_ref()
+    view = _view(sql_views, "itemview")
+    assert view.body is not None, view.notes
+    assert '"item"."kind_reference" AS "kind_ref"' in view.body
+    assert '"item"."label" AS "label"' in view.body
+
+
+def test_view_over_flattened_struct_executes_against_real_sqlite():
+    tables, sql_views = _split_catalog_ref()
+    schema = render_gpkg(tables).split("\nINSERT INTO gpkg_contents")[0]
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(schema)
+    view = _view(sql_views, "itemview")
+    conn.execute(f'CREATE VIEW "{view.name}" AS {view.body}')
+    conn.execute("INSERT INTO wind (id) VALUES ('w1')")
+    conn.execute("INSERT INTO item (id, kind_reference, label) VALUES ('i1', 'w1', 'Windpark')")
+    rows = conn.execute("SELECT kind_ref, label FROM itemview").fetchall()
+    assert rows == [("w1", "Windpark")]
+
+
 _UNION_MODEL = """INTERLIS 2.4;
 MODEL Test AT "http://x" VERSION "1" =
   TOPIC Base =
