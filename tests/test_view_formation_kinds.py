@@ -4,7 +4,8 @@
 for `UNION OF`, `AGGREGATION OF` and `INSPECTION OF` (also quoted in the
 FGDM4GS report, HEIG-VD 2024, chapter 4.2), plus one translatable
 `AGGREGATION OF` variant whose columns are plain key projections rather
-than a FUNCTION over the implicit `AGGREGATES` bag.
+than a FUNCTION over the implicit `AGGREGATES` bag, and one `INSPECTION
+OF` variant adding a `PARENT->` view attribute.
 
 What each converter is expected to do per kind is documented in
 docs/view-formation-support.md; this test pins it:
@@ -137,6 +138,21 @@ def test_inspection_sql_selects_over_the_child_table_and_runs():
 def test_inspection_jsonfg_is_one_feature_per_structure_element():
     feats = _features(_build("inspection_of"), "inspection_of")
     assert [f["properties"]["Attr1"] for f in feats] == ["first", "second", "third"]
+
+
+def test_inspection_sql_resolves_parent_arrow_by_joining_back_to_the_base_table():
+    builder = _build("inspection_of_parent")
+    _tables, views = _sql_views(builder)
+    (vb,) = views
+    assert vb.body is not None
+    assert 'FROM "b_attr2" "insp"' in vb.body
+    assert 'JOIN "b" "b" ON "insp"."b_fk" = "b"."id"' in vb.body
+    con = _run_ddl(_tables, views)
+    con.execute('INSERT INTO "b" ("id", "name") VALUES (1, ?)', ("owner-1",))
+    con.execute('INSERT INTO "b_attr2" ("id", "b_fk", "attr1") VALUES (1, 1, ?)', ("first",))
+    con.execute('INSERT INTO "b_attr2" ("id", "b_fk", "attr1") VALUES (2, 1, ?)', ("second",))
+    rows = sorted(con.execute('SELECT "attr1", "ownername" FROM "vb"'))
+    assert rows == [("first", "owner-1"), ("second", "owner-1")]
 
 
 # --- AGGREGATION OF -----------------------------------------------------

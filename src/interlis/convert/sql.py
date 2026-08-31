@@ -1654,10 +1654,13 @@ def _build_inspection_view(
     `BAG`/`LIST OF` structure attribute; `build_tables` already emits that
     extent as the child table `<base_table>_<attr>`, so the view is just a
     projection over it. Each view `ClassAttribute` (`out := <base> -> field`)
-    reads `field` straight from a child-table column. `PARENT -> ...`
-    (navigating back to the owning object) and a multi-hop inspection path
-    (an indirect sub-structure) are not translated - the whole view demotes
-    to a `-- NOTE` (RULE #5). A geometry inspection
+    reads `field` straight from a child-table column; `out := PARENT ->
+    field` reads `field` from the owning object instead, resolved by
+    joining back to the base table on the same `<base_table>_fk` column
+    `build_tables` already puts on the child table (`RULE #1`: reuses that
+    naming, does not invent a new join convention). A multi-hop inspection
+    path (an indirect sub-structure) is not translated - the whole view
+    demotes to a `-- NOTE` (RULE #5). A geometry inspection
     (`SurfaceBoundary`/`SurfaceEdge` of an area/surface attribute) has no
     child table and likewise demotes.
     """
@@ -1683,8 +1686,11 @@ def _build_inspection_view(
             "SQL-VIEW-FORMATION-UNSUPPORTED",
         )
     columns = {c.name for c in tables_by_name[child_table].columns}
+    base_columns = {c.name for c in tables_by_name[base_table].columns} if base_table in tables_by_name else set()
+    fk_col = _sql_identifier(f"{base_table}_fk")
     elem_alias = "insp"
     select_items: list[str] = []
+    needs_parent_join = False
     for attr in getattr(view, "ClassAttribute", None) or []:
         aname = getattr(attr, "Name", None)
         derivates = getattr(attr, "Derivates", None) or []
@@ -1693,22 +1699,35 @@ def _build_inspection_view(
         factor = derivates[0]
         if not factor._qualified_class.endswith("PathOrInspFactor") or getattr(factor, "Inspection", None):
             raise _UnsupportedView(f"inspection view attribute {aname!r} is not a plain element path")
-        refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
+        path_els = getattr(factor, "PathEls", None) or []
+        refs = [getattr(el, "Ref", None) for el in path_els]
         if len(refs) == 2 and (refs[0] or "").lower() == base_alias and refs[1] is not None:
             col = _sql_identifier(refs[1])
             if col not in columns:
                 raise _UnsupportedView(f"element attribute {refs[1]!r} has no column on {child_table!r}")
             select_items.append(f'"{elem_alias}"."{col}" AS "{_sql_identifier(aname or "")}"')
-        elif refs and (refs[0] or "").upper() == "PARENT":
-            raise _UnsupportedView(
-                "an inspection view attribute navigates PARENT-> back to the owning object - not translated",
-                "SQL-VIEW-FORMATION-UNSUPPORTED",
-            )
+        elif len(path_els) == 2 and getattr(path_els[0], "Kind", None) == "Parent" and refs[1] is not None:
+            if fk_col not in columns:
+                raise _UnsupportedView(
+                    f"the inspected element table {child_table!r} has no {fk_col!r} column to join back to "
+                    f"{base_table!r}",
+                    "SQL-VIEW-FORMATION-UNSUPPORTED",
+                )
+            col = _sql_identifier(refs[1])
+            if col not in base_columns:
+                raise _UnsupportedView(f"PARENT-> attribute {refs[1]!r} has no column on {base_table!r}")
+            select_items.append(f'"{base_alias}"."{col}" AS "{_sql_identifier(aname or "")}"')
+            needs_parent_join = True
         else:
             raise _UnsupportedView(f"inspection view attribute {aname!r}: unsupported element path {refs}")
     if not select_items:
         raise _UnsupportedView("inspection view has no projectable ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
-    return "SELECT\n    " + ",\n    ".join(select_items) + f'\nFROM "{child_table}" "{elem_alias}"'
+    from_clause = f'FROM "{child_table}" "{elem_alias}"'
+    if needs_parent_join:
+        from_clause += (
+            f'\nJOIN "{base_table}" "{base_alias}" ON "{elem_alias}"."{fk_col}" = "{base_alias}"."{OID_COLUMN}"'
+        )
+    return "SELECT\n    " + ",\n    ".join(select_items) + f"\n{from_clause}"
 
 
 def _build_aggregation_view(

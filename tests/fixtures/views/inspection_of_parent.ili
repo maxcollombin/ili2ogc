@@ -1,0 +1,29 @@
+INTERLIS 2.3;
+
+!! Same INSPECTION OF shape as inspection_of.ili, plus a `PARENT->` view
+!! attribute reading back onto the owning object - pins the SQL
+!! translation's join from the inspected element's child table to the
+!! base table on `<base_table>_fk` (`convert/sql.py:_build_inspection_view`).
+
+MODEL TestInspectionParent AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    STRUCTURE A =
+      Attr1: TEXT*20;
+    END A;
+
+    CLASS B =
+      Name: TEXT*20;
+      Attr2: BAG OF A;
+    END B;
+
+    VIEW VB
+      INSPECTION OF TestInspectionParent.Base.B -> Attr2;
+      =
+      ATTRIBUTE
+        Attr1: TEXT*20 := B -> Attr1;
+        OwnerName := PARENT -> Name;
+    END VB;
+  END Base;
+
+END TestInspectionParent.

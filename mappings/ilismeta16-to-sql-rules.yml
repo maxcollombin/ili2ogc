@@ -118,20 +118,24 @@ concepts:
       (`_build_union_view`) - one branch per base, each projecting that
       base's `Derivates[i]` for every union-view attribute; `UNION ALL`,
       not `UNION`, since INTERLIS union is a merge. `Inspection` ->
-      `SELECT <attr := element field> FROM <parent>_<inspected attr>`
-      (`_build_inspection_view`) - the child table `build_tables` already
-      emits for the inspected `BAG`/`LIST OF` attribute IS the inspection
-      extent. `Aggregation` -> `SELECT DISTINCT <plain key projections>`
-      (`_build_aggregation_view`; `EQUAL(key)` is not materialised by the
-      builder - `View.FormationParameter` gap - so `ALL` de-duplication
-      is the faithful reading). A branch that cannot be translated
-      faithfully demotes that whole View to a `-- NOTE`
+      `SELECT <attr := element field | PARENT-> field> FROM
+      <parent>_<inspected attr> [JOIN <parent> ON ...<parent>_fk =
+      <parent>.id]` (`_build_inspection_view`) - the child table
+      `build_tables` already emits for the inspected `BAG`/`LIST OF`
+      attribute IS the inspection extent; a `PARENT->` attribute joins
+      that child table back to the base table on the same `<parent>_fk`
+      column the child table already carries. `Aggregation` -> `SELECT
+      DISTINCT <plain key projections>` (`_build_aggregation_view`;
+      `EQUAL(key)` is not materialised by the builder -
+      `View.FormationParameter` gap - so `ALL` de-duplication is the
+      faithful reading). A branch that cannot be translated faithfully
+      demotes that whole View to a `-- NOTE`
       (`SQL-VIEW-FORMATION-UNSUPPORTED`): an `Aggregation` column that is
       a user-`FUNCTION` call over the implicit `AGGREGATES` bag (out of
       scope by design), a geometry `Inspection`
       (`SurfaceBoundary`/`SurfaceEdge` - a decomposition, not a table),
-      an `Inspection` navigating `PARENT->` or an indirect sub-structure.
-      See docs/view-formation-support.md.
+      an `Inspection` navigating an indirect sub-structure. See
+      docs/view-formation-support.md.
 
       Its base classes (`RenamedBaseView.BaseView`) live in an IMPORTED
       model, so that model must be part of the same conversion
