@@ -128,16 +128,23 @@ concepts:
       tables `_build_nested_child_tables` now also emits; a `PARENT->`
       attribute (single-hop only) joins the child table back to the base
       table on the same `<parent>_fk` column it already carries.
-      `Aggregation` -> `SELECT DISTINCT <plain key projections>`
-      (`_build_aggregation_view`; `EQUAL(key)` is not materialised by the
-      builder - `View.FormationParameter` gap - so `ALL` de-duplication
-      is the faithful reading). A branch that cannot be translated
-      faithfully demotes that whole View to a `-- NOTE`
-      (`SQL-VIEW-FORMATION-UNSUPPORTED`): an `Aggregation` column that is
-      a user-`FUNCTION` call over the implicit `AGGREGATES` bag (out of
-      scope by design), a geometry `Inspection`
-      (`SurfaceBoundary`/`SurfaceEdge` - a decomposition, not a table),
-      an `Inspection` path nesting more than one level deep. See
+      `Aggregation` -> `SELECT [DISTINCT] <plain key projections |
+      COUNT(*)> FROM <base> [GROUP BY <key>]` (`_build_aggregation_view`):
+      `EQUAL(key)` (stashed by the builder as `view._aggregation_key`,
+      `_stash_aggregation_key`) becomes a real `GROUP BY <key>` (every
+      other plain-path attribute joins it there too); `ALL` (no key)
+      still uses `DISTINCT` for a plain-projection-only view. An
+      `Aggregation` column that is `INTERLIS.objectCount`/
+      `elementCount(AGGREGATES)` (the 2 STANDARD library functions whose
+      signature IS "count the members of a bag/object set") becomes
+      `COUNT(*)`; any OTHER `FUNCTION` call over the implicit `AGGREGATES`
+      bag - a user `FUNCTION` body, out of scope by design - demotes the
+      whole View to a `-- NOTE` (`SQL-VIEW-FORMATION-UNSUPPORTED`),
+      as does mixing a standard-function column into an `ALL` aggregation
+      alongside a plain column (no grouping key to make that well-defined).
+      Other cases demoted the same way: a geometry `Inspection`
+      (`SurfaceBoundary`/`SurfaceEdge` - a decomposition, not a table), an
+      `Inspection` path nesting more than one level deep. See
       docs/view-formation-support.md.
 
       Its base classes (`RenamedBaseView.BaseView`) live in an IMPORTED

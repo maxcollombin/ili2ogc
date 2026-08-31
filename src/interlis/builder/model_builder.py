@@ -2029,7 +2029,41 @@ class InterlisModelBuilder(InterlisParserVisitor):
                     self._set_join_or_null(instance, ca.call(formation, subrule))
                 elif subrule == "inspection":
                     self._stash_inspection_path(instance, ca.call(formation, subrule))
+                elif subrule == "aggregation":
+                    self._stash_aggregation_key(instance, ca.call(formation, subrule))
                 return
+
+    def _stash_aggregation_key(self, view: MetaInstance, aggregation_ctx: ParserRuleContext) -> None:
+        """Record `AGGREGATION OF ... EQUAL(uniqueEl)`'s grouping key as `view._aggregation_key`.
+
+        Same class of gap as `_stash_inspection_path` right below: the
+        spec's `aggregation.FormationParameter` binding (`uniqueEl`,
+        `feeds_into: PathOrInspFactor`) IS declared, but the generic
+        `Container` resolution machinery only materializes it when a
+        parent instance's own attribute_bindings drive the merge - called
+        this way, directly from `_set_view_formation_kind` (no such parent
+        instance in progress), `self.visit(...)` on the underlying
+        `objectOrAttributePath` returns the raw bag dict
+        (`{"PathEls": [...]}`, confirmed empirically - see
+        `_merge_bag_into_instance`'s own docstring on why a `Container`
+        rule with `feeds_into:` must stay a bag, never auto-unwrapped) -
+        never a `PathOrInspFactor` instance on its own. Materialized here
+        by hand: a fresh `PathOrInspFactor` + `_merge_bag_into_instance`,
+        the SAME merge step a normal attribute-binding chain would apply
+        automatically. `ALL` (no `uniqueEl` in this VIEW) leaves
+        `_aggregation_key` unset - `convert/sql.py`'s `_build_aggregation_view`
+        treats that as the `ALL` collapse-to-one-row-or-DISTINCT reading.
+        """
+        unique_el = ca.call(aggregation_ctx, "uniqueEl")
+        if unique_el is None:
+            return
+        path = ca.call(unique_el, "objectOrAttributePath")
+        if path is None:
+            return
+        bag = self.visit(path)
+        factor = self.registry.new_instance("IlisMeta16.ModelData.PathOrInspFactor")
+        self._merge_bag_into_instance(factor, bag, "aggregation")
+        view._aggregation_key = factor
 
     @staticmethod
     def _stash_inspection_path(view: MetaInstance, inspection_ctx: ParserRuleContext) -> None:

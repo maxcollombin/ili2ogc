@@ -1839,50 +1839,124 @@ def _build_aggregation_view(
     symbol_for,
     assoc_near_roles: dict[str, str],
 ) -> str:
-    """Return a `SELECT DISTINCT ... FROM "<base>"` body for a `FormationKind=Aggregation` view, or demote.
+    """Return a `SELECT [DISTINCT] ... FROM "<base>" [GROUP BY ...]` body for a `FormationKind=Aggregation` view,
+    or demote.
 
-    `AGGREGATION OF <base> (ALL | EQUAL(keys))` collapses base objects into
+    `AGGREGATION OF <base> (ALL | EQUAL(key))` collapses base objects into
     one instance; inside the view the implicit `AGGREGATES` bag holds the
     grouped objects, for a FUNCTION (`ElementCount := countB(AGGREGATES)`).
     A user FUNCTION body is out of scope by design (delegated to an
-    external engine - see docs/fgdm4gs-view-strategy.md), so a view
-    attribute that is a `FunctionCall` demotes the whole view to a
-    `-- NOTE`. The translatable subset is an aggregation whose every
-    attribute is a plain path projection of a base attribute - that is a
-    `SELECT DISTINCT` (the `EQUAL(keys)` grouping key itself is not
-    materialised by the builder, `View.FormationParameter` gap, so `ALL`
-    de-duplication is the faithful reading either way, mirroring
-    `convert/jsonfg.evaluate_view`). An attribute navigating a reference
-    hop (`Attr := <base>->Role->Field`) joins the target table in, same
-    `resolver.extra_joins` machinery PROJECTION/JOIN already use.
+    external engine - see docs/fgdm4gs-view-strategy.md) and demotes the
+    whole view - EXCEPT the 2 INTERLIS STANDARD functions whose signature
+    IS "count the members of a bag/object set" (`INTERLIS.objectCount`/
+    `elementCount`), applied to the bag AGGREGATES itself: that becomes a
+    plain `COUNT(*)`, no external engine needed. `EQUAL(key)` (stashed by
+    the builder as `view._aggregation_key`, `_stash_aggregation_key`) adds
+    a real `GROUP BY <key>` - every OTHER plain-path attribute joins the
+    key in `GROUP BY` too (same practical effect as `ALL`'s `DISTINCT`,
+    now expressed correctly alongside a real aggregate column). `ALL`
+    (no key) with a standard-function column and no plain column
+    alongside it is a single ungrouped aggregate row (no `GROUP BY`
+    needed); mixing a plain column into that combination has no
+    well-defined single value to show (no key to group by) and demotes
+    the whole view - no real corpus case combines the two. An attribute
+    navigating a reference hop (`Attr := <base>->Role->Field`) joins the
+    target table in, same `resolver.extra_joins` machinery PROJECTION/JOIN
+    already use.
     """
     if len(bases) != 1:
         raise _UnsupportedView("an aggregation view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
     resolver = _ViewResolver(bases, tables_by_name, symbol_for, assoc_near_roles)
+    key_factor = getattr(view, "_aggregation_key", None)
+    group_by: list[str] = []
+    if key_factor is not None:
+        group_by.append(resolver.scalar_ref(key_factor))
     select_items: list[str] = []
+    has_aggregate = False
+    has_plain = False
     for attr in getattr(view, "ClassAttribute", None) or []:
         aname = getattr(attr, "Name", None)
         derivates = getattr(attr, "Derivates", None) or []
         if not derivates:
             raise _UnsupportedView(f"aggregation view attribute {aname!r} has no assigned expression")
         factor = derivates[0]
+        out_col = _sql_identifier(aname or "")
+        if factor._qualified_class.endswith("FunctionCall"):
+            select_items.append(f'{_standard_aggregate_function_sql(factor, aname)} AS "{out_col}"')
+            has_aggregate = True
+            continue
         if not factor._qualified_class.endswith(("PathOrInspFactor", "Constant")):
             raise _UnsupportedView(
                 f"aggregation view attribute {aname!r} is a function/expression over the implicit AGGREGATES bag - "
                 f"a user FUNCTION body is not translated to SQL",
                 "SQL-VIEW-FORMATION-UNSUPPORTED",
             )
-        select_items.append(f'{resolver.scalar_ref(factor)} AS "{_sql_identifier(aname or "")}"')
+        expr = resolver.scalar_ref(factor)
+        select_items.append(f'{expr} AS "{out_col}"')
+        has_plain = True
+        if key_factor is not None and expr not in group_by:
+            group_by.append(expr)
     if not select_items:
         raise _UnsupportedView("aggregation view has no projectable ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
+    if key_factor is None and has_aggregate and has_plain:
+        raise _UnsupportedView(
+            "an ALL aggregation combines a FUNCTION over AGGREGATES with a plain attribute - "
+            "no EQUAL(...) grouping key to make that combination well-defined",
+            "SQL-VIEW-FORMATION-UNSUPPORTED",
+        )
     _alias, _cls, table = bases[0]
     from_parts = [f'"{table}" "{_alias}"']
     from_parts += [f'"{t}" "{a}"' for t, a, _on in resolver.extra_joins]
-    body = "SELECT DISTINCT\n    " + ",\n    ".join(select_items) + "\nFROM " + ", ".join(from_parts)
+    verb = "SELECT" if key_factor is not None or has_aggregate else "SELECT DISTINCT"
+    body = f"{verb}\n    " + ",\n    ".join(select_items) + "\nFROM " + ", ".join(from_parts)
     join_conditions = [on for _t, _a, on in resolver.extra_joins]
     if join_conditions:
         body += "\nWHERE " + "\n  AND ".join(join_conditions)
+    if key_factor is not None:
+        body += "\nGROUP BY " + ", ".join(group_by)
     return body
+
+
+_STANDARD_AGGREGATE_COUNT_FUNCTIONS = {"INTERLIS.objectCount", "INTERLIS.elementCount"}
+
+
+def _is_aggregates_marker(expr: MetaInstance) -> bool:
+    """True for the bare `AGGREGATES` argument (`PathEl(Kind=Attribute, Ref=None)` - no `Name`, unlike a real
+    attribute).
+    """
+    if not expr._qualified_class.endswith("PathOrInspFactor"):
+        return False
+    path_els = getattr(expr, "PathEls", None) or []
+    return (
+        len(path_els) == 1
+        and getattr(path_els[0], "Kind", None) == "Attribute"
+        and getattr(path_els[0], "Ref", None) is None
+    )
+
+
+def _standard_aggregate_function_sql(factor: MetaInstance, aname: str | None) -> str:
+    """Return `COUNT(*)` for `INTERLIS.objectCount(AGGREGATES)`/`elementCount(AGGREGATES)`, or demote.
+
+    Both standard functions' refman signature ("number of objects/elements
+    a bag/object set contains") is exactly `COUNT(*)` when applied to the
+    grouped bag itself - a call to any OTHER function, or one of these two
+    applied to something other than the bare `AGGREGATES` argument (e.g.
+    `INTERLIS.objectCount(SomeOtherClass)`, a valid but UNRELATED whole-
+    population idiom used elsewhere for `SET CONSTRAINT`), is a user
+    FUNCTION body / an expression outside this narrow subset and demotes
+    the whole view.
+    """
+    func_name = getattr(factor, "Function", None)
+    args = getattr(factor, "Arguments", None) or []
+    arg_expr = getattr(args[0], "Expression", None) if len(args) == 1 else None
+    if func_name in _STANDARD_AGGREGATE_COUNT_FUNCTIONS and arg_expr is not None and _is_aggregates_marker(arg_expr):
+        return "COUNT(*)"
+    raise _UnsupportedView(
+        f"aggregation view attribute {aname!r} is a function/expression over the implicit AGGREGATES bag - "
+        f"only INTERLIS.objectCount(AGGREGATES)/elementCount(AGGREGATES) are translated to SQL, "
+        f"a user FUNCTION body is not",
+        "SQL-VIEW-FORMATION-UNSUPPORTED",
+    )
 
 
 def _view_constraint_notes(view: MetaInstance) -> list[str]:

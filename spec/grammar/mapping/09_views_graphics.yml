@@ -20,7 +20,13 @@ aggregation:
         ... ;` (ALL form), aborting the whole model build (same class of fix as `inspection.AREA` above).
         uniqueEl (target: PathOrInspFactor) feeds View.FormationParameter (LIST OF Expression,
         restricted to PathOrInspFactor) directly - exact IDL citation: "Aggr.Equal: UniqueEl". See
-        viewDef.FormationParameter above for the full citation.
+        viewDef.FormationParameter above for the full citation. This binding alone does not materialize
+        a real PathOrInspFactor when `aggregation()` is reached the way `_set_view_formation_kind` reads
+        it (no parent-instance attribute_bindings chain in progress at that point) - `self.visit(...)`
+        on `uniqueEl().objectOrAttributePath()` returns the raw bag dict, never merged onto an instance;
+        `InterlisModelBuilder._stash_aggregation_key` does that merge by hand and stashes the result on
+        `view._aggregation_key` (same class of workaround as `_stash_inspection_path` for
+        `inspection.FormationParameter` above) - `convert/sql.py` reads it to build `GROUP BY`.
 
         '
     renamedViewableRef:

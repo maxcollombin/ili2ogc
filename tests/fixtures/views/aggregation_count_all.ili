@@ -1,0 +1,28 @@
+INTERLIS 2.3;
+
+!! An ALL AGGREGATION OF (no EQUAL(key)) whose single column is a
+!! standard INTERLIS.elementCount(AGGREGATES) - collapses to ONE
+!! ungrouped aggregate row, no GROUP BY - pins the SQL translation's
+!! `SELECT COUNT(*) ...` path (no plain column alongside it, so the
+!! result is unambiguous even without a grouping key).
+
+MODEL TestAggregationCountAll AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    CLASS Parcel =
+      Municipality: TEXT*40;
+    END Parcel;
+  END Base;
+
+  TOPIC Aggregation =
+    DEPENDS ON TestAggregationCountAll.Base;
+
+    VIEW ParcelStats
+      AGGREGATION OF TestAggregationCountAll.Base.Parcel ALL;
+      =
+      ATTRIBUTE
+        Total := INTERLIS.elementCount(AGGREGATES);
+    END ParcelStats;
+  END Aggregation;
+
+END TestAggregationCountAll.

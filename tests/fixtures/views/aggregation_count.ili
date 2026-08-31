@@ -1,0 +1,29 @@
+INTERLIS 2.3;
+
+!! Same EQUAL(key) AGGREGATION OF shape as aggregation_key.ili, but adds
+!! a standard INTERLIS.objectCount(AGGREGATES) column (a group member
+!! count, unlike the reference manual's countB - a USER function still
+!! out of scope) - pins the SQL translation's GROUP BY + COUNT(*)
+!! (`convert/sql.py:_build_aggregation_view`, `_standard_aggregate_function_sql`).
+
+MODEL TestAggregationCount AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    CLASS Parcel =
+      Municipality: TEXT*40;
+    END Parcel;
+  END Base;
+
+  TOPIC Aggregation =
+    DEPENDS ON TestAggregationCount.Base;
+
+    VIEW MunicipalityStats
+      AGGREGATION OF TestAggregationCount.Base.Parcel EQUAL(Parcel -> Municipality);
+      =
+      ATTRIBUTE
+        Municipality: TEXT*40 := Parcel -> Municipality;
+        ParcelCount := INTERLIS.objectCount(AGGREGATES);
+    END MunicipalityStats;
+  END Aggregation;
+
+END TestAggregationCount.

@@ -4,13 +4,16 @@
 for `UNION OF`, `AGGREGATION OF` and `INSPECTION OF` (also quoted in the
 FGDM4GS report, HEIG-VD 2024, chapter 4.2), plus a few translatable
 variants: `AGGREGATION OF` with columns that are plain key projections
-rather than a FUNCTION over the implicit `AGGREGATES` bag (`_key`) or
-that navigate a REFERENCE TO hop (`_key_reference`); `INSPECTION OF`
-adding a `PARENT->` view attribute (`_parent`) or an indirect multi-hop
-path (`_nested`); `UNION OF` with a branch attribute navigating a
-REFERENCE TO hop (`_reference`); `PROJECTION OF` an embedded 2-role
-ASSOCIATION (`projection_of_association.ili`, self-contained shape of
-the real `Planungszonen_V2_d_B.ili`/`TypPZ_Planungszone`).
+rather than a FUNCTION over the implicit `AGGREGATES` bag (`_key`), that
+navigate a REFERENCE TO hop (`_key_reference`), or that use a standard
+`INTERLIS.objectCount`/`elementCount(AGGREGATES)` column alongside
+`EQUAL(key)` (`_count`) or `ALL` (`_count_all`) - a USER function
+(`countB`, the reference manual's own example) stays untranslated either
+way; `INSPECTION OF` adding a `PARENT->` view attribute (`_parent`) or an
+indirect multi-hop path (`_nested`); `UNION OF` with a branch attribute
+navigating a REFERENCE TO hop (`_reference`); `PROJECTION OF` an embedded
+2-role ASSOCIATION (`projection_of_association.ili`, self-contained shape
+of the real `Planungszonen_V2_d_B.ili`/`TypPZ_Planungszone`).
 
 What each converter is expected to do per kind is documented in
 docs/view-formation-support.md; this test pins it:
@@ -222,11 +225,11 @@ def test_aggregation_function_column_jsonfg_is_skipped_with_a_reason():
     assert reason is not None and "function engine" in reason
 
 
-def test_aggregation_projection_only_sql_is_select_distinct_and_runs():
+def test_aggregation_projection_only_sql_groups_by_the_stashed_key_and_runs():
     builder = _build("aggregation_key")
     _tables, views = _sql_views(builder)
     (v,) = views
-    assert v.body is not None and v.body.startswith("SELECT DISTINCT")
+    assert v.body is not None and "GROUP BY" in v.body and not v.body.startswith("SELECT DISTINCT")
     con = _run_ddl(_tables, views)
     con.executemany(
         'INSERT INTO "parcel" ("id", "municipality") VALUES (?, ?)',
@@ -244,7 +247,7 @@ def test_aggregation_sql_joins_an_attribute_that_navigates_a_reference():
     builder = _build("aggregation_key_reference")
     tables, views = _sql_views(builder)
     (v,) = views
-    assert v.body is not None and v.body.startswith("SELECT DISTINCT")
+    assert v.body is not None and "GROUP BY" in v.body
     assert 'FROM "parcel" "parcel", "municipality" "j1_municipality"' in v.body
     con = _run_ddl(tables, views)
     con.execute('INSERT INTO "municipality" ("id", "name") VALUES (1, ?)', ("Lausanne",))
@@ -255,6 +258,47 @@ def test_aggregation_sql_joins_an_attribute_that_navigates_a_reference():
     )
     rows = sorted(r[0] for r in con.execute('SELECT "municipalityname" FROM "municipalitylist"'))
     assert rows == ["Lausanne", "Renens"]
+
+
+def test_aggregation_standard_count_function_sql_groups_by_key_and_runs():
+    builder = _build("aggregation_count")
+    tables, views = _sql_views(builder)
+    (v,) = views
+    assert v.body is not None
+    assert "COUNT(*)" in v.body and 'GROUP BY "parcel"."municipality"' in v.body
+    con = _run_ddl(tables, views)
+    con.executemany(
+        'INSERT INTO "parcel" ("id", "municipality") VALUES (?, ?)',
+        [(1, "Lausanne"), (2, "Lausanne"), (3, "Renens")],
+    )
+    rows = dict(con.execute('SELECT "municipality", "parcelcount" FROM "municipalitystats"'))
+    assert rows == {"Lausanne": 2, "Renens": 1}
+
+
+def test_aggregation_standard_count_function_all_sql_is_a_single_ungrouped_row():
+    builder = _build("aggregation_count_all")
+    tables, views = _sql_views(builder)
+    (v,) = views
+    assert v.body is not None
+    assert "COUNT(*)" in v.body and "GROUP BY" not in v.body
+    con = _run_ddl(tables, views)
+    con.executemany(
+        'INSERT INTO "parcel" ("id", "municipality") VALUES (?, ?)',
+        [(1, "Lausanne"), (2, "Lausanne"), (3, "Renens")],
+    )
+    (total,) = con.execute('SELECT "total" FROM "parcelstats"').fetchone()
+    assert total == 3
+
+
+def test_aggregation_user_function_still_demotes_even_with_a_stashed_key():
+    """The stashed EQUAL(key) doesn't itself make a USER FUNCTION (countB) translatable."""
+    builder = _build("aggregation_of")
+    view = _registered(builder, "View")[0]
+    assert getattr(view, "_aggregation_key", None) is not None
+    _tables, views = _sql_views(builder)
+    (vb2,) = views
+    assert vb2.body is None
+    assert any("SQL-VIEW-FORMATION-UNSUPPORTED" in n and "AGGREGATES" in n for n in vb2.notes)
 
 
 # --- PROJECTION OF an ASSOCIATION -----------------------------------------
