@@ -119,22 +119,25 @@ concepts:
       base's `Derivates[i]` for every union-view attribute; `UNION ALL`,
       not `UNION`, since INTERLIS union is a merge. `Inspection` ->
       `SELECT <attr := element field | PARENT-> field> FROM
-      <parent>_<inspected attr> [JOIN <parent> ON ...<parent>_fk =
+      <parent>_<attr>[_<sub-attr>] [JOIN <parent> ON ...<parent>_fk =
       <parent>.id]` (`_build_inspection_view`) - the child table
       `build_tables` already emits for the inspected `BAG`/`LIST OF`
-      attribute IS the inspection extent; a `PARENT->` attribute joins
-      that child table back to the base table on the same `<parent>_fk`
-      column the child table already carries. `Aggregation` -> `SELECT
-      DISTINCT <plain key projections>` (`_build_aggregation_view`;
-      `EQUAL(key)` is not materialised by the builder -
-      `View.FormationParameter` gap - so `ALL` de-duplication is the
-      faithful reading). A branch that cannot be translated faithfully
-      demotes that whole View to a `-- NOTE`
+      attribute IS the inspection extent; an indirect path
+      (`-> attr -> sub_attr`, a `BAG`/`LIST OF` nested one level inside
+      `attr`'s element structure) walks the matching chain of child
+      tables `_build_nested_child_tables` now also emits; a `PARENT->`
+      attribute (single-hop only) joins the child table back to the base
+      table on the same `<parent>_fk` column it already carries.
+      `Aggregation` -> `SELECT DISTINCT <plain key projections>`
+      (`_build_aggregation_view`; `EQUAL(key)` is not materialised by the
+      builder - `View.FormationParameter` gap - so `ALL` de-duplication
+      is the faithful reading). A branch that cannot be translated
+      faithfully demotes that whole View to a `-- NOTE`
       (`SQL-VIEW-FORMATION-UNSUPPORTED`): an `Aggregation` column that is
       a user-`FUNCTION` call over the implicit `AGGREGATES` bag (out of
       scope by design), a geometry `Inspection`
       (`SurfaceBoundary`/`SurfaceEdge` - a decomposition, not a table),
-      an `Inspection` navigating an indirect sub-structure. See
+      an `Inspection` path nesting more than one level deep. See
       docs/view-formation-support.md.
 
       Its base classes (`RenamedBaseView.BaseView`) live in an IMPORTED
@@ -231,15 +234,21 @@ concepts:
 
   MultiValue:
     qualified_name: IlisMeta16.ModelData.MultiValue
-    status: backlog
+    status: mapped
     note: >
-      `BAG {m..n} OF X` / `LIST {m..n} OF X` - needs a related CHILD TABLE
-      (1:N), not a column on the parent table (real precedent: ili2db
-      creates one, linked via a `D_<attributename>`-style FOREIGN KEY back
-      to the parent plus an ordering column for LIST - see
-      docs/sql-conversion-strategy.md). Deliberately deferred to a later
-      lot rather than guessed at - the attribute is surfaced as a `-- NOTE`
-      comment (RULE #5), never silently dropped.
+      `BAG {m..n} OF X` / `LIST {m..n} OF X` -> a related CHILD TABLE
+      (1:N, `_build_child_table`), linked via a `<parent>_fk` FOREIGN KEY
+      back to the parent (real precedent: ili2db's own
+      `D_<attributename>`-style convention) plus a `seq` ordering column
+      for `LIST` (see docs/sql-conversion-strategy.md). A `BAG`/`LIST OF`
+      found ONE level inside the element STRUCTURE (an indirect/nested
+      multi-value, e.g. `INSPECTION OF ... -> a -> b`) gets its own
+      `<parent>_<attr>_<sub-attr>` child table too
+      (`_build_nested_child_tables`) - bounded to that one extra level,
+      same `_MAX_STRUCT_FLATTEN_DEPTH`-style bound as `StructureNesting`
+      above (no real corpus evidence of a third level); an element type
+      this module cannot map to a column/table at all is surfaced as a
+      `-- NOTE` comment (RULE #5), never silently dropped.
 
   Inheritance:
     qualified_name: IlisMeta16.ModelData.Class

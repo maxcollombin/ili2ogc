@@ -1,0 +1,34 @@
+INTERLIS 2.3;
+
+!! Same INSPECTION OF shape as inspection_of.ili, but the inspected path
+!! is INDIRECT (INSPECTION OF ... -> Attr2 -> Attr3): Attr2 is a BAG OF A,
+!! and A itself has a BAG OF C nested one level deeper - pins the SQL
+!! translation's multi-hop chain of child tables
+!! (`b_attr2` -> `b_attr2_attr3`, `convert/sql.py:_build_nested_child_tables`
+!! / `_build_inspection_view`).
+
+MODEL TestInspectionNested AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    STRUCTURE C =
+      Attr4: TEXT*20;
+    END C;
+
+    STRUCTURE A =
+      Attr1: TEXT*20;
+      Attr3: BAG OF C;
+    END A;
+
+    CLASS B =
+      Attr2: BAG OF A;
+    END B;
+
+    VIEW VB
+      INSPECTION OF TestInspectionNested.Base.B -> Attr2 -> Attr3;
+      =
+      ATTRIBUTE
+        Attr4: TEXT*20 := B -> Attr4;
+    END VB;
+  END Base;
+
+END TestInspectionNested.

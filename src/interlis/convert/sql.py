@@ -489,9 +489,9 @@ def _build_child_table(
     attr_name: str,
     multi_value: MetaInstance,
     symbol_table: SymbolTable | None,
-) -> tuple[Table | None, dict[str, str], str | None]:
-    """Return `(child_table, renamed, None)` on success or `(None, {}, reason)` on failure, for one `BAG`/`LIST OF`
-    attribute.
+) -> tuple[Table | None, dict[str, str], str | None, list[tuple[str, MetaInstance]]]:
+    """Return `(child_table, renamed, None, nested_child_specs)` on success or `(None, {}, reason, [])` on failure,
+    for one `BAG`/`LIST OF` attribute.
 
     Companion to `convert/jsonfg.py`'s `include_child_rows` synthetic
     Features (see docs/sql-conversion-strategy.md) - GDAL loads them into
@@ -504,9 +504,13 @@ def _build_child_table(
     as a plain attribute: scalar/geometry -> one `value` column;
     `STRUCTURE` -> its own columns (reusing `_columns_for_class` directly
     with no prefix, since THIS table already represents one structure
-    instance - a NESTED `BAG`/`LIST` inside it still isn't supported, same
-    one-level scope limit as everywhere else in this module). The
-    `ReferenceType`/non-structure `Class` branch below is DEFENSIVE only -
+    instance). A `BAG`/`LIST OF` found INSIDE that structure - a nested
+    multi-value, not flattenable into a column - is returned as
+    `nested_child_specs` rather than built here: the caller (`build_tables`)
+    turns each into its own `<this table>_<subattr>` child table, one
+    level deeper (`build_tables`'s own recursion bound, mirroring
+    `_MAX_STRUCT_FLATTEN_DEPTH`). The `ReferenceType`/non-structure `Class`
+    branch below is DEFENSIVE only -
     verified (2026-08-27, `attrTypeDef`'s real ANTLR bytecode, RULE #2bis)
     that `BAG`/`LIST OF REFERENCE TO X` is NOT actually constructible by
     this project's vendored grammar at all (`attrTypeDef`'s `(BAG|LIST)
@@ -514,13 +518,13 @@ def _build_child_table(
     `STRUCTURE`, `ANYSTRUCTURE`, or a bare scalar `type_()`, never
     `referenceAttr()`) - contrary to what the abstract eCH-0031 EBNF
     alone would suggest, and confirmed absent from the real corpus too.
-    An unmapped `BaseType` kind returns `(None, reason)` - the caller
+    An unmapped `BaseType` kind returns `(None, {}, reason, [])` - the caller
     keeps the pre-existing "-- NOTE" on the PARENT table instead of
     creating an empty/broken child table.
     """
     base_type = getattr(multi_value, "BaseType", None)
     if not isinstance(base_type, MetaInstance):
-        return None, {}, "BaseType not resolved"
+        return None, {}, "BaseType not resolved", []
     base_kind = base_type._qualified_class.rsplit(".", 1)[-1]
 
     child_table_name = _sql_identifier(f"{parent_table}_{attr_name}")
@@ -539,22 +543,24 @@ def _build_child_table(
     if bool(getattr(multi_value, "Ordered", False)):
         columns.append(Column("seq", "integer", nullable=False))
 
+    nested_child_specs: list[tuple[str, MetaInstance]] = []
     if base_kind == "Class" and _is_structure(base_type):
         if bool(getattr(base_type, "Abstract", False)):
             # An abstract element is routed to `abstract_specs` by `_columns_for_class`
             # (one child table per concrete subclass) - never reaches here.
-            return None, {}, "BAG/LIST OF an ABSTRACT structure - subclass polymorphism not mapped to a table"
-        sub_columns, sub_fks, sub_notes, _sub_child_specs, _sub_local_unique, _sub_abstract = _columns_for_class(
+            return None, {}, "BAG/LIST OF an ABSTRACT structure - subclass polymorphism not mapped to a table", []
+        sub_columns, sub_fks, sub_notes, sub_child_specs, _sub_local_unique, _sub_abstract = _columns_for_class(
             base_type, symbol_table
         )
         columns.extend(sub_columns)
         foreign_keys.extend(sub_fks)
         notes.extend(sub_notes)
+        nested_child_specs = sub_child_specs
     elif base_kind in ("Class", "ReferenceType"):
         synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
         target = reference_target_class(synthetic)
         if target is None:
-            return None, {}, "reference target not resolved - pass its model to --repo or --catalog"
+            return None, {}, "reference target not resolved - pass its model to --repo or --catalog", []
         target_table = _sql_identifier(getattr(target, "Name", None) or "")
         columns.append(Column("value", "text", nullable=True))
         foreign_keys.append(
@@ -569,17 +575,72 @@ def _build_child_table(
         synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
         sfa_type, srid, reason = _geometry_column_info(synthetic)
         if sfa_type is None:
-            return None, {}, reason
+            return None, {}, reason, []
         columns.append(Column("value", sql_type="", nullable=False, geometry_type=sfa_type, srid=srid))
     else:
         synthetic = ResolvedAttribute(attr=base_type, type_instance=base_type, type_kind=base_kind, mandatory=True)
         scalar_type = _scalar_sql_type(synthetic)
         if scalar_type is None:
-            return None, {}, f"unsupported element type {base_kind!r}"
+            return None, {}, f"unsupported element type {base_kind!r}", []
         columns.append(Column("value", scalar_type, nullable=False))
 
     renamed = _avoid_identity_collision(columns)
-    return Table(name=child_table_name, columns=columns, foreign_keys=foreign_keys, notes=notes), renamed, None
+    table = Table(name=child_table_name, columns=columns, foreign_keys=foreign_keys, notes=notes)
+    return table, renamed, None, nested_child_specs
+
+
+def _build_nested_child_tables(
+    parent_child_table: Table,
+    child_specs: list[tuple[str, MetaInstance]],
+    symbol_table: SymbolTable | None,
+    used_table_names: set[str],
+) -> list[Table]:
+    """Build one `<parent_child_table>_<attr>` table per `BAG`/`LIST OF` attribute found one level inside it.
+
+    `INSPECTION OF <class> -> a -> b` (an indirect/multi-hop path) needs
+    exactly this chain of tables to exist (`_build_inspection_view`
+    resolves it by walking `<base>_a_b`); a `BAG`/`LIST OF` attribute
+    nested this way was previously discarded silently by
+    `_build_child_table` (`_sub_child_specs`, now `nested_child_specs`).
+    Bounded to ONE level (no recursive call back into this function): no
+    real corpus evidence of a THIRD nesting level, and the immediate
+    `UNIQUE (LOCAL)`/`struct_global_unique` bookkeeping `build_tables`
+    does for a first-level child table doesn't apply here (a `UNIQUE
+    (LOCAL)` this deep has no observed real-world case either) - a
+    further-nested `BAG`/`LIST OF` inside one of these tables is simply
+    noted, not built, same "no real corpus evidence, no crash" stance as
+    `_MAX_STRUCT_FLATTEN_DEPTH` for STRUCTURE flattening.
+    """
+    out: list[Table] = []
+    for attr_name, multi_value in child_specs:
+        child_table, _renamed, reason, deeper_specs = _build_child_table(
+            parent_child_table.name, attr_name, multi_value, symbol_table
+        )
+        if child_table is None:
+            rule = (
+                "SQL-BAGLIST-ELEMENT-UNRESOLVED"
+                if reason and "not resolved" in reason
+                else "SQL-BAGLIST-ELEMENT-UNMAPPED"
+            )
+            parent_child_table.notes.append(_diag(rule, f"{attr_name}: BAG/LIST OF - {reason}"))
+            continue
+        base_name = child_table.name
+        name = base_name
+        suffix = 2
+        while name in used_table_names:
+            name = f"{base_name}_{suffix}"
+            suffix += 1
+        used_table_names.add(name)
+        child_table.name = name
+        if deeper_specs:
+            child_table.notes.append(
+                _diag(
+                    "SQL-BAGLIST-ELEMENT-UNMAPPED",
+                    "a further nested BAG/LIST OF attribute is not built as a table (2 levels of nesting is the bound)",
+                )
+            )
+        out.append(child_table)
+    return out
 
 
 def _structure_child_table(
@@ -1114,7 +1175,9 @@ def build_tables(
         tables.append(parent_table)
 
         for attr_name, multi_value in child_specs:
-            child_table, child_renamed, reason = _build_child_table(table_name, attr_name, multi_value, home_table)
+            child_table, child_renamed, reason, nested_specs = _build_child_table(
+                table_name, attr_name, multi_value, home_table
+            )
             if child_table is None:
                 rule = (
                     "SQL-BAGLIST-ELEMENT-UNRESOLVED"
@@ -1167,6 +1230,8 @@ def build_tables(
                 child_table.unique_constraints.append(UniqueConstraint(name, remapped))
 
             tables.append(child_table)
+            if nested_specs:
+                tables.extend(_build_nested_child_tables(child_table, nested_specs, home_table, used_table_names))
 
         # An ABSTRACT structure attribute (single-valued or BAG/LIST OF):
         # one child table per concrete subclass reachable in the symbol
@@ -1648,21 +1713,26 @@ def _build_inspection_view(
     tables_by_name: dict[str, Table],
     symbol_for,
 ) -> str:
-    """Return a `SELECT ... FROM "<parent>_<attr>"` body for a `FormationKind=Inspection` view.
+    """Return a `SELECT ... FROM "<parent>_<attr>[_<sub-attr>]"` body for a `FormationKind=Inspection` view.
 
     `INSPECTION OF <base> -> attr` yields every element of the inspected
     `BAG`/`LIST OF` structure attribute; `build_tables` already emits that
     extent as the child table `<base_table>_<attr>`, so the view is just a
-    projection over it. Each view `ClassAttribute` (`out := <base> -> field`)
-    reads `field` straight from a child-table column; `out := PARENT ->
-    field` reads `field` from the owning object instead, resolved by
-    joining back to the base table on the same `<base_table>_fk` column
-    `build_tables` already puts on the child table (`RULE #1`: reuses that
-    naming, does not invent a new join convention). A multi-hop inspection
-    path (an indirect sub-structure) is not translated - the whole view
-    demotes to a `-- NOTE` (RULE #5). A geometry inspection
-    (`SurfaceBoundary`/`SurfaceEdge` of an area/surface attribute) has no
-    child table and likewise demotes.
+    projection over it. An indirect path (`-> attr -> sub_attr`, a
+    `BAG`/`LIST OF` nested one level inside `attr`'s element structure)
+    walks the SAME chain of tables `build_tables`/`_build_nested_child_tables`
+    now emits (`<base_table>_<attr>_<sub_attr>`) - a missing table at any
+    hop (a chain deeper than that one nesting level, or a geometry
+    decomposition with no table at all) demotes the whole view. Each view
+    `ClassAttribute` (`out := <base> -> field`) reads `field` straight from
+    the FINAL hop's column; `out := PARENT -> field` reads `field` from
+    the owning object instead, resolved by joining back to the base table
+    on the same `<base_table>_fk` column `build_tables` already puts on
+    the child table (`RULE #1`: reuses that naming, does not invent a new
+    join convention) - only supported for a single-hop path, since a
+    multi-hop child table's FK points at the INTERMEDIATE table, not the
+    base table. A geometry inspection (`SurfaceBoundary`/`SurfaceEdge` of
+    an area/surface attribute) has no child table and likewise demotes.
     """
     if len(bases) != 1:
         raise _UnsupportedView("an inspection view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
@@ -1673,18 +1743,15 @@ def _build_inspection_view(
             "INSPECTION path (the '-> attribute' chain) was not built - InterlisModelBuilder gap",
             "SQL-VIEW-FORMATION-UNSUPPORTED",
         )
-    if len(path) > 1:
-        raise _UnsupportedView(
-            f"INSPECTION OF an indirect sub-structure ({' -> '.join(path)}) is not translated to a SQL view",
-            "SQL-VIEW-FORMATION-UNSUPPORTED",
-        )
-    child_table = _sql_identifier(f"{base_table}_{path[0]}")
-    if child_table not in tables_by_name:
-        raise _UnsupportedView(
-            f"the inspected attribute {path[0]!r} has no child table "
-            f"(a geometry inspection is a decomposition, not a table)",
-            "SQL-VIEW-FORMATION-UNSUPPORTED",
-        )
+    child_table = base_table
+    for hop in path:
+        child_table = _sql_identifier(f"{child_table}_{hop}")
+        if child_table not in tables_by_name:
+            raise _UnsupportedView(
+                f"the inspected attribute {' -> '.join(path)!r} has no child table "
+                f"(a geometry inspection is a decomposition, or the path nests more than one level deep)",
+                "SQL-VIEW-FORMATION-UNSUPPORTED",
+            )
     columns = {c.name for c in tables_by_name[child_table].columns}
     base_columns = {c.name for c in tables_by_name[base_table].columns} if base_table in tables_by_name else set()
     fk_col = _sql_identifier(f"{base_table}_fk")
@@ -1707,6 +1774,12 @@ def _build_inspection_view(
                 raise _UnsupportedView(f"element attribute {refs[1]!r} has no column on {child_table!r}")
             select_items.append(f'"{elem_alias}"."{col}" AS "{_sql_identifier(aname or "")}"')
         elif len(path_els) == 2 and getattr(path_els[0], "Kind", None) == "Parent" and refs[1] is not None:
+            if len(path) > 1:
+                raise _UnsupportedView(
+                    "an inspection view attribute navigates PARENT-> on a multi-hop path - the child table's "
+                    "FK points at the intermediate table, not the base table",
+                    "SQL-VIEW-FORMATION-UNSUPPORTED",
+                )
             if fk_col not in columns:
                 raise _UnsupportedView(
                     f"the inspected element table {child_table!r} has no {fk_col!r} column to join back to "

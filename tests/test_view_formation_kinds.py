@@ -155,6 +155,27 @@ def test_inspection_sql_resolves_parent_arrow_by_joining_back_to_the_base_table(
     assert rows == [("first", "owner-1"), ("second", "owner-1")]
 
 
+def test_inspection_sql_resolves_an_indirect_multi_hop_path_via_a_nested_child_table():
+    builder = _build("inspection_of_nested")
+    tables, views = _sql_views(builder)
+    (vb,) = views
+    assert vb.body is not None
+    assert 'FROM "b_attr2_attr3" "insp"' in vb.body
+    table_names = {t.name for t in tables}
+    assert {"b", "b_attr2", "b_attr2_attr3"} <= table_names
+    con = _run_ddl(tables, views)
+    con.execute('INSERT INTO "b" ("id") VALUES (1)')
+    con.execute('INSERT INTO "b_attr2" ("id", "b_fk", "attr1") VALUES (1, 1, ?)', ("first",))
+    con.execute('INSERT INTO "b_attr2_attr3" ("id", "b_attr2_fk", "attr4") VALUES (1, 1, ?)', ("alpha",))
+    con.execute('INSERT INTO "b_attr2_attr3" ("id", "b_attr2_fk", "attr4") VALUES (2, 1, ?)', ("beta",))
+    assert sorted(r[0] for r in con.execute('SELECT "attr4" FROM "vb"')) == ["alpha", "beta"]
+
+
+def test_inspection_jsonfg_resolves_an_indirect_multi_hop_path_too():
+    feats = _features(_build("inspection_of_nested"), "inspection_of_nested")
+    assert [f["properties"]["Attr4"] for f in feats] == ["alpha", "beta"]
+
+
 # --- AGGREGATION OF -----------------------------------------------------
 
 

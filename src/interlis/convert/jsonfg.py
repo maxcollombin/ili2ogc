@@ -1210,25 +1210,39 @@ def _inspection_target(
     base_view: MetaInstance,
     path: list[str],
     symbol_table: SymbolTable | None,
-) -> tuple[MetaInstance | None, bool]:
-    """Return `(element type, is_multi)` for the `INSPECTION OF base -> a -> b` path's final hop."""
+) -> tuple[MetaInstance | None, bool, list[bool]]:
+    """Return `(element type, is_multi, hop_is_multi)` for the `INSPECTION OF base -> a -> b` path.
+
+    `hop_is_multi[i]` says whether `path[i]` is itself a `BAG`/`LIST OF`
+    attribute - `_evaluate_inspection` needs this for EVERY hop, not just
+    the last (`is_multi`), to unwrap a multi-value wrapper into its
+    occurrences before matching the NEXT hop's tag on each occurrence (an
+    indirect path through a `BAG`/`LIST OF` structure at an intermediate
+    level, not only at the end). Always `len(path)` long, even when a hop
+    fails to resolve (padded with `False` - best-effort, same
+    graceful-degradation stance as everywhere else, RULE #5).
+    """
     current: MetaInstance | None = base_view
     is_multi = False
+    hop_is_multi: list[bool] = []
     for hop in path:
         if not isinstance(current, MetaInstance):
-            return None, False
+            break
         members = schema_members_of(current, symbol_table) if symbol_table is not None else attributes_of(current)
         attr = members.get(hop)
         if attr is None:
-            return None, False
+            current = None
+            break
         resolved = resolve_attribute(attr)
         nxt = resolved.type_instance
         is_multi = resolved.type_kind == "MultiValue"
+        hop_is_multi.append(is_multi)
         if is_multi and isinstance(nxt, MetaInstance):
             nxt = getattr(nxt, "BaseType", None)  # BAG/LIST OF <element type>
         current = nxt if isinstance(nxt, MetaInstance) else None
+    hop_is_multi += [False] * (len(path) - len(hop_is_multi))
     ok = isinstance(current, MetaInstance) and getattr(current, "Kind", None) in ("Class", "Structure")
-    return (current if ok else None), is_multi
+    return (current if ok else None), (is_multi if ok else False), hop_is_multi
 
 
 def _evaluate_inspection(
@@ -1247,13 +1261,20 @@ def _evaluate_inspection(
     transfers its occurrences as DIRECT CHILDREN of one wrapper element
     (the same wire convention `_multi_value` relies on) - those children
     are the elements; a single reference/structure attribute is itself the
-    element.
+    element. An INDIRECT path (`-> a -> b`) needs this unwrapping at EVERY
+    multi-value hop, not just the last one: `hop_is_multi[k-1]` (from
+    `_inspection_target`) says whether hop `path[k-1]`'s own wrapper must
+    be expanded into its occurrences before searching THEM for `path[k]`'s
+    tag - a plain (non-multi) intermediate structure attribute is its own
+    element, so its children are searched directly instead.
     """
-    element_type, is_multi = _inspection_target(base_view, path, symbol_table)
+    element_type, is_multi, hop_is_multi = _inspection_target(base_view, path, symbol_table)
     features: list[dict[str, Any]] = []
     for base_obj in base_objects:
         nodes: list[RawNode] = list(base_obj.attributes.get(path[0], []))
-        for hop in path[1:]:
+        for hop, previous_was_multi in zip(path[1:], hop_is_multi[:-1]):
+            if previous_was_multi:
+                nodes = [c for node in nodes for c in node.children]
             nodes = [gc for node in nodes for gc in node.children if gc.tag == hop]
         occurrences = [c for node in nodes for c in node.children] if is_multi else nodes
         for i, node in enumerate(occurrences):
