@@ -11,7 +11,14 @@ from pathlib import Path
 import pytest
 
 from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.convert.sql import Column, UniqueConstraint, build_tables, render_gpkg, render_postgresql
+from interlis.convert.sql import (
+    Column,
+    UniqueConstraint,
+    _truncate_identifier,
+    build_tables,
+    render_gpkg,
+    render_postgresql,
+)
 from interlis.runtime.parse import meta_attribute_comments, parse_text
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -838,8 +845,8 @@ def test_unique_local_becomes_a_compound_unique_on_the_child_table():
     assert parent.notes == []
     assert child.unique_constraints == [
         UniqueConstraint(
-            # truncated to 63 chars, same as every other identifier in this module
-            "uq_countrynamestranslation_entries_countrynamestranslation_fk_c",
+            # truncated (collision-safe hash suffix) to 63 chars, same as every other identifier in this module
+            _truncate_identifier("uq_countrynamestranslation_entries_countrynamestranslation_fk_code"),
             ["countrynamestranslation_fk", "code"],
         )
     ]
@@ -939,3 +946,29 @@ END Foo.
             "INSERT INTO parcel_name_entries (id, parcel_fk, language, text) VALUES (?,?,?,?)",
             ("e3", "p1", "de", "Parcelle"),
         )
+
+
+def test_truncate_identifier_leaves_short_names_untouched():
+    assert _truncate_identifier("road") == "road"
+    assert _truncate_identifier("a" * 63) == "a" * 63
+
+
+def test_truncate_identifier_hash_suffix_avoids_collision_on_shared_prefix():
+    """2 different long names sharing the same 63-char prefix must NOT truncate to the same identifier.
+
+    Real corpus case (`LWB_Bewirtschaftungseinheiten_V3_0`): a naive
+    `name[:63]` already produced a foreign key name truncated to exactly
+    63 chars - the collision itself wasn't observed only because no 2nd
+    name happened to share that exact prefix, not because the old code
+    guarded against it.
+    """
+    base = "fk_" + "x" * 70
+    a = _truncate_identifier(base + "_alpha")
+    b = _truncate_identifier(base + "_beta")
+    assert len(a) <= 63 and len(b) <= 63
+    assert a != b
+
+
+def test_truncate_identifier_is_deterministic():
+    long_name = "fk_" + "y" * 80
+    assert _truncate_identifier(long_name) == _truncate_identifier(long_name)

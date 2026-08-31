@@ -52,6 +52,7 @@ comment (RULE #5).
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 
@@ -118,7 +119,26 @@ def _sql_identifier(name: str) -> str:
 
 
 def _truncate_identifier(name: str) -> str:
-    return name if len(name) <= _MAX_IDENTIFIER_LENGTH else name[:_MAX_IDENTIFIER_LENGTH]
+    """Truncate `name` to PostgreSQL's identifier limit, collision-safe.
+
+    A naive `name[:63]` risks 2 DIFFERENT long names sharing the same
+    63-char prefix truncating to the exact same identifier - not
+    hypothetical, a real corpus run (`LWB_Bewirtschaftungseinheiten_V3_0`)
+    already produced a foreign key name truncated to exactly 63 chars
+    mid-word. Replacing the tail with a short hash of the FULL name
+    (rather than just chopping it) makes 2 unrelated long names collide
+    only in the astronomically unlikely case of a hash collision, without
+    needing a globally-tracked `used` set the way `_dedup_name` does for
+    VIEW/table names (every one of this function's 15+ call sites would
+    otherwise need one threaded through) - and stays deterministic (the
+    same full name always truncates to the same result, needed for a
+    reproducible re-run of `convert-sql` on an unchanged model).
+    """
+    if len(name) <= _MAX_IDENTIFIER_LENGTH:
+        return name
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]  # noqa: S324 - collision-avoidance, not security
+    keep = _MAX_IDENTIFIER_LENGTH - len(digest) - 1
+    return f"{name[:keep]}_{digest}"
 
 
 def _avoid_identity_collision(columns: list[Column]) -> dict[str, str]:
