@@ -92,6 +92,11 @@ REGISTRY: dict[str, tuple[str, str]] = {
         "A",
         "a UNION/AGGREGATION/INSPECTION VIEW is not translated to CREATE VIEW (only PROJECTION/JOIN are)",
     ),
+    "SQL-VIEW-JOIN-UNLINKED": (
+        "B",
+        "a WHERE-less JOIN OF has 2+ bases with no direct association to join on - a comma-join would silently "
+        "produce a Cartesian product",
+    ),
     # -- convert (.ili -> JSON Schema) -------------------------------------
     "JSONSCHEMA-CLASS-UNRESOLVED": (
         "C",

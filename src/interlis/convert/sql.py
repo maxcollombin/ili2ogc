@@ -1762,6 +1762,8 @@ def build_views(
             if not select_items:
                 raise _UnsupportedView("view has no projectable ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
             where = _view_where_conjuncts(getattr(view, "Where", None), resolver)
+            if len(bases) > 1 and getattr(view, "Where", None) is None:
+                where += _auto_join_conditions(bases, symbol_for)
             constraint_notes, triggers = _view_unique_constraint_ddl(
                 view, vname, bases, tables_by_name, attr_col, where, extra_joins_present=bool(resolver.extra_joins)
             )
@@ -2293,6 +2295,111 @@ def _association_embedding(assoc_cls: MetaInstance) -> tuple[MetaInstance, str, 
     if not near_name or not far_name:
         return None
     return carrier, near_name, far_name
+
+
+def _direct_association_join(
+    cls_a: MetaInstance, cls_b: MetaInstance, symbol_table: SymbolTable | None
+) -> tuple[bool, str] | None:
+    """Find the (unique) 2-role association directly linking `cls_a` and `cls_b`.
+
+    Returns `(fk_on_a, fk_col)`: `fk_on_a` True means `cls_a`'s table
+    carries the FK column `fk_col` referencing `cls_b`'s id, False the
+    reverse. Same embedding rule as `_resolve_association_hop`/
+    `xtf.schema.embedded_roles_of` (the FK sits on the `> 1`-cardinality
+    role's target, else the second-declared role's target; its column is
+    named after the OTHER role) - `None` for no such association, a
+    many-to-many one (nothing embedded to join on), or 2+ candidates that
+    disagree (ambiguous, left to an explicit `WHERE` rather than guessed).
+    """
+    if symbol_table is None:
+        return None
+    result: tuple[bool, str] | None = None
+    for cand in symbol_table.all_registered():
+        if not isinstance(cand, MetaInstance) or cand._qualified_class.rsplit(".", 1)[-1] != "Class":
+            continue
+        if getattr(cand, "Kind", None) != "Association":
+            continue
+        roles = [r for r in (getattr(cand, "Role", None) or []) if isinstance(r, MetaInstance)]
+        if len(roles) != 2:
+            continue
+        role_a, role_b = roles
+        tgt_a, tgt_b = _class_related_base_class(role_a), _class_related_base_class(role_b)
+        if tgt_a is None or tgt_b is None:
+            continue
+        if is_class_compatible(cls_a, tgt_a) and is_class_compatible(cls_b, tgt_b):
+            a_target = tgt_a
+        elif is_class_compatible(cls_a, tgt_b) and is_class_compatible(cls_b, tgt_a):
+            a_target = tgt_b
+        else:
+            continue
+        multi_a, multi_b = _role_is_multi(role_a), _role_is_multi(role_b)
+        if multi_a and multi_b:
+            continue
+        embed_on, fk_role = (tgt_a, role_b) if multi_a else ((tgt_b, role_a) if multi_b else (tgt_b, role_a))
+        fk_col = _sql_identifier(getattr(fk_role, "Name", None) or "")
+        if not fk_col:
+            continue
+        candidate = (embed_on is a_target, fk_col)
+        if result is not None and result != candidate:
+            return None
+        result = candidate
+    return result
+
+
+def _auto_join_conditions(
+    bases: list[tuple[str, MetaInstance, str]],
+    symbol_for,
+) -> list[str]:
+    """Derive `WHERE` join predicates connecting every JOIN OF base, for a `Where`-less multi-base VIEW.
+
+    Real corpus `JOIN OF A, B;` with no `WHERE` at all (e.g.
+    `Waldabstandslinien_V1_2`'s `Waldabstand_Linie`/`Typ`,
+    `ERKAS_Strassen_V2_0`'s `Verkehrsaufkommen`/`Vollzug`) relies on the
+    classes being linked by their OWN association - confirmed against
+    `ili2c` (`JOIN OF A,B;` alone compiles when exactly one 2-role
+    association connects them). Builds a spanning tree over `bases` via
+    `_direct_association_join`: each base beyond the first must be
+    linkable to some base already in the tree. A base with no direct
+    association to the rest (`ERKAS_Strassen_V2_0`'s case - Verkehrsaufkommen
+    and Vollzug are only related transitively, through Datenpunkt) can't
+    be joined without risking a Cartesian product - demotes the whole VIEW
+    (RULE #5) instead of emitting a wrong `FROM a, b` comma-join.
+    """
+    connected = {bases[0][0]}
+    conditions: list[str] = []
+    remaining = list(bases[1:])
+    progress = True
+    while remaining and progress:
+        progress = False
+        for alias, cls, _table in list(remaining):
+            for other_alias, other_cls, _other_table in bases:
+                if other_alias not in connected or other_alias == alias:
+                    continue
+                link = _direct_association_join(cls, other_cls, symbol_for(cls)) or _direct_association_join(
+                    cls, other_cls, symbol_for(other_cls)
+                )
+                if link is None:
+                    continue
+                fk_on_current, fk_col = link
+                conditions.append(
+                    f'"{alias}"."{fk_col}" = "{other_alias}"."{OID_COLUMN}"'
+                    if fk_on_current
+                    else f'"{other_alias}"."{fk_col}" = "{alias}"."{OID_COLUMN}"'
+                )
+                connected.add(alias)
+                remaining.remove((alias, cls, _table))
+                progress = True
+                break
+            if progress:
+                break
+    if remaining:
+        names = ", ".join(getattr(cls, "Name", None) or "?" for _a, cls, _t in remaining)
+        raise _UnsupportedView(
+            f"JOIN OF has no WHERE and {names} has no direct association linking it to the other base(s) - "
+            "cannot derive a join condition without risking a Cartesian product",
+            "SQL-VIEW-JOIN-UNLINKED",
+        )
+    return conditions
 
 
 def _resolve_view_bases(

@@ -343,3 +343,92 @@ def test_fgdm4gs_derived_view_auto_includes_its_base_model_tables(derived):
     for v in sql_views:
         assert v.body is None and v.notes
         assert "not built" not in v.notes[0]  # the base tables ARE built; only the geometry column is missing
+
+
+_WHERELESS_JOIN_MODEL = """INTERLIS 2.4;
+MODEL WherelessJoin AT "http://x" VERSION "1" =
+  TOPIC Base =
+    CLASS Typ =
+      Code : MANDATORY TEXT*10;
+    END Typ;
+    CLASS Linie =
+      Geom : MANDATORY TEXT*10;
+    END Linie;
+    ASSOCIATION Typ_Linie =
+      Geometrie -- {0..*} Linie;
+      WAL -<> {1} Typ;
+    END Typ_Linie;
+    CLASS Unrelated1 =
+      Attr1 : TEXT*10;
+    END Unrelated1;
+    CLASS Unrelated2 =
+      Attr2 : TEXT*10;
+    END Unrelated2;
+  END Base;
+  TOPIC Derived =
+    DEPENDS ON WherelessJoin.Base;
+    VIEW LinieTyp
+      JOIN OF Linie, Typ;
+      =
+      ATTRIBUTE
+        geom := Linie -> Geom;
+        code := Typ -> Code;
+    END LinieTyp;
+    VIEW Unlinked
+      JOIN OF Unrelated1, Unrelated2;
+      =
+      ATTRIBUTE
+        attr1 := Unrelated1 -> Attr1;
+        attr2 := Unrelated2 -> Attr2;
+    END Unlinked;
+  END Derived;
+END WherelessJoin.
+"""
+
+
+def _split_whereless_join():
+    tree, errors = parse_text(_WHERELESS_JOIN_MODEL)
+    assert not errors, errors
+    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+    return _split(builder)
+
+
+def test_whereless_join_of_directly_associated_classes_auto_derives_the_join_condition():
+    """`JOIN OF A, B;` with no `WHERE` at all - real corpus shape (`Waldabstandslinien_V1_2`'s
+    `Waldabstand_Linie`/`Typ`, confirmed valid `ili2c` INTERLIS - `JOIN OF A,B;` alone compiles when exactly one
+    2-role association connects them, refman SS4.3.9). `_auto_join_conditions` derives the join from that
+    association's own embedded FK, the same one `build_tables` already put on `linie` (`wal` -> `typ.id`).
+    """
+    _tables, sql_views = _split_whereless_join()
+    view = _view(sql_views, "linietyp")
+    assert view.body is not None, view.notes
+    assert 'FROM "linie" "linie", "typ" "typ"' in view.body
+    assert '"linie"."wal" = "typ"."id"' in view.body
+
+
+def test_whereless_join_of_directly_associated_classes_executes_against_real_sqlite():
+    tables, sql_views = _split_whereless_join()
+    schema = render_gpkg(tables).split("\nINSERT INTO gpkg_contents")[0]
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(schema)
+    view = _view(sql_views, "linietyp")
+    conn.execute(f'CREATE VIEW "{view.name}" AS {view.body}')
+    conn.execute("INSERT INTO typ (id, code) VALUES ('t1', 'x')")
+    conn.execute("INSERT INTO linie (id, geom, wal) VALUES ('l1', 'g1', 't1')")
+    conn.execute("INSERT INTO linie (id, geom, wal) VALUES ('l2', 'g2', 't1')")
+    rows = sorted(conn.execute("SELECT geom, code FROM linietyp"))
+    assert rows == [("g1", "x"), ("g2", "x")]
+
+
+def test_whereless_join_of_unassociated_classes_demotes_instead_of_a_cartesian_product():
+    """No `WHERE`, and the 2 bases share no direct association (real corpus shape - `ERKAS_Strassen_V2_0`'s
+    `Verkehrsaufkommen`/`Vollzug`, only related transitively through `Datenpunkt`) - a bare comma-join would
+    silently produce a Cartesian product, so the whole VIEW demotes to a `-- NOTE` instead (RULE #5).
+    """
+    _tables, sql_views = _split_whereless_join()
+    view = _view(sql_views, "unlinked")
+    assert view.body is None
+    assert any("SQL-VIEW-JOIN-UNLINKED" in n for n in view.notes)
