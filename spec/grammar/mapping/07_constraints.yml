@@ -153,10 +153,18 @@ existenceConstraint:
   kind: Instance
   target: IlisMeta16.ModelData.ExistenceConstraint
   parent:
-    association: ExistenceDef
-    role: ExistenceConstraint
-    note: confirmed association IlisMeta16.ModelData.ExistenceDef (ilismeta16-associations.yml), ends
-      ExistenceConstraint/ExistsIn; ExistsIn (target Class) is resolved from viewableRef(0).
+    association: ClassConstraint
+    role: Constraint
+    note: 'Same association/role every other constraintDef alternative uses (mandatoryConstraint/
+      setConstraint/uniquenessConstraint) to attach onto the ENCLOSING class/view''s own Constraint
+      list - existenceConstraint previously named ExistenceDef/ExistenceConstraint here instead, its
+      OWN ExistsIn association (see below), which attaches nothing onto the enclosing class at all
+      (confirmed empirically: a CLASS with an inline EXISTENCE CONSTRAINT built the ExistenceConstraint
+      instance, registered it in the symbol table, but left Class.Constraint == None). ExistsIn itself
+      does not need its own `parent:` entry here: it is populated separately, by the generic
+      unclaimed-children sweep (`_attach_unclaimed_results`) finding the ExistenceDef association as
+      the only one connecting ExistenceConstraint and Class, once viewableRef(0)''s resolved Class is
+      left unclaimed by any attribute_binding below.'
   attribute_bindings:
     Name:
       source:
@@ -169,7 +177,12 @@ existenceConstraint:
         index: 0
       note: 'confirmed attribute Attr: IlisMeta16.ModelData.PathOrInspFactor on ExistenceConstraint (ilismeta16-classes.yml);
         attributePath(0) is the attribute whose existence is required. attributePath()''s internal PathEls/Inspection
-        dispatch belongs to Expressions - not resolved here.'
+        dispatch belongs to Expressions - not resolved here. This binding alone only populates Attr with
+        the raw Container bag ({"PathEls": [...]}), never a proper PathOrInspFactor instance - the
+        wrapping normally happens in factor()''s own Conditional branch merge, which existenceConstraint''s
+        grammar never routes through (it calls attributePath() directly). `InterlisModelBuilder._fix_existence_constraint_attr`
+        re-wraps it by hand, same class of gap and same fix shape as
+        `_stash_aggregation_key`/`_stash_inspection_path` (view FormationParameter).'
   note: 'The grammar originally only accepted a single viewableRef/attributePath pair: "EXISTENCE CONSTRAINT
     (Name COLON)? attributePath(0) REQUIRED IN viewableRef COLON attributePath(1) SEMI" - but the Reference
     Manual eCH-0031 V2.1.0 (§3.12) specifies a repeatable clause "{''OR'' ViewableRef '':''

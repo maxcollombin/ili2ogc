@@ -10,7 +10,11 @@ exercised:
   `plausibilityConstraint`/`uniquenessConstraint`/`setConstraint`) had no
   `parent:` binding at all - a constraint declared INSIDE a CLASS/STRUCTURE
   body was built then silently discarded, never reachable from
-  `Class.Constraint`.
+  `Class.Constraint`. The 5th (`existenceConstraint`) had the same gap for
+  a different reason (a `parent:` binding WAS present, but named the
+  wrong association - `ExistenceDef`/`ExistenceConstraint`, its OWN
+  `ExistsIn` link, instead of `ClassConstraint`/`Constraint` like the
+  other 4) - fixed separately, see `test_existence_constraint_...` below.
 - `_relay`'s single-key "bag" unwrap shortcut discarded a `feeds_into:`
   rule's real content whenever it had exactly one non-underscore
   attribute_bindings key (e.g. `objectOrAttributePath.PathEls`) - the root
@@ -96,6 +100,57 @@ def test_set_constraint_attaches_to_its_class():
     cls = _class_with_constraint("SET CONSTRAINT KBfrei == #false;")
     assert len(cls.Constraint) == 1
     assert cls.Constraint[0]._qualified_class.endswith("SetConstraint")
+
+
+def test_existence_constraint_attaches_to_its_class_with_a_real_attr_and_existsin():
+    """Real-corpus shape (`Axis_V1_1.ili`'s `Owner REQUIRED IN AxisCatalogs...RoadOwner: OwnerCode`), reduced to a
+    single model: `Attr` must be a real `PathOrInspFactor` (not the raw Container bag), `ExistsIn` the target class.
+    """
+    builder = _build("""INTERLIS 2.3;
+MODEL Test AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Country =
+      Code: TEXT*3;
+    END Country;
+    CLASS City =
+      CountryCode: TEXT*3;
+      EXISTENCE CONSTRAINT CountryCode REQUIRED IN Country: Code;
+    END City;
+  END T;
+END Test.
+""")
+    cls = builder.symbol_table.resolve("Test.T.City")
+    assert len(cls.Constraint) == 1
+    constraint = cls.Constraint[0]
+    assert constraint._qualified_class.endswith("ExistenceConstraint")
+    assert constraint.Attr._qualified_class.endswith("PathOrInspFactor")
+    assert [pe.Ref for pe in constraint.Attr.PathEls] == ["CountryCode"]
+    assert [c.Name for c in constraint.ExistsIn] == ["Country"]
+
+
+def test_existence_constraint_or_clause_populates_every_target_class():
+    """The repeatable `OR ViewableRef : AttributePath` form (eCH-0031 SS3.12) resolves every branch's target class
+    into `ExistsIn`, not just the first.
+    """
+    builder = _build("""INTERLIS 2.3;
+MODEL Test AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Country =
+      Code: TEXT*3;
+    END Country;
+    CLASS Region =
+      Code: TEXT*3;
+    END Region;
+    CLASS City =
+      CountryCode: TEXT*3;
+      EXISTENCE CONSTRAINT CountryCode REQUIRED IN Country: Code OR Region: Code;
+    END City;
+  END T;
+END Test.
+""")
+    cls = builder.symbol_table.resolve("Test.T.City")
+    constraint = cls.Constraint[0]
+    assert [c.Name for c in constraint.ExistsIn] == ["Country", "Region"]
 
 
 def test_local_uniqueness_builds_kind_and_uniquedef_from_the_real_corpus_shape():

@@ -779,6 +779,36 @@ END Foo.
     assert '"code" = ' not in ddl  # never a wrong CHECK comparing the raw column instead of len(...)
 
 
+def test_existence_constraint_becomes_a_note_not_a_check():
+    """Real corpus shape (`ili_corpus/Axis_V1_1.ili`'s `Owner REQUIRED IN AxisCatalogs...RoadOwner: OwnerCode`,
+    `CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili`'s `Entries->Code REQUIRED IN ...Country: Code`, 6/71 real corpus
+    files): a cross-class existence check no single-row SQL CHECK can express - surfaced, never dropped or
+    misrendered as a same-table column comparison.
+    """
+    builder = _build("""INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  TOPIC T =
+    CLASS Country =
+      Code: TEXT*3;
+    END Country;
+    CLASS City =
+      CountryCode: TEXT*3;
+      EXISTENCE CONSTRAINT CountryCode REQUIRED IN Country: Code;
+    END City;
+  END T;
+END Foo.
+""")
+    country = _resolved_class(builder, "Foo.T.Country")
+    city = _resolved_class(builder, "Foo.T.City")
+    tables = build_tables([country, city])
+    table = _table(tables, "city")
+    assert table.check_constraints == []
+    assert any("[SQL-CONSTRAINT-EXISTENCE]" in note and "no single-row SQL CHECK" in note for note in table.notes)
+    ddl = render_postgresql(tables)
+    assert "-- NOTE (city): [SQL-CONSTRAINT-EXISTENCE]" in ddl
+    assert '"countrycode" = ' not in ddl  # never a wrong CHECK comparing the raw column against itself
+
+
 _LOCAL_UNIQUE_MODEL = """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
   TOPIC T =

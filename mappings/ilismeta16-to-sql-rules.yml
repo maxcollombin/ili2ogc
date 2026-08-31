@@ -356,11 +356,11 @@ concepts:
       stay `status: backlog` within this same concept entry -
       population/basket-level checks a single-row `CHECK` cannot express -
       but each is now surfaced as its own `-- NOTE` (`SET`/`EXISTENCE`
-      touch ~3%/~8% of the real corpus - `SetConstraint` reaches
-      `_check_constraints_for_class` and is noted there; `ExistenceConstraint`
-      is not yet built by `InterlisModelBuilder` at all, so the note is
-      forward-looking on the SQL side and lives here on the spec side),
-      never a silent drop. Verified that even
+      touch ~3%/~8% of the real corpus; both `SetConstraint` and
+      `ExistenceConstraint` reach `_check_constraints_for_class` and are
+      noted there - `ExistenceConstraint`'s own builder attachment gap,
+      see `07_constraints.yml`'s `existenceConstraint` entry, closed
+      2026-08-31), never a silent drop. Verified that even
       ili2db (the mature reference INTERLIS-to-database tool) does not
       attempt an arbitrary-`Expression`-to-`CHECK` translation either -
       its own `--createNumChecks`/`--createTextChecks`/

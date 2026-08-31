@@ -403,6 +403,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
             self._normalize_enumeration_const_value(instance)
         elif rule_name == "pathEl":
             self._set_path_el_kind(instance, ctx)
+        elif rule_name == "existenceConstraint":
+            self._fix_existence_constraint_attr(instance)
 
         if entry.parent and self._parent_stack:
             self.attachment.attach(
@@ -2081,6 +2083,29 @@ class InterlisModelBuilder(InterlisParserVisitor):
             return
         tokens = names if isinstance(names, list) else [names]
         view._inspection_path = [t.getText() for t in tokens if t is not None]
+
+    def _fix_existence_constraint_attr(self, instance: MetaInstance) -> None:
+        """Re-wrap `ExistenceConstraint.Attr` as a real `PathOrInspFactor` instance.
+
+        Same class of gap as `_stash_aggregation_key`/`_stash_inspection_path`
+        (spec/grammar/mapping/07_constraints.yml's own `existenceConstraint.Attr`
+        note): the declarative `Attr` binding (`attributePath(0)`, `feeds_into:
+        PathOrInspFactor`) DOES fire and set `instance.Attr`, but only with the
+        raw Container bag (`{"PathEls": [...]}`) - the wrapping into a proper
+        instance normally happens in `factor()`'s own `Conditional` branch
+        merge, which `existenceConstraint`'s grammar never routes through (it
+        calls `attributePath()` directly, not `factor()`). Confirmed
+        empirically before this fix: `ec.Attr` was a plain `dict`,
+        `getattr(ec.Attr, "PathEls", None)` raised `AttributeError` - any
+        consumer expecting the normal Expression-node interface (every other
+        constraint's own path/expression fields) would break the same way.
+        """
+        bag = getattr(instance, "Attr", None)
+        if not isinstance(bag, dict):
+            return
+        factor = self.registry.new_instance("IlisMeta16.ModelData.PathOrInspFactor")
+        self._merge_bag_into_instance(factor, bag, "existenceConstraint")
+        instance.Attr = factor
 
     def _set_join_or_null(self, view: MetaInstance, join_ctx: ParserRuleContext) -> None:
         """Set `RenamedBaseView.OrNull` for every base of a `JOIN OF` carrying a trailing `(OR NULL)`.
