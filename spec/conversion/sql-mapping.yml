@@ -105,9 +105,14 @@ View:
         Each ClassAttribute's assigned expression (Derivates[0], a
         PathOrInspFactor) resolves to "<base alias>"."<column>", AS its own
         Name. An intermediate hop through a REFERENCE TO/embedded role adds
-        a comma-joined table. An ALL OF attribute whose synthetic identity
-        path resolves to no single column is dropped with a per-attribute
-        note (it was not named), not a whole-View demotion.
+        a comma-joined table. A base that is itself Kind=Association
+        (PROJECTION OF <association>) resolves to its 2-role embedding's
+        carrier class/table instead (_association_embedding); a path hop
+        naming the role whose own target IS that carrier is a self-reference
+        (no-op), the other role the real embedded FK. An ALL OF attribute
+        whose synthetic identity path resolves to no single column is
+        dropped with a per-attribute note (it was not named), not a
+        whole-View demotion.
     where:
       source: {field: Where}
       note: >

@@ -144,12 +144,20 @@ concepts:
       model, so that model must be part of the same conversion
       (`interlis convert-sql --catalog <base>.ili`) for its tables to
       exist - a missing base table demotes the whole View to a `-- NOTE`
-      rather than emitting a `CREATE VIEW` that would not compile. Each
-      `ClassAttribute`'s assigned expression (`Derivates[0]`, a
-      `PathOrInspFactor`) becomes `"<base alias>"."<column>"`; an
-      intermediate hop through a `REFERENCE TO`/embedded role adds a
-      comma-joined table + its `fk = id` predicate (covers `PROJECTION OF`
-      an association navigating its roles). An `ALL OF <base>` attribute
+      rather than emitting a `CREATE VIEW` that would not compile. A base
+      that is itself `Kind=Association` (`PROJECTION OF <association>`,
+      no `CREATE TABLE` of its own) resolves instead to its 2-role
+      embedding's CARRIER class/table (`_association_embedding`) - the
+      alias still spells the association's own name, so a path hop naming
+      the role whose OWN target IS that carrier is a self-reference
+      (no-op), and the OTHER role is the real embedded FK, resolved the
+      same as any embedded role below. Each `ClassAttribute`'s assigned
+      expression (`Derivates[0]`, a `PathOrInspFactor`) becomes
+      `"<base alias>"."<column>"`; an intermediate hop through a
+      `REFERENCE TO`/embedded role adds a comma-joined table + its
+      `fk = id` predicate (covers `PROJECTION OF`/`JOIN OF`/`UNION OF`/
+      `AGGREGATION OF` alike navigating a role or association). An
+      `ALL OF <base>` attribute
       whose synthetic identity path resolves to no single column (a
       STRUCTURE, an unmapped type) is dropped with a per-attribute
       `-- NOTE`, not a demotion of the whole View - it was not asked for

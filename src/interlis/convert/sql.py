@@ -1361,6 +1361,18 @@ class _ViewResolver:
     `symbol_for(cls)` returns the `SymbolTable` `cls` was built with (its
     OWN model's, for a `--catalog` class - same `class_symbol_tables` map
     `build_tables` uses), needed to see `cls`'s embedded association roles.
+
+    `assoc_near_roles` (`alias -> role name`, from `_resolve_view_bases`)
+    covers a base that is really an embedded 2-role `ASSOCIATION`:
+    `_resolve_view_bases` already remapped `alias` onto the CARRIER
+    class/table (the endpoint the association is embedded on), so a path
+    hop naming the "near" role (the one whose own target IS that carrier -
+    a self-reference back to the very row the association is embedded on)
+    is a no-op, not a real member lookup - `scalar_ref` skips it and
+    continues resolving the REST of the path against the SAME `cls`/`table`.
+    The "far" role (the other one, the actual embedded FK) needs no special
+    handling at all - it is already a normal pseudo-attribute in
+    `schema_members_of`.
     """
 
     def __init__(
@@ -1368,10 +1380,12 @@ class _ViewResolver:
         bases: list[tuple[str, MetaInstance, str]],
         tables_by_name: dict[str, Table],
         symbol_for,
+        assoc_near_roles: dict[str, str] | None = None,
     ) -> None:
         self.by_alias = {alias: (cls, table) for alias, cls, table in bases}
         self.tables_by_name = tables_by_name
         self.symbol_for = symbol_for
+        self.assoc_near_roles = assoc_near_roles or {}
         self.extra_joins: list[tuple[str, str, str]] = []  # (table, alias, ON-condition SQL)
         self._counter = 0
 
@@ -1405,6 +1419,12 @@ class _ViewResolver:
             if hop is None:
                 raise _UnsupportedView("path element with no name")
             is_last = i == len(refs) - 1
+            if hop == self.assoc_near_roles.get(cur_alias):
+                # The association is embedded ON this very row - navigating
+                # its "near" role is a self-reference, not a real hop.
+                if is_last:
+                    return f'"{cur_alias}"."{OID_COLUMN}"'
+                continue
             attr = self._members(cls).get(hop)
             if attr is None:
                 raise _UnsupportedView(f"{hop!r} is not an attribute/role of {getattr(cls, 'Name', None)!r}")
@@ -1621,10 +1641,10 @@ def build_views(
             vname = _truncate_identifier(f"{vname}_v")
         used_names.add(vname)
         try:
-            bases = _resolve_view_bases(view, tables_by_name, table_name_by_class_id)
+            bases, assoc_near_roles = _resolve_view_bases(view, tables_by_name, table_name_by_class_id)
             formation = getattr(view, "FormationKind", None)
             if formation == "Union":
-                body = _build_union_view(view, bases, tables_by_name, symbol_for)
+                body = _build_union_view(view, bases, tables_by_name, symbol_for, assoc_near_roles)
                 result.append(SqlView(vname, body, _view_constraint_notes(view)))
                 continue
             if formation == "Inspection":
@@ -1632,10 +1652,10 @@ def build_views(
                 result.append(SqlView(vname, body, _view_constraint_notes(view)))
                 continue
             if formation == "Aggregation":
-                body = _build_aggregation_view(view, bases, tables_by_name, symbol_for)
+                body = _build_aggregation_view(view, bases, tables_by_name, symbol_for, assoc_near_roles)
                 result.append(SqlView(vname, body, _view_constraint_notes(view)))
                 continue
-            resolver = _ViewResolver(bases, tables_by_name, symbol_for)
+            resolver = _ViewResolver(bases, tables_by_name, symbol_for, assoc_near_roles)
             select_items: list[str] = []
             notes: list[str] = []
             for attr in getattr(view, "ClassAttribute", None) or []:
@@ -1675,6 +1695,7 @@ def _build_union_view(
     bases: list[tuple[str, MetaInstance, str]],
     tables_by_name: dict[str, Table],
     symbol_for,
+    assoc_near_roles: dict[str, str],
 ) -> str:
     """Return a `SELECT ... UNION ALL SELECT ...` body for a `FormationKind=Union` view.
 
@@ -1695,7 +1716,7 @@ def _build_union_view(
         raise _UnsupportedView("union view has no ATTRIBUTE definitions", "SQL-VIEW-NO-ATTRS")
     branches: list[str] = []
     for branch_index, (alias, cls, table) in enumerate(bases):
-        resolver = _ViewResolver([(alias, cls, table)], tables_by_name, symbol_for)
+        resolver = _ViewResolver([(alias, cls, table)], tables_by_name, symbol_for, assoc_near_roles)
         items: list[str] = []
         for attr in attrs:
             aname = getattr(attr, "Name", None)
@@ -1816,6 +1837,7 @@ def _build_aggregation_view(
     bases: list[tuple[str, MetaInstance, str]],
     tables_by_name: dict[str, Table],
     symbol_for,
+    assoc_near_roles: dict[str, str],
 ) -> str:
     """Return a `SELECT DISTINCT ... FROM "<base>"` body for a `FormationKind=Aggregation` view, or demote.
 
@@ -1836,7 +1858,7 @@ def _build_aggregation_view(
     """
     if len(bases) != 1:
         raise _UnsupportedView("an aggregation view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
-    resolver = _ViewResolver(bases, tables_by_name, symbol_for)
+    resolver = _ViewResolver(bases, tables_by_name, symbol_for, assoc_near_roles)
     select_items: list[str] = []
     for attr in getattr(view, "ClassAttribute", None) or []:
         aname = getattr(attr, "Name", None)
@@ -1905,12 +1927,58 @@ def _view_constraint_notes(view: MetaInstance) -> list[str]:
     return notes
 
 
+def _association_embedding(assoc_cls: MetaInstance) -> tuple[MetaInstance, str, str] | None:
+    """Return `(carrier_class, near_role_name, far_role_name)` for a 2-role embedded `ASSOCIATION`.
+
+    Mirrors `xtf.schema.embedded_roles_of`'s own embedding rule, but from
+    the association's own perspective (which class does IT embed onto),
+    not a candidate target class scanning every association in a
+    `SymbolTable` - no `SymbolTable` needed, this only reads
+    `assoc_cls.Role` directly. `near_role_name` is the role whose OWN
+    target class IS the carrier - a self-reference when navigated FROM
+    the association (`PROJECTION OF <assoc> -> <near_role> -> ...`: the
+    association's row IS that very carrier row, so `<near_role>` names no
+    real hop). `far_role_name` is the OTHER role - already resolvable
+    generically as an embedded pseudo-attribute (`schema_members_of`), no
+    special handling needed for it. `None` for a many-to-many association
+    (not embedded, transferred as its own object per eCH-0031 SS4.3.9.2)
+    or a non-2-role/unresolved-target one.
+    """
+    roles = [r for r in getattr(assoc_cls, "Role", None) or [] if isinstance(r, MetaInstance)]
+    if len(roles) != 2:
+        return None
+    role_a, role_b = roles
+    target_a, target_b = _class_related_base_class(role_a), _class_related_base_class(role_b)
+    if target_a is None or target_b is None:
+        return None
+    multi_a, multi_b = _role_is_multi(role_a), _role_is_multi(role_b)
+    if multi_a and multi_b:
+        return None
+    carrier, near_role, far_role = (target_a, role_a, role_b) if multi_a else (target_b, role_b, role_a)
+    near_name, far_name = getattr(near_role, "Name", None), getattr(far_role, "Name", None)
+    if not near_name or not far_name:
+        return None
+    return carrier, near_name, far_name
+
+
 def _resolve_view_bases(
     view: MetaInstance,
     tables_by_name: dict[str, Table],
     table_name_by_class_id: dict[int, str],
-) -> list[tuple[str, MetaInstance, str]]:
+) -> tuple[list[tuple[str, MetaInstance, str]], dict[str, str]]:
+    """Return `(bases, assoc_near_roles)` - `assoc_near_roles` (`alias -> role name`) for `_ViewResolver`, see its
+    own docstring.
+
+    A base that is `Kind=Association` has no `CREATE TABLE` of its own
+    (`build_tables` only tables `Kind=Class`) - resolved instead to its
+    2-role embedding's CARRIER class/table (`_association_embedding`),
+    the real corpus shape for `PROJECTION OF <association>`
+    (`tests/fixtures/fgdm4gs/Planungszonen_V2_d_B.ili`'s
+    `TypPZ_Planungszone`). The alias stays the association's OWN
+    name/rename - view attribute paths still spell it that way.
+    """
     bases: list[tuple[str, MetaInstance, str]] = []
+    assoc_near_roles: dict[str, str] = {}
     used_aliases: set[str] = set()
     for rbv in getattr(view, "RenamedBaseView", None) or []:
         base_cls = getattr(rbv, "BaseView", None)
@@ -1918,11 +1986,24 @@ def _resolve_view_bases(
             raise _UnsupportedView(
                 "a base class did not resolve - pass --repo for the base model's own imports", "SQL-VIEW-BASE-MISSING"
             )
-        table = table_name_by_class_id.get(id(base_cls)) or _sql_identifier(getattr(base_cls, "Name", None) or "")
+        resolved_cls = base_cls
+        near_role_name: str | None = None
+        if getattr(base_cls, "Kind", None) == "Association":
+            embedding = _association_embedding(base_cls)
+            if embedding is None:
+                raise _UnsupportedView(
+                    f"{getattr(base_cls, 'Name', '?')!r} is an ASSOCIATION with no 2-role embedding "
+                    "(many-to-many, or fewer/more than 2 roles) - not represented by a table",
+                    "SQL-VIEW-BASE-MISSING",
+                )
+            resolved_cls, near_role_name, _far_role_name = embedding
+        table = table_name_by_class_id.get(id(resolved_cls)) or _sql_identifier(
+            getattr(resolved_cls, "Name", None) or ""
+        )
         if table not in tables_by_name:
             raise _UnsupportedView(
                 f"base table {table!r} not built - pass "
-                f"{getattr(base_cls, 'Name', '?')}'s model via --repo or --catalog",
+                f"{getattr(resolved_cls, 'Name', '?')}'s model via --repo or --catalog",
                 "SQL-VIEW-BASE-MISSING",
             )
         alias = (getattr(rbv, "Name", None) or getattr(base_cls, "Name", None) or "").lower()
@@ -1932,12 +2013,14 @@ def _resolve_view_bases(
             alias = f"{base_alias}_{suffix}"
             suffix += 1
         used_aliases.add(alias)
-        bases.append((alias, base_cls, table))
+        bases.append((alias, resolved_cls, table))
+        if near_role_name is not None:
+            assoc_near_roles[alias] = near_role_name
     if not bases:
         raise _UnsupportedView(
             "no resolved base classes - pass the base model via --repo or --catalog", "SQL-VIEW-BASE-MISSING"
         )
-    return bases
+    return bases, assoc_near_roles
 
 
 def _render_views(views: tuple[SqlView, ...]) -> list[str]:

@@ -8,7 +8,9 @@ rather than a FUNCTION over the implicit `AGGREGATES` bag (`_key`) or
 that navigate a REFERENCE TO hop (`_key_reference`); `INSPECTION OF`
 adding a `PARENT->` view attribute (`_parent`) or an indirect multi-hop
 path (`_nested`); `UNION OF` with a branch attribute navigating a
-REFERENCE TO hop (`_reference`).
+REFERENCE TO hop (`_reference`); `PROJECTION OF` an embedded 2-role
+ASSOCIATION (`projection_of_association.ili`, self-contained shape of
+the real `Planungszonen_V2_d_B.ili`/`TypPZ_Planungszone`).
 
 What each converter is expected to do per kind is documented in
 docs/view-formation-support.md; this test pins it:
@@ -253,3 +255,20 @@ def test_aggregation_sql_joins_an_attribute_that_navigates_a_reference():
     )
     rows = sorted(r[0] for r in con.execute('SELECT "municipalityname" FROM "municipalitylist"'))
     assert rows == ["Lausanne", "Renens"]
+
+
+# --- PROJECTION OF an ASSOCIATION -----------------------------------------
+
+
+def test_projection_of_association_sql_resolves_the_embedded_carrier_and_far_role():
+    builder = _build("projection_of_association")
+    tables, views = _sql_views(builder)
+    (v,) = views
+    assert v.body is not None
+    assert 'FROM "planungszone" "typpz_planungszone", "typpz" "j1_typpz"' in v.body
+    assert '"typpz_planungszone"."typpz" = "j1_typpz"."id"' in v.body
+    con = _run_ddl(tables, views)
+    con.execute('INSERT INTO "typpz" ("id", "code") VALUES (1, ?)', ("Z1",))
+    con.execute('INSERT INTO "planungszone" ("id", "publishedfrom", "typpz") VALUES (1, ?, 1)', ("2024-01-01",))
+    row = con.execute('SELECT "publishedfrom", "typecode" FROM "view_pz"').fetchone()
+    assert row == ("2024-01-01", "Z1")

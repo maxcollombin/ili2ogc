@@ -1,0 +1,39 @@
+INTERLIS 2.3;
+
+!! PROJECTION OF an ASSOCIATION (real corpus shape:
+!! tests/fixtures/fgdm4gs/Planungszonen_V2_d_B.ili's `TypPZ_Planungszone`,
+!! reproduced here self-contained so the CREATE VIEW can run against a
+!! real SQLite engine). A 2-role association where only one role is
+!! multi-valued is embedded on that role's TARGET class (here
+!! Planungszone, carrying an embedded "TypPZ" FK) - the view's base alias
+!! is the ASSOCIATION itself, so `-> Planungszone -> ...` (the role whose
+!! own target IS the carrier) is a self-reference, and `-> TypPZ -> ...`
+!! is the real embedded FK hop - pins
+!! `convert/sql.py:_association_embedding`/`_resolve_view_bases`.
+
+MODEL TestProjectionAssociation AT "http://www.interlis.ch/ili2c/tests/" VERSION "1" =
+
+  TOPIC Base =
+    CLASS TypPZ =
+      Code: TEXT*10;
+    END TypPZ;
+
+    CLASS Planungszone =
+      PublishedFrom: TEXT*20;
+    END Planungszone;
+
+    ASSOCIATION TypPZ_Planungszone =
+      Planungszone -- {0..*} Planungszone;
+      TypPZ -<> {1} TypPZ;
+    END TypPZ_Planungszone;
+
+    VIEW view_pz
+      PROJECTION OF TypPZ_Planungszone;
+      =
+      ATTRIBUTE
+        PublishedFrom := TypPZ_Planungszone -> Planungszone -> PublishedFrom;
+        TypeCode := TypPZ_Planungszone -> TypPZ -> Code;
+    END view_pz;
+  END Base;
+
+END TestProjectionAssociation.
