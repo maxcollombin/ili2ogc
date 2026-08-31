@@ -79,6 +79,19 @@ MODEL Test AT "http://x" VERSION "1" =
         ALL OF B;
         ALL OF C;
     END VU;
+    VIEW VPR
+      PROJECTION OF Test.Base.B;
+      =
+      ATTRIBUTE
+        attr1_renamed := B -> Attr1;
+    END VPR;
+    VIEW VJR
+      JOIN OF B ~ Test.Base.B, C ~ Test.Base.C;
+      =
+      ATTRIBUTE
+        a1 := B -> Attr1;
+        a2 := C -> Attr2;
+    END VJR;
   END Views;
 END Test.
 """
@@ -153,6 +166,40 @@ def test_projection_reuses_base_objects_tagged_as_the_view():
     assert [f["featureType"] for f in features] == ["VP", "VP"]
     assert [f["id"] for f in features] == ["b1", "b2"]
     assert features[0]["properties"] == {"Attr1": "x"}
+
+
+def test_projection_with_renamed_attribute_reads_the_base_wire_value():
+    """`Name := Class -> Attr` with `Name != Attr` (any case/spelling) must still resolve.
+
+    Regression for a real bug found via item 13's VIEW-corpus pipeline
+    (`docs/fgdm4gs-view-strategy.md`) against real `xtf_corpus/geoadmin`
+    data: `object_to_feature`/`_members_value` look up each property by
+    the VIEW's OWN schema attribute name against the base object's RAW
+    wire attribute names - correct only when they match (`ALL OF`, or a
+    same-name reassignment like DMAV's `NBIdent := NBIdent`), silently
+    empty otherwise. Every one of the 10 `scripts/generate_view_corpus.py`
+    derived models names its VIEW attributes after a service's field
+    names (e.g. `roadnumber := RoadSegment -> RoadNumber`), never matching
+    the base's own spelling - `MainRoads_LV95_V1_1_d.view_roadsegment`
+    produced 135/135 empty `properties` before this fix.
+    """
+    builder = _build(_VIEW_MODEL)
+    view = _view(builder, "VPR")
+    transfer = _transfer(_b("b1", "x"))
+
+    features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert features[0]["properties"] == {"attr1_renamed": "x"}
+
+
+def test_join_with_renamed_attributes_reads_each_base_wire_value():
+    builder = _build(_VIEW_MODEL)
+    view = _view(builder, "VJR")
+    transfer = _transfer(_b("b1", "x"), _c("c1", "z"))
+
+    features = evaluate_view(view, transfer, symbol_table=builder.symbol_table)
+
+    assert features[0]["properties"] == {"a1": "x", "a2": "z"}
 
 
 def test_join_evaluates_cartesian_product_of_two_bases():

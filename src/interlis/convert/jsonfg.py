@@ -988,6 +988,55 @@ def _join_combinations(
     return combos
 
 
+def _project_object_under_view_names(view: MetaInstance, obj: XtfObject) -> XtfObject:
+    """Re-key `obj`'s wire attributes under `view`'s own `ClassAttribute` names.
+
+    `object_to_feature`/`_members_value` look up each property by the
+    Class's OWN schema attribute name - correct for a plain Class, and for
+    an `ALL OF` view attribute (its synthetic identity `Derivates` is
+    `<base> -> <attr>` with `attr == Name`, a no-op here: `source ==
+    out_name` is skipped below). WRONG for any RENAMED view attribute
+    (`Name := <alias> -> <attr>` with a different `Name`, e.g. a
+    lower-cased WFS/ArcGIS field name) - PROJECTION/JOIN (pooled via
+    `_merge_join_combo`)/AGGREGATION all fed the object straight through
+    before this fix, so every such attribute was silently dropped (empty
+    `properties`) - confirmed on real `xtf_corpus/geoadmin` data
+    (`MainRoads_LV95_V1_1_d.view_roadsegment`, item 13's VIEW corpus
+    pipeline), not a synthetic edge case: every one of the 10
+    `scripts/generate_view_corpus.py`-derived models names its VIEW
+    attributes after the source service's field names, virtually never
+    matching the base attribute's own spelling/case.
+
+    Mirrors `_union_projected_object`'s remap (that one is per-base/
+    `n_bases`-aware, for UNION's one-`Derivates`-entry-per-base shape);
+    every other FormationKind's `ClassAttribute` carries a single source
+    expression, `Derivates[0]`. For JOIN, `obj` is already the merged
+    combo (`_merge_join_combo`) - a plain source-name lookup against the
+    pooled attributes is correct here for the same reason
+    `_merge_join_combo` itself pools blindly: no real corpus evidence of
+    an attribute-name collision between two JOIN bases.
+    """
+    remapped: dict[str, list[RawNode]] = dict(obj.attributes)
+    for attr in getattr(view, "ClassAttribute", None) or []:
+        out_name = getattr(attr, "Name", None)
+        derivates = getattr(attr, "Derivates", None) or []
+        if out_name is None or not derivates:
+            continue
+        factor = derivates[0]
+        if not isinstance(factor, MetaInstance) or not factor._qualified_class.endswith("PathOrInspFactor"):
+            continue
+        if getattr(factor, "Inspection", None):
+            continue
+        refs = [getattr(el, "Ref", None) for el in (getattr(factor, "PathEls", None) or [])]
+        source = refs[-1] if len(refs) == 2 and refs[-1] else (refs[0] if len(refs) == 1 else None)
+        if source is None or source == out_name:
+            continue
+        remapped.pop(out_name, None)
+        if source in obj.attributes:
+            remapped[out_name] = obj.attributes[source]
+    return XtfObject(tid=obj.tid, qualified_class=obj.qualified_class, attributes=remapped)
+
+
 def _merge_join_combo(combo: list[XtfObject | None], view_name: str) -> XtfObject:
     """Merge one JOIN OF combination into a single synthetic `XtfObject`, re-fed through `object_to_feature`.
 
@@ -1168,7 +1217,9 @@ def evaluate_view(
 
     if kind in ("Projection", "Aggregation"):
         kept = [
-            object_to_feature(obj, view, standalone=standalone, symbol_table=symbol_table)
+            object_to_feature(
+                _project_object_under_view_names(view, obj), view, standalone=standalone, symbol_table=symbol_table
+            )
             for obj in objects_by_base[0]
             if _passes_where([obj])
         ]
@@ -1180,7 +1231,10 @@ def evaluate_view(
         if not _passes_where(combo):
             continue
         feature = object_to_feature(
-            _merge_join_combo(combo, view_name), view, standalone=standalone, symbol_table=symbol_table
+            _project_object_under_view_names(view, _merge_join_combo(combo, view_name)),
+            view,
+            standalone=standalone,
+            symbol_table=symbol_table,
         )
         members = _join_members(bases, combo)
         if members:
