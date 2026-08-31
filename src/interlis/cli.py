@@ -19,6 +19,9 @@ from pathlib import Path
 from interlis.builder.forward_refs import SymbolTable
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
+from interlis.cli_style import ExitCode, use_color
+from interlis.cli_style import error as _error
+from interlis.cli_style import warn as _warn
 from interlis.convert import jsonfg as _jsonfg_mod
 from interlis.convert import jsonschema as _jsonschema_mod
 from interlis.convert import sql as _sql_mod
@@ -122,7 +125,7 @@ def _finish(bag: DiagnosticBag, args: argparse.Namespace, *, extra_exit: int = 0
                 file=sys.stderr,
             )
         else:
-            print(render_text(bag, color=sys.stderr.isatty()), file=sys.stderr)
+            print(render_text(bag, color=use_color(sys.stderr)), file=sys.stderr)
     return extra_exit or bag.exit_code(strict=strict)
 
 
@@ -170,15 +173,15 @@ def _describe_field(field: str, value, indent: int, seen: set[int]) -> None:
 def cmd_build(args: argparse.Namespace) -> int:
     path = Path(args.file)
     if not path.exists():
-        print(f"file not found: {path}", file=sys.stderr)
-        return 1
+        _error(f"file not found: {path}")
+        return ExitCode.NOT_FOUND
 
     tree, syntax_errors = parse_file(path)
     if syntax_errors:
-        print(f"{len(syntax_errors)} syntax error(s):", file=sys.stderr)
+        _error(f"{len(syntax_errors)} syntax error(s):")
         for e in syntax_errors:
             print(f"  {e}", file=sys.stderr)
-        return 1
+        return ExitCode.INVALID
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
     with _resource_dirs() as (mappings_dir, spec_dir):
@@ -190,11 +193,11 @@ def cmd_build(args: argparse.Namespace) -> int:
     _describe(model)
 
     if caught and not args.quiet:
-        print(f"\n{len(caught)} warning(s) (known spec gaps):", file=sys.stderr)
+        _warn(f"{len(caught)} warning(s) (known spec gaps):")
         for w in caught:
             print(f"  {w.message}", file=sys.stderr)
 
-    return 0
+    return ExitCode.OK
 
 
 # All five `View` formation laws are translated by every converter - see
@@ -228,15 +231,15 @@ def cmd_convert(args: argparse.Namespace) -> int:
     """
     path = Path(args.file)
     if not path.exists():
-        print(f"file not found: {path}", file=sys.stderr)
-        return 1
+        _error(f"file not found: {path}")
+        return ExitCode.NOT_FOUND
 
     tree, syntax_errors = parse_file(path)
     if syntax_errors:
-        print(f"{len(syntax_errors)} syntax error(s):", file=sys.stderr)
+        _error(f"{len(syntax_errors)} syntax error(s):")
         for e in syntax_errors:
             print(f"  {e}", file=sys.stderr)
-        return 1
+        return ExitCode.INVALID
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
     bag = DiagnosticBag()
@@ -280,12 +283,11 @@ def cmd_convert(args: argparse.Namespace) -> int:
     if args.lang:
         translation = load_translation(getattr(root_model, "Name", None) or "", args.lang, repository)
         if translation is None:
-            print(
+            _error(
                 f"--lang {args.lang}: no TRANSLATION OF "
                 f"{getattr(root_model, 'Name', path.stem)!r} for '{args.lang}' in --repo",
-                file=sys.stderr,
             )
-            return 1
+            return ExitCode.NOT_FOUND
         schema = rename_json_schema(schema, translation)
     text = json.dumps(schema, indent=2, ensure_ascii=False)
     if args.output:
@@ -424,15 +426,15 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     """
     path = Path(args.file)
     if not path.exists():
-        print(f"file not found: {path}", file=sys.stderr)
-        return 1
+        _error(f"file not found: {path}")
+        return ExitCode.NOT_FOUND
 
     tree, syntax_errors = parse_file(path)
     if syntax_errors:
-        print(f"{len(syntax_errors)} syntax error(s):", file=sys.stderr)
+        _error(f"{len(syntax_errors)} syntax error(s):")
         for e in syntax_errors:
             print(f"  {e}", file=sys.stderr)
-        return 1
+        return ExitCode.INVALID
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
     bag = DiagnosticBag()
@@ -485,18 +487,18 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     for catalog_arg in args.catalog:
         catalog_path = Path(catalog_arg)
         if not catalog_path.exists():
-            print(f"--catalog file not found: {catalog_path}", file=sys.stderr)
-            return 1
+            _error(f"--catalog file not found: {catalog_path}")
+            return ExitCode.NOT_FOUND
         catalog_path = catalog_path.resolve()
         if catalog_path == path.resolve() or catalog_path in seen_catalog_paths:
             continue  # the same file given twice (as `file` or across --catalog) would otherwise duplicate its table
         seen_catalog_paths.add(catalog_path)
         catalog_tree, catalog_syntax_errors = parse_file(catalog_path)
         if catalog_syntax_errors:
-            print(f"{len(catalog_syntax_errors)} syntax error(s) in {catalog_path}:", file=sys.stderr)
+            _error(f"{len(catalog_syntax_errors)} syntax error(s) in {catalog_path}:")
             for e in catalog_syntax_errors:
                 print(f"  {e}", file=sys.stderr)
-            return 1
+            return ExitCode.INVALID
         with _resource_dirs() as (mappings_dir, spec_dir):
             catalog_builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
         with warnings.catch_warnings():
@@ -545,8 +547,8 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
         base_name = next(iter(root_names), None) or path.stem
         translation = load_translation(base_name, args.lang, repository)
         if translation is None:
-            print(f"--lang {args.lang}: no TRANSLATION OF {base_name!r} for '{args.lang}' in --repo", file=sys.stderr)
-            return 1
+            _error(f"--lang {args.lang}: no TRANSLATION OF {base_name!r} for '{args.lang}' in --repo")
+            return ExitCode.NOT_FOUND
         ddl = rename_sql_ddl(ddl, translation)
     if args.output:
         Path(args.output).write_text(ddl, encoding="utf-8")
@@ -560,8 +562,8 @@ def _resolve_schema_model_path(
     transfer,
     args: argparse.Namespace,
     repository: ModelRepository | None,
-) -> tuple[Path, str | None] | None:
-    """Resolve the .ili file describing `transfer`'s schema, or print an error and return `None`.
+) -> tuple[Path, str | None] | ExitCode:
+    """Resolve the .ili file describing `transfer`'s schema, or print an error and return the `ExitCode` to exit with.
 
     Shared between `cmd_validate` and `cmd_convert_jsonfg` (same
     resolution rule, see docs/model-resolution-strategy.md):
@@ -576,27 +578,28 @@ def _resolve_schema_model_path(
 
     Returns `(model_path, root_model_name)` - `root_model_name` is `None`
     for the explicit `--model` path (never looked up by name in that
-    case).
+    case) - or an `ExitCode` (USAGE: neither `--model` nor `--repo` given;
+    NOT_FOUND: `--model` path, or every candidate root model, missing).
     """
     if args.model:
         model_path = Path(args.model)
         if not model_path.exists():
-            print(f".ili file not found: {model_path}", file=sys.stderr)
-            return None
+            _error(f".ili file not found: {model_path}")
+            return ExitCode.NOT_FOUND
         return model_path, None
     if repository is None:
-        print("no --model given: --repo is required for schema auto-detection.", file=sys.stderr)
-        return None
+        _error("no --model given: --repo is required for schema auto-detection.")
+        return ExitCode.USAGE
     for name in root_model_names(transfer):
         candidate = repository.path_for(name)
         if candidate is not None:
             return candidate, name
     header = header_model_lookup(transfer)
-    print(f"no root model of {xtf_path} is available in --repo. Required models (HEADERSECTION):", file=sys.stderr)
+    _error(f"no root model of {xtf_path} is available in --repo. Required models (HEADERSECTION):")
     for name in root_model_names(transfer):
         version, uri = header.get(name, ["?", "?"])
         print(f"  {name} VERSION={version!r} URI={uri!r}", file=sys.stderr)
-    return None
+    return ExitCode.NOT_FOUND
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -608,23 +611,23 @@ def cmd_validate(args: argparse.Namespace) -> int:
     """
     xtf_path = Path(args.xtf)
     if not xtf_path.exists():
-        print(f".xtf file not found: {xtf_path}", file=sys.stderr)
-        return 1
+        _error(f".xtf file not found: {xtf_path}")
+        return ExitCode.NOT_FOUND
 
     transfer = parse_xtf(xtf_path)
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
 
     resolved = _resolve_schema_model_path(xtf_path, transfer, args, repository)
-    if resolved is None:
-        return 1
+    if isinstance(resolved, ExitCode):
+        return resolved
     model_path, root_model_name = resolved
 
     tree, syntax_errors = parse_file(model_path)
     if syntax_errors:
-        print(f"{len(syntax_errors)} syntax error(s) in {model_path}:", file=sys.stderr)
+        _error(f"{len(syntax_errors)} syntax error(s) in {model_path}:")
         for e in syntax_errors:
             print(f"  {e}", file=sys.stderr)
-        return 1
+        return ExitCode.INVALID
 
     with _resource_dirs() as (mappings_dir, spec_dir):
         builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
@@ -697,10 +700,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
             )
 
     if counts.get("error"):
-        return 1
+        return ExitCode.ERROR
     if getattr(args, "strict", False) and len(issues):
-        return 1
-    return 0
+        return ExitCode.ERROR
+    return ExitCode.OK
 
 
 def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
@@ -734,23 +737,23 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     """
     xtf_path = Path(args.xtf)
     if not xtf_path.exists():
-        print(f".xtf file not found: {xtf_path}", file=sys.stderr)
-        return 1
+        _error(f".xtf file not found: {xtf_path}")
+        return ExitCode.NOT_FOUND
 
     transfer = parse_xtf(xtf_path)
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
 
     resolved = _resolve_schema_model_path(xtf_path, transfer, args, repository)
-    if resolved is None:
-        return 1
+    if isinstance(resolved, ExitCode):
+        return resolved
     model_path, _root_model_name = resolved
 
     tree, syntax_errors = parse_file(model_path)
     if syntax_errors:
-        print(f"{len(syntax_errors)} syntax error(s) in {model_path}:", file=sys.stderr)
+        _error(f"{len(syntax_errors)} syntax error(s) in {model_path}:")
         for e in syntax_errors:
             print(f"  {e}", file=sys.stderr)
-        return 1
+        return ExitCode.INVALID
 
     bag = DiagnosticBag()
     with _resource_dirs() as (mappings_dir, spec_dir):
@@ -797,8 +800,8 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         base_name = next(iter(root_names), None) or model_path.stem
         translation = load_translation(base_name, args.lang, repository)
         if translation is None:
-            print(f"--lang {args.lang}: no TRANSLATION OF {base_name!r} for '{args.lang}' in --repo", file=sys.stderr)
-            return 1
+            _error(f"--lang {args.lang}: no TRANSLATION OF {base_name!r} for '{args.lang}' in --repo")
+            return ExitCode.NOT_FOUND
         collection = rename_feature_collection(collection, translation)
     text = json.dumps(collection, indent=2, ensure_ascii=False)
     if args.output:

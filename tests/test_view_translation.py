@@ -14,6 +14,7 @@ from pathlib import Path
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.cli import main
+from interlis.cli_style import ExitCode
 from interlis.convert.translation import load_translation
 from interlis.metamodel.instance import MetaInstance
 from interlis.runtime.parse import parse_file
@@ -128,5 +129,5 @@ def test_convert_jsonfg_lang_renames_featuretype_and_property_keys_but_not_the_w
 
 
 def test_convert_lang_with_no_translation_is_a_clear_error(capsys):
-    assert main(["convert", str(FIX / "Wanderwege_V1.ili"), "--lang", "it", "--repo", str(FIX)]) == 1
+    assert main(["convert", str(FIX / "Wanderwege_V1.ili"), "--lang", "it", "--repo", str(FIX)]) == ExitCode.NOT_FOUND
     assert "no TRANSLATION OF 'Wanderwege_V1' for 'it'" in capsys.readouterr().err
