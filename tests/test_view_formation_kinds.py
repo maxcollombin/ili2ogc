@@ -34,32 +34,24 @@ docs/view-formation-support.md; this test pins it:
 """
 
 import sqlite3
-import warnings
 from pathlib import Path
 
-from interlis.builder.model_builder import InterlisModelBuilder
+from conftest import build_from_file
+
 from interlis.convert.jsonfg import evaluate_view, unsupported_view_reason
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.convert.sql import build_tables, build_views, render_gpkg
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import meta_attribute_comments_in_file, parse_file
+from interlis.runtime.parse import meta_attribute_comments_in_file
 from interlis.xtf.parse import parse_xtf
 
 ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURES = ROOT / "tests" / "fixtures" / "views"
 
 
 def _build(name: str):
     path = FIXTURES / f"{name}.ili"
-    tree, errors = parse_file(path)
-    assert not errors, f"unexpected syntax errors in {name}.ili: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree, meta_attributes=meta_attribute_comments_in_file(path))
-    return builder
+    return build_from_file(path, meta_attributes=meta_attribute_comments_in_file(path))
 
 
 def _registered(builder, suffix):

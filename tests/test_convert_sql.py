@@ -5,12 +5,10 @@ See docs/sql-conversion-strategy.md for the design decision and scope.
 """
 
 import sqlite3
-import warnings
-from pathlib import Path
 
 import pytest
+from conftest import build_from_text
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.sql import (
     Column,
     UniqueConstraint,
@@ -19,21 +17,11 @@ from interlis.convert.sql import (
     render_gpkg,
     render_postgresql,
 )
-from interlis.runtime.parse import meta_attribute_comments, parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
+from interlis.runtime.parse import meta_attribute_comments
 
 
 def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree, meta_attributes=meta_attribute_comments(src))
-    return builder
+    return build_from_text(src, meta_attributes=meta_attribute_comments(src))
 
 
 def _resolved_class(builder, name: str):

@@ -12,25 +12,7 @@ same `presence: true` dispatch pattern already used for
 viewDef.Abstract/Final/Transient.
 """
 
-import warnings
-from pathlib import Path
-
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
-
-
-def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
+from conftest import build_from_text as _build
 
 
 def _model(area: str) -> str:

@@ -4,10 +4,8 @@ See docs/jsonfg-conversion-strategy.md for the design decision and scope
 (JSON-FG "core" + "types-schemas" requirements classes only).
 """
 
-import warnings
-from pathlib import Path
+from conftest import build_from_text
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.jsonfg import (
     CONF_CIRCULAR_ARCS,
     CONF_CORE,
@@ -16,12 +14,8 @@ from interlis.convert.jsonfg import (
     object_to_feature,
     transfer_to_feature_collection,
 )
-from interlis.runtime.parse import meta_attribute_comments, parse_text
+from interlis.runtime.parse import meta_attribute_comments
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 
 _MODEL = """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
@@ -39,16 +33,7 @@ END Foo.
 
 
 def _build(src: str, *, capture_meta: bool = False):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        if capture_meta:
-            builder.build(tree, meta_attributes=meta_attribute_comments(src))
-        else:
-            builder.build(tree)
-    return builder
+    return build_from_text(src, meta_attributes=meta_attribute_comments(src) if capture_meta else None)
 
 
 def _resolved_class(builder, name: str):

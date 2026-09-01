@@ -8,26 +8,14 @@ generic mechanism, verified here with a synthetic fixture only (no real
 corpus example of a class-level meta-attribute found so far).
 """
 
-import warnings
-from pathlib import Path
+from conftest import build_from_text
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.jsonschema import class_to_json_schema, model_to_json_schema
-from interlis.runtime.parse import meta_attribute_comments, parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
+from interlis.runtime.parse import meta_attribute_comments
 
 
 def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree, meta_attributes=meta_attribute_comments(src))
-    return builder
+    return build_from_text(src, meta_attributes=meta_attribute_comments(src))
 
 
 def test_attribute_level_meta_attribute_surfaced_on_its_own_property():

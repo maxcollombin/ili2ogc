@@ -46,15 +46,7 @@ item 6 (CartoSym), not fixed speculatively without a real example to
 validate against.
 """
 
-import warnings
-from pathlib import Path
-
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
+from conftest import build_from_text as _build
 
 _MODEL_HEADER = """INTERLIS 2.3;
 
@@ -73,16 +65,6 @@ VERSION "2024-01-01" =
   END TestTopic;
 END {name}.
 """
-
-
-def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
 
 
 def test_graphicdef_based_on_class_builds():

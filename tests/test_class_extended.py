@@ -27,29 +27,19 @@ mirror the cross-file shape (the more general one, `IMPORTS` +
 `ModelRepository`).
 """
 
-import warnings
 from pathlib import Path
 
-from interlis.builder.model_builder import InterlisModelBuilder
+from conftest import build_from_file
+
 from interlis.builder.repository import ModelRepository
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_file
 from interlis.xtf.schema import attributes_of
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURES_DIR = Path(__file__).parent / "fixtures/class_extended"
 
 
 def _build(repository):
-    tree, errors = parse_file(FIXTURES_DIR / "extension.ili")
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
+    return build_from_file(FIXTURES_DIR / "extension.ili", repository=repository)
 
 
 def test_extended_class_resolves_super_and_merges_attributes_via_repository():

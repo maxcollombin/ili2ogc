@@ -10,18 +10,11 @@ attribute/reference on it - the FGDM4GS `Seg->OfRoad == Road` idiom). A
 clear diagnostic.
 """
 
-import warnings
-from pathlib import Path
+from conftest import build_from_text as _build
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.jsonfg import evaluate_view, transfer_to_feature_collection, unsupported_view_reason
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_text
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 
 _VIEW_MODEL = """INTERLIS 2.4;
 MODEL Test AT "http://x" VERSION "1" =
@@ -120,16 +113,6 @@ MODEL Roads AT "http://x" VERSION "1" =
   END V;
 END Roads.
 """
-
-
-def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
 
 
 def _view(builder, name: str) -> MetaInstance:

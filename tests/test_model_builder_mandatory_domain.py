@@ -12,16 +12,9 @@ gives a `MANDATORY`-qualified attribute its own private clone of the
 resolved domain instead, leaving the shared one untouched.
 """
 
-import warnings
-from pathlib import Path
+from conftest import build_from_text as _build
 
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import parse_text
 from interlis.xtf.schema import attributes_of, resolve_attribute
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 
 _MODEL = """INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
@@ -35,16 +28,6 @@ MODEL Foo AT "http://x" VERSION "1" =
   END T;
 END Foo.
 """
-
-
-def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
 
 
 def test_mandatory_named_domain_reference_gets_its_own_clone():

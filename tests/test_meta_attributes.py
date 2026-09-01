@@ -11,28 +11,13 @@ pre-existing `MetaAttributes` association - no grammar change, no new
 metamodel class, purely additive (opt-in via the `meta_attributes` kwarg).
 """
 
-import warnings
-from pathlib import Path
+from conftest import build_from_text
 
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import meta_attribute_comments, parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
+from interlis.runtime.parse import meta_attribute_comments
 
 
 def _build(src: str, *, capture: bool = True):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        if capture:
-            builder.build(tree, meta_attributes=meta_attribute_comments(src))
-        else:
-            builder.build(tree)
-    return builder
+    return build_from_text(src, meta_attributes=meta_attribute_comments(src) if capture else None)
 
 
 def _names_values(instance) -> list[tuple[str, str]]:

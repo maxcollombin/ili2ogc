@@ -6,30 +6,20 @@ UnresolvedNamedReference (comportement V1) ; avec un ModelRepository
 pointant sur le repertoire des fixtures, elle doit resoudre vers
 l'instance EnumType reelle construite depuis base.ili."""
 
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file, build_from_file_with_model
 
 from interlis.builder.errors import UnresolvedNamedReference
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
-from interlis.runtime.parse import parse_file
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURES_DIR = Path(__file__).parent / "fixtures/multi_file"
 
 
 def _build(repository):
-    tree, errors = parse_file(FIXTURES_DIR / "importer.ili")
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # gaps de spec connus, hors de portee de ce test
-        model = builder.build(tree)
-    return builder, model
+    # gaps de spec connus, hors de portee de ce test (warnings suppressed by build_from_file_with_model)
+    return build_from_file_with_model(FIXTURES_DIR / "importer.ili", repository=repository)
 
 
 def _employee_kind_type(model):
@@ -100,14 +90,8 @@ TOPIC_EXTENDS_FIXTURES_DIR = Path(__file__).parent / "fixtures/topic_extends"
 
 
 def _build_topic_extends(entry_file: str):
-    tree, errors = parse_file(TOPIC_EXTENDS_FIXTURES_DIR / entry_file)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
     repository = ModelRepository([TOPIC_EXTENDS_FIXTURES_DIR])
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        model = builder.build(tree)
-    return builder, model
+    return build_from_file_with_model(TOPIC_EXTENDS_FIXTURES_DIR / entry_file, repository=repository)
 
 
 def test_topic_extends_super_resolves_to_base_dataunit_cross_model():
@@ -156,13 +140,8 @@ def test_extends_cross_model_short_name_collision_resolves_to_imported_class():
     n'ait sa chance, des qu'une correspondance qualifiee exacte manquait -
     meme si le prefixe qualifie ("CollisionBase") ne designait PAS du tout
     ce fichier)."""
-    tree, errors = parse_file(COLLISION_FIXTURES_DIR / "importer.ili")
-    assert not errors, errors
     repository = ModelRepository([COLLISION_FIXTURES_DIR])
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
+    builder = build_from_file(COLLISION_FIXTURES_DIR / "importer.ili", repository=repository)
 
     from interlis.xtf.schema import attributes_of, resolve_class
 
@@ -190,13 +169,8 @@ UNQUALIFIED_COLLISION_DIR = Path(__file__).parent / "fixtures/imports_unqualifie
 
 
 def test_imports_unqualified_reference_resolves_to_the_named_model_not_its_same_named_base():
-    tree, errors = parse_file(UNQUALIFIED_COLLISION_DIR / "consumer.ili")
-    assert not errors, errors
     repository = ModelRepository([UNQUALIFIED_COLLISION_DIR])
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
+    builder = build_from_file(UNQUALIFIED_COLLISION_DIR / "consumer.ili", repository=repository)
 
     from interlis.xtf.schema import attributes_of, resolve_class
 

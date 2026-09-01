@@ -18,33 +18,22 @@ reproduction of that idiom, modelled on
 
 import json
 import sqlite3
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.jsonfg import evaluate_view, unsupported_view_reason
 from interlis.convert.sql import build_tables, build_views, render_gpkg
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_file
 from interlis.xtf.parse import parse_xtf
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "dmav_view_pattern.ili"
 XTF = Path(__file__).resolve().parent / "fixtures" / "xtf" / "dmav_view_pattern.xtf"
 
 
 def _build():
-    tree, errors = parse_file(FIXTURE)
-    assert not errors, f"unexpected syntax errors: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
+    return build_from_file(FIXTURE)
 
 
 def _registered(builder, suffix):

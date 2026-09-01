@@ -5,26 +5,9 @@ cited in mappings/ilismeta16-to-jsonschema-rules.yml's `Constraint` entry):
 `NOT (KBfrei == #false AND Datum != "1991-02-27") OR DEFINED (REPflichtPers)`.
 """
 
-import warnings
-from pathlib import Path
+from conftest import build_from_text as _build
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.constraint_eval import check_feature_constraints, describe_expression, evaluate_expression
-from interlis.runtime.parse import parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
-
-
-def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
 
 
 def _class_with_constraint(constraint_src: str, extra_attrs: str = ""):

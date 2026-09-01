@@ -8,8 +8,9 @@ output - the .ili input and the .xtf wire tags stay in the base language.
 """
 
 import json
-import warnings
 from pathlib import Path
+
+from conftest import build_from_file
 
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
@@ -17,22 +18,12 @@ from interlis.cli import main
 from interlis.cli_style import ExitCode
 from interlis.convert.translation import load_translation
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_file
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIX = Path(__file__).resolve().parent / "fixtures" / "translation"
 
 
 def _build(name: str) -> InterlisModelBuilder:
-    tree, errors = parse_file(FIX / name)
-    assert not errors, errors
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=ModelRepository([FIX]))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
+    return build_from_file(FIX / name, repository=ModelRepository([FIX]))
 
 
 def test_positional_alignment_builds_the_name_map():

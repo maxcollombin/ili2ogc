@@ -8,23 +8,18 @@ against a real corpus `.xtf`, in `tests/test_xtf_writer_roundtrip.py`.
 """
 
 import tempfile
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file, build_from_text
 
 from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.jsonfg import evaluate_view_objects
 from interlis.convert.xtf_writer import render_xtf, write_view_basket, write_xtf
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_file, parse_text
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer, parse_xtf
 
 VIEW_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "views"
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 
 _VIEW_MODEL = """INTERLIS 2.4;
 MODEL Test AT "http://x" VERSION "1" =
@@ -65,24 +60,12 @@ END Test.
 
 
 def _build(src: str) -> InterlisModelBuilder:
-    tree, errors = parse_text(src)
-    assert not errors, f"unexpected syntax errors: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
+    return build_from_text(src)
 
 
 def _build_fixture(name: str) -> InterlisModelBuilder:
     """Build one of `tests/fixtures/views/*.ili` (refman canonical VIEW examples - `test_view_formation_kinds.py`)."""
-    tree, errors = parse_file(VIEW_FIXTURES / f"{name}.ili")
-    assert not errors, f"unexpected syntax errors in {name}.ili: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
+    return build_from_file(VIEW_FIXTURES / f"{name}.ili")
 
 
 def _view(builder: InterlisModelBuilder, name: str) -> MetaInstance:

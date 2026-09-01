@@ -10,29 +10,18 @@ d'un roleDef (restrictedClassOrAssRef) n'est pas encore cablee dans
 spec/grammar/mapping/ (documentee "not yet mapped" dans sa propre note),
 donc les ForwardRef ne sont pas exercees ici de bout en bout."""
 
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file_with_model
 
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import parse_file
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURE = Path(__file__).parent / "fixtures/minimal_model.ili"
 
 
 @pytest.fixture(scope="module")
 def builder_and_model():
-    tree, errors = parse_file(FIXTURE)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # gaps de spec connus, voir docstring
-        model = builder.build(tree)
-    return builder, model
+    # gaps de spec connus, voir docstring (warnings suppressed by build_from_file_with_model)
+    return build_from_file_with_model(FIXTURE)
 
 
 @pytest.fixture(scope="module")

@@ -7,29 +7,11 @@ earlier: same AST, compiled instead of evaluated. The real corpus pattern
 reused here too, to keep both modules' test coverage aligned.
 """
 
-import warnings
-from pathlib import Path
-
 import pytest
+from conftest import build_from_text as _build
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.constraint_eval import UnsupportedExpressionError
 from interlis.convert.cql2 import constraint_to_cql2, cql2_unsupported_reason
-from interlis.runtime.parse import parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
-
-
-def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"unexpected syntax errors: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
 
 
 def _constraint(constraint_src: str, extra_attrs: str = ""):

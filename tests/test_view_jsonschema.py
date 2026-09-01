@@ -9,27 +9,10 @@ confirmed here: a View is simply one more root, and its already-flattened
 attribute set converts through the exact same path as a plain Class.
 """
 
-import warnings
-from pathlib import Path
+from conftest import build_from_text as _build
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.cli import _SUPPORTED_VIEW_FORMATION_KINDS
 from interlis.convert.jsonschema import class_to_json_schema, model_to_json_schema
-from interlis.runtime.parse import parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
-
-
-def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
 
 
 def _view(builder, name: str):

@@ -12,6 +12,7 @@ import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file_with_model
 
 from interlis.builder.errors import BuildError, UnresolvedNamedReference
 from interlis.builder.model_builder import InterlisModelBuilder
@@ -24,13 +25,8 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures/predefined_interlis"
 
 
 def _build(filename: str, *, repository=None):
-    tree, errors = parse_file(FIXTURES_DIR / filename)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # gaps de spec connus, hors de portee de ce test
-        model = builder.build(tree)
-    return builder, model
+    # gaps de spec connus, hors de portee de ce test (warnings suppressed by build_from_file_with_model)
+    return build_from_file_with_model(FIXTURES_DIR / filename, repository=repository)
 
 
 def _ident_type(model):

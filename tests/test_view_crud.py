@@ -9,17 +9,10 @@ View gets the full CRUD set. `validate_feature_properties` is the
 output.
 """
 
-import warnings
-from pathlib import Path
+from conftest import build_from_text as _build
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.convert.jsonschema import class_to_json_schema, model_to_json_schema, validate_feature_properties
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_text
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 
 _MODEL = """INTERLIS 2.4;
 MODEL Test AT "http://x" VERSION "1" =
@@ -55,16 +48,6 @@ MODEL Test AT "http://x" VERSION "1" =
   END Views;
 END Test.
 """
-
-
-def _build(src: str):
-    tree, errors = parse_text(src)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
 
 
 def _resolve(builder, name: str) -> MetaInstance:

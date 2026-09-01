@@ -21,31 +21,19 @@ not always present) - not exercised here to keep this test hermetic; see
 the NOTICE file for how to build them manually against `ili_corpus/`.
 """
 
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import parse_file
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "fgdm4gs"
 
 
 def _build(fname: str):
-    tree, errors = parse_file(FIXTURES_DIR / fname)
-    assert not errors, f"erreurs de syntaxe inattendues: {errors}"
-    repo = ModelRepository([FIXTURES_DIR])
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repo)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return builder
+    return build_from_file(FIXTURES_DIR / fname, repository=ModelRepository([FIXTURES_DIR]))
 
 
 def _views(builder) -> list[MetaInstance]:
