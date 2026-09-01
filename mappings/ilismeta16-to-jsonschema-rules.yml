@@ -236,36 +236,16 @@ concepts:
       is Abstract=true maps to `anyOf` over every concrete (non-abstract)
       subclass found via the `Inheritance`/`Super` chain (own+inherited
       merge itself is already covered by StructureNesting/xtf.schema.attributes_of()
-      - this concept entry is specifically about the
-      polymorphic case). `anyOf` chosen over `oneOf` (user decision) since
-      a concrete subclass can itself be extended by another concrete
-      subclass (real corpus case, CHBase_Part8_GEOMETRY3D_V2.ili:
-      `Surface3D` (ABSTRACT) -> `PlanarSurface3D` (concrete) ->
-      `Triangle3D` (concrete)) - a `Triangle3D` value would validate
-      against both branches under `oneOf`'s "exactly one match"
-      requirement, since none of this pipeline's $defs schemas set
-      `additionalProperties: false`. Requires `symbol_table` (subclasses
-      are found by scanning every registered Class, there being no
-      reverse-of-`Super` link) - without it, or when no concrete subclass
-      is found, falls back to the pre-existing plain `$ref`, now with an
-      informational `x-abstract` marker (RULE #5).
-
-      Explicitly still `status: backlog` within this same concept, NOT
-      separately mapped (RULE #7 - no real corpus evidence to build
-      against): RESTRICTION(...) narrowing a STRUCTURE-typed attribute's
-      candidate set (`restrictedStructureRef`/`restrictedClassOrStructureRef`,
-      spec/grammar/mapping/04_attributes.yml) - the entire 54-file
-      `ili_corpus/` has exactly one real RESTRICTION occurrence
-      (RoadTrafficCensus_V1_1.ili), and it is the DOMAIN-level `CLASS
-      RESTRICTION(...)` form already covered by
-      xtf.schema.restriction_candidates() (ReferenceType/Role only), not
-      an attribute-level structure restriction. Confirmed this form isn't
-      even captured by InterlisModelBuilder today (no
-      `_build_domain_class_restriction`-equivalent call site for
-      `restrictedStructureRef`'s own Restrictions binding) - a pre-existing
-      builder-layer gap, not something to build blind for a construct
-      with zero real evidence, same discipline as the MANDATORY-on-structure
-      gap documented under StructureNesting.
+      - this concept entry is specifically about the polymorphic case).
+      Requires `symbol_table` (subclasses are found by scanning every
+      registered Class, there being no reverse-of-`Super` link) - without
+      it, or when no concrete subclass is found, falls back to the
+      pre-existing plain `$ref`, now with an informational `x-abstract`
+      marker (RULE #5). RESTRICTION(...) narrowing a STRUCTURE-typed
+      attribute's candidate set is `status: backlog` (RULE #7 - zero real
+      corpus evidence). Rationale for `anyOf` over `oneOf` and the
+      RESTRICTION backlog detail: `docs/jsonschema-conversion-strategy.md`
+      ("Inheritance: ABSTRACT structure polymorphism").
 
   View:
     qualified_name: IlisMeta16.ModelData.View

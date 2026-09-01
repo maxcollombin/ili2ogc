@@ -292,27 +292,11 @@ concepts:
       operators, `DEFINED(...)`, plain attribute paths up to one STRUCTURE
       hop, `Numeric`/`Text`/`Enumeration` constants). `UniqueConstraint`/
       `SetConstraint`/`ExistenceConstraint` and the percentage-based
-      plausibility form (`Percentage` set, or `Kind` `LowPercC`/`HighPercC`)
-      stay `status: backlog` within this same concept entry -
-      population/basket-level checks a single-row `CHECK` cannot express -
-      but each is now surfaced as its own `-- NOTE` (`SET`/`EXISTENCE`
-      touch ~3%/~8% of the real corpus; both `SetConstraint` and
-      `ExistenceConstraint` reach `_check_constraints_for_class` and are
-      noted there - `ExistenceConstraint`'s own builder attachment gap,
-      see `07_constraints.yml`'s `existenceConstraint` entry, now
-      closed), never a silent drop. Verified that even
-      ili2db (the mature reference INTERLIS-to-database tool) does not
-      attempt an arbitrary-`Expression`-to-`CHECK` translation either -
-      its own `--createNumChecks`/`--createTextChecks`/
-      `--createDateTimeChecks`/`--createMandatoryChecks`/
-      `--createTypeConstraint` flags only cover narrower PER-DATATYPE
-      validation (range/length/NOT NULL). `THIS`/`PARENT`/aggregate paths/
-      `FunctionCall`/arithmetic surface as a `-- NOTE`, never a wrong or
-      partial `CHECK` (RULE #5) - found a real, separate construction bug
-      the hard way: `factor`'s `INTERLIS DOT (Name|URI|UUIDOID) (LPAR ...
-      RPAR)?` alternative (predefined functions, e.g. `INTERLIS.len(...)`)
-      had no `when_present` branch and silently collapsed to its own
-      first argument (`spec/grammar/mapping/07_constraints.yml`'s
-      `factor.INTERLIS` entry) - fixed at construction, not papered over
-      here, since it also corrupted `constraint_eval.py`'s runtime
-      evaluation of the same real corpus constraints.
+      plausibility form stay `status: backlog` within this same concept
+      entry - population/basket-level checks a single-row `CHECK` cannot
+      express - each surfaced as its own `-- NOTE`, never a silent drop.
+      `THIS`/`PARENT`/aggregate paths/`FunctionCall`/arithmetic surface the
+      same way (RULE #5), never a wrong or partial `CHECK`. Full mapping
+      detail, the ili2db comparison, and a real predefined-function
+      construction bug found while building this:
+      `docs/sql-conversion-strategy.md` ("CHECK from CONSTRAINT").

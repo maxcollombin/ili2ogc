@@ -312,31 +312,15 @@ globalUniqueness:
       wrap:
         uniqueEl: IlisMeta16.ModelData.PathOrInspFactor
       note: >
-        `wrap:` (same mechanism as coordinateType.Axis, 06_types.yml -
-        "missing from the engine's multi: true branch" note there is the
-        SAME class of bug, found independently here): without it, each
-        `uniqueEl` in the list resolves to a raw bag dict
-        (`{'PathEls': [...]}`), never a real `PathOrInspFactor` instance -
-        confirmed empirically (sweep result before this fix:
-        `[('globalUniqueness', [{'PathEls': [...]}])]`, a bare dict, not
-        `[IlisMeta16.ModelData.PathOrInspFactor(...)]`) - silently
-        unusable by `attach()` (which requires a MetaInstance or a list of
-        them to find/set a real association role), compounding the key
-        rename above.
-        Each uniqueEl -> one PathOrInspFactor entry, appended to the
-        enclosing UniqueConstraint.UniqueDef list (no intermediate class
-        instance). Key is "UniqueDef", not "Elements": the
-        bag key IS the literal attribute/role name `_attach_unclaimed_results`
-        attaches onto the enclosing instance (`self.attachment.attach(instance,
-        key, sub_value, ...)`) - "Elements" is not a real UniqueConstraint
-        attribute, and the class-based fallback that recovers a WRONG key
-        name elsewhere in this codebase only applies to a single
-        MetaInstance value, never a list (`multi: true` always produces a
-        list here), so the wrong key would leave `UniqueConstraint.UniqueDef`
-        silently `[]` for every real `UNIQUE` declaration corpus-wide
-        (confirmed empirically on a synthetic `UNIQUE Code;` fixture -
-        `constraint_eval.py`/`convert/jsonschema.py` both deliberately
-        leave UniqueConstraint unmapped, so nothing else exercises this key).
+        `wrap:` (same mechanism as coordinateType.Axis, 06_types.yml)
+        promotes each `uniqueEl` to a real `PathOrInspFactor` instance
+        rather than a raw bag dict, so `attach()` can find/set the
+        association role. Key is "UniqueDef", the enclosing
+        `UniqueConstraint`'s real association role name -
+        `_attach_unclaimed_results` uses the bag key literally as the
+        target role. Background on both bugs (why they went undetected,
+        how they were found): `docs/sql-conversion-strategy.md` ("Three
+        real bugs found and fixed while building this").
   note: 'No direct IlisMeta16 instance expected. Comma-separated list of uniqueEl, feeding the enclosing
     UniqueConstraint''s UniqueDef (PathOrInspFactor list) directly - no own class instance. Grammar
     (globalUniqueness()): uniqueEl (COMMA uniqueEl)*. No "GlobalUniqueness" class exists in the metamodel.
