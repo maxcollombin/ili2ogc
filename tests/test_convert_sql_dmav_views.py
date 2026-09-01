@@ -18,29 +18,19 @@ The hermetic, network-free reduction is `tests/test_view_dmav_pattern.py`.
 """
 
 import sqlite3
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.convert.sql import build_tables, build_views, render_gpkg
-from interlis.runtime.parse import parse_file
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 DMAV = Path(__file__).resolve().parent / "fixtures" / "dmav"
 
 
 def _views_and_tables(model: str):
-    tree, errors = parse_file(DMAV / model)
-    assert not errors, errors
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=ModelRepository([DMAV]))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
+    builder = build_from_file(DMAV / model, repository=ModelRepository([DMAV]))
     registered = builder.symbol_table.all_registered()
     classes = [i for i in registered if getattr(i, "_qualified_class", "").endswith(".Class")]
     views = [i for i in registered if getattr(i, "_qualified_class", "").endswith(".View")]

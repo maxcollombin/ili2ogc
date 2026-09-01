@@ -7,20 +7,16 @@ XtfObject/RawNode synthetiques directement en Python plutot qu'un vrai .xtf
 sur disque - la couche structurelle (parse.py) est deja testee separement
 (test_xtf_parse.py), ce fichier teste uniquement le croisement schema/donnees."""
 
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
-from interlis.runtime.parse import parse_file
 from interlis.xtf.parse import RawNode, XtfBasket, XtfObject, XtfTransfer
 from interlis.xtf.validate import validate_transfer
 
 ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURE = Path(__file__).parent / "fixtures/minimal_model.ili"
 
 CLASS_NAME = "MinimalTest.MainTopic.Person"
@@ -28,13 +24,7 @@ CLASS_NAME = "MinimalTest.MainTopic.Person"
 
 @pytest.fixture(scope="module")
 def builder():
-    tree, errors = parse_file(FIXTURE)
-    assert not errors
-    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        b.build(tree)
-    return b
+    return build_from_file(FIXTURE)
 
 
 def _text_attr(name: str, text: str | None) -> tuple[str, list[RawNode]]:
@@ -146,13 +136,7 @@ LOCATION_CLASS = "RefTest.MainTopic.Location"
 
 @pytest.fixture(scope="module")
 def ref_builder():
-    tree, errors = parse_file(REF_FIXTURE)
-    assert not errors
-    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        b.build(tree)
-    return b
+    return build_from_file(REF_FIXTURE)
 
 
 def _ref_attr(name: str, target_tid: str) -> tuple[str, list[RawNode]]:
@@ -487,13 +471,7 @@ WIDGET_EXTERNAL_CLASS = "RestrictionTest.MainTopic.WidgetWithExternal"
 
 @pytest.fixture(scope="module")
 def restriction_builder():
-    tree, errors = parse_file(RESTRICTION_FIXTURE)
-    assert not errors
-    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        b.build(tree)
-    return b
+    return build_from_file(RESTRICTION_FIXTURE)
 
 
 def test_restriction_text_matching_first_candidate_has_no_issue(restriction_builder):
@@ -566,13 +544,7 @@ ZONE_CLASS = "GeomTest.MainTopic.Zone"
 
 @pytest.fixture(scope="module")
 def geometry_builder():
-    tree, errors = parse_file(GEOMETRY_FIXTURE)
-    assert not errors
-    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        b.build(tree)
-    return b
+    return build_from_file(GEOMETRY_FIXTURE)
 
 
 def _coord_node(*components: str, tag: str = "COORD") -> RawNode:
@@ -876,13 +848,8 @@ EMBED_CHILD_CLASS = "EmbedBase.MainTopic.Child"
 
 @pytest.fixture(scope="module")
 def cross_model_builder():
-    tree, errors = parse_file(CROSS_MODEL_FIXTURES_DIR / "importer.ili")
-    assert not errors
     repository = ModelRepository([CROSS_MODEL_FIXTURES_DIR])
-    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        b.build(tree)
+    b = build_from_file(CROSS_MODEL_FIXTURES_DIR / "importer.ili", repository=repository)
     return b, repository
 
 
@@ -933,13 +900,7 @@ PERSON_CLASS = "StructContentTest.MainTopic.Person"
 
 @pytest.fixture(scope="module")
 def struct_content_builder():
-    tree, errors = parse_file(STRUCT_CONTENT_FIXTURE)
-    assert not errors
-    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        b.build(tree)
-    return b
+    return build_from_file(STRUCT_CONTENT_FIXTURE)
 
 
 def _struct_wrapper(*attr_pairs: tuple[str, list[RawNode]]) -> RawNode:

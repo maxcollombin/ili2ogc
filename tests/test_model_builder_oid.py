@@ -14,28 +14,18 @@ Fixture (tests/fixtures/oid_model.ili) covers, one TOPIC per case:
   class-default resolve independently.
 """
 
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file_with_model
 
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import parse_file
-
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURE = Path(__file__).parent / "fixtures/oid_model.ili"
 
 
 @pytest.fixture(scope="module")
 def model():
-    tree, errors = parse_file(FIXTURE)
-    assert not errors, f"unexpected syntax errors: {errors}"
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return builder.build(tree)
+    _builder, model = build_from_file_with_model(FIXTURE)
+    return model
 
 
 def _topic(model, name):

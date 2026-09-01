@@ -16,19 +16,15 @@ production model - review it, then regenerate:
 import json
 import os
 import re
-import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+from conftest import build_from_text
 
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import parse_text
 from interlis.xtf.schema import attributes_of
 
 ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 MGDM = Path(__file__).resolve().parent / "fixtures" / "mgdm"
 WFS = Path(__file__).resolve().parent / "fixtures" / "wfs-schemas"
 EXPECTED = MGDM / "wfs_crosscheck_expected.json"
@@ -64,12 +60,7 @@ def _wfs_feature_types(xsd_path: Path) -> dict[str, list[str]]:
 
 
 def _classes(model_file: str) -> dict[str, object]:
-    tree, errors = parse_text((MGDM / model_file).read_text(encoding="utf-8"))
-    assert not errors, errors
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
+    builder = build_from_text((MGDM / model_file).read_text(encoding="utf-8"))
     return {
         getattr(i, "Name", ""): i
         for i in builder.symbol_table.all_registered()

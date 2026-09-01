@@ -17,20 +17,16 @@ real SQLite engine.
 """
 
 import sqlite3
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file, build_from_text
 
-from interlis.builder.model_builder import InterlisModelBuilder
 from interlis.builder.repository import ModelRepository
 from interlis.convert.sql import build_tables, build_views, render_gpkg
 from interlis.metamodel.instance import MetaInstance
-from interlis.runtime.parse import meta_attribute_comments, parse_file, parse_text
+from interlis.runtime.parse import meta_attribute_comments
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FGDM4GS = Path(__file__).resolve().parent / "fixtures" / "fgdm4gs"
 
 
@@ -76,13 +72,7 @@ END RoadView.
 
 
 def _build_model():
-    tree, errors = parse_text(_MODEL)
-    assert not errors, errors
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree, meta_attributes=meta_attribute_comments(_MODEL))
-    return builder
+    return build_from_text(_MODEL, meta_attributes=meta_attribute_comments(_MODEL))
 
 
 def _split(builder):
@@ -168,13 +158,7 @@ END CatalogRefView.
 
 
 def _split_catalog_ref():
-    tree, errors = parse_text(_CATALOG_REF_MODEL)
-    assert not errors, errors
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return _split(builder)
+    return _split(build_from_text(_CATALOG_REF_MODEL))
 
 
 def test_view_attribute_naming_a_flattened_struct_resolves_to_its_one_column():
@@ -228,13 +212,7 @@ END Test.
 
 
 def _split_union():
-    tree, errors = parse_text(_UNION_MODEL)
-    assert not errors, errors
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return _split(builder)
+    return _split(build_from_text(_UNION_MODEL))
 
 
 def test_union_view_is_a_union_all_of_per_branch_projections():
@@ -276,13 +254,8 @@ def _convert_with_auto_base_models(derived: str):
     actually resolved (via the repository) so the VIEW's base classes
     become tables in the SAME conversion.
     """
-    tree, errors = parse_file(FGDM4GS / derived)
-    assert not errors, errors
     repo = ModelRepository([FGDM4GS])
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repo)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
+    builder = build_from_file(FGDM4GS / derived, repository=repo)
 
     registered = builder.symbol_table.all_registered()
     classes = [i for i in registered if getattr(i, "_qualified_class", "").endswith(".Class")]
@@ -387,13 +360,7 @@ END WherelessJoin.
 
 
 def _split_whereless_join():
-    tree, errors = parse_text(_WHERELESS_JOIN_MODEL)
-    assert not errors, errors
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=None)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        builder.build(tree)
-    return _split(builder)
+    return _split(build_from_text(_WHERELESS_JOIN_MODEL))
 
 
 def test_whereless_join_of_directly_associated_classes_auto_derives_the_join_condition():

@@ -9,31 +9,20 @@ fixtures are included for structural coverage only, not to assert an overlap
 error that this validator doesn't compute.
 """
 
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file
 
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import parse_file
 from interlis.xtf.parse import parse_xtf
 from interlis.xtf.validate import validate_transfer
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURE_DIR = Path(__file__).parent / "fixtures/xtf/xtf23overlap"
 
 
 @pytest.fixture(scope="module")
 def builder():
-    tree, errors = parse_file(FIXTURE_DIR / "Overlap23.ili")
-    assert not errors
-    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        b.build(tree)
-    return b
+    return build_from_file(FIXTURE_DIR / "Overlap23.ili")
 
 
 ALL_FIXTURES = sorted(FIXTURE_DIR.glob("*.xtf"))

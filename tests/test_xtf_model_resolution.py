@@ -6,18 +6,14 @@ restait invisible, disponible ou non). Reutilise les fixtures
 `tests/fixtures/multi_file/` (Base disponible, BrokenSyntax indexe mais en
 echec, NoSuchModel absent), meme corpus que `test_model_builder_multi_file.py`."""
 
-import warnings
 from pathlib import Path
 
-from interlis.builder.model_builder import InterlisModelBuilder
+from conftest import build_from_file
+
 from interlis.builder.repository import ModelRepository
-from interlis.runtime.parse import parse_file
 from interlis.xtf.model_resolution import header_completeness
 from interlis.xtf.parse import XtfModelRef, XtfTransfer
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURES_DIR = Path(__file__).parent / "fixtures/multi_file"
 
 
@@ -38,13 +34,9 @@ def test_header_completeness_without_repository_is_no_repo():
 def test_header_completeness_covers_all_four_states():
     repository = ModelRepository([FIXTURES_DIR])
     # bind_builder_factory necessite un InterlisModelBuilder deja construit
-    # avec ce repository (meme mecanisme que test_model_builder_multi_file.py)
-    builder = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR, repository=repository)
-    tree, errors = parse_file(FIXTURES_DIR / "importer.ili")
-    assert not errors
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # gaps de spec connus, hors de portee de ce test
-        builder.build(tree)
+    # avec ce repository (meme mecanisme que test_model_builder_multi_file.py) -
+    # gaps de spec connus, hors de portee de ce test (warnings suppressed by build_from_file)
+    build_from_file(FIXTURES_DIR / "importer.ili", repository=repository)
 
     statuses = header_completeness(
         _transfer(["INTERLIS", "Base", "NoSuchModel", "BrokenSyntax"]),

@@ -10,31 +10,20 @@ Both `interlis.xtf.parse.parse_xtf` (envelope/basket/object structure) and
 this encoding for this file to validate cleanly.
 """
 
-import warnings
 from pathlib import Path
 
 import pytest
+from conftest import build_from_file
 
-from interlis.builder.model_builder import InterlisModelBuilder
-from interlis.runtime.parse import parse_file
 from interlis.xtf.parse import parse_xtf
 from interlis.xtf.validate import validate_transfer
 
-ROOT = Path(__file__).resolve().parent.parent
-MAPPINGS_DIR = ROOT / "mappings"
-SPEC_DIR = ROOT / "spec/grammar/mapping"
 FIXTURE_DIR = Path(__file__).parent / "fixtures/xtf/xtf24allerrors"
 
 
 @pytest.fixture(scope="module")
 def builder():
-    tree, errors = parse_file(FIXTURE_DIR / "AllErrors24.ili")
-    assert not errors
-    b = InterlisModelBuilder(MAPPINGS_DIR, SPEC_DIR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        b.build(tree)
-    return b
+    return build_from_file(FIXTURE_DIR / "AllErrors24.ili")
 
 
 @pytest.fixture(scope="module")
