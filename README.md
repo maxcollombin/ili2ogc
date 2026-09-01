@@ -2,7 +2,8 @@
 
 A pure-Python INTERLIS 2 runtime: parses `.ili` models into a graph of typed
 Python objects (the IlisMeta16 metamodel), validates `.xtf` data transfers
-against them, and converts both to JSON Schema and OGC JSON-FG.
+against them, and converts both to JSON Schema, SQL DDL, OGC JSON-FG,
+CQL2-JSON filters, and back to `.xtf`.
 
 ## Installation
 
@@ -13,13 +14,16 @@ uv sync          # or: pip install .
 The generated ANTLR lexer/parser are committed under `src/interlis/antlr/`,
 so no grammar build step is needed.
 
-## Quickstart
+## Usage
 
 ```sh
-interlis build model.ili --repo models/
-interlis validate transfer.xtf --repo models/
-interlis convert model.ili -o model.schema.json                        # .ili -> JSON Schema
-interlis convert-jsonfg transfer.xtf --repo models/ -o out.jsonfg.json  # .xtf -> JSON-FG
+interlis build model.ili --repo models/                                 # parse + print the built model
+interlis validate transfer.xtf --repo models/                           # check .xtf against its .ili schema
+interlis convert model.ili -o model.schema.json                         # .ili -> JSON Schema
+interlis convert-sql model.ili --dialect postgresql -o model.sql        # .ili -> SQL DDL
+interlis convert-jsonfg transfer.xtf --repo models/ -o out.jsonfg.json   # .xtf -> OGC JSON-FG
+interlis convert-cql2 model.ili -o model.cql2.json                      # CONSTRAINT -> CQL2-JSON filters
+interlis write-xtf view-model.ili source.xtf -o view.xtf                # VIEW TOPIC data -> .xtf
 ```
 
 `--repo DIR` (repeatable) resolves `IMPORTS`/schema references against a
@@ -42,10 +46,11 @@ transfer = parse_xtf(Path("transfer.xtf"))
 issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
 ```
 
-`interlis.convert.jsonschema`/`interlis.convert.jsonfg` expose the same
-conversions as the CLI's `convert`/`convert-jsonfg`. Pass a
-`ModelRepository` (`interlis.builder.repository`) to the builder to resolve
-`IMPORTS` against other local `.ili` models.
+`interlis.convert.jsonschema`/`.sql`/`.jsonfg`/`.cql2`/`.xtf_writer` expose
+the same conversions as the CLI's `convert`/`convert-sql`/`convert-jsonfg`/
+`convert-cql2`/`write-xtf`. Pass a `ModelRepository`
+(`interlis.builder.repository`) to the builder to resolve `IMPORTS` against
+other local `.ili` models.
 
 ## Development
 
