@@ -196,7 +196,7 @@ constant:
       source:
         field: null
       note: confirmed Constant.own.Type (Kind enum, mandatory) - dispatched from which of the 7 alternatives
-        matched (needs mapping to Constant.Type's enum values, not read in this lot's scope - values not
+        matched (needs mapping to Constant.Type's enum values - values not
         yet cross-checked against kind-values.yml).
   note: 'Type resolved dynamically: UNDEFINED -> Undefined, numericConst -> Numeric, textConst/formattedConst
     -> Text, enumerationConst -> Enumeration. classConst/attributePathConst need separate confirmation

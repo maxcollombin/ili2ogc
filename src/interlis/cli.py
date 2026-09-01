@@ -216,7 +216,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
     See docs/jsonschema-conversion-strategy.md and
     mappings/ilismeta16-to-jsonschema-rules.yml for scope - a mapped type
-    outside the current lot's coverage gets an explicit
+    outside this converter's coverage gets an explicit
     `x-unsupported` marker rather than being silently dropped.
 
     Every `Class` becomes its own `$defs` entry, as before. A `VIEW` is
@@ -224,8 +224,8 @@ def cmd_convert(args: argparse.Namespace) -> int:
     (`_SUPPORTED_VIEW_FORMATION_KINDS` - Projection/Join/Union/Aggregation/
     Inspection, see docs/view-formation-support.md). `View` extends
     `Class` in the metamodel (`ilismeta16-classes.yml`) and its
-    `ClassAttribute` list is populated the same way (backlog item 8's
-    Lot A2) - `class_to_json_schema`/`model_to_json_schema` need no View-
+    `ClassAttribute` list is populated the same way -
+    `class_to_json_schema`/`model_to_json_schema` need no View-
     specific code at all, confirmed empirically: a View's flattened
     attribute set (whatever the formation law) already produces a correct
     JSON Schema `$defs` entry through the exact same path as a plain

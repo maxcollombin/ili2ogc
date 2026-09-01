@@ -325,20 +325,18 @@ globalUniqueness:
         rename above.
         Each uniqueEl -> one PathOrInspFactor entry, appended to the
         enclosing UniqueConstraint.UniqueDef list (no intermediate class
-        instance). Key renamed from "Elements" to "UniqueDef" (2026-08-27,
-        found while building the SQL DDL pipeline, backlog item 14): the
+        instance). Key is "UniqueDef", not "Elements": the
         bag key IS the literal attribute/role name `_attach_unclaimed_results`
         attaches onto the enclosing instance (`self.attachment.attach(instance,
         key, sub_value, ...)`) - "Elements" is not a real UniqueConstraint
         attribute, and the class-based fallback that recovers a WRONG key
         name elsewhere in this codebase only applies to a single
         MetaInstance value, never a list (`multi: true` always produces a
-        list here) - so `UniqueConstraint.UniqueDef` silently stayed `[]`
-        for every real `UNIQUE` declaration, corpus-wide, until this fix
-        (confirmed empirically before/after on a synthetic `UNIQUE Code;`
-        fixture - nobody had read `UniqueConstraint.UniqueDef` before this
-        lot, `constraint_eval.py`/`convert/jsonschema.py` both deliberately
-        leave UniqueConstraint unmapped).
+        list here), so the wrong key would leave `UniqueConstraint.UniqueDef`
+        silently `[]` for every real `UNIQUE` declaration corpus-wide
+        (confirmed empirically on a synthetic `UNIQUE Code;` fixture -
+        `constraint_eval.py`/`convert/jsonschema.py` both deliberately
+        leave UniqueConstraint unmapped, so nothing else exercises this key).
   note: 'No direct IlisMeta16 instance expected. Comma-separated list of uniqueEl, feeding the enclosing
     UniqueConstraint''s UniqueDef (PathOrInspFactor list) directly - no own class instance. Grammar
     (globalUniqueness()): uniqueEl (COMMA uniqueEl)*. No "GlobalUniqueness" class exists in the metamodel.
@@ -912,24 +910,23 @@ uniquenessConstraint:
       note: >
         Default for the common case (own top-level BASKET presence,
         checked directly on UniquenessConstraintContext.BASKET() - a real
-        accessor, confirmed via mappings/antlr-rule-index.yml). Found
-        empirically (2026-08-27, backlog item 14/SQL DDL pipeline) that
-        `Kind` was NEVER set at all before this binding - even the
+        accessor, confirmed via mappings/antlr-rule-index.yml). Without
+        this binding, `Kind` is never set at all - even the
         overwhelmingly common bare `UNIQUE Code;` form (no LOCAL/BASKET
-        qualifier anywhere) built Kind=None, contradicting this file's own
-        note below (kept for its remaining LocalU background) and
-        confirmed to be nobody's bug until now: no prior consumer
-        (`convert/jsonschema.py`/`convert/constraint_eval.py`) ever read
-        `UniqueConstraint.Kind`. `_apply_bindings` for THIS rule (Instance
+        qualifier anywhere) builds Kind=None, contradicting this file's own
+        note below (kept for its remaining LocalU background); no prior
+        consumer (`convert/jsonschema.py`/`convert/constraint_eval.py`)
+        ever reads `UniqueConstraint.Kind`, so this had gone unnoticed.
+        `_apply_bindings` for THIS rule (Instance
         kind) runs before its nested `localUniqueness` Container children
         are swept (`_build_instance`'s own order) - a genuine `(LOCAL)`
         qualifier's own Kind=LocalU binding (localUniqueness below) still
         gets the chance to override this default afterward IF that
-        mechanism itself works; independently confirmed
-        (2026-08-27) that it currently does NOT (`localUniqueness`'s
+        mechanism itself works; confirmed
+        that it currently does NOT (`localUniqueness`'s
         UniqueDef construction is empty even with `(LOCAL)` present, "exact
         construction not yet confirmed" per its own note below) - left
-        `status: backlog` deliberately (RULE #7, out of this lot's scope,
+        `status: backlog` deliberately (RULE #7,
         see docs/sql-conversion-strategy.md) rather than guessed at
         alongside this fix. A downstream consumer MUST still treat an
         empty `UniqueDef` as unsupported regardless of `Kind` (this

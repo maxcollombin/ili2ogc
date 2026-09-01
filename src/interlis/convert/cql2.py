@@ -17,8 +17,8 @@ guessed): a comparison is `{"op": "=", "args": [{"property": "x"}, v]}`;
 [...]}`); `isNull` is `{"op": "isNull", "args": [{"property": "x"}]}`,
 negated via a `not` wrapper for `DEFINED(x)`; a property reference is
 `{"property": "name"}`, a multi-hop STRUCTURE path dotted
-(`"struct.sub"`); a named-function extension point (e.g. a future
-`interlis_mod` for `MOD`, Lot 2, not implemented here) uses the SAME
+(`"struct.sub"`); a named-function extension point (e.g. a hypothetical
+`interlis_mod` for `MOD`, not implemented here) uses the SAME
 `{"op": "<name>", "args": [...]}` shape as any built-in operator - no
 separate `"function"` wrapper.
 

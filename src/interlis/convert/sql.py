@@ -77,7 +77,7 @@ from interlis.xtf.schema import (
 )
 
 OID_COLUMN = "id"
-"""Deliberately NOT `PRIMARY KEY`/GDAL's own default FID column name (`ogc_fid`) - verified empirically (2026-08-27, a
+"""Deliberately NOT `PRIMARY KEY`/GDAL's own default FID column name (`ogc_fid`) - verified empirically (a
 real `ogr2ogr -append` against a live PostgreSQL AND GeoPackage) that GDAL treats WHATEVER column it detects as the
 table's `PRIMARY KEY` as an auto-managed FID slot, excluded from the INSERT column list entirely (expects the database
 to fill it in, e.g. `SERIAL`) - a Feature's `"id"` is NEVER written into it, `PRIMARY KEY "ogc_fid" text` silently
@@ -109,8 +109,8 @@ def _sql_identifier(name: str) -> str:
 
     PostgreSQL folds every UNQUOTED identifier to lowercase regardless of
     what this module writes - and GDAL's own PostgreSQL driver launders
-    (lowercases) field names by default (`LAUNDER=YES`, verified
-    2026-08-27) when it later `-append`s data into a table this module
+    (lowercases) field names by default (`LAUNDER=YES`, verified against
+    a live database) when it later `-append`s data into a table this module
     created. Writing every identifier already-lowercase here sidesteps
     BOTH mechanisms rather than relying on either implicitly - no quoting
     needed anywhere in the generated DDL.
@@ -145,7 +145,7 @@ def _avoid_identity_collision(columns: list[Column]) -> dict[str, str]:
     """Rename any column literally named `OID_COLUMN` ("id") to `"id_attr"` (or `"id_attr_2"`, ... on a further
     collision), IN PLACE - returns the `{old_name: new_name}` rename map.
 
-    Real corpus case (found 2026-08-27 via a live SQLite run,
+    Real corpus case (found via a live SQLite run,
     `ili_corpus/WasserBase_V1_1.ili`: `ID : MANDATORY TEXT*25;` -
     "duplicate column name: id"): a genuine INTERLIS attribute literally
     named `Id`/`ID` lowercases to the SAME name this module reserves for
@@ -178,7 +178,7 @@ def _avoid_identity_collision(columns: list[Column]) -> dict[str, str]:
 def _quote(name: str) -> str:
     """Double-quote a table/column identifier (ANSI SQL, both PostgreSQL and SQLite accept it).
 
-    Found necessary (2026-08-27) by executing generated DDL against a real
+    Found necessary by executing generated DDL against a real
     SQLite engine, not just eyeballing the text: a real corpus INTERLIS
     `Class`/attribute can be named after a SQL reserved word (confirmed:
     `Union`, `Index`) - unquoted, `CREATE TABLE union (...)` is a syntax
@@ -561,7 +561,7 @@ def _build_child_table(
     level deeper (`build_tables`'s own recursion bound, mirroring
     `_MAX_STRUCT_FLATTEN_DEPTH`). The `ReferenceType`/non-structure `Class`
     branch below is DEFENSIVE only -
-    verified (2026-08-27, `attrTypeDef`'s real ANTLR bytecode, RULE #2bis)
+    verified against `attrTypeDef`'s real ANTLR bytecode (RULE #2bis)
     that `BAG`/`LIST OF REFERENCE TO X` is NOT actually constructible by
     this project's vendored grammar at all (`attrTypeDef`'s `(BAG|LIST)
     OF` alternative only ever calls `restrictedStructureRef()` - a named
@@ -983,7 +983,7 @@ def _unique_constraints_for_class(
     `Kind=LocalU` is handled by `_local_unique_constraints_for_class` (skipped
     here, never noted twice). `Kind` on every `PathEl` is always
     "ReferenceAttr" regardless of whether the hop is a role or a structure
-    step (confirmed empirically 2026-08-27), so path LENGTH plus the child-
+    step (confirmed empirically), so path LENGTH plus the child-
     table match in `build_tables` are the only real signals.
     """
     result: list[UniqueConstraint] = []
@@ -1125,8 +1125,8 @@ def build_tables(
     Unlike `convert/jsonschema.py`'s `model_to_json_schema`, this performs
     NO reachability discovery beyond `classes` itself: a STRUCTURE-typed
     attribute is flattened INLINE (`_columns_for_class`), never a separate
-    `Table`, so there is nothing beyond the given roots to discover (Lot 1
-    scope - see mappings/ilismeta16-to-sql-rules.yml).
+    `Table`, so there is nothing beyond the given roots to discover
+    (see mappings/ilismeta16-to-sql-rules.yml).
 
     `class_table_names` (`id(cls) -> str`, optional out-param) is filled
     with the final table name chosen for every class - `build_views` uses
@@ -1153,7 +1153,7 @@ def build_tables(
     SAME identity graph, which discovery-via-repository cannot guarantee.
 
     Two real bugs found and fixed by executing the generated DDL against a
-    real SQLite engine (2026-08-27, not just eyeballing the text) - neither
+    real SQLite engine, not just eyeballing the text - neither
     was specific to one renderer, both affect PostgreSQL too:
     1. A short `Class.Name` collision across TOPICs (real corpus cases,
        e.g. two different `Item` classes) produced two `CREATE TABLE item`
@@ -1350,18 +1350,17 @@ def build_tables(
                     )
                 )
 
-    # 3rd real bug found the same way (PostgreSQL, live `psycopg`-free
-    # verification against a real `postgis/postgis` container, 2026-08-27):
+    # A real bug found the same way (PostgreSQL, live `psycopg`-free
+    # verification against a real `postgis/postgis` container):
     # a `REFERENCE TO`/Role target belonging to a DIFFERENT model (real
     # corpus case, `ili_corpus/LWB_Bewirtschaftungseinheiten_V3_0.ili`'s
     # `Zone_Ausland` -> `LWB_Landwirtschaftliche_Zonengrenzen_Kataloge_V2_0.
     # LZ_Kataloge.LZ_Katalog_TypRef`) resolves to a REAL Class via
     # `reference_target_class` (repository-loaded, so not caught by the
     # "unresolved reference" check in `_columns_for_class`) but that class
-    # is NOT among `classes` - Lot 1 deliberately converts ONE model's OWN
-    # classes only (no cross-model reachability discovery, unlike
-    # `convert/jsonschema.py`'s `_discover_classes` - a real, larger scope
-    # decision for a later lot, not made here). The FK column itself
+    # is NOT among `classes` - this function deliberately converts ONE
+    # model's OWN classes only (no cross-model reachability discovery,
+    # unlike `convert/jsonschema.py`'s `_discover_classes`). The FK column itself
     # (a valid OID string either way) is kept; only the now-dangling
     # `FOREIGN KEY` constraint - which would `ALTER TABLE ... REFERENCES` a
     # table this conversion never creates - is dropped.

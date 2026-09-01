@@ -63,9 +63,9 @@ def _crud_operations(class_instance: MetaInstance) -> tuple[str, ...] | None:
     content is never its own collection, CRUD semantics don't apply.
     A `View` is GET-only for every `FormationKind` EXCEPT a plain
     `PROJECTION OF` (1:1 with its single base, the direct equivalent of a
-    single-table SQL view, so writes map straight back) - see
-    .claude/PROGRESS.md item 8 Lot D's decision, by direct analogy with
-    SQL view updatability (the report's own pipeline, chapter 6 step 2a,
+    single-table SQL view, so writes map straight back) - by direct
+    analogy with SQL view updatability (the report's own pipeline,
+    chapter 6 step 2a,
     materializes `JOIN OF` as a real multi-table database VIEW via
     `ili2db` - PostgreSQL/PostGIS, GeoPackage and ESRI FileGDB all require
     a SINGLE source relation, or `INSTEAD OF` triggers INTERLIS provides
@@ -618,7 +618,7 @@ def class_to_json_schema(
     costs nothing extra to support - verified by a synthetic fixture
     rather than real-corpus proof for this specific branch.
 
-    `x-crud` (`_crud_operations`, backlog item 8 Lot D) declares
+    `x-crud` (`_crud_operations`) declares
     which HTTP operations a future OGC API Features publication of this
     `$defs` entry could support - `["GET"]` for a `JOIN OF` View,
     otherwise the full CRUD set. Omitted entirely for `Kind in
@@ -655,10 +655,9 @@ def validate_feature_properties(properties: dict[str, Any], schema: dict[str, An
     """Validate a candidate PUT/PATCH `properties` payload against one `$defs` entry of a `model_to_json_schema`
     document.
 
-    Backlog item 8 Lot D ("CRUD PUT-PATCH-DELETE, validation via le même
-    JSON Schema") - the building block a future write-capable OGC API
+    The building block a future write-capable OGC API
     Features layer (pygeoapi or otherwise, not implemented in this
-    project - see .claude/PROGRESS.md item 8) would call before accepting
+    project) would call before accepting
     a write. Uses the standard `jsonschema` package rather than
     reimplementing JSON Schema semantics (type/format/pattern/anyOf/
     required/`$ref` resolution...) by hand - this runtime's own output

@@ -35,7 +35,7 @@ EnumType:
   sql:
     column_type:
       value: text
-      note: "No CHECK(...IN(...)) in Lot 1 - deliberately deferred, see mappings/ilismeta16-to-sql-rules.yml."
+      note: "No CHECK(...IN(...)) - deliberately deferred, see mappings/ilismeta16-to-sql-rules.yml."
 
 BooleanType:
   qualified_name: IlisMeta16.ModelData.BooleanType
@@ -137,8 +137,8 @@ ObjectOID:
       value: "id text UNIQUE NOT NULL"
       note: >
         Synthetic, independent of the Class's own OID clause. Deliberately
-        NOT `PRIMARY KEY` (was `ogc_fid text PRIMARY KEY` until 2026-08-27):
-        verified empirically that GDAL excludes whatever it detects as
+        NOT `PRIMARY KEY` (not GDAL's own default FID column name,
+        `ogc_fid`): verified empirically that GDAL excludes whatever it detects as
         `PRIMARY KEY` from the INSERT column list entirely (expects the
         database to auto-generate it) - a Feature's `"id"` was NEVER
         actually written on `ogr2ogr -append`. See

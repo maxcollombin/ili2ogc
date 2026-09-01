@@ -6,10 +6,10 @@
 # decision for. Every concept relevant to table/column/constraint shape must
 # appear here, either `status: mapped` (field bindings live in
 # spec/conversion/sql-mapping.yml) or `status: backlog` (deliberately out of
-# scope for Lot 1, with a reason - RULE #7). Checked by
+# scope, with a reason - RULE #7). Checked by
 # scripts/validate_sql_conversion_spec.py.
 #
-# Lot 1 scope (concept mapping is dialect-neutral; two renderers exist -
+# Scope (concept mapping is dialect-neutral; two renderers exist -
 # PostgreSQL and GeoPackage/SQLite, see convert/sql.py's
 # render_postgresql/render_gpkg): a plain `Class` (`Kind=Class`, never
 # `Kind=Structure`, never `View`) becomes one `CREATE TABLE`, with a
@@ -49,11 +49,9 @@ concepts:
     qualified_name: IlisMeta16.ModelData.EnumType
     status: mapped
     note: >
-      Plain `text` column - no CHECK(... IN (...)) in Lot 1 (deliberately
-      deferred, see Constraint entry below: Lot 1 scope is UNIQUE/FOREIGN
-      KEY only, not CHECK of any kind, even though an enum's value set is
-      static and CHECK(IN(...)) would be dialect-neutral and easy - kept
-      out to respect the agreed Lot 1 boundary, not a technical limit).
+      Plain `text` column - no CHECK(... IN (...)) enforcing the enum's
+      value set (deliberately deferred, see Constraint entry below - not a
+      technical limit, CHECK(IN(...)) would be dialect-neutral and easy).
 
   BooleanType:
     qualified_name: IlisMeta16.ModelData.BooleanType
@@ -94,7 +92,7 @@ concepts:
       Kind in {Polyline, DirectedPolyline} -> LineString/MultiLineString,
       Kind in {Surface, Area} -> Polygon/MultiPolygon. ARC segments
       (circular-arcs) have no SFA-native column type (SFA is strictly
-      linear) - out of scope for Lot 1's column typing, same as the JSON
+      linear) - out of scope for this column typing, same as the JSON
       Schema pipeline's own straight-line-only position-array limit.
 
   Class:
@@ -111,82 +109,24 @@ concepts:
     status: mapped
     note: >
       Every `FormationKind` becomes a `CREATE VIEW` (`convert/sql.py`'s
-      `build_views`). `Projection`/`Join` -> `SELECT <attr := path> ...
-      FROM <base tables + navigated join tables, comma-joined> WHERE
-      <translated Where predicates>`. `Union` -> `SELECT <branch-1 exprs>
-      FROM c1 UNION ALL SELECT <branch-2 exprs> FROM c2 ...`
-      (`_build_union_view`) - one branch per base, each projecting that
-      base's `Derivates[i]` for every union-view attribute; `UNION ALL`,
-      not `UNION`, since INTERLIS union is a merge. `Inspection` ->
-      `SELECT <attr := element field | PARENT-> field> FROM
-      <parent>_<attr>[_<sub-attr>] [JOIN <parent> ON ...<parent>_fk =
-      <parent>.id]` (`_build_inspection_view`) - the child table
-      `build_tables` already emits for the inspected `BAG`/`LIST OF`
-      attribute IS the inspection extent; an indirect path
-      (`-> attr -> sub_attr`, a `BAG`/`LIST OF` nested one level inside
-      `attr`'s element structure) walks the matching chain of child
-      tables `_build_nested_child_tables` now also emits; a `PARENT->`
-      attribute (single-hop only) joins the child table back to the base
-      table on the same `<parent>_fk` column it already carries. A
-      single-hop geometry `Inspection` over a SURFACE/AREA attribute
-      (conceptually `SurfaceBoundary`/`SurfaceEdge`, eCH-0031 SS3.15) has
-      no child table but IS translated too -> `SELECT ST_Boundary(<geom
-      col>) FROM <base>` (`_build_geometry_inspection_view`, one row per
-      base object; `ST_Boundary` is PostGIS/OGC SFA SQL, needs SpatiaLite
-      to execute against `render_gpkg`'s plain SQLite).
-      `Aggregation` -> `SELECT [DISTINCT] <plain key projections |
-      COUNT(*)> FROM <base> [GROUP BY <key>]` (`_build_aggregation_view`):
-      `EQUAL(key)` (stashed by the builder as `view._aggregation_key`,
-      `_stash_aggregation_key`) becomes a real `GROUP BY <key>` (every
-      other plain-path attribute joins it there too); `ALL` (no key)
-      still uses `DISTINCT` for a plain-projection-only view. An
-      `Aggregation` column that is `INTERLIS.objectCount`/
-      `elementCount(AGGREGATES)` (the 2 STANDARD library functions whose
-      signature IS "count the members of a bag/object set") becomes
-      `COUNT(*)`; any OTHER `FUNCTION` call over the implicit `AGGREGATES`
-      bag - a user `FUNCTION` body, out of scope by design - demotes the
-      whole View to a `-- NOTE` (`SQL-VIEW-FORMATION-UNSUPPORTED`),
-      as does mixing a standard-function column into an `ALL` aggregation
-      alongside a plain column (no grouping key to make that well-defined).
-      An `Inspection` path nesting more than one level deep, or a
-      LINE/POLYLINE geometry attribute (a different conceptual
-      decomposition, `LineGeometry`/`LineSegment` - out of scope), still
-      demotes the same way. See docs/view-formation-support.md.
-
-      Its base classes (`RenamedBaseView.BaseView`) live in an IMPORTED
-      model, so that model must be part of the same conversion
-      (`interlis convert-sql --catalog <base>.ili`) for its tables to
-      exist - a missing base table demotes the whole View to a `-- NOTE`
-      rather than emitting a `CREATE VIEW` that would not compile. A base
-      that is itself `Kind=Association` (`PROJECTION OF <association>`,
-      no `CREATE TABLE` of its own) resolves instead to its 2-role
-      embedding's CARRIER class/table (`_association_embedding`) - the
-      alias still spells the association's own name, so a path hop naming
-      the role whose OWN target IS that carrier is a self-reference
-      (no-op), and the OTHER role is the real embedded FK, resolved the
-      same as any embedded role below. Each `ClassAttribute`'s assigned
-      expression (`Derivates[0]`, a `PathOrInspFactor`) becomes
-      `"<base alias>"."<column>"`; an intermediate hop through a
-      `REFERENCE TO`/embedded role adds a comma-joined table + its
-      `fk = id` predicate (covers `PROJECTION OF`/`JOIN OF`/`UNION OF`/
-      `AGGREGATION OF` alike navigating a role or association). An
-      `ALL OF <base>` attribute
-      whose synthetic identity path resolves to no single column (a
-      STRUCTURE, an unmapped type) is dropped with a per-attribute
-      `-- NOTE`, not a demotion of the whole View - it was not asked for
-      by name. `Where` is walked for `And`/`Or`/`Not` of relational
-      comparisons of two plain paths and `DEFINED(<base> -> role -> ...)`
-      (a bare base reference denotes that row's `id`; a `DEFINED` over an
-      association becomes `EXISTS (SELECT 1 FROM <next> WHERE <fk join>
-      [AND <rest>])`, reading the FK from whichever side carries it, the
-      same as `build_tables`; the DMAV `*_Gueltig` idiom); anything else -
-      a path through an unresolvable reference, an aggregate/function node
-      - demotes the WHOLE View to a `-- NOTE` (RULE #5), never a half-built
-      statement. A VIEW-level `UNIQUE` / `SET` / `EXISTENCE` constraint (a
-      `CREATE VIEW` cannot carry it) is surfaced as a `-- NOTE` alongside
-      the view. Verified end-to-end (a real `CREATE VIEW` executing and
-      returning correct rows) against both a live SQLite and a live
-      PostgreSQL engine - see docs/sql-conversion-strategy.md.
+      `build_views`) - `Projection`/`Join` a `SELECT ... FROM <base
+      tables, joined> WHERE <translated predicates>`, `Union` a `UNION
+      ALL` of one branch per base, `Inspection` a `SELECT` over the child
+      table `build_tables` already emits for the inspected `BAG`/`LIST OF`
+      (or `ST_Boundary(...)` for a single-hop SURFACE/AREA geometry,
+      PostGIS/OGC SFA SQL), `Aggregation` a `GROUP BY`/`DISTINCT`/
+      `COUNT(*)` depending on the key and whether a column is a STANDARD
+      library aggregate function. A construct outside this mapped subset
+      (a user `FUNCTION` body, a nested-Inspection path, an unresolvable
+      reference, a base model missing from `--catalog`) demotes the WHOLE
+      View to a `-- NOTE` rather than a half-built statement (RULE #5); a
+      VIEW-level `UNIQUE`/`SET`/`EXISTENCE` constraint is likewise a
+      `-- NOTE` alongside the view (a `CREATE VIEW` cannot carry it).
+      Verified end-to-end (a real `CREATE VIEW` executing and returning
+      correct rows) against both a live SQLite and a live PostgreSQL
+      engine. Full per-`FormationKind` SQL shape, base-model resolution,
+      and `WHERE`-translation rules: docs/sql-conversion-strategy.md and
+      docs/view-formation-support.md.
 
   ObjectOID:
     qualified_name: IlisMeta16.ModelData.ObjectOID
@@ -200,8 +140,8 @@ concepts:
       already treats `XtfObject.tid` as an opaque string regardless of the
       declared OID type (indeed the SAME `"id"` JSON-FG already puts on
       every Feature - `object_to_feature`). `id`, and NEVER `PRIMARY KEY`
-      (originally `ogc_fid`, GDAL's own PostgreSQL default FID name -
-      revised 2026-08-27): verified empirically (a real `ogr2ogr -append`
+      (not GDAL's own PostgreSQL default FID name, `ogc_fid`):
+      verified empirically (a real `ogr2ogr -append`
       against a live PostgreSQL AND GeoPackage) that GDAL treats WHATEVER
       column it detects as `PRIMARY KEY` as an auto-managed FID slot,
       excluded from the INSERT column list entirely - a Feature's `"id"`
@@ -238,8 +178,8 @@ concepts:
     status: mapped
     note: >
       Plain `REFERENCE TO X` -> a `text` column (typed to match the target
-      table's `id`) PLUS a real `FOREIGN KEY ... REFERENCES` (Lot 1's
-      marquee feature - see docs/interlis-ogc-architecture.md's Prevalence
+      table's `id`) PLUS a real `FOREIGN KEY ... REFERENCES` (a
+      marquee feature of this pipeline - see docs/interlis-ogc-architecture.md's Prevalence
       table: REFERENCE TO touches ~30% of the real corpus). An unresolved
       target class (declared target not reachable, e.g. no `--repo` given)
       gets a `-- NOTE` comment instead of a column - never a dangling FK.
@@ -306,7 +246,7 @@ concepts:
       is a real `REFERENCE TO`/role navigation to ANOTHER table's column
       and the whole constraint is a `SQL-UNIQUE-CROSS-REF` `-- NOTE`.
       `PathEl.Kind` is ALWAYS `"ReferenceAttr"` regardless of
-      hop position (confirmed empirically, 2026-08-27: `Owner->Code`
+      hop position (confirmed empirically: `Owner->Code`
       produces `[('ReferenceAttr','Owner'), ('ReferenceAttr','Code')]`, no
       distinct Kind for the intermediate role step) - path LENGTH, not
       `Kind`, is the real signal (same permissive Kind set as
@@ -359,8 +299,8 @@ concepts:
       touch ~3%/~8% of the real corpus; both `SetConstraint` and
       `ExistenceConstraint` reach `_check_constraints_for_class` and are
       noted there - `ExistenceConstraint`'s own builder attachment gap,
-      see `07_constraints.yml`'s `existenceConstraint` entry, closed
-      2026-08-31), never a silent drop. Verified that even
+      see `07_constraints.yml`'s `existenceConstraint` entry, now
+      closed), never a silent drop. Verified that even
       ili2db (the mature reference INTERLIS-to-database tool) does not
       attempt an arbitrary-`Expression`-to-`CHECK` translation either -
       its own `--createNumChecks`/`--createTextChecks`/

@@ -235,8 +235,8 @@ concepts:
       attribute (direct, or via MultiValue.BaseType) whose resolved type
       is Abstract=true maps to `anyOf` over every concrete (non-abstract)
       subclass found via the `Inheritance`/`Super` chain (own+inherited
-      merge itself was already covered by StructureNesting/xtf.schema.attributes_of()
-      since Lot 1/2 - this concept entry is specifically about the
+      merge itself is already covered by StructureNesting/xtf.schema.attributes_of()
+      - this concept entry is specifically about the
       polymorphic case). `anyOf` chosen over `oneOf` (user decision) since
       a concrete subclass can itself be extended by another concrete
       subclass (real corpus case, CHBase_Part8_GEOMETRY3D_V2.ili:
@@ -257,7 +257,7 @@ concepts:
       spec/grammar/mapping/04_attributes.yml) - the entire 54-file
       `ili_corpus/` has exactly one real RESTRICTION occurrence
       (RoadTrafficCensus_V1_1.ili), and it is the DOMAIN-level `CLASS
-      RESTRICTION(...)` form already covered by Lot 6/7's
+      RESTRICTION(...)` form already covered by
       xtf.schema.restriction_candidates() (ReferenceType/Role only), not
       an attribute-level structure restriction. Confirmed this form isn't
       even captured by InterlisModelBuilder today (no
@@ -265,7 +265,7 @@ concepts:
       `restrictedStructureRef`'s own Restrictions binding) - a pre-existing
       builder-layer gap, not something to build blind for a construct
       with zero real evidence, same discipline as the MANDATORY-on-structure
-      gap documented under StructureNesting (Lot 2).
+      gap documented under StructureNesting.
 
   View:
     qualified_name: IlisMeta16.ModelData.View
@@ -275,14 +275,13 @@ concepts:
       and shares the SAME `ClassAttr` association for its attribute list
       (populated by `InterlisModelBuilder._expand_view_all_of`/
       `_apply_pending_view_all_of` for `ATTRIBUTE ALL OF <base>;`, or
-      already-generic `attributeDef` handling - see backlog item 8's Lot
-      A2, `.claude/PROGRESS.md`) - `class_to_json_schema`/
+      already-generic `attributeDef` handling) - `class_to_json_schema`/
       `model_to_json_schema` (`src/interlis/convert/jsonschema.py`) need
       NO View-specific code: a View instance is simply passed as one more
       root, and its (already-flattened, `JOIN OF`-joined or `PROJECTION
       OF`-selected) `ClassAttribute` list converts through the exact same
-      path as a plain `Class`'s. Confirmed empirically (no code change
-      required in this module for Lot B).
+      path as a plain `Class`'s. Confirmed empirically - no code change
+      required in this module at all.
 
       Every `FormationKind` is selected as a root (`cli.cmd_convert`,
       `_SUPPORTED_VIEW_FORMATION_KINDS` - Projection/Join/Union/Aggregation/
@@ -314,20 +313,16 @@ concepts:
       confirms this means the object has NO stable identification at all
       (transfer-scoped TID only), not an error/gap to guess around.
 
-      **Resolved (2026-08-22)**: this entry was originally left open
-      pending the `.xtf` -> JSON-FG stage's own Feature/`id` conventions,
-      to avoid fixing a property name/shape that might not match. That
-      stage is now built (`convert/jsonfg.py`'s `object_to_feature`) and
+      The `.xtf` -> JSON-FG stage (`convert/jsonfg.py`'s `object_to_feature`)
       confirms OID maps to a JSON-FG Feature's `"id"` member - a
       Feature-level concept, entirely separate from `"properties"`
       (GeoJSON/JSON-FG RFC 7946 SS3.2). `class_to_json_schema` only ever
       describes the `properties` object's shape (reused identically for
       both a top-level Class and a nested Structure's `$defs` entry) -
-      OID structurally does not belong there, and never will, regardless
-      of which lot runs next. `status: backlog` is kept (this contract
-      has no separate "permanently out of scope" status, same as
-      `Constraint` below) but this is a closed, evidence-based
-      conclusion, not a still-pending decision.
+      OID structurally does not belong there, and never will. `status:
+      backlog` is kept (this contract has no separate "permanently out
+      of scope" status, same as `Constraint` below) but this is a
+      closed, evidence-based conclusion, not a still-pending decision.
 
   Constraint:
     qualified_name: IlisMeta16.ModelData.Constraint
@@ -351,13 +346,11 @@ concepts:
       open-ended undertaking disproportionate to every other concept in
       this contract, each a fixed, well-defined transformation.
 
-      **User decision (2026-08-22, explicit backlog)**: presented with the
-      choice between documenting this as backlog (no code) and adding a
-      cheap `x-constraints` marker (raw constraint text/Name per
-      class, no semantic translation attempted), the user chose the
-      documented-backlog option - consistent with this project's own XTF
-      validator, which likewise never executes these expressions against
-      real data (`.claude/PROGRESS.md`, "Gaps techniques restants").
+      Kept as documented backlog rather than a cheap `x-constraints`
+      marker (raw constraint text/Name per class, no semantic translation
+      attempted) - explicit user decision, consistent with this project's
+      own XTF validator, which likewise never executes these expressions
+      against real data.
       `UniqueConstraint`/`ExistenceConstraint`/`SetConstraint` (the `UNIQUE`/
       `EXISTS`/set-membership constructs, distinct concrete `Constraint`
       subclasses from `SimpleConstraint`) were not surveyed separately -

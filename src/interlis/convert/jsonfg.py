@@ -276,8 +276,8 @@ def _child_row_features(obj: XtfObject, cls: MetaInstance, *, symbol_table: Symb
     child table's own flattened columns, one level, same as
     `_build_child_table`) ; anything else (scalar, or a `REFERENCE TO`
     target OID - though `BAG`/`LIST OF REFERENCE TO` is not actually
-    constructible by this project's own grammar, verified 2026-08-27,
-    `convert/sql.py`'s own note) lands in a single `"value"` property,
+    constructible by this project's own grammar, per `convert/sql.py`'s
+    own note) lands in a single `"value"` property,
     matching the child table's own `value` column. `id` is synthesized
     (`"<parent OID>_<attr name>_<index>"`) - a `STRUCTURE`/scalar
     occurrence has no OID of its own on the wire. `"geometry"` stays
@@ -362,11 +362,11 @@ def _members_value(
 # same wire structure (reuses the SAME tag helpers/sets, imported directly
 # rather than duplicated), but building a JSON-FG geometry value instead of
 # a list of validation issues. Returns `None` (never raises) on anything
-# this Lot doesn't represent - a custom LINE FORM segment, a missing/
+# this module doesn't represent - a custom LINE FORM segment, a missing/
 # non-numeric component - so the caller falls back to leaving the attribute
 # in "properties" (RULE #5: never silently misrepresent geometry that
 # couldn't be read). An ARC segment IS representable (see `_read_polyline`
-# below, docs/interlis-geometry-sfa-mapping.md, decision 2026-08-26): a
+# below, docs/interlis-geometry-sfa-mapping.md): a
 # straight-only POLYLINE/BOUNDARY still returns a plain position list (as
 # before, wrapped into LineString/Polygon by the caller), but one
 # containing at least one ARC returns an already-typed JSON-FG geometry
@@ -662,8 +662,8 @@ def object_to_feature(
     would just be silently discarded on load, never a wrong load, but
     wasted file size and a confusing thing for a human to read). Does NOT
     affect a NESTED `BAG`/`LIST` inside a STRUCTURE property - only
-    TOP-LEVEL `BAG`/`LIST` attributes have a child table at all (Lot 1's
-    "one level" scope, `convert/sql.py`).
+    TOP-LEVEL `BAG`/`LIST` attributes have a child table at all
+    (`convert/sql.py` flattens one level deep, never nested).
 
     `cls` is the already-resolved Class/Structure instance for
     `obj.qualified_class` (xtf.schema.resolve_class) - resolution stays
@@ -794,12 +794,12 @@ def object_to_feature(
     return feature
 
 
-# --- VIEW evaluation (backlog item 8) --------------------------------------
+# --- VIEW evaluation --------------------------------------------------------
 #
 # Every FormationKind is evaluated in memory against an already-parsed
 # XtfTransfer, producing JSON-FG Features shaped like the VIEW rather than
 # its raw base class(es) - the FGDM4GS report's central equivalence (a VIEW
-# = the FeatureType projection instruction, docs/... item 8/.claude/PROGRESS.md):
+# is a FeatureType projection instruction):
 #
 #   PROJECTION OF   one base           re-tag each matching object
 #   JOIN OF         N bases            cartesian product (`_join_combinations`)
@@ -967,8 +967,8 @@ def _join_combinations(
 
     Reference Manual eCH-0031 V2.1.0 SS3.16 (JOIN OF): "kartesisches Produkt
     der Basis-Klassen" - a literal cartesian product, no join KEY/condition
-    of its own (a WHERE clause narrows the result on top, out of this
-    Lot's scope, see `unsupported_view_reason`). "(OR NULL)": "wenn zu
+    of its own (a WHERE clause narrows the result on top, handled
+    separately, see `unsupported_view_reason`). "(OR NULL)": "wenn zu
     einer bestimmten Kombination der vorangegangenen Objekte kein Objekt
     der gewuenschten weiteren Klasse gefunden wird" - since there is no
     WHERE here to narrow a combination-by-combination match, a base
@@ -1605,11 +1605,10 @@ def _inspection_elements(
 def _join_members(bases: list[MetaInstance], combo: list[XtfObject | None]) -> list[dict[str, Any]]:
     """Return `{"featureType": ..., "id": ...}` for every real (non-`None`) participant of one JOIN combination.
 
-    Backlog item 8 Lot D: a `JOIN OF` collection is GET-only
-    (`.claude/PROGRESS.md`'s CRUD decision - no natural single writable
+    A `JOIN OF` collection is GET-only (no natural single writable
     target for a multi-base combination, by analogy with non-updatable
     SQL views). This is what makes that limitation actionable rather than
-    a dead end: each base object this Lot's runtime ALREADY publishes as
+    a dead end: each base object this runtime ALREADY publishes as
     its own, independently fully-writable collection (a plain `Class` -
     `transfer_to_feature_collection` emits it via `resolve_class`
     regardless of any `views=` given), so a client that needs to edit a
@@ -1684,7 +1683,7 @@ def transfer_to_feature_collection(
     geometry-level placement with no official example to check it
     against (see docs/jsonfg-conversion-strategy.md).
 
-    `views` (backlog item 8 Lot C, optional): PROJECTION OF/JOIN OF Views
+    `views` (optional): PROJECTION OF/JOIN OF Views
     already filtered by the caller to ones `evaluate_view` can actually
     handle (same `unsupported_view_reason` check `cmd_convert_jsonfg`
     applies before calling this - this function assumes every given view

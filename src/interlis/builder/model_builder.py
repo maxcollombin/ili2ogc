@@ -2210,9 +2210,9 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         Previously never implemented (no real corpus `(OR NULL)`
         occurrence existed to surface the gap) - `RenamedBaseView.OrNull`
-        stayed `None`/falsy for every JOIN, silently breaking backlog item
-        8 Lot C's outer-join evaluation (`convert/jsonfg.py`'s
-        `_join_combinations`) until a synthetic fixture caught it.
+        stayed `None`/falsy for every JOIN, silently breaking
+        `convert/jsonfg.py`'s outer-join evaluation
+        (`_join_combinations`) until a synthetic fixture caught it.
         """
         bases = [b for b in getattr(view, "RenamedBaseView", None) or [] if isinstance(b, MetaInstance)]
         children = list(join_ctx.children or [])
@@ -2398,53 +2398,39 @@ class InterlisModelBuilder(InterlisParserVisitor):
     def _apply_pending_view_all_of(self) -> None:
         """Expand every View recorded by `_expand_view_all_of`, once refs are resolved.
 
-        Scope of this lot (RULE #7 - real corpus evidence only): only the
-        FIRST "ALL OF Name;" in one viewAttributes() (the grammar itself
-        only supports one per call - see the ATTRIBUTE-alt1 loop in
-        viewAttributes()'s generated body, `(Name ASSIGN expression;)*`
-        AFTER "ALL OF Name;", never a second "ALL OF"), and only OWN
-        attributes of the matched base (`base.BaseView.ClassAttribute` -
-        inherited attributes via EXTENDS not walked here: no real corpus
-        evidence yet that a View's "ALL OF" base itself has an EXTENDS
-        chain, and duplicating `xtf.schema.attributes_of`'s inheritance
-        walk here would cross a layering boundary - `xtf/schema.py`
-        imports FROM `interlis.builder`, not the other way around). A base
-        that's still unresolved after `resolve_all()` (e.g.
+        Only OWN attributes of the matched base
+        (`base.BaseView.ClassAttribute` - inherited attributes via EXTENDS
+        not walked here: no real corpus evidence yet that a View's
+        "ALL OF" base itself has an EXTENDS chain, and duplicating
+        `xtf.schema.attributes_of`'s inheritance walk here would cross a
+        layering boundary - `xtf/schema.py` imports FROM
+        `interlis.builder`, not the other way around). A base that's
+        still unresolved after `resolve_all()` (e.g.
         `UnresolvedNamedReference`, a genuinely absent cross-file model) is
         skipped, same "no crash on a known limit" stance as
         `xtf.schema.attributes_of`.
 
-        `viewAttributes()`'s grammar (`vendor/interlis-antlr4/InterlisParser.g4`)
-        used to allow only ONE "ALL OF Name;" per call, picked via a single
-        top-level alternative among 4 mutually exclusive ones - a real,
-        legal pattern with MULTIPLE consecutive "ALL OF Name;" statements
-        (one per base of a multi-base `JOIN OF`/`UNION OF`, e.g.
-        `ili_corpus/ERKAS_Strassen_V2_0.ili`'s `VIEW vVA`/`vER`) then had
-        its 2nd (and further) "ALL OF" silently swallowed by
-        `constraintDef()` instead (confirmed by direct AST inspection - it
-        became its own bogus `ConstraintDefContext` with no usable
-        content). **Fixed at the grammar level** (2026-08-24, matching the
-        official EBNF, Reference Manual eCH-0031 V2.1.0 §3.15
+        `viewAttributes()`'s grammar (`vendor/interlis-antlr4/InterlisParser.g4`,
+        matching the official EBNF, Reference Manual eCH-0031 V2.1.0 §3.15
         "ViewAttributes = [ATTRIBUTE] {'ALL' 'OF' Base-Name ';' |
         AttributeDef | Attribute-Name Properties<...> ':=' Expression
-        ';'}." - a REPEATED, 0..* choice of 3 alternatives, not a single
-        pick among 4): `viewAttributes()` now loops
-        (`(ALL OF Name SEMI | attributeDef | Name (Properties)? ASSIGN
-        expression SEMI)*`), so ANY number of "ALL OF" clauses (freely
-        interleaved with `attributeDef`/`Name := expression` redefinitions,
-        in any order, exactly per the EBNF) land in the SAME
-        `ViewAttributesContext` - confirmed empirically on the ERKAS
-        example above (`ALL()`/`Name()` accessors both become multi).
-        Walks `va.children` positionally (same technique as
-        `_register_unqualified_imports`) to pair each `ALL` terminal with
-        the `Name` terminal immediately following its `OF` - the ONLY
-        reliable way to recover "which Name belongs to which ALL OF",
-        since `Name` is ALSO used by the (unrelated) `Name := expression`
-        alternative in the same repeated group.
-        `attributeDef`-form attributes (bare `Name: Type;` inside
+        ';'}.") loops (`(ALL OF Name SEMI | attributeDef | Name
+        (Properties)? ASSIGN expression SEMI)*`), so ANY number of
+        "ALL OF" clauses (freely interleaved with `attributeDef`/
+        `Name := expression` redefinitions, in any order, exactly per the
+        EBNF) land in the SAME `ViewAttributesContext` - a real, legal
+        pattern with MULTIPLE consecutive "ALL OF Name;" statements (one
+        per base of a multi-base `JOIN OF`/`UNION OF`, e.g.
+        `ili_corpus/ERKAS_Strassen_V2_0.ili`'s `VIEW vVA`/`vER`,
+        `ALL()`/`Name()` accessors both multi there). Walks `va.children`
+        positionally (same technique as `_register_unqualified_imports`)
+        to pair each `ALL` terminal with the `Name` terminal immediately
+        following its `OF` - the ONLY reliable way to recover "which Name
+        belongs to which ALL OF", since `Name` is ALSO used by the
+        (unrelated) `Name := expression` alternative in the same repeated
+        group. `attributeDef`-form attributes (bare `Name: Type;` inside
         ATTRIBUTE) are unaffected either way - already handled generically
-        by the existing engine (verified separately, no change needed
-        here), independently of how many times it now repeats.
+        by the existing engine, independently of how many times it repeats.
         """
         pending, self._pending_view_all_of = self._pending_view_all_of, []
         for view, ctx in pending:
@@ -2746,9 +2732,8 @@ class InterlisModelBuilder(InterlisParserVisitor):
         statically against the metamodel (no XTF instance data needed -
         this only answers "what's this computed attribute's declared
         type", for `.ili -> JSON Schema`; evaluating the expression against
-        real data is a separate, still-open concern, see
-        `.claude/PROGRESS.md`'s "cross-check WFS" item and the known
-        `.xtf -> JSON-FG` WHERE-clause exclusion). First `PathEl` selects
+        real data (`.xtf -> JSON-FG`) is a separate concern, handled by
+        `convert/jsonfg.py`'s own WHERE-clause evaluator instead. First `PathEl` selects
         the `RenamedBaseView` (same lookup `_find_renamed_base_view`
         already uses for `ALL OF`); each subsequent `PathEl` is tried
         first as a plain `ClassAttribute` by name (the JOIN OF case, e.g.
@@ -3212,8 +3197,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
                                 # unresolved ForwardRef (e.g. a reference to
                                 # an existing, possibly SHARED, named DOMAIN
                                 # - "Geom: MANDATORY Coord2D;"). `Mandatory`
-                                # specifically (2026-08-27, backlog item 14):
-                                # queued in `_pending_mandatory_overrides`,
+                                # specifically is queued in `_pending_mandatory_overrides`,
                                 # resolved by
                                 # `_apply_pending_mandatory_overrides` AFTER
                                 # `forward_refs.resolve_all()` - a private,
