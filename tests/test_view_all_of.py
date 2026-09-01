@@ -185,26 +185,75 @@ END Test.
     assert [a.Name for a in (view.ClassAttribute or [])] == ["Attr1", "Attr3"]
 
 
+def test_all_of_interleaved_with_bare_name_assignment_preserves_source_order():
+    """`ALL OF <Base>;` interleaved with a bare `Name := expression;` redefinition, in EITHER order.
+
+    Real corpus evidence this matters (RULE #7): exactly the shape a
+    `JOIN OF` VIEW needs to project one base wholesale and rename
+    attributes from another (e.g.
+    `Waldabstandslinien_V1_2`'s `Waldabstand_Linie`/`Typ`) - harmless for
+    `.ili -> JSON Schema`/`.xtf -> JSON-FG`/`convert-sql` (none care about
+    `ClassAttribute` order), but a real `.xtf` writer
+    (`convert/xtf_writer.py`) needs the VIEW's OWN declaration order
+    (refman SS4.3.7's XSD-sequence rule) - confirmed empirically
+    (`ili2c -oXSD` + `xmllint --schema` on a real derived model) before
+    `InterlisModelBuilder._reorder_view_class_attributes` fixed it.
+    `renamed` swaps at BOTH class name AND position so the source order
+    genuinely differs from insertion order either way this test runs.
+    """
+    src = """INTERLIS 2.3;
+MODEL Test AT "http://x" VERSION "1" =
+  TOPIC Base =
+    CLASS B =
+      Attr1: TEXT*20;
+    END B;
+    CLASS C =
+      Attr3: TEXT*30;
+    END C;
+  END Base;
+  TOPIC Views =
+    DEPENDS ON Test.Base;
+    VIEW VJ
+      JOIN OF B ~ Test.Base.B, C ~ Test.Base.C;
+      =
+      ATTRIBUTE
+        ALL OF B;
+        renamed := C -> Attr3;
+    END VJ;
+    VIEW VJ2
+      JOIN OF B ~ Test.Base.B, C ~ Test.Base.C;
+      =
+      ATTRIBUTE
+        renamed := C -> Attr3;
+        ALL OF B;
+    END VJ2;
+  END Views;
+END Test.
+"""
+    views = _views(_build(src))
+    assert [a.Name for a in (views["VJ"].ClassAttribute or [])] == ["Attr1", "renamed"]
+    assert [a.Name for a in (views["VJ2"].ClassAttribute or [])] == ["renamed", "Attr1"]
+
+
 def test_all_of_interleaved_with_bare_attributedef():
     """The EBNF's repeated group allows "ALL OF"/attributeDef/"Name :="
     freely interleaved, in any order - exercises that "ALL"'s positional
     walk (_all_of_base_names) isn't thrown off by an attributeDef sitting
     between two "ALL OF" clauses.
 
-    Known, documented limitation (no real corpus evidence of this exact
+    Known, documented limitation (no real corpus evidence of THIS exact
     interleaving to justify more effort, RULE #7 - ERKAS_Strassen_V2_0.ili
     only ever has consecutive "ALL OF" clauses, never interleaved with a
-    bare attributeDef): relative SOURCE ORDER between "ALL OF" and
-    attributeDef attributes is NOT preserved in `View.ClassAttribute` -
-    attributeDef attaches immediately during normal tree construction (the
-    existing generic engine), while "ALL OF" expansion is deferred to the
-    very end of build() (needs forward refs resolved first - see
-    `_apply_pending_view_all_of`'s docstring), so ALL "ALL OF"-sourced
-    attributes always end up AFTER every attributeDef-sourced one,
-    regardless of their relative position in the source text. Harmless for
-    a future View -> JSON Schema stage (JSON object key order isn't
-    semantically significant), asserted here as a SET rather than a
-    sequence for that reason."""
+    bare attributeDef): `_reorder_view_class_attributes` (item 15) fixes
+    "ALL OF" vs. a bare `Name := expression` redefinition (see
+    `test_all_of_interleaved_with_bare_name_assignment_preserves_source_order`
+    above) but leaves an `attributeDef`-form attribute (`Extra: TEXT*10;`
+    below - built generically elsewhere, not by either method
+    `_reorder_view_class_attributes` tracks) at its CURRENT position - so
+    relative SOURCE ORDER between "ALL OF" and attributeDef specifically
+    is still NOT guaranteed. Harmless for a future View -> JSON Schema
+    stage (JSON object key order isn't semantically significant), asserted
+    here as a SET rather than a sequence for that reason."""
     src = """INTERLIS 2.3;
 MODEL Test AT "http://x" VERSION "1" =
   TOPIC Base =

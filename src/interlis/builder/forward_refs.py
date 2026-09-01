@@ -126,6 +126,21 @@ class SymbolTable:
                 result.append(instance)
         return result
 
+    def qualified_name_of(self, instance: Any) -> str | None:
+        """Reverse lookup: the longest key registered for `instance` (its full `Model.Topic[.Name]` path), or `None`.
+
+        `_qualify_name` (`InterlisModelBuilder`) registers each instance
+        under its full dotted path built from `_parent_stack` at
+        construction time - the SAME string a wire tag (basket or object)
+        needs (`convert/xtf_writer.py`'s `write_view_basket`, deriving a
+        VIEW's `Model.Topic`/`Model.Topic.ViewName`). An alias (a bracketed
+        UNIT short name, `rekey_model_prefix`) can register a SECOND,
+        shorter key for the same instance - the longest match is the fully
+        qualified one, never an alias.
+        """
+        candidates = [name for name, inst in self._qualified.items() if inst is instance]
+        return max(candidates, key=len) if candidates else None
+
     def resolve(self, name: str, kind_hint: str | list[str] | None = None, home_model: str | None = None) -> Any | None:
         if name in self._qualified:
             return self._qualified[name]

@@ -2468,6 +2468,99 @@ class InterlisModelBuilder(InterlisParserVisitor):
                         role="ClassAttribute",
                         rule="viewAttributes",
                     )
+            self._reorder_view_class_attributes(view, va)
+
+    @staticmethod
+    def _reorder_view_class_attributes(view: MetaInstance, va: ParserRuleContext | None) -> None:
+        """Reorder `view.ClassAttribute` to match `viewAttributes()`'s own SOURCE order.
+
+        An `ATTRIBUTE ALL OF <Base>;` expansion (just above) and a bare
+        `Name := expression` redefinition (`_build_view_bare_attributes`)
+        attach to `ClassAttribute` at DIFFERENT TIMES during `build()`
+        (bare ones immediately during the main tree walk; `ALL OF` only
+        after `forward_refs.resolve_all()`, since its base can still be a
+        `ForwardRef` until then) - so whichever forms are mixed in one
+        `ATTRIBUTE` block, `ClassAttribute` used to end up with every
+        bare-assign attribute BEFORE every `ALL OF` expansion, regardless
+        of which was actually declared first in the source.
+
+        Real corpus evidence this matters (RULE #7): `ALL OF <Base>;
+        <Name> := <OtherBase> -> <Attr>;` is exactly the shape a `JOIN
+        OF` VIEW needs to project one base wholesale and rename
+        attributes from another (e.g. `Waldabstandslinien_V1_2`'s
+        `Waldabstand_Linie`/`Typ`, item 13/15) - the wrong order is
+        invisible to `.ili -> JSON Schema`/`.xtf -> JSON-FG`/`convert-sql`
+        (none of the three care about `ClassAttribute` order), but a real
+        `.xtf` writer (`convert/xtf_writer.py`, backlog item 15) DOES:
+        refman eCH-0031 V2.1.0 SS4.3.7's "Zwiebelprinzip" - a compiled
+        schema's XSD `xsd:sequence` rejects an out-of-order instance -
+        confirmed empirically (`ili2c -oXSD` + `xmllint --schema` on a
+        real `Waldabstandslinien_V1_2_d` model) before this fix existed.
+
+        Reorders by the position of each attribute's OWN declaring token
+        in `va.children` (the `ALL` terminal for an `ALL OF` group -
+        every attribute it expanded to moves together, keeping their OWN
+        relative order - or the `Name` terminal for a bare redefinition),
+        matched back to the already-built `ClassAttribute` entries by
+        their `_all_of_identity` marker (`ALL OF` copies) or by name
+        (bare redefinitions, unique names within one VIEW). An
+        `attributeDef`-form attribute (bare `Name: Type;`, built
+        generically elsewhere, not by either method above) has no
+        recorded position here - no real corpus evidence yet of it mixed
+        with `ALL OF` in the same VIEW (`_bare_view_attribute_assignments`'s
+        own docstring) - so it keeps its current position, anchored via
+        its own current list index (never worse than before this fix for
+        that combination).
+        """
+        if va is None:
+            return
+        attrs = list(getattr(view, "ClassAttribute", None) or [])
+        if not attrs:
+            return
+        current_index = {id(a): i for i, a in enumerate(attrs)}
+        by_name: dict[str | None, list[MetaInstance]] = {}
+        for a in attrs:
+            by_name.setdefault(getattr(a, "Name", None), []).append(a)
+
+        children = list(va.children or [])
+        all_of_indices: dict[int, str] = {}
+        for node in ca.call_list(va, "ALL"):
+            idx = children.index(node)
+            if idx + 2 < len(children):
+                all_of_indices[idx] = children[idx + 2].getText()
+
+        position_of_id: dict[int, int] = {}
+        consumed_by_name: dict[str, int] = {}
+        slot = 0
+        i, n = 0, len(children)
+        while i < n:
+            if i in all_of_indices:
+                base_name = all_of_indices[i]
+                for a in attrs:
+                    if id(a) in position_of_id:
+                        continue
+                    derivates = getattr(a, "Derivates", None) or []
+                    if not derivates or not getattr(derivates[0], "_all_of_identity", False):
+                        continue
+                    path_els = getattr(derivates[0], "PathEls", None) or []
+                    if path_els and getattr(path_els[0], "Ref", None) == base_name:
+                        position_of_id[id(a)] = slot
+                        slot += 1
+                i += 3  # ALL OF Name
+                continue
+            node = children[i]
+            if isinstance(node, TerminalNode) and node.symbol.type == InterlisParser.Name:
+                name = node.getText()
+                candidates = by_name.get(name) or []
+                used = consumed_by_name.get(name, 0)
+                if used < len(candidates):
+                    position_of_id[id(candidates[used])] = slot
+                    consumed_by_name[name] = used + 1
+                    slot += 1
+            i += 1
+
+        attrs.sort(key=lambda a: position_of_id.get(id(a), 1_000_000 + current_index[id(a)]))
+        setattr(view, "ClassAttribute", attrs)  # noqa: B010 - dynamic MetaInstance field, no static attribute to assign
 
     def _identity_view_path(self, base_ref: str, attr_name: str) -> MetaInstance:
         """Build the `<base> -> <attr>` identity `PathOrInspFactor` for one `ALL OF` view attribute.

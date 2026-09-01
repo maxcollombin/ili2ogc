@@ -25,6 +25,7 @@ from interlis.cli_style import warn as _warn
 from interlis.convert import jsonfg as _jsonfg_mod
 from interlis.convert import jsonschema as _jsonschema_mod
 from interlis.convert import sql as _sql_mod
+from interlis.convert import xtf_writer as _xtf_writer_mod
 from interlis.convert.jsonfg import transfer_to_feature_collection
 from interlis.convert.jsonschema import model_to_json_schema
 from interlis.convert.sql import build_tables, build_views, render_gpkg, render_postgresql
@@ -811,6 +812,112 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     return _finish(bag, args)
 
 
+def cmd_write_xtf(args: argparse.Namespace) -> int:
+    """Write one `VIEW TOPIC` VIEW's data as an .xtf transfer, evaluated against a source .xtf.
+
+    See `convert/xtf_writer.py`'s module docstring for the refman grounding
+    (eCH-0031 V2.1.0 SS4182/SS4728/SS4.3.7/SS4.3.8). `model` is the VIEW
+    TOPIC `.ili` (its base model resolved via `--repo`, RULE #9 - a base
+    model missing from `--repo` degrades this the same way as any other
+    conversion here, a clear diagnostic, never a crash); `xtf` is the
+    source transfer the VIEW is evaluated against. `--view` picks which
+    VIEW when the model declares more than one; with exactly one VIEW in
+    the model, it's used automatically. Every `FormationKind` is
+    supported (`evaluate_view_objects`) EXCEPT an `INSPECTION` of a
+    single-hop SURFACE/AREA geometry, which has no XTF-transferable shape
+    at all (a decomposed boundary ring list, JSON-FG-only - a clear
+    `ValueError`, never attempted). A VIEW declared in a plain `TOPIC`
+    rather than a `VIEW TOPIC` is refused outright (refman: it would
+    never actually be transferred by a compliant tool - `ili2c` compiles
+    it silently absent from the generated schema).
+    """
+    model_path = Path(args.model)
+    if not model_path.exists():
+        _error(f".ili file not found: {model_path}")
+        return ExitCode.NOT_FOUND
+    xtf_path = Path(args.xtf)
+    if not xtf_path.exists():
+        _error(f".xtf file not found: {xtf_path}")
+        return ExitCode.NOT_FOUND
+
+    tree, syntax_errors = parse_file(model_path)
+    if syntax_errors:
+        _error(f"{len(syntax_errors)} syntax error(s) in {model_path}:")
+        for e in syntax_errors:
+            print(f"  {e}", file=sys.stderr)
+        return ExitCode.INVALID
+
+    repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+    with _resource_dirs() as (mappings_dir, spec_dir):
+        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+
+    candidate_views = [
+        inst
+        for inst in builder.symbol_table.all_registered()
+        if isinstance(inst, MetaInstance) and inst._qualified_class.rsplit(".", 1)[-1] == "View"
+    ]
+    if args.view:
+        candidate_views = [v for v in candidate_views if getattr(v, "Name", None) == args.view]
+        if not candidate_views:
+            _error(f"no VIEW named {args.view!r} in {model_path}")
+            return ExitCode.NOT_FOUND
+    elif not candidate_views:
+        _error(f"no VIEW found in {model_path}")
+        return ExitCode.NOT_FOUND
+    elif len(candidate_views) > 1:
+        names = ", ".join(sorted(getattr(v, "Name", None) or "?" for v in candidate_views))
+        _error(f"{len(candidate_views)} VIEWs in {model_path} - pick one with --view: {names}")
+        return ExitCode.USAGE
+    view = candidate_views[0]
+    view_name = getattr(view, "Name", None)
+
+    qualified_view = builder.symbol_table.qualified_name_of(view)
+    topic_instance = builder.symbol_table.resolve(qualified_view.rsplit(".", 1)[0]) if qualified_view else None
+    # `ViewUnit` lives on the DataUnit twin, not the SubModel `topic_instance`
+    # itself (topicDef builds both linked instances, `_build_multi_target`
+    # in model_builder.py - only the SubModel gets registered in the symbol
+    # table under its qualified name, so the twin has to be reached via
+    # `_twin`).
+    data_unit = getattr(topic_instance, "_twin", None)
+    if not getattr(data_unit, "ViewUnit", False):
+        _error(
+            f"VIEW {view_name!r} is declared in a plain TOPIC, not a VIEW TOPIC - refman SS4182/SS4728: "
+            "it would never actually be transferred (ili2c compiles it silently absent from the generated "
+            "schema). Declare its enclosing TOPIC as `VIEW TOPIC` instead."
+        )
+        return ExitCode.INVALID
+
+    reason = _jsonfg_mod.unsupported_view_reason(view)
+    if reason is not None:
+        _error(f"cannot evaluate VIEW {view_name!r}: {reason}")
+        return ExitCode.INVALID
+
+    transfer = parse_xtf(xtf_path)
+    bid = args.bid or view_name or "view"
+    try:
+        text = _xtf_writer_mod.write_xtf(
+            view,
+            transfer,
+            bid=bid,
+            symbol_table=builder.symbol_table,
+            repository=repository,
+            sender=args.sender,
+            merge_with_source=args.merge_with_source,
+        )
+    except ValueError as exc:
+        _error(str(exc))
+        return ExitCode.INVALID
+
+    if args.output:
+        Path(args.output).write_text(text + "\n", encoding="utf-8")
+    else:
+        print(text)
+    return ExitCode.OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="interlis", description="Pure-Python INTERLIS runtime.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -993,6 +1100,58 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_diagnostic_args(convert_jsonfg_parser)
     convert_jsonfg_parser.set_defaults(func=cmd_convert_jsonfg)
+
+    write_xtf_parser = subparsers.add_parser(
+        "write-xtf",
+        help="Write one VIEW TOPIC VIEW's data as an .xtf transfer, evaluated against a source .xtf.",
+    )
+    write_xtf_parser.add_argument("model", help="Path to the VIEW TOPIC .ili model declaring the VIEW to write.")
+    write_xtf_parser.add_argument("xtf", help="Path to the source .xtf the VIEW is evaluated against.")
+    write_xtf_parser.add_argument(
+        "--view",
+        default=None,
+        metavar="NAME",
+        help="Name of the VIEW to write, when the model declares more than one. "
+        "Omitted: used automatically if the model declares exactly one VIEW.",
+    )
+    write_xtf_parser.add_argument(
+        "--repo",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="Directory of .ili models to resolve the VIEW model's IMPORTS (its base model - repeatable).",
+    )
+    write_xtf_parser.add_argument(
+        "--bid",
+        default=None,
+        metavar="ID",
+        help="Basket id (BID) for the new VIEW TOPIC basket. Omitted: the VIEW's own name.",
+    )
+    write_xtf_parser.add_argument(
+        "--sender",
+        default="interlis-runtime",
+        metavar="NAME",
+        help="HEADERSECTION SENDER value for the written .xtf. Refman eCH-0031 V2.1.0 SS4.3.4 leaves it "
+        "optional, but a real ili2c-compiled schema for a simple transfer marks it required (verified "
+        "empirically) and every real .xtf this runtime has read always carries one - defaults to "
+        "'interlis-runtime' rather than omitting it.",
+    )
+    write_xtf_parser.add_argument(
+        "--merge-with-source",
+        action="store_true",
+        help="Append the new VIEW basket to a copy of the SOURCE .xtf's own baskets/models instead of writing "
+        "a standalone VIEW-only transfer (both are valid per refman eCH-0031 V2.1.0 SS4.3.5 - see "
+        "convert/xtf_writer.py's write_xtf docstring). Omitted (default): a standalone transfer with only "
+        "the new VIEW basket.",
+    )
+    write_xtf_parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        metavar="FILE",
+        help="Write to FILE instead of stdout.",
+    )
+    write_xtf_parser.set_defaults(func=cmd_write_xtf)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -1134,6 +1134,145 @@ def _resolved_objects_of(
     return out
 
 
+def _view_combos(
+    view: MetaInstance,
+    transfer: XtfTransfer,
+    *,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None = None,
+) -> tuple[list[MetaInstance], list[list[XtfObject | None]]]:
+    """Shared PROJECTION/AGGREGATION/JOIN setup: resolve bases, their matching objects, and WHERE-filtered combos.
+
+    One combo per kept result row - a 1-element list for PROJECTION/
+    AGGREGATION (one base), one element per base for JOIN
+    (`_join_combinations`, `None` for an `OR NULL` outer-join miss).
+    Shared by `evaluate_view` (JSON-FG) and `evaluate_view_objects` (the
+    write-xtf path) so both stay in lockstep on which rows a VIEW produces
+    - only the final per-combo SHAPE differs between the two callers.
+    UNION/INSPECTION have no combo concept of their own (see `evaluate_view`)
+    and never call this helper. Precondition (both callers already check
+    it): `view.FormationKind` is one of these 3 kinds.
+    """
+    kind = view.FormationKind
+    view_name = getattr(view, "Name", None) or "View"
+    bases = [b for b in view.RenamedBaseView if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
+    resolved_objects = _resolved_objects_of(transfer, symbol_table, repository)
+    objects_by_base = [
+        [obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases
+    ]
+    where = getattr(view, "Where", None)
+    aliases = [_view_alias(base) for base in bases]
+    by_tid = {obj.tid: obj for obj, _cls in resolved_objects if obj.tid is not None}
+
+    def _passes_where(combo: list[XtfObject | None]) -> bool:
+        if where is None:
+            return True
+        try:
+            return bool(evaluate_expression(where, _combo_properties(aliases, combo, by_tid)))
+        except UnsupportedExpressionError as exc:
+            raise ValueError(f"cannot evaluate view {view_name!r}: WHERE clause: {exc}") from exc
+
+    if kind in ("Projection", "Aggregation"):
+        combos: list[list[XtfObject | None]] = [[obj] for obj in objects_by_base[0] if _passes_where([obj])]
+    else:  # Join
+        combos = [combo for combo in _join_combinations(bases, objects_by_base) if _passes_where(combo)]
+    return bases, combos
+
+
+def _dedup_objects(objects: list[XtfObject]) -> list[XtfObject]:
+    """Keep one `XtfObject` per distinct set of projected attributes - AGGREGATION's `ALL` reading.
+
+    Mirrors `_dedup_features`, one step earlier (before JSON-FG's
+    place/properties split) - so `evaluate_view_objects`'s AGGREGATION
+    output collapses on the same rows `evaluate_view`'s does, just
+    `XtfObject`-shaped. Compares `RawNode` structurally (tag/text/attrib/
+    children, recursively) rather than by Python identity.
+    """
+
+    def _raw_node_key(node: RawNode) -> tuple[Any, ...]:
+        return (node.tag, node.text, tuple(sorted(node.attrib.items())), tuple(_raw_node_key(c) for c in node.children))
+
+    seen: set[tuple[Any, ...]] = set()
+    out: list[XtfObject] = []
+    for obj in objects:
+        key = tuple(sorted((name, tuple(_raw_node_key(n) for n in nodes)) for name, nodes in obj.attributes.items()))
+        if key not in seen:
+            seen.add(key)
+            out.append(obj)
+    return out
+
+
+def evaluate_view_objects(
+    view: MetaInstance,
+    transfer: XtfTransfer,
+    *,
+    symbol_table: SymbolTable,
+    repository: ModelRepository | None = None,
+) -> list[XtfObject]:
+    """Evaluate `view` into projected/merged `XtfObject`s - `evaluate_view`, one step earlier.
+
+    Same PROJECTION/AGGREGATION/JOIN row selection (`_view_combos`) and
+    `WHERE` filtering as `evaluate_view`, but stops before
+    `object_to_feature`: each returned `XtfObject` already carries its
+    `.attributes` keyed under the VIEW's own `ClassAttribute` names
+    (`_project_object_under_view_names`/`_merge_join_combo`), as raw
+    `RawNode` XML subtrees straight from `transfer` - never decoded into a
+    JSON-FG "place"/properties split. This is the shape
+    `convert/xtf_writer.py`'s `write_xtf` re-serializes losslessly (no
+    reverse-engineering INTERLIS geometry XML from JSON-FG "place"), and
+    what `evaluate_view` itself builds on for these 3 FormationKinds.
+
+    UNION returns each base's own objects, re-keyed under the union's
+    per-base attribute assignment (`_union_projected_object`). INSPECTION
+    returns one `XtfObject` per inspected element (`_inspection_elements`)
+    - EXCEPT the single-hop SURFACE/AREA geometry case
+    (`_single_hop_surface_attr`), which raises `ValueError`: it has no
+    element TYPE at all (a decomposed boundary ring list, a JSON-FG-only
+    shape - see `_evaluate_geometry_inspection`), so there is nothing an
+    XTF writer could serialize as a named attribute.
+
+    Raises `ValueError` if `unsupported_view_reason(view)` isn't `None`,
+    same precondition as `evaluate_view`.
+    """
+    reason = unsupported_view_reason(view)
+    if reason is not None:
+        raise ValueError(f"cannot evaluate view {getattr(view, 'Name', None)!r}: {reason}")
+    kind = view.FormationKind
+    view_name = getattr(view, "Name", None) or "View"
+
+    if kind in ("Inspection", "Union"):
+        bases = [
+            b for b in view.RenamedBaseView if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)
+        ]
+        resolved_objects = _resolved_objects_of(transfer, symbol_table, repository)
+        objects_by_base = [
+            [obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases
+        ]
+        if kind == "Inspection":
+            path = _inspection_path(view)
+            base_view = bases[0].BaseView
+            if _single_hop_surface_attr(base_view, path, symbol_table) is not None:
+                raise ValueError(
+                    f"evaluate_view_objects: INSPECTION {view_name!r} of a single-hop SURFACE/AREA geometry "
+                    "has no XTF-transferable shape (a decomposed boundary ring list, JSON-FG-only)"
+                )
+            elements, _element_type = _inspection_elements(view, base_view, objects_by_base[0], path, symbol_table)
+            return elements
+        n_bases = len(bases)
+        return [
+            _union_projected_object(view, base_index, n_bases, obj)
+            for base_index, objs in enumerate(objects_by_base)
+            for obj in objs
+        ]
+
+    _bases, combos = _view_combos(view, transfer, symbol_table=symbol_table, repository=repository)
+    if kind == "Join":
+        objects = [_project_object_under_view_names(view, _merge_join_combo(combo, view_name)) for combo in combos]
+    else:
+        objects = [_project_object_under_view_names(view, combo[0]) for combo in combos if combo[0] is not None]
+    return _dedup_objects(objects) if kind == "Aggregation" else objects
+
+
 def evaluate_view(
     view: MetaInstance,
     transfer: XtfTransfer,
@@ -1174,23 +1313,24 @@ def evaluate_view(
 
     kind = view.FormationKind
     view_name = getattr(view, "Name", None) or "View"
-    bases = [b for b in view.RenamedBaseView if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)]
-    resolved_objects = _resolved_objects_of(transfer, symbol_table, repository)
-    objects_by_base = [
-        [obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases
-    ]
 
-    if kind == "Inspection":
-        return _evaluate_inspection(
-            view,
-            bases[0].BaseView,
-            objects_by_base[0],
-            _inspection_path(view),
-            standalone,
-            symbol_table,
-        )
-
-    if kind == "Union":
+    if kind in ("Inspection", "Union"):
+        bases = [
+            b for b in view.RenamedBaseView if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)
+        ]
+        resolved_objects = _resolved_objects_of(transfer, symbol_table, repository)
+        objects_by_base = [
+            [obj for obj, cls in resolved_objects if is_class_compatible(cls, base.BaseView)] for base in bases
+        ]
+        if kind == "Inspection":
+            return _evaluate_inspection(
+                view,
+                bases[0].BaseView,
+                objects_by_base[0],
+                _inspection_path(view),
+                standalone,
+                symbol_table,
+            )
         n_bases = len(bases)
         return [
             object_to_feature(
@@ -1203,33 +1343,23 @@ def evaluate_view(
             for obj in objs
         ]
 
-    where = getattr(view, "Where", None)
-    aliases = [_view_alias(base) for base in bases]
-    by_tid = {obj.tid: obj for obj, _cls in resolved_objects if obj.tid is not None}
-
-    def _passes_where(combo: list[XtfObject | None]) -> bool:
-        if where is None:
-            return True
-        try:
-            return bool(evaluate_expression(where, _combo_properties(aliases, combo, by_tid)))
-        except UnsupportedExpressionError as exc:
-            raise ValueError(f"cannot evaluate view {view_name!r}: WHERE clause: {exc}") from exc
+    bases, combos = _view_combos(view, transfer, symbol_table=symbol_table, repository=repository)
 
     if kind in ("Projection", "Aggregation"):
         kept = [
             object_to_feature(
-                _project_object_under_view_names(view, obj), view, standalone=standalone, symbol_table=symbol_table
+                _project_object_under_view_names(view, combo[0]),
+                view,
+                standalone=standalone,
+                symbol_table=symbol_table,
             )
-            for obj in objects_by_base[0]
-            if _passes_where([obj])
+            for combo in combos
+            if combo[0] is not None
         ]
         return _dedup_features(kept) if kind == "Aggregation" else kept
 
-    combos = _join_combinations(bases, objects_by_base)
     features = []
     for combo in combos:
-        if not _passes_where(combo):
-            continue
         feature = object_to_feature(
             _project_object_under_view_names(view, _merge_join_combo(combo, view_name)),
             view,
@@ -1418,8 +1548,42 @@ def _evaluate_inspection(
     geom_attr = _single_hop_surface_attr(base_view, path, symbol_table)
     if geom_attr is not None:
         return _evaluate_geometry_inspection(view, base_objects, geom_attr, standalone, symbol_table)
-    element_type, is_multi, hop_is_multi = _inspection_target(base_view, path, symbol_table)
+    elements, element_type = _inspection_elements(view, base_view, base_objects, path, symbol_table)
     features: list[dict[str, Any]] = []
+    for element in elements:
+        feature = object_to_feature(
+            element,
+            element_type if element_type is not None else view,
+            standalone=standalone,
+            symbol_table=symbol_table,
+        )
+        feature["featureType"] = getattr(view, "Name", None) or feature["featureType"]
+        features.append(feature)
+    return features
+
+
+def _inspection_elements(
+    view: MetaInstance,
+    base_view: MetaInstance,
+    base_objects: list[XtfObject],
+    path: list[str],
+    symbol_table: SymbolTable,
+) -> tuple[list[XtfObject], MetaInstance | None]:
+    """Every element of `INSPECTION OF base -> path` as a synthetic `XtfObject`, plus its resolved element type.
+
+    Extracted from `_evaluate_inspection`'s own construction loop - shared
+    with `evaluate_view_objects`'s INSPECTION branch (`convert/xtf_writer.py`'s
+    write-xtf path), which needs the raw `XtfObject`s rather than
+    `object_to_feature`'s JSON-FG output. See `_evaluate_inspection`'s
+    docstring for the wire-unwrapping rule at each multi-value hop. Does
+    NOT cover the single-hop SURFACE/AREA geometry case
+    (`_single_hop_surface_attr`) - that one has no element TYPE to resolve
+    at all (a decomposed boundary ring list, JSON-FG-only shape, see
+    `_evaluate_geometry_inspection`) - callers check `_single_hop_surface_attr`
+    themselves first, same as `_evaluate_inspection` does.
+    """
+    element_type, is_multi, hop_is_multi = _inspection_target(base_view, path, symbol_table)
+    elements: list[XtfObject] = []
     for base_obj in base_objects:
         nodes: list[RawNode] = list(base_obj.attributes.get(path[0], []))
         for hop, previous_was_multi in zip(path[1:], hop_is_multi[:-1]):
@@ -1432,18 +1596,10 @@ def _evaluate_inspection(
             for child in node.children:
                 element_attrs.setdefault(child.tag, []).append(child)
             tid = node.attrib.get("TID") or (f"{base_obj.tid}_{path[-1]}_{i}" if base_obj.tid else None)
-            element = XtfObject(
-                tid=tid, qualified_class=getattr(view, "Name", None) or "View", attributes=element_attrs
+            elements.append(
+                XtfObject(tid=tid, qualified_class=getattr(view, "Name", None) or "View", attributes=element_attrs)
             )
-            feature = object_to_feature(
-                element,
-                element_type if element_type is not None else view,
-                standalone=standalone,
-                symbol_table=symbol_table,
-            )
-            feature["featureType"] = getattr(view, "Name", None) or feature["featureType"]
-            features.append(feature)
-    return features
+    return elements, element_type
 
 
 def _join_members(bases: list[MetaInstance], combo: list[XtfObject | None]) -> list[dict[str, Any]]:
