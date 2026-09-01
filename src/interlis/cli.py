@@ -15,6 +15,7 @@ import sys
 import warnings
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
+from typing import Any
 
 from interlis.builder.forward_refs import SymbolTable
 from interlis.builder.model_builder import InterlisModelBuilder
@@ -22,6 +23,7 @@ from interlis.builder.repository import ModelRepository
 from interlis.cli_style import ExitCode, use_color
 from interlis.cli_style import error as _error
 from interlis.cli_style import warn as _warn
+from interlis.convert import cql2 as _cql2_mod
 from interlis.convert import jsonfg as _jsonfg_mod
 from interlis.convert import jsonschema as _jsonschema_mod
 from interlis.convert import sql as _sql_mod
@@ -918,6 +920,74 @@ def cmd_write_xtf(args: argparse.Namespace) -> int:
     return ExitCode.OK
 
 
+def cmd_convert_cql2(args: argparse.Namespace) -> int:
+    """Compile every per-Feature CONSTRAINT of an .ili model to a CQL2-JSON filter.
+
+    OGC API - Features Part 3: Filtering. Walks every Class/View's
+    `Constraint` list; only a plain `SimpleConstraint` (`Kind` `None`/
+    `MandC`, no `Percentage`) is a per-Feature boolean filter at all -
+    `UNIQUE`/`SET`/`EXISTENCE` and the percentage-based plausibility form
+    are population/basket-level checks, skipped with a clear diagnostic
+    (`convert/cql2.py`'s `cql2_unsupported_reason`) rather than omitted
+    silently. Scope mirrors `convert/constraint_eval.py` exactly
+    (relational operators, `And`/`Or`/`Not`/`Implication`,
+    `DEFINED(...)`, a plain possibly-multi-hop attribute path, constants)
+    - arithmetic, spatial predicates, `THIS`/`PARENT`, and function calls
+    are out of scope, reported the same way (`UnsupportedExpressionError`).
+    """
+    path = Path(args.file)
+    if not path.exists():
+        _error(f"file not found: {path}")
+        return ExitCode.NOT_FOUND
+
+    tree, syntax_errors = parse_file(path)
+    if syntax_errors:
+        _error(f"{len(syntax_errors)} syntax error(s):")
+        for e in syntax_errors:
+            print(f"  {e}", file=sys.stderr)
+        return ExitCode.INVALID
+
+    repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
+    with _resource_dirs() as (mappings_dir, spec_dir):
+        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        builder.build(tree)
+
+    roots = [
+        inst
+        for inst in builder.symbol_table.all_registered()
+        if isinstance(inst, MetaInstance) and inst._qualified_class.rsplit(".", 1)[-1] in ("Class", "View")
+    ]
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for root in roots:
+        entries: list[dict[str, Any]] = []
+        for constraint in getattr(root, "Constraint", None) or []:
+            label = f"{getattr(root, 'Name', '?')}.{getattr(constraint, 'Name', None) or '?'}"
+            reason = _cql2_mod.cql2_unsupported_reason(constraint)
+            if reason is not None:
+                if not args.quiet:
+                    _warn(f"{label}: skipped - {reason}")
+                continue
+            try:
+                filt = _cql2_mod.constraint_to_cql2(constraint)
+            except _cql2_mod.UnsupportedExpressionError as exc:
+                if not args.quiet:
+                    _warn(f"{label}: skipped - {exc}")
+                continue
+            entries.append({"name": getattr(constraint, "Name", None), "filter": filt})
+        if entries:
+            result[getattr(root, "Name", "?")] = entries
+
+    text = json.dumps(result, indent=2, ensure_ascii=False)
+    if args.output:
+        Path(args.output).write_text(text + "\n", encoding="utf-8")
+    else:
+        print(text)
+    return ExitCode.OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="interlis", description="Pure-Python INTERLIS runtime.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1152,6 +1222,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Write to FILE instead of stdout.",
     )
     write_xtf_parser.set_defaults(func=cmd_write_xtf)
+
+    convert_cql2_parser = subparsers.add_parser(
+        "convert-cql2",
+        help="Compile every per-Feature CONSTRAINT of an .ili model to a CQL2-JSON filter.",
+    )
+    convert_cql2_parser.add_argument("file", help="Path to the .ili file to convert.")
+    convert_cql2_parser.add_argument(
+        "--repo",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="Directory of .ili models used to resolve references to imported models (IMPORTS) - repeatable.",
+    )
+    convert_cql2_parser.add_argument(
+        "-o", "--output", default=None, metavar="FILE", help="Write to FILE instead of stdout."
+    )
+    convert_cql2_parser.add_argument(
+        "-q", "--quiet", action="store_true", help="Don't print a warning for each skipped CONSTRAINT."
+    )
+    convert_cql2_parser.set_defaults(func=cmd_convert_cql2)
 
     args = parser.parse_args(argv)
     return args.func(args)
