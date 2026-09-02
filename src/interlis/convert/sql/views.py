@@ -32,11 +32,9 @@ class _UnsupportedView(Exception):
     """A View shape this module cannot faithfully turn into a `CREATE VIEW` - caught per-View, surfaced as a `-- NOTE`
     (RULE #5), never a crash.
 
-    `rule` is the stable diagnostic id (`interlis.diagnostic_ids`) - the
-    default covers the "expression outside the translatable subset"
-    family; the class-C "a base/target table is missing" sites pass
-    `SQL-VIEW-BASE-MISSING` explicitly so the message names `--repo`/
-    `--catalog` as the fix.
+    `rule` is the stable diagnostic id - defaults to the "expression
+    outside the translatable subset" family; a "base/target table
+    missing" site passes `SQL-VIEW-BASE-MISSING` explicitly.
     """
 
     def __init__(self, message: str, rule: str = "SQL-VIEW-EXPR-UNTRANSLATABLE") -> None:
@@ -47,26 +45,12 @@ class _UnsupportedView(Exception):
 class _ViewResolver:
     """Resolves a View's `RenamedBaseView`/`ClassAttribute`/`Where` paths against the already-built `Table`s.
 
-    A View's bases live in an IMPORTED model, so the base `Table`s must be
-    part of the SAME conversion (via `interlis convert-sql --catalog
-    <base>.ili`) - a missing base table raises `_UnsupportedView` rather
-    than emitting a `CREATE VIEW` that would not compile.
-
-    `symbol_for(cls)` returns the `SymbolTable` `cls` was built with (its
-    OWN model's, for a `--catalog` class - same `class_symbol_tables` map
-    `build_tables` uses), needed to see `cls`'s embedded association roles.
-
-    `assoc_near_roles` (`alias -> role name`, from `_resolve_view_bases`)
-    covers a base that is really an embedded 2-role `ASSOCIATION`:
-    `_resolve_view_bases` already remapped `alias` onto the CARRIER
-    class/table (the endpoint the association is embedded on), so a path
-    hop naming the "near" role (the one whose own target IS that carrier -
-    a self-reference back to the very row the association is embedded on)
-    is a no-op, not a real member lookup - `scalar_ref` skips it and
-    continues resolving the REST of the path against the SAME `cls`/`table`.
-    The "far" role (the other one, the actual embedded FK) needs no special
-    handling at all - it is already a normal pseudo-attribute in
-    `schema_members_of`.
+    Base `Table`s must be part of the same conversion (`--catalog
+    <base>.ili`) - a missing one raises `_UnsupportedView` rather than
+    emitting a `CREATE VIEW` that would not compile. `assoc_near_roles`
+    (from `_resolve_view_bases`) marks a base that is really an embedded
+    2-role `ASSOCIATION`'s "near" role - navigating it is a self-reference
+    no-op, not a real member lookup.
     """
 
     def __init__(
@@ -93,19 +77,10 @@ class _ViewResolver:
     def _flattened_struct_column(self, resolved: ResolvedAttribute, col: str, table: str) -> str | None:
         """Resolve a VIEW attribute naming a single-valued STRUCTURE to its ONE flattened column, or `None`.
 
-        `build_tables`/`_columns_for_class` flattens a single-valued
-        non-abstract STRUCTURE inline (`"<attr>_<subattr>"`, up to
-        `_MAX_STRUCT_FLATTEN_DEPTH` levels) - `scalar_ref`'s bare
-        single-hop lookup doesn't know that convention, so a VIEW
-        attribute naming the STRUCTURE itself (`Name := Class -> Struct`,
-        not `Class -> Struct -> SubField`) always failed even though the
-        base table has a real column for it. Real corpus idiom this
-        unblocks: eCH-0031's `MandatoryCatalogueReference` (a STRUCTURE
-        wrapping exactly one `Reference : REFERENCE TO` attribute, e.g.
-        `RichtplanungErneuerbareEnergien_V1.Katalog_Energieform.EnergieformRef`)
-        - only handled when the STRUCTURE flattens to EXACTLY one column,
-        since a bare struct-typed hop is otherwise ambiguous about which
-        of several flattened columns it means.
+        `_columns_for_class` flattens a single-valued STRUCTURE inline
+        (`"<attr>_<subattr>"`) - a VIEW attribute naming the STRUCTURE
+        itself, not a sub-field, only resolves when it flattens to
+        EXACTLY one column (else ambiguous which one it means).
         """
         if resolved.type_kind != "Class" or not _is_structure(resolved.type_instance):
             return None
@@ -183,14 +158,10 @@ class _ViewResolver:
         """Return a SQL boolean for `DEFINED(<base-alias> -> role -> role ...)` - an association-navigation existence
         test.
 
-        This is the DMAV `*_Gueltig` VIEW idiom: a `WHERE` built only from
-        nested `DEFINED()` over association-role paths. Each hop is a
-        2-role association; the hop becomes an `EXISTS (SELECT 1 FROM
-        <next> <v> WHERE <join> [AND <rest>])`, with `<join>` reading the
-        FK from whichever side actually carries it (the DMAV 1:0..1
-        associations embed it on the child). A path element that is a
-        scalar attribute, not a role, or a many-to-many association (no
-        embedded FK) demotes the whole VIEW (RULE #5).
+        The DMAV `*_Gueltig` VIEW idiom: a `WHERE` built only from nested
+        `DEFINED()` over association-role paths. Each hop becomes an
+        `EXISTS (...)` reading the FK from whichever side carries it. A
+        scalar attribute or many-to-many hop demotes the whole VIEW.
         """
         if not factor._qualified_class.endswith("PathOrInspFactor") or getattr(factor, "Inspection", None):
             raise _UnsupportedView("DEFINED(...) argument is not a plain association path")
@@ -226,10 +197,7 @@ class _ViewResolver:
         """Find the 2-role association connecting `cls` to `hop`; return `(target class, target table, fk_on_current,
         fk_column)`.
 
-        FK placement mirrors `xtf.schema.embedded_roles_of` exactly (the
-        same `build_tables` used to make the columns): the FK sits on the
-        `> 1` role's target, else on the second-declared role's target,
-        and its column is named after the opposite role.
+        FK placement mirrors `xtf.schema.embedded_roles_of` exactly.
         """
         st = self.symbol_for(cls)
         candidates = st.all_registered() if st is not None else []
@@ -307,11 +275,9 @@ def _view_where_conjuncts(expr: MetaInstance | None, resolver: _ViewResolver) ->
 def _view_where_sql(expr: MetaInstance, resolver: _ViewResolver) -> str:
     """One View `Where` sub-expression as a parenthesised SQL boolean.
 
-    Same supported subset as `convert/constraint_eval.py` and
-    `convert/jsonfg.py`'s `evaluate_view` WHERE evaluation - relational
-    comparison of two paths, `And`/`Or`/`Not`, and `DEFINED()` over an
-    association path (`_ViewResolver.defined_sql`). Anything else (a
-    function call, arithmetic) demotes the whole VIEW (RULE #5).
+    Same supported subset as `constraint_eval.py`/`jsonfg.py`'s
+    `evaluate_view`: relational comparison, `And`/`Or`/`Not`, `DEFINED()`.
+    Anything else (a function call, arithmetic) demotes the whole VIEW.
     """
     qname = expr._qualified_class.rsplit(".", 1)[-1]
     op = getattr(expr, "Operation", None)
@@ -343,15 +309,10 @@ def build_views(
     """Translate each `View` (`FormationKind` Projection/Join only) into a `CREATE VIEW` body, or a `-- NOTE` when it
     can't be done faithfully.
 
-    A View becomes `SELECT <attr := path> ... FROM <base tables + navigated
-    join tables, comma-joined> WHERE <translated Where predicates>`. Its
-    base classes must be among `tables` (pass their model via
-    `interlis convert-sql --catalog`). Anything outside the translatable
-    subset - a `Where` predicate that isn't a relational comparison of two
-    plain paths, an attribute path that navigates through something other
-    than a resolvable reference/role, a base table that wasn't built -
-    demotes the WHOLE view to `body=None` with an explanatory note (RULE #5),
-    never a half-built `CREATE VIEW`.
+    Becomes `SELECT <attr := path> ... FROM <base tables, comma-joined>
+    WHERE <predicates>`. Base classes must be among `tables` (`--catalog`).
+    Anything outside the translatable subset demotes the WHOLE view to
+    `body=None` with a note (RULE #5), never a half-built `CREATE VIEW`.
     """
     tables_by_name = {t.name: t for t in tables}
     table_name_by_class_id = class_table_names or {}
@@ -433,17 +394,11 @@ def _build_union_view(
 ) -> str:
     """Return a `SELECT ... UNION ALL SELECT ...` body for a `FormationKind=Union` view.
 
-    Each union-view `ClassAttribute` carries one `Derivates` entry per base
-    (`Attr := C1->A, C2->B`), in base declaration order; branch `i` projects
-    every attribute's `Derivates[i]` from base `i` alone. `UNION ALL`, not
-    `UNION` - INTERLIS union is a merge (two base objects that project equal
-    rows stay two rows), not a set operation. A branch attribute navigating
-    a reference hop (`Attr := C1->Role->Field`) joins the target table into
-    that BRANCH's own `FROM`, same `resolver.extra_joins` machinery
-    PROJECTION/JOIN already use - each branch resolves independently (its
-    own `_ViewResolver`), so one branch's join never leaks into another's.
-    Any branch expression that is not a plain path/constant (a function, an
-    unmapped type) demotes the whole view (RULE #5).
+    Each `ClassAttribute` carries one `Derivates` entry per base; branch
+    `i` projects `Derivates[i]` from base `i` alone. `UNION ALL`, not
+    `UNION` - INTERLIS union is a merge, not a set operation. Each branch
+    resolves independently, so one branch's join never leaks into
+    another's.
     """
     attrs = getattr(view, "ClassAttribute", None) or []
     if not attrs:
@@ -479,29 +434,12 @@ def _build_inspection_view(
     """Return a `SELECT ... FROM "<parent>_<attr>[_<sub-attr>]"` body for a `FormationKind=Inspection` view.
 
     `INSPECTION OF <base> -> attr` yields every element of the inspected
-    `BAG`/`LIST OF` structure attribute; `build_tables` already emits that
-    extent as the child table `<base_table>_<attr>`, so the view is just a
-    projection over it. An indirect path (`-> attr -> sub_attr`, a
-    `BAG`/`LIST OF` nested one level inside `attr`'s element structure)
-    walks the SAME chain of tables `build_tables`/`_build_nested_child_tables`
-    now emits (`<base_table>_<attr>_<sub_attr>`) - a missing table at any
-    hop (a chain deeper than that one nesting level, or a geometry
-    decomposition with no table at all) demotes the whole view. Each view
-    `ClassAttribute` (`out := <base> -> field`) reads `field` straight from
-    the FINAL hop's column; `out := PARENT -> field` reads `field` from
-    the owning object instead, resolved by joining back to the base table
-    on the same `<base_table>_fk` column `build_tables` already puts on
-    the child table (`RULE #1`: reuses that naming, does not invent a new
-    join convention) - only supported for a single-hop path, since a
-    multi-hop child table's FK points at the INTERMEDIATE table, not the
-    base table. A single-hop geometry inspection over a SURFACE/AREA
-    attribute (`INSPECTION OF <class> -> surfaceAttr`, conceptually
-    `SurfaceBoundary`/`SurfaceEdge`, eCH-0031 SS3.15) has no child table
-    either, but IS translated - delegated to
-    `_build_geometry_inspection_view` (`ST_Boundary` of the base table's
-    own geometry column, one row per base object, no `Lines`/`SurfaceEdge`
-    sub-structure). A LINE/POLYLINE geometry, or a path nesting more than
-    one level deep, still has no child table at all and demotes.
+    `BAG`/`LIST OF`; `build_tables` already emits that extent as the
+    child table `<base_table>_<attr>`, so this is a projection over it
+    (`out := PARENT -> field` joins back on the child's own `_fk` column,
+    single-hop only). A SURFACE/AREA geometry inspection has no child
+    table but IS translated (`_build_geometry_inspection_view`); a
+    LINE/POLYLINE geometry or a deeper path demotes.
     """
     if len(bases) != 1:
         raise _UnsupportedView("an inspection view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
@@ -590,11 +528,8 @@ def _geometry_inspection_column(
     """Return `attr_name`'s SQL column name on `base_table` if it's a single-valued SURFACE/AREA-`Kind` geometry
     attribute, else `None`.
 
-    The shape `_build_inspection_view` delegates to
-    `_build_geometry_inspection_view` for. `Kind in ("Surface", "Area")`
-    only - a `Polyline`/`DirectedPolyline` LINE attribute has a different
-    conceptual decomposition (`LineGeometry`/`LineSegment`, eCH-0031
-    SS3.15) not covered here.
+    `Kind in ("Surface", "Area")` only - a `Polyline`/`DirectedPolyline`
+    has a different decomposition, not covered here.
     """
     st = symbol_for(base_cls)
     members = schema_members_of(base_cls, st) if st is not None else attributes_of(base_cls)
@@ -619,23 +554,12 @@ def _build_geometry_inspection_view(
 ) -> str:
     """Return a `SELECT ST_Boundary(...) FROM "<base>"` body for a single-hop geometry `INSPECTION`.
 
-    `INSPECTION OF <class> -> surfaceAttr` conceptually yields one
-    `SurfaceBoundary` (`Lines: LIST OF SurfaceEdge`, eCH-0031 SS3.15) per
-    surface - decomposed here as ONE row per base object whose geometry
-    IS that boundary (`ST_Boundary`, OGC SFA), the pragmatic reading a
-    `GRAPHIC ... BASED ON` an inspection view actually needs (drawing the
-    boundary), rather than the full
-    nested `Lines`/`SurfaceEdge` structure - out of scope, eCH-0031 itself
-    calls the geometric INSPECTION structures "a conceptual description
-    only... generating views belongs to a separate conformance level".
-    `ST_Boundary` is OGC SFA / PostGIS SQL - correct against
-    `render_postgresql`'s output, but needs SpatiaLite loaded to actually
-    EXECUTE against `render_gpkg`'s plain SQLite (both renderers emit the
-    SAME dialect-agnostic VIEW body via `_render_views` - this module has
-    no per-renderer VIEW SQL yet). Only a view attribute reading the SAME
-    inspected geometry attribute back (`out := <base> -> <attr>`) is
-    translatable - there is no further sub-structure to select from
-    (RULE #5).
+    Decomposed as ONE row per base object whose geometry IS that boundary
+    (`ST_Boundary`, OGC SFA/PostGIS) - the pragmatic reading a `GRAPHIC
+    ... BASED ON` an inspection view needs, not the full nested
+    `Lines`/`SurfaceEdge` structure (out of scope, eCH-0031 itself treats
+    that as a separate conformance level). Only reading the SAME
+    inspected attribute back is translatable.
     """
     select_items: list[str] = []
     for attr in getattr(view, "ClassAttribute", None) or []:
@@ -670,26 +594,11 @@ def _build_aggregation_view(
     or demote.
 
     `AGGREGATION OF <base> (ALL | EQUAL(key))` collapses base objects into
-    one instance; inside the view the implicit `AGGREGATES` bag holds the
-    grouped objects, for a FUNCTION (`ElementCount := countB(AGGREGATES)`).
-    A user FUNCTION body is out of scope by design (delegated to an
-    external engine) and demotes the
-    whole view - EXCEPT the 2 INTERLIS STANDARD functions whose signature
-    IS "count the members of a bag/object set" (`INTERLIS.objectCount`/
-    `elementCount`), applied to the bag AGGREGATES itself: that becomes a
-    plain `COUNT(*)`, no external engine needed. `EQUAL(key)` (stashed by
-    the builder as `view._aggregation_key`, `_stash_aggregation_key`) adds
-    a real `GROUP BY <key>` - every OTHER plain-path attribute joins the
-    key in `GROUP BY` too (same practical effect as `ALL`'s `DISTINCT`,
-    now expressed correctly alongside a real aggregate column). `ALL`
-    (no key) with a standard-function column and no plain column
-    alongside it is a single ungrouped aggregate row (no `GROUP BY`
-    needed); mixing a plain column into that combination has no
-    well-defined single value to show (no key to group by) and demotes
-    the whole view - no real corpus case combines the two. An attribute
-    navigating a reference hop (`Attr := <base>->Role->Field`) joins the
-    target table in, same `resolver.extra_joins` machinery PROJECTION/JOIN
-    already use.
+    one instance; a user FUNCTION over the implicit `AGGREGATES` bag
+    demotes the view, EXCEPT `INTERLIS.objectCount`/`elementCount` on the
+    bag itself, which become `COUNT(*)`. `EQUAL(key)` adds a real
+    `GROUP BY`; `ALL` with an aggregate AND a plain column has no
+    well-defined single value and demotes too.
     """
     if len(bases) != 1:
         raise _UnsupportedView("an aggregation view has exactly one base", "SQL-VIEW-FORMATION-UNSUPPORTED")
@@ -748,9 +657,7 @@ _STANDARD_AGGREGATE_COUNT_FUNCTIONS = {"INTERLIS.objectCount", "INTERLIS.element
 
 
 def _is_aggregates_marker(expr: MetaInstance) -> bool:
-    """True for the bare `AGGREGATES` argument (`PathEl(Kind=Attribute, Ref=None)` - no `Name`, unlike a real
-    attribute).
-    """
+    """True for the bare `AGGREGATES` argument (no `Ref`, unlike a real attribute)."""
     if not expr._qualified_class.endswith("PathOrInspFactor"):
         return False
     path_els = getattr(expr, "PathEls", None) or []
@@ -764,14 +671,9 @@ def _is_aggregates_marker(expr: MetaInstance) -> bool:
 def _standard_aggregate_function_sql(factor: MetaInstance, aname: str | None) -> str:
     """Return `COUNT(*)` for `INTERLIS.objectCount(AGGREGATES)`/`elementCount(AGGREGATES)`, or demote.
 
-    Both standard functions' refman signature ("number of objects/elements
-    a bag/object set contains") is exactly `COUNT(*)` when applied to the
-    grouped bag itself - a call to any OTHER function, or one of these two
-    applied to something other than the bare `AGGREGATES` argument (e.g.
-    `INTERLIS.objectCount(SomeOtherClass)`, a valid but UNRELATED whole-
-    population idiom used elsewhere for `SET CONSTRAINT`), is a user
-    FUNCTION body / an expression outside this narrow subset and demotes
-    the whole view.
+    Refman signature ("count of objects/elements") is exactly `COUNT(*)`
+    applied to the grouped bag itself - any other function, or these two
+    applied to anything but the bare `AGGREGATES` argument, demotes.
     """
     func_name = getattr(factor, "Function", None)
     args = getattr(factor, "Arguments", None) or []
@@ -789,11 +691,8 @@ def _standard_aggregate_function_sql(factor: MetaInstance, aname: str | None) ->
 def _view_constraint_notes(view: MetaInstance) -> list[str]:
     """Return a `-- NOTE` per VIEW-level `UNIQUE` / `SET` / `EXISTENCE` constraint - a `CREATE VIEW` cannot carry them.
 
-    DMAV `*_Gueltig` views carry a catalogue-numbered `UNIQUE CHxxxxxx:`;
-    a few also carry `SET CONSTRAINT ... INTERLIS.areAreas(...)`. Neither
-    is expressible on a SQL view - surfaced here rather than dropped
-    silently (RULE #5); enforce downstream (a unique index on a
-    materialised view, an application check).
+    Neither is expressible on a SQL view - surfaced here rather than
+    dropped silently (RULE #5); enforce downstream.
     """
     notes: list[str] = []
     for constraint in getattr(view, "Constraint", None) or []:
@@ -842,19 +741,11 @@ def _view_unique_constraint_ddl(
     `Inspection` still go through `_view_constraint_notes` unchanged - no real corpus case combines them with a
     view-level `UNIQUE`).
 
-    A `UniqueConstraint` whose key is a plain view attribute (found in
-    `attr_col`, i.e. resolves to a bare `"<alias>"."<col>"` with no
-    reference-hop join) on a SINGLE-base view with no `extra_joins`
-    becomes a real `UniqueViewTrigger` instead of a dropped note - the
-    real corpus case (DMAV `*_Gueltig`, `UNIQUE CHxxxxxx:` on
-    `Grundstueck_Gueltig`/`Grenzpunkt_Gueltig`). A geometry-typed key
-    column stays a note: SQL `=` is bounding-box equality on a PostGIS
-    `geometry`, not exact equality, and would silently accept two
-    distinct overlapping-bbox geometries as "unique" - dialect-ambiguous
-    correctness, not attempted (RULE #5). `SetConstraint`/
-    `ExistenceConstraint` (`INTERLIS.areAreas(...)`, a whole-population
-    topology check) stay notes too - same "no engine for a spatial/
-    aggregate function" stance as the arithmetic `WHERE` guard.
+    A `UniqueConstraint` whose key is a plain view attribute on a
+    SINGLE-base view with no `extra_joins` becomes a real
+    `UniqueViewTrigger` instead of a dropped note (real corpus case: DMAV
+    `*_Gueltig`). A geometry-typed key stays a note - SQL `=` is
+    bounding-box equality on PostGIS `geometry`, not exact equality.
     """
     notes: list[str] = []
     triggers: list[UniqueViewTrigger] = []
@@ -910,19 +801,10 @@ def _view_unique_constraint_ddl(
 def _association_embedding(assoc_cls: MetaInstance) -> tuple[MetaInstance, str, str] | None:
     """Return `(carrier_class, near_role_name, far_role_name)` for a 2-role embedded `ASSOCIATION`.
 
-    Mirrors `xtf.schema.embedded_roles_of`'s own embedding rule, but from
-    the association's own perspective (which class does IT embed onto),
-    not a candidate target class scanning every association in a
-    `SymbolTable` - no `SymbolTable` needed, this only reads
-    `assoc_cls.Role` directly. `near_role_name` is the role whose OWN
-    target class IS the carrier - a self-reference when navigated FROM
-    the association (`PROJECTION OF <assoc> -> <near_role> -> ...`: the
-    association's row IS that very carrier row, so `<near_role>` names no
-    real hop). `far_role_name` is the OTHER role - already resolvable
-    generically as an embedded pseudo-attribute (`schema_members_of`), no
-    special handling needed for it. `None` for a many-to-many association
-    (not embedded, transferred as its own object per eCH-0031 SS4.3.9.2)
-    or a non-2-role/unresolved-target one.
+    Mirrors `xtf.schema.embedded_roles_of`, but from the association's own
+    perspective. `near_role_name`'s own target class IS the carrier (a
+    self-reference when navigated from the association). `None` for a
+    many-to-many association (not embedded) or a non-2-role one.
     """
     roles = [r for r in getattr(assoc_cls, "Role", None) or [] if isinstance(r, MetaInstance)]
     if len(roles) != 2:
@@ -946,14 +828,9 @@ def _direct_association_join(
 ) -> tuple[bool, str] | None:
     """Find the (unique) 2-role association directly linking `cls_a` and `cls_b`.
 
-    Returns `(fk_on_a, fk_col)`: `fk_on_a` True means `cls_a`'s table
-    carries the FK column `fk_col` referencing `cls_b`'s id, False the
-    reverse. Same embedding rule as `_resolve_association_hop`/
-    `xtf.schema.embedded_roles_of` (the FK sits on the `> 1`-cardinality
-    role's target, else the second-declared role's target; its column is
-    named after the OTHER role) - `None` for no such association, a
-    many-to-many one (nothing embedded to join on), or 2+ candidates that
-    disagree (ambiguous, left to an explicit `WHERE` rather than guessed).
+    Returns `(fk_on_a, fk_col)` (True = `cls_a`'s table carries the FK).
+    `None` for no such association, a many-to-many one, or 2+ candidates
+    that disagree (ambiguous, left to an explicit `WHERE`).
     """
     if symbol_table is None:
         return None
@@ -996,18 +873,11 @@ def _auto_join_conditions(
 ) -> list[str]:
     """Derive `WHERE` join predicates connecting every JOIN OF base, for a `Where`-less multi-base VIEW.
 
-    Real corpus `JOIN OF A, B;` with no `WHERE` at all (e.g.
-    `Waldabstandslinien_V1_2`'s `Waldabstand_Linie`/`Typ`,
-    `ERKAS_Strassen_V2_0`'s `Verkehrsaufkommen`/`Vollzug`) relies on the
-    classes being linked by their OWN association - confirmed against
-    `ili2c` (`JOIN OF A,B;` alone compiles when exactly one 2-role
-    association connects them). Builds a spanning tree over `bases` via
-    `_direct_association_join`: each base beyond the first must be
-    linkable to some base already in the tree. A base with no direct
-    association to the rest (`ERKAS_Strassen_V2_0`'s case - Verkehrsaufkommen
-    and Vollzug are only related transitively, through Datenpunkt) can't
-    be joined without risking a Cartesian product - demotes the whole VIEW
-    (RULE #5) instead of emitting a wrong `FROM a, b` comma-join.
+    Real corpus `JOIN OF A, B;` with no `WHERE` relies on the classes
+    being linked by their OWN association (confirmed against `ili2c`).
+    Builds a spanning tree over `bases`; a base with no direct association
+    to the rest can't join without risking a Cartesian product and
+    demotes the whole VIEW instead.
     """
     connected = {bases[0][0]}
     conditions: list[str] = []
@@ -1054,13 +924,10 @@ def _resolve_view_bases(
     """Return `(bases, assoc_near_roles)` - `assoc_near_roles` (`alias -> role name`) for `_ViewResolver`, see its
     own docstring.
 
-    A base that is `Kind=Association` has no `CREATE TABLE` of its own
-    (`build_tables` only tables `Kind=Class`) - resolved instead to its
-    2-role embedding's CARRIER class/table (`_association_embedding`),
-    the real corpus shape for `PROJECTION OF <association>`
-    (`tests/fixtures/fgdm4gs/Planungszonen_V2_d_B.ili`'s
-    `TypPZ_Planungszone`). The alias stays the association's OWN
-    name/rename - view attribute paths still spell it that way.
+    A base that is `Kind=Association` has no `CREATE TABLE` of its own -
+    resolved instead to its 2-role embedding's CARRIER class/table
+    (`_association_embedding`), the real corpus shape for `PROJECTION OF
+    <association>`.
     """
     bases: list[tuple[str, MetaInstance, str]] = []
     assoc_near_roles: dict[str, str] = {}
@@ -1125,15 +992,9 @@ def _view_unique_trigger_predicate(trig: UniqueViewTrigger, new_ref: str) -> tup
     reference (`"NEW"` in both dialects).
 
     `new_is_in_the_view` reapplies the view's own `WHERE` to the row being
-    written (its base-table alias substituted for `new_ref`) - without
-    this, a not-yet-valid row (e.g. `DEFINED(...->Entstehung)` still
-    false) would be wrongly rejected just for sharing a key with an
-    already-valid row. `a_duplicate_exists` re-queries the base table
-    (not the `CREATE VIEW` itself - simpler, and avoids depending on the
-    view exposing its own identity column) for another row, excluding
-    `new_ref` itself, that matches the key AND still satisfies the SAME
-    `WHERE` (an existing row that has since become invalid no longer
-    counts as a duplicate).
+    written - without it, a not-yet-valid row would be wrongly rejected
+    just for sharing a key with an already-valid one. `a_duplicate_exists`
+    re-queries the base table (simpler than the `CREATE VIEW` itself).
     """
     substituted = [w.replace(f'"{trig.alias}".', f"{new_ref}.") for w in trig.where]
     not_null = " AND ".join(f'{new_ref}."{c}" IS NOT NULL' for c in trig.columns)

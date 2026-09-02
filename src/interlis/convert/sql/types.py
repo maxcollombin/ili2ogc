@@ -16,13 +16,7 @@ _GEOMETRY_KINDS = {"CoordType", "LineType"}
 
 def _srid(coord_type: MetaInstance | None) -> str | None:
     """Return the bare numeric EPSG code (e.g. `"2056"`) from a CoordType's `!!@CRS=EPSG:<code>` meta-attribute, or
-    `None`.
-
-    Same resolution as `convert/jsonfg.py`'s `_crs_uri` (reused via the
-    same `_meta_value` primitive), returning just the numeric code instead
-    of the full `coordRefSys` URI - `None` (never guessed) when the
-    meta-attribute is absent or not an `EPSG:<digits>` value, same
-    RULE #5 stance as `_crs_uri`.
+    `None` (never guessed) if absent/malformed.
     """
     raw = _meta_value(coord_type, "CRS")
     if raw is None:

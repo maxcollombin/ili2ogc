@@ -1,10 +1,8 @@
 """CONSTRAINT/WHERE `Expression` tree -> SQL boolean text.
 
-`_expression_to_sql` (row-local `MANDATORY CONSTRAINT` -> `CHECK`, used by
-`tables.py`) and `views.py`'s own VIEW `WHERE` translator share this
-module's path-resolution and literal helpers rather than duplicating them
-- a leaf module (only `tables.py`/`views.py` call into it), no other
-submodule of this package needed to build it.
+Shared by `tables.py`'s `CHECK` translation and `views.py`'s VIEW `WHERE`
+translation, so both use the same path-resolution/literal helpers. Leaf
+module.
 """
 
 from __future__ import annotations
@@ -37,16 +35,10 @@ _SQL_RELATIONAL_OPERATORS = {
 def _path_to_column(path_els: list[MetaInstance]) -> str:
     """Resolve a `CONSTRAINT` path (`PathOrInspFactor.PathEls`) to the flattened SQL column name it maps to.
 
-    Same scope as `constraint_eval.py`'s own `_resolve_path`: a `CONSTRAINT`
-    navigates only nested `STRUCTURE` hops in the SAME object (never through
-    a `REFERENCE TO`/role) - so 1 hop is a plain own column, and 2 or 3 hops
-    are the SAME `<attr>_<subattr>[_<subsubattr>]` flattened name
-    `tables.py::_columns_for_class` builds for up to `_MAX_STRUCT_FLATTEN_DEPTH` levels
-    of STRUCTURE nesting (RULE #1: same join, not a parallel convention).
-    More hops than that would need a deeper nesting level, refused the same
-    way it is everywhere else in this module. The caller checks the result
-    against the real column set, so a path that lands on a column that was
-    NOT flattened degrades to a `-- NOTE`, never a broken `CHECK`.
+    A `CONSTRAINT` navigates only nested `STRUCTURE` hops in the same
+    object (never a `REFERENCE TO`/role) - 1-3 hops flatten to the same
+    `<attr>_<subattr>[_<subsubattr>]` name `_columns_for_class` builds.
+    The caller checks the result against the real column set.
     """
     if len(path_els) not in (1, 2, 3):
         raise _UnsupportedCheckExpression(
@@ -84,17 +76,10 @@ def _expression_to_sql(expr: MetaInstance, column_names: set[str], renamed: dict
     """Serialize `expr` (an already-built `Expression` node) into a SQL boolean expression for `CHECK (...)`.
 
     Same supported subset as `constraint_eval.py`'s `evaluate_expression`
-    (relational operators, `And`/`Or`/`Not`/`Implication`, `DEFINED(...)`,
-    plain attribute paths, `Numeric`/`Text`/`Enumeration` constants) -
-    walks the SAME `Expression` tree, but emits SQL text instead of
-    evaluating against a Python dict. `THIS`/`PARENT`/aggregate paths/
-    `FunctionCall`/arithmetic raise `_UnsupportedCheckExpression`, same as
-    that module's `UnsupportedExpressionError` for the same nodes.
-
-    `renamed` is `tables.py::_avoid_identity_collision`'s `{old_name: new_name}` map -
-    a path whose single hop is a real attribute literally named `id` must
-    resolve to the column it was actually renamed to (`id_attr`), the same
-    remap already applied to `UniqueConstraint.columns` in `build_tables`.
+    (relational/logical operators, `DEFINED(...)`, plain paths, scalar
+    constants) - `THIS`/`PARENT`/aggregate/`FunctionCall`/arithmetic raise
+    `_UnsupportedCheckExpression`. `renamed` is `_avoid_identity_collision`'s
+    rename map, for a path whose sole hop is literally named `id`.
     """
     qualified = expr._qualified_class
     if qualified.endswith("CompoundExpr"):

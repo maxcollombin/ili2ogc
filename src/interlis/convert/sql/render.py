@@ -19,13 +19,9 @@ def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> s
     """Render `tables` as PostgreSQL DDL text - `CREATE TABLE` (with inline `UNIQUE`) then `ALTER TABLE ... ADD
     CONSTRAINT ... FOREIGN KEY`.
 
-    Foreign keys are added via a SEPARATE `ALTER TABLE` pass after every
-    `CREATE TABLE` - sidesteps forward-reference ordering entirely (a
-    table's own FK target may be declared later in `tables`) rather than
-    topologically sorting them, a real simplification PostgreSQL affords
-    (unlike a future SQLite/GPKG renderer, which cannot add a FOREIGN KEY
-    to an existing table at all -
-    and so will need to sort tables and declare FKs inline instead).
+    FKs are added via a separate `ALTER TABLE` pass after every `CREATE
+    TABLE` - sidesteps forward-reference ordering entirely instead of
+    topologically sorting.
     """
     statements: list[str] = []
     for table in tables:
@@ -58,34 +54,13 @@ def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
     """Render `tables` as SQLite/GeoPackage DDL text - everything inline at `CREATE TABLE` time, plus the GeoPackage
     bootstrap rows.
 
-    Assumes the target `.gpkg` file already exists with the standard
-    GeoPackage system tables (`gpkg_contents`/`gpkg_geometry_columns`/
-    `gpkg_spatial_ref_sys`/...) already in place - created by GDAL itself
-    (e.g. `ogr2ogr -f GPKG target.gpkg -dsco VERSION=1.3` with no layers,
-    or any prior GDAL write to the same file) - this function only ADDS
-    rows/tables to it, never creates the container from scratch (same
-    "GDAL owns the mature bootstrapping, this project owns the schema on
-    top" stance as the rest of this package).
-
-    Unlike `render_postgresql`, `FOREIGN KEY` is declared INLINE at
-    `CREATE TABLE` time (SQLite cannot add one to an existing table via
-    `ALTER TABLE` at all) - verified
-    empirically that this needs NO topological sort of `tables`: SQLite
-    tolerates a `FOREIGN KEY REFERENCES` naming a table that does not YET
-    exist at `CREATE TABLE` time (only enforced later, at INSERT/UPDATE,
-    and only when `PRAGMA foreign_keys=ON`), unlike PostgreSQL.
-
-    `gpkg_spatial_ref_sys.definition` (the SRS WKT text) is written as an
-    explicit, LOUD placeholder rather than fabricated - this project stays
-    pure Python (no GDAL/PROJ dependency),
-    so it has no authoritative source for a real WKT string; `organization`/
-    `organization_coordsys_id` (the EPSG code) are correct and are what
-    `gpkg_geometry_columns.srs_id` actually keys off in practice - the
-    caller should verify/replace `definition` via an authoritative source
-    (e.g. `gdalsrsinfo -o wkt2 EPSG:<code>`) before treating the resulting
-    GeoPackage as fully spec-compliant. EPSG:4326 is skipped (every valid
-    GeoPackage already has it pre-registered per the spec's own mandatory
-    default rows).
+    Assumes the target `.gpkg` already has GDAL's standard GeoPackage
+    system tables in place - this only ADDS rows/tables to it. `FOREIGN
+    KEY` is declared INLINE (SQLite can't `ALTER TABLE` one in later).
+    CAUTION: `gpkg_spatial_ref_sys.definition` (the SRS WKT) is a LOUD
+    placeholder, not a real WKT string (no GDAL/PROJ dependency here) -
+    verify/replace it via an authoritative source before treating the
+    result as fully spec-compliant.
     """
     statements: list[str] = []
     srids: set[int] = set()

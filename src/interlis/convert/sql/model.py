@@ -1,10 +1,8 @@
 """Dialect-neutral SQL schema/view intermediate representation.
 
-`Table`/`Column`/`ForeignKey`/`UniqueConstraint`/`CheckConstraint` are
-`tables.py::build_tables`'s output; `SqlView`/`UniqueViewTrigger` are
-`views.py::build_views`'s. Every renderer in `render.py` consumes these
-same objects - a pure leaf module, no other submodule of this package
-needed to build it.
+`build_tables` produces `Table`/`Column`/...; `build_views` produces
+`SqlView`/`UniqueViewTrigger`. Every renderer consumes these same
+objects. Pure leaf module.
 """
 
 from __future__ import annotations
@@ -81,13 +79,9 @@ class SqlView:
 class UniqueViewTrigger:
     """A VIEW-level `UniqueConstraint` translated into a `BEFORE INSERT`/`BEFORE UPDATE` trigger on its base table.
 
-    Dialect-neutral (`where`/`columns` reference only the base table's own
-    alias/columns, no dialect syntax) - `render.py::_render_view_unique_triggers_postgresql`/
-    `_render_view_unique_triggers_gpkg` each wrap the SAME predicate
-    (`views.py::_view_unique_trigger_predicate`) in their own `CREATE TRIGGER` form:
-    PostgreSQL needs a separate PL/pgSQL function; SQLite/GPKG needs two
-    triggers (one per INSERT/UPDATE), since a single `CREATE TRIGGER`
-    cannot combine both events.
+    Dialect-neutral (`where`/`columns` name only the base table's own
+    alias/columns) - each renderer wraps the same predicate in its own
+    `CREATE TRIGGER` form.
     """
 
     view_name: str

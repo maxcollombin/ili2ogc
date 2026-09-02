@@ -30,17 +30,10 @@ def _avoid_identity_collision(columns: list[Column]) -> dict[str, str]:
     """Rename any column literally named `OID_COLUMN` ("id") to `"id_attr"` (or `"id_attr_2"`, ... on a further
     collision), IN PLACE - returns the `{old_name: new_name}` rename map.
 
-    Real corpus case (found via a live SQLite run,
-    `ili_corpus/WasserBase_V1_1.ili`: `ID : MANDATORY TEXT*25;` -
-    "duplicate column name: id"): a genuine INTERLIS attribute literally
-    named `Id`/`ID` lowercases to the SAME name this module reserves for
-    the synthetic identity column (`OID_COLUMN`) - renaming the ATTRIBUTE's
-    own column here rather than the reserved one, which every FOREIGN KEY
-    and every GDAL `-append` already depends on matching exactly. The
-    caller MUST also apply the returned rename map to any `UniqueConstraint`
-    built from the SAME attribute set (its own column list is computed
-    independently, straight from `PathEl.Ref`, and would otherwise still
-    reference the OLD, no-longer-existing name).
+    Real corpus case: a genuine INTERLIS attribute literally named
+    `Id`/`ID` collides with the reserved identity column. The caller must
+    also apply the rename map to any `UniqueConstraint` built from the
+    same attributes.
     """
     used = {c.name for c in columns}
     renamed: dict[str, str] = {}
@@ -77,41 +70,10 @@ def _columns_for_class(
     """Return `(columns, foreign_keys, notes, child_specs, local_unique, abstract_specs)` for `cls`'s own+inherited
     members, flattening up to `_MAX_STRUCT_FLATTEN_DEPTH` levels of STRUCTURE nesting inline.
 
-    `prefix` is non-empty on the recursive call flattening a STRUCTURE
-    attribute (`"<attr>_"`, or `"<attr>_<subattr>_"` at the second level) -
-    it builds the flattened column names. `depth` counts how many STRUCTURE
-    levels have already been entered; a STRUCTURE found at
-    `depth == _MAX_STRUCT_FLATTEN_DEPTH` is refused with a `-- NOTE` rather
-    than flattened into an ever-deeper column name (RULE #7: bounded, see
-    mappings/ilismeta16-to-sql-rules.yml's StructureNesting entry).
-
-    `child_specs` is `[(label, MultiValue instance), ...]` for every
-    `BAG`/`LIST OF` member found at the TOP level or while flattening a
-    STRUCTURE (`label` carries the full `"<struct_attr>_"` /
-    `"<struct_attr>_<sub_attr>_"` prefix in the nested case, e.g.
-    `"zustaendige_behoerde_entries"`) - built into a related child table by
-    `_build_child_table` (called from `build_tables`, which alone knows the
-    already-used table names to disambiguate against). A `BAG`/`LIST OF`
-    reached through one or two flattened STRUCTURE levels still becomes one
-    child table keyed by the parent's OID.
-
-    `local_unique` is the SAME shape `_local_unique_constraints_for_class`
-    returns, merged up from any nested STRUCTURE's OWN `Kind=LocalU`
-    `UniqueConstraint` (the real corpus idiom, e.g. `LocalisationCH_V1.
-    MultilingualText` wraps a `BAG`/`LIST` AND declares `UNIQUE (LOCAL)` on
-    itself, not on the embedding Class) - keys qualified with the SAME
-    `"<struct_attr>_"` prefix as the matching `child_specs` label, so
-    `build_tables` can look them up together without knowing they came
-    from a nested STRUCTURE at all.
-
-    `abstract_specs` is `[(label, abstract STRUCTURE class, ordered,
-    from_multivalue), ...]` for an attribute whose (element) type is an
-    ABSTRACT structure - `build_tables` emits one child table per concrete
-    subclass found in the symbol table (`concrete_structure_subclasses`),
-    mirroring the JSON Schema pipeline's `anyOf`. `from_multivalue`
-    distinguishes a `BAG`/`LIST OF <abstract>` from a single-valued
-    ABSTRACT structure attribute, only to pick the right `-- NOTE` id when
-    no concrete subclass is in the conversion.
+    `prefix`/`depth` track the recursive STRUCTURE-flattening call.
+    `child_specs` are `BAG`/`LIST OF` members for `_build_child_table`;
+    `local_unique` merges up nested `UNIQUE (LOCAL)`; `abstract_specs` are
+    ABSTRACT-structure attributes, one child table per concrete subclass.
     """
     columns: list[Column] = []
     foreign_keys: list[ForeignKey] = []
@@ -241,33 +203,11 @@ def _build_child_table(
     for one `BAG`/`LIST OF` attribute.
 
     Companion to `convert/jsonfg.py`'s `include_child_rows` synthetic
-    Features - GDAL loads them into
-    the table this returns via the SAME `ogr2ogr -append` call that loads
-    the parent data, routed by `"featureType"`. Schema: a `<parent>_fk` `FOREIGN KEY` back to the
-    parent (own `id` identity column added by the renderer, like every
-    table) +
-    `seq` (only when `Ordered=True` - `LIST` is order-significant, `BAG`
-    is not) + the element's own value column(s), dispatched the SAME way
-    as a plain attribute: scalar/geometry -> one `value` column;
-    `STRUCTURE` -> its own columns (reusing `_columns_for_class` directly
-    with no prefix, since THIS table already represents one structure
-    instance). A `BAG`/`LIST OF` found INSIDE that structure - a nested
-    multi-value, not flattenable into a column - is returned as
-    `nested_child_specs` rather than built here: the caller (`build_tables`)
-    turns each into its own `<this table>_<subattr>` child table, one
-    level deeper (`build_tables`'s own recursion bound, mirroring
-    `_MAX_STRUCT_FLATTEN_DEPTH`). The `ReferenceType`/non-structure `Class`
-    branch below is DEFENSIVE only -
-    verified against `attrTypeDef`'s real ANTLR bytecode (RULE #2bis)
-    that `BAG`/`LIST OF REFERENCE TO X` is NOT actually constructible by
-    this project's vendored grammar at all (`attrTypeDef`'s `(BAG|LIST)
-    OF` alternative only ever calls `restrictedStructureRef()` - a named
-    `STRUCTURE`, `ANYSTRUCTURE`, or a bare scalar `type_()`, never
-    `referenceAttr()`) - contrary to what the abstract eCH-0031 EBNF
-    alone would suggest, and confirmed absent from the real corpus too.
-    An unmapped `BaseType` kind returns `(None, {}, reason, [])` - the caller
-    keeps the pre-existing "-- NOTE" on the PARENT table instead of
-    creating an empty/broken child table.
+    Features (same `"featureType"` routing). Schema: a `<parent>_fk`
+    `FOREIGN KEY` + `seq` (if `Ordered`) + the element's own value
+    column(s). A `BAG`/`LIST OF` nested inside is returned as
+    `nested_child_specs`, not built here - `build_tables` makes it its
+    own `<this table>_<subattr>` child table, one level deeper.
     """
     base_type = getattr(multi_value, "BaseType", None)
     if not isinstance(base_type, MetaInstance):
@@ -344,19 +284,9 @@ def _build_nested_child_tables(
 ) -> list[Table]:
     """Build one `<parent_child_table>_<attr>` table per `BAG`/`LIST OF` attribute found one level inside it.
 
-    `INSPECTION OF <class> -> a -> b` (an indirect/multi-hop path) needs
-    exactly this chain of tables to exist (`views.py::_build_inspection_view`
-    resolves it by walking `<base>_a_b`); a `BAG`/`LIST OF` attribute
-    nested this way was previously discarded silently by
-    `_build_child_table` (`_sub_child_specs`, now `nested_child_specs`).
-    Bounded to ONE level (no recursive call back into this function): no
-    real corpus evidence of a THIRD nesting level, and the immediate
-    `UNIQUE (LOCAL)`/`struct_global_unique` bookkeeping `build_tables`
-    does for a first-level child table doesn't apply here (a `UNIQUE
-    (LOCAL)` this deep has no observed real-world case either) - a
-    further-nested `BAG`/`LIST OF` inside one of these tables is simply
-    noted, not built, same "no real corpus evidence, no crash" stance as
-    `_MAX_STRUCT_FLATTEN_DEPTH` for STRUCTURE flattening.
+    `INSPECTION OF <class> -> a -> b` needs exactly this chain of tables
+    to exist. Bounded to ONE level (no real corpus evidence of a third
+    nesting level) - a further-nested `BAG`/`LIST OF` is noted, not built.
     """
     out: list[Table] = []
     for attr_name, multi_value in child_specs:
@@ -436,15 +366,10 @@ def _check_constraints_for_class(
     """Return `(constraints, notes)` for `cls`'s own row-local `MANDATORY CONSTRAINT`s - same scope as
     `constraint_eval.py`'s `check_feature_constraints`.
 
-    `UniqueConstraint` is handled by `_unique_constraints_for_class`/
-    `_local_unique_constraints_for_class`. `SetConstraint`/
-    `ExistenceConstraint` and the percentage-based plausibility form
-    (`SimpleConstraint` with `Percentage`, or `Kind` `LowPercC`/`HighPercC`)
-    are population/basket-level checks a single-row `CHECK` cannot express -
-    same exclusion as `check_feature_constraints`, not attempted here
-    either, but each is surfaced as a `-- NOTE` rather than dropped
-    silently (RULE #5 - `SET`/`EXISTENCE` touch ~3%/~8% of the real
-    corpus).
+    `UniqueConstraint` is handled separately. `SetConstraint`/
+    `ExistenceConstraint`/percentage-based plausibility are
+    population/basket-level checks no single-row `CHECK` can express -
+    surfaced as a `-- NOTE`, never dropped silently (RULE #5).
     """
     result: list[CheckConstraint] = []
     notes: list[str] = []
@@ -518,23 +443,11 @@ def _unique_constraints_for_class(
 ) -> tuple[list[UniqueConstraint], list[str], dict[str, list[list[str]]]]:
     """Return `(constraints, notes, struct_global_unique)` for `cls`'s own `Kind=GlobalU` `UniqueConstraint`s.
 
-    `constraints`: plain `UNIQUE (...)` over own columns (every path a single
-    own-attribute hop).
-
-    `struct_global_unique`: `{struct attr: [[sub-attr column, ...], ...]}` for a
-    `UNIQUE X->Y` (or compound `UNIQUE X->Y, X->Z`) where `X` is this class's
-    own `BAG`/`LIST OF STRUCTURE` attribute - the global (not `(LOCAL)`, so no
-    per-parent scoping) counterpart of `_local_unique_constraints_for_class`.
-    `build_tables` turns each group into a `UNIQUE` on the `<parent>_<attr>`
-    child table, WITHOUT the `<parent>_fk` prefix. A first hop that never
-    matches a child table is a real `->` reference/role navigation and gets a
-    `SQL-UNIQUE-CROSS-REF` note there.
-
-    `Kind=LocalU` is handled by `_local_unique_constraints_for_class` (skipped
-    here, never noted twice). `Kind` on every `PathEl` is always
-    "ReferenceAttr" regardless of whether the hop is a role or a structure
-    step (confirmed empirically), so path LENGTH plus the child-
-    table match in `build_tables` are the only real signals.
+    `constraints`: plain `UNIQUE (...)` over own columns. `struct_global_unique`:
+    `{struct attr: [[sub-attr column, ...], ...]}` for a `UNIQUE X->Y`
+    where `X` is a `BAG`/`LIST OF STRUCTURE` attribute - `build_tables`
+    turns each group into a `UNIQUE` on the `<parent>_<attr>` child table.
+    `Kind=LocalU` is handled separately (`_local_unique_constraints_for_class`).
     """
     result: list[UniqueConstraint] = []
     notes: list[str] = []
@@ -598,21 +511,10 @@ def _local_unique_constraints_for_class(cls: MetaInstance) -> tuple[dict[str, li
     """Return `({BAG/LIST attr name: [[sub-attr column, ...], ...]}, notes)` for `cls`'s own `Kind=LocalU`
     `UniqueConstraint`s.
 
-    Each `UniqueDef` entry's `PathEls` is `[role_hop, sub_attr]` (see
-    `InterlisModelBuilder._build_local_uniqueness_def` - real corpus usage
-    is always exactly this shape, e.g. `UNIQUE (LOCAL) Entries: Code;` ->
-    `PathEls=[('ReferenceAttr','Entries'), ('ReferenceAttr','Code')]`): the
-    role path (all but the last hop) must be exactly ONE hop naming the
-    `BAG`/`LIST OF` attribute, and every entry of the SAME `UniqueConstraint`
-    must share that SAME role hop (one `UNIQUE (LOCAL) X: A, B;`-style
-    compound constraint over the SAME `BAG`/`LIST`, matching the grammar's
-    own single-role-path-then-attribute-list shape) - a multi-hop role
-    path or a mix of role hops is grammatically possible but never seen in
-    the real corpus, rejected with a note rather than guessed at (RULE #7).
-    `build_tables` attaches the resulting column list as one compound
-    `UNIQUE` on the matching child table, prefixed with that table's own
-    `<parent>_fk` column (RULE #1: reuses the SAME child-table naming
-    `_build_child_table` already establishes, not a parallel convention).
+    E.g. `UNIQUE (LOCAL) Entries: Code;` -> `PathEls=[Entries, Code]`: the
+    role path must be exactly ONE hop naming the `BAG`/`LIST OF` attribute,
+    shared by every entry of the same constraint (RULE #7: a multi-hop or
+    mixed role path is grammatically possible but unseen in the corpus).
     """
     result: dict[str, list[list[str]]] = {}
     notes: list[str] = []
@@ -672,50 +574,12 @@ def build_tables(
 ) -> list[Table]:
     """Convert every `Class(Kind=Class)` in `classes` into a `Table` - the dialect-neutral IR every renderer consumes.
 
-    Unlike `convert/jsonschema.py`'s `model_to_json_schema`, this performs
-    NO reachability discovery beyond `classes` itself: a STRUCTURE-typed
-    attribute is flattened INLINE (`_columns_for_class`), never a separate
-    `Table`, so there is nothing beyond the given roots to discover
-    (see mappings/ilismeta16-to-sql-rules.yml).
-
-    `class_table_names` (`id(cls) -> str`, optional out-param) is filled
-    with the final table name chosen for every class - `build_views` uses
-    it to map a View's base classes to their tables by identity rather
-    than by re-deriving a possibly-disambiguated name.
-
-    `class_symbol_tables` (`id(cls) -> SymbolTable`, optional) overrides
-    `symbol_table` for one specific class when looking up its embedded
-    association roles (`_columns_for_class` -> `schema_members_of` ->
-    `embedded_roles_of`) - needed for a class that belongs to a DIFFERENT
-    model than `symbol_table` (e.g. `cli.cmd_convert_sql`'s `--catalog`
-    classes), whose embedding association may be declared in that OTHER
-    model's own table, never in `symbol_table`. Deliberately NOT
-    `xtf/schema.py`'s `home_symbol_table` (used by `xtf/validate.py` for
-    the analogous problem): that helper DISCOVERS the right table from a
-    bare qualified-name string via `ModelRepository`, which here would
-    return a table built by a SEPARATE parse of the same model file - a
-    different Python object graph than the one `cls` itself belongs to,
-    breaking `is_class_compatible`'s identity comparison
-    (`embedded_roles_of`'s `Super`-chain walk). The caller (`cli.py`)
-    already knows, by construction, the exact `SymbolTable` each class
-    came from (one `InterlisModelBuilder` per `--catalog` file) - passing
-    it directly keeps the class and the table it's queried against in the
-    SAME identity graph, which discovery-via-repository cannot guarantee.
-
-    Two real bugs found and fixed by executing the generated DDL against a
-    real SQLite engine, not just eyeballing the text - neither
-    was specific to one renderer, both affect PostgreSQL too:
-    1. A short `Class.Name` collision across TOPICs (real corpus cases,
-       e.g. two different `Item` classes) produced two `CREATE TABLE item`
-       statements - disambiguated the SAME way as
-       `convert/jsonschema.py`'s `_assign_keys` (`_2`/`_3` suffix).
-    2. `UNIQUE <attr>;` on an attribute whose type never resolved to a
-       mapped column (e.g. `INTERLIS.UUIDOID`, real corpus case
-       `ili_corpus/Axis_V1_1.ili`) still built a `UNIQUE` constraint
-       naming that (never-created) column - `CONSTRAINT ... UNIQUE
-       (databaseid)` referencing a column that plain doesn't exist.
-       Filtered out here (RULE #5: a note, not a crash-only-at-DDL-time
-       surprise) by cross-checking against the columns actually built.
+    No reachability discovery beyond `classes` itself: a STRUCTURE-typed
+    attribute flattens INLINE, never becomes a separate `Table`.
+    `class_table_names` (optional out-param) lets `build_views` map a
+    View's base classes to their tables by identity. `class_symbol_tables`
+    overrides `symbol_table` per-class for a `--catalog` class whose
+    embedding association lives in a different model's own table.
     """
     tables = []
     used_table_names: set[str] = set()
