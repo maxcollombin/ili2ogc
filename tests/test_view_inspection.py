@@ -1,14 +1,12 @@
 """VIEW ... INSPECTION OF ... (grammar rule inspection): AREA is OPTIONAL.
 
-Real corpus bug (LWB_Nutzungsflaechen_V3_0.ili, models.geo.admin.ch):
 `VIEW InspectionOfProgramm INSPECTION OF LNF_Nutzung_Programm ~ ... ;` (no
-AREA) raised `BuildError: [inspection] 'AREA' missing (not optional) on
-InspectionContext` - the spec/grammar/mapping/09_views_graphics.yml
-binding for inspection's `_kind` read AREA via a plain field+index
-accessor with no `optional`/`presence` flag, even though the grammar
-itself (InterlisParser.py's inspection()) only matches AREA inside an
-"if" lookahead guard - not unconditionally. Fixed by switching to the
-same `presence: true` dispatch pattern already used for
+AREA) is real corpus evidence (RULE #7, LWB_Nutzungsflaechen_V3_0.ili,
+models.geo.admin.ch) that AREA can be absent: the grammar itself
+(InterlisParser.py's inspection()) only matches AREA inside an "if"
+lookahead guard, not unconditionally, so the
+spec/grammar/mapping/09_views_graphics.yml binding for inspection's
+`_kind` uses the same `presence: true` dispatch pattern already used for
 viewDef.Abstract/Final/Transient.
 """
 

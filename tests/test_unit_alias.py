@@ -1,12 +1,12 @@
 """UNIT bracketed short-name alias (unitDef grammar: `UNIT? Name (LSBR Name RSBR)? ...`).
 
-Real corpus bug (PlanerischerGewaesserschutz_V1_1.ili/Hazard_Mapping_V1_3.ili):
+Real corpus evidence (RULE #7,
+PlanerischerGewaesserschutz_V1_1.ili/Hazard_Mapping_V1_3.ili):
 `CubicMeterPerSecond [m3sec] = (Units.m3 / INTERLIS.s);` then, elsewhere in
-the SAME file, `Menge = 0 .. 100000 [m3sec];` - the alias `m3sec` was never
-registered anywhere (only the primary Name), so the later `[m3sec]` unitRef
-raised `BuildError: unresolved reference, not attributable to an import`.
-Fixed by InterlisModelBuilder._register_unit_alias, called right after the
-normal _maybe_register_symbol registration for a unitDef instance.
+the SAME file, `Menge = 0 .. 100000 [m3sec];` - the bracketed alias must
+resolve this later `unitRef`, not just the primary Name.
+`InterlisModelBuilder._register_unit_alias` registers it right after the
+normal `_maybe_register_symbol` registration for a unitDef instance.
 """
 
 from conftest import build_from_text as _build

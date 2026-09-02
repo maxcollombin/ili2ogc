@@ -1,14 +1,12 @@
-"""Smoke test de bout en bout du ModelBuilder (voir plan de conception,
-/home/maxime/.claude/plans/rippling-kindling-swing.md). Valide le moteur
-generique (dispatch par kind, discriminant, arbre de composition via
-`parent:`, attachement par association, table de symboles) sur un modele
-minimal reel - pas une simulation.
+"""End-to-end smoke test of ModelBuilder against a real minimal model, not a
+simulation - exercises the generic engine (kind dispatch, discriminant,
+`parent:` composition tree, association attachment, symbol table).
 
-Limitations connues (gaps de spec par-regle, pas de defauts du moteur -
-voir .claude/PROGRESS.md) : la resolution de la reference de classe cible
-d'un roleDef (restrictedClassOrAssRef) n'est pas encore cablee dans
-spec/grammar/mapping/ (documentee "not yet mapped" dans sa propre note),
-donc les ForwardRef ne sont pas exercees ici de bout en bout."""
+Known limitation (a per-rule spec gap, not an engine defect - see
+.claude/PROGRESS.md): roleDef's target class reference
+(restrictedClassOrAssRef) is not yet wired in spec/grammar/mapping/
+(documented "not yet mapped" in its own note), so ForwardRef resolution is
+not exercised end-to-end here."""
 
 from pathlib import Path
 
@@ -20,7 +18,7 @@ FIXTURE = Path(__file__).parent / "fixtures/minimal_model.ili"
 
 @pytest.fixture(scope="module")
 def builder_and_model():
-    # gaps de spec connus, voir docstring (warnings suppressed by build_from_file_with_model)
+    # known spec gaps, see docstring (warnings suppressed by build_from_file_with_model)
     return build_from_file_with_model(FIXTURE)
 
 

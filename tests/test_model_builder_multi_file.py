@@ -1,10 +1,9 @@
-"""Resolution multi-fichiers (IMPORTS) : voir le plan de conception
-/home/maxime/.claude/plans/rippling-kindling-swing.md. `importer.ili`
-importe `base.ili` et reference une de ses DOMAIN par nom qualifie
-(`Base.PersonKind`) - sans ModelRepository, cette reference resterait un
-UnresolvedNamedReference (comportement V1) ; avec un ModelRepository
-pointant sur le repertoire des fixtures, elle doit resoudre vers
-l'instance EnumType reelle construite depuis base.ili."""
+"""Multi-file resolution (IMPORTS): `importer.ili` imports `base.ili` and
+references one of its DOMAIN by qualified name (`Base.PersonKind`) -
+without a ModelRepository this reference stays an
+UnresolvedNamedReference (V1 behavior); with a ModelRepository pointing at
+the fixtures directory, it must resolve to the actual EnumType instance
+built from base.ili."""
 
 from pathlib import Path
 
@@ -18,7 +17,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures/multi_file"
 
 
 def _build(repository):
-    # gaps de spec connus, hors de portee de ce test (warnings suppressed by build_from_file_with_model)
+    # known spec gaps, out of scope for this test (warnings suppressed by build_from_file_with_model)
     return build_from_file_with_model(FIXTURES_DIR / "importer.ili", repository=repository)
 
 
@@ -70,7 +69,7 @@ def test_availability_builtin_available_missing_and_failed(repository):
     """`ModelRepository.availability()`, proactively verifying header-vs-resolved
     completeness for `interlis validate`: all 4 possible states, each
     exercised concretely (not just "one of the 4 works", RULE #1)."""
-    _build(repository)  # lie bind_builder_factory (necessaire a _get_table)
+    _build(repository)  # binds bind_builder_factory (needed by _get_table)
     assert repository.availability("INTERLIS") == "builtin"
     assert repository.availability("Base") == "available"
     assert repository.availability("NoSuchModel") == "missing"
@@ -150,18 +149,18 @@ def test_extends_cross_model_short_name_collision_resolves_to_imported_class():
     )
     sup = getattr(cls, "Super", None)
     assert sup is not None
-    assert sup is not cls  # RULE #6 - le self-loop exact du bug
+    assert sup is not cls  # RULE #6 - the exact self-loop from the bug
     assert sup.Name == "ModInfo"
     assert list(attributes_of(cls)) == ["LatestModification"]
 
 
-# --- `IMPORTS UNQUALIFIED` + short-name collision entre un modele de base
-# et son extension DANS LE MEME FICHIER (forme reelle de
+# --- `IMPORTS UNQUALIFIED` + short-name collision between a base model
+# and its extension WITHIN THE SAME FILE (real shape of
 # Localisation_V1.MultilingualText / LocalisationCH_V1.MultilingualText,
-# importe non qualifie par WasserBase_Codelisten_V1_1 et consorts) : la
-# reference nue `Multiling` doit se lier a DerivedLoc.Multiling, PAS rester
-# UnresolvedNamedReference parce que la table du fichier partage porte
-# aussi BaseLoc.Multiling (meme nom court, meme kind `Class`). ---
+# imported unqualified by WasserBase_Codelisten_V1_1 and others): the bare
+# reference `Multiling` must bind to DerivedLoc.Multiling, NOT stay an
+# UnresolvedNamedReference just because the shared file's table also
+# carries BaseLoc.Multiling (same short name, same kind `Class`). ---
 
 UNQUALIFIED_COLLISION_DIR = Path(__file__).parent / "fixtures/imports_unqualified_short_name_collision"
 
