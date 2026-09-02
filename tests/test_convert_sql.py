@@ -8,9 +8,11 @@ import sqlite3
 import pytest
 from conftest import build_from_text
 
+from interlis.convert.jsonfg import _sql_identifier as _jsonfg_sql_identifier
 from interlis.convert.sql import (
     Column,
     UniqueConstraint,
+    _sql_identifier,
     _truncate_identifier,
     build_tables,
     render_gpkg,
@@ -959,3 +961,28 @@ def test_truncate_identifier_hash_suffix_avoids_collision_on_shared_prefix():
 def test_truncate_identifier_is_deterministic():
     long_name = "fk_" + "y" * 80
     assert _truncate_identifier(long_name) == _truncate_identifier(long_name)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        "A",
+        "RoadSegment",
+        "roadsegment",
+        "ROAD_SEGMENT",
+        "Waldabstand_Linie",
+        "MultilingualText_de_fr_it",
+        "a1B2c3",
+        "fk_countrynamestranslation_entries_countrynamestranslation_fk_code",
+    ],
+)
+def test_sql_identifier_matches_jsonfg_copy(name):
+    """`convert/sql.py::_sql_identifier` and `convert/jsonfg.py::_sql_identifier` are 2 manually-synced copies.
+
+    `jsonfg.py` can't import from `sql.py` (the reverse import already
+    exists, `_meta_value`, so importing back would be circular) - this
+    guards the "kept manually in sync" claim in both docstrings against
+    silent drift if either copy is ever edited alone.
+    """
+    assert _sql_identifier(name) == _jsonfg_sql_identifier(name)
