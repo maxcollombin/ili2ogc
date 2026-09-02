@@ -1,10 +1,9 @@
-"""Lot 39 - verification PROACTIVE de completude header-vs-resolu pour
-`interlis validate` (jusqu'ici paresseuse, voir Lot 36/38 : seuls les
-modeles REELLEMENT references par un attribut/role effectivement rencontre
-etaient charges - un modele du header jamais exerce par les donnees
-restait invisible, disponible ou non). Reutilise les fixtures
-`tests/fixtures/multi_file/` (Base disponible, BrokenSyntax indexe mais en
-echec, NoSuchModel absent), meme corpus que `test_model_builder_multi_file.py`."""
+"""PROACTIVE header-vs-resolved completeness check for `interlis validate`
+(previously lazy: only models ACTUALLY referenced by an attribute/role
+actually encountered were loaded - a header model never exercised by the
+data stayed invisible, available or not). Reuses the fixtures
+`tests/fixtures/multi_file/` (Base available, BrokenSyntax indexed but
+failed, NoSuchModel absent), same corpus as `test_model_builder_multi_file.py`."""
 
 from pathlib import Path
 

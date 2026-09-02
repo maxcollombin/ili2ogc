@@ -1,4 +1,4 @@
-"""Lot 1-3 (backlog item 5, second stage) - .xtf -> JSON-FG, Feature/FeatureCollection + single-attribute geometry.
+""".xtf -> JSON-FG, Feature/FeatureCollection + single-attribute geometry.
 
 See docs/jsonfg-conversion-strategy.md for the design decision and scope
 (JSON-FG "core" + "types-schemas" requirements classes only).
@@ -643,7 +643,7 @@ def test_multi_geometry_class_with_mismatched_crs_gets_no_place():
 
 
 def test_without_meta_capture_crs_is_unresolved():
-    """`meta_attributes` is opt-in (Lot 3, .ili side) - without it, even a CRS-carrying domain yields no place."""
+    """`meta_attributes` is opt-in on the `.ili` side - without it, even a CRS-carrying domain yields no place."""
     builder = _build(_GEOM_MODEL, capture_meta=False)
     cls = _resolved_class(builder, "APoint")
     obj = XtfObject(

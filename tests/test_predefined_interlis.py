@@ -1,12 +1,12 @@
-"""Modele "INTERLIS" predefini (Lot 23) : Reference Manual eCH-0031 V2.1.0,
-Annexe A - NOOID/ANYOID/I32OID/STANDARDOID/UUIDOID, toujours disponible
-qualifie (`INTERLIS.I32OID`) et disponible non qualifie uniquement via
-`IMPORTS UNQUALIFIED INTERLIS;` (voir ModelRepository._BUILTIN_SOURCES,
+"""Predefined "INTERLIS" model: Reference Manual eCH-0031 V2.1.0, Annex A -
+NOOID/ANYOID/I32OID/STANDARDOID/UUIDOID, always available qualified
+(`INTERLIS.I32OID`) and available unqualified only via
+`IMPORTS UNQUALIFIED INTERLIS;` (see ModelRepository._BUILTIN_SOURCES,
 ForwardRefResolver._resolve_one, InterlisModelBuilder._register_unqualified_imports).
 
-Couvre aussi la regression corrigee au passage (has_prefix) : une reference
-NON qualifiee introuvable localement, dans un fichier SANS aucun `IMPORTS
-UNQUALIFIED`, doit rester une erreur (BuildError) - pas etre masquee."""
+Also covers a regression fixed along the way (has_prefix): an UNqualified
+reference not found locally, in a file with NO `IMPORTS UNQUALIFIED` at
+all, must remain an error (BuildError) - not get silently masked."""
 
 import warnings
 from pathlib import Path
@@ -45,9 +45,9 @@ def test_qualified_reference_resolves_without_any_repository():
     assert not isinstance(type_value, UnresolvedNamedReference)
     assert type_value._qualified_class == "IlisMeta16.ModelData.NumType"
     assert type_value.Name == "I32OID"
-    # Min/Max : corrige au Lot 25 (voir test_numeric_domain_min_max.py) -
-    # verifie ici aussi puisque I32OID est un NumType construit via le
-    # meme chemin (domainDef -> numeric() nu -> visit_wrapped).
+    # Min/Max (see test_numeric_domain_min_max.py) - verified here too
+    # since I32OID is a NumType built via the same path (domainDef ->
+    # bare numeric() -> visit_wrapped).
     assert type_value.Min == "0"
     assert type_value.Max == "2147483647"
 
@@ -71,13 +71,12 @@ def test_import_instance_resolves_to_real_interlis_model():
 
 
 def test_qualified_gregorian_year_resolves_to_numtype_with_manual_range():
-    """Lot 47 point 3 : `INTERLIS.GregorianYear` (RULE #4, eCH-0031 V2.1.0
-    §3.8.7 "Datum und Zeit", `DOMAIN GregorianYear = 1582 .. 2999 [Y]
-    {GregorianCalendar};` - unite/annotation volontairement omises, voir
-    repository.py) doit resoudre en NumType Min=1582/Max=2999, comme
-    I32OID ci-dessus - PAS un type_kind=None jamais verifie (bug confirme
-    reel sur RoadTrafficAccidentLocation_V2.ili/RoadTrafficCensus_V1_1.ili
-    avant ce lot)."""
+    """`INTERLIS.GregorianYear` (RULE #4, eCH-0031 V2.1.0 §3.8.7 "Datum und
+    Zeit", `DOMAIN GregorianYear = 1582 .. 2999 [Y] {GregorianCalendar};` -
+    unit/annotation deliberately omitted, see repository.py) must resolve
+    to NumType Min=1582/Max=2999, like I32OID above - NOT a type_kind=None
+    that was never checked (bug confirmed real on
+    RoadTrafficAccidentLocation_V2.ili/RoadTrafficCensus_V1_1.ili)."""
     _, model = _build("gregorian_year_ref.ili", repository=None)
     topic = model.Element[0]
     thing = topic.Element[0]
@@ -94,7 +93,7 @@ def test_qualified_xml_date_time_resolve_to_formattedtype():
     """`INTERLIS.XMLDate`/`XMLTime`/`XMLDateTime` (eCH-0031 V2.1.0 §3.8.7 "Datum und Zeit") must resolve to a real
     FormattedType, not type_kind=None.
 
-    Confirmed a real, corpus-wide gap (2026-08-27, distinct from the
+    Confirmed a real, corpus-wide gap (distinct from the
     ANYOID/UUIDOID/BOOLEAN grammar-level exclusions documented in
     docs/dev-notes/predefined-interlis-namespace.md): 30 real `ili_corpus/`
     files declare an attribute directly as `INTERLIS.XMLDate`, all of which

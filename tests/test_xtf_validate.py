@@ -1,11 +1,11 @@
-"""Tests du validateur semantique XTF (Lot 30, src/interlis/xtf/{schema,validate}.py)
-contre le schema reel construit depuis tests/fixtures/minimal_model.ili (Person:
-Name MANDATORY TEXT, BirthYear 1800..2100, Kind (Adult,Child) - couvre les 3
-verifications de type de base + MANDATORY + classe/attribut inconnus en une
-seule fixture reutilisee de test_model_builder_minimal.py). Construit des
-XtfObject/RawNode synthetiques directement en Python plutot qu'un vrai .xtf
-sur disque - la couche structurelle (parse.py) est deja testee separement
-(test_xtf_parse.py), ce fichier teste uniquement le croisement schema/donnees."""
+"""Tests for the semantic XTF validator (src/interlis/xtf/{schema,validate}.py)
+against the real schema built from tests/fixtures/minimal_model.ili (Person:
+Name MANDATORY TEXT, BirthYear 1800..2100, Kind (Adult,Child) - covers the 3
+basic type checks + MANDATORY + unknown class/attribute in a single fixture
+reused from test_model_builder_minimal.py). Builds synthetic XtfObject/RawNode
+directly in Python rather than a real .xtf on disk - the structural layer
+(parse.py) is already tested separately (test_xtf_parse.py), this file only
+tests the schema/data cross-check."""
 
 from pathlib import Path
 
@@ -75,12 +75,12 @@ def test_numeric_out_of_range_flagged(builder):
 
 
 def test_numeric_within_rounding_tolerance_has_no_issue(builder):
-    """Lot 48 - RULE #4, eCH-0031 V2.1.0 §2.8 "Umgang mit Rundung von
-    numerischen Werten und Koordinaten" / §4.3.11.4 "Codierung von
-    numerischen Datentypen" : une valeur peut etre transferee avec une
-    precision SUPERIEURE a celle du domaine (BirthYear: 1800..2100, 0
-    decimale) - seul compte qu'elle arrondit dans la plage. 1799.6
-    arrondit a 1800, ne doit PAS etre signalee < Min."""
+    """RULE #4, eCH-0031 V2.1.0 §2.8 "Umgang mit Rundung von numerischen
+    Werten und Koordinaten" / §4.3.11.4 "Codierung von numerischen
+    Datentypen": a value may be transferred with a precision HIGHER than
+    the domain's own (BirthYear: 1800..2100, 0 decimals) - all that
+    matters is that it rounds into range. 1799.6 rounds to 1800, must NOT
+    be flagged < Min."""
     transfer = _transfer(_object("t1", {"Name": "Alice", "BirthYear": "1799.6"}))
     issues = validate_transfer(transfer, symbol_table=builder.symbol_table)
     assert _messages(issues, attribute="BirthYear") == []
@@ -126,7 +126,7 @@ def test_unknown_class_flagged(builder):
     assert "absent from the resolved schema" in issues[0].message
 
 
-# --- Lot 31 : resolution TID/REF cross-panier (tests/fixtures/xtf/reference_model.ili :
+# --- Cross-basket TID/REF resolution (tests/fixtures/xtf/reference_model.ili :
 # Indicator.RefLocation, REFERENCE TO Location) ---
 
 REF_FIXTURE = Path(__file__).parent / "fixtures/xtf/reference_model.ili"
@@ -140,9 +140,9 @@ def ref_builder():
 
 
 def _ref_attr(name: str, target_tid: str) -> tuple[str, list[RawNode]]:
-    """Forme reelle "REF nu sur le noeud du role" (Lot 31, confirmee sur
-    rMeasurementLocation) - la plus simple des 3 formes, suffisante pour
-    exercer _extract_reference (deja testee structurellement par ailleurs)."""
+    """Real-world form "bare REF on the role node" (confirmed on
+    rMeasurementLocation) - the simplest of the 3 forms, sufficient to
+    exercise _extract_reference (already tested structurally elsewhere)."""
     return name, [RawNode(tag=name, text=None, attrib={"REF": target_tid}, children=[])]
 
 
@@ -162,10 +162,9 @@ def test_reference_resolved_within_same_basket_has_no_issue(ref_builder):
 
 
 def test_reference_resolved_across_different_baskets_has_no_issue(ref_builder):
-    """Une reference peut viser un objet d'un AUTRE panier du meme
-    transfert (cas reel confirme, voir docstring _build_tid_index) -
-    l'index doit couvrir TOUS les paniers, pas seulement celui de
-    l'objet source."""
+    """A reference can target an object in a DIFFERENT basket of the same
+    transfer (confirmed real case, see _build_tid_index's docstring) -
+    the index must cover ALL baskets, not just the source object's own."""
     location = XtfObject(tid="loc-1", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Bern")]))
     indicator = XtfObject(
         tid="ind-1",
@@ -193,8 +192,8 @@ def test_reference_target_not_found_is_warning_not_error(ref_builder):
     assert _messages(issues, attribute="RefLocation", severity="error") == []
 
 
-# --- Lot 40 : compatibilite de classe d'une reference RESOLUE (RefLocation
-# declare REFERENCE TO Location - fixture etendue avec SpecialLocation
+# --- Class compatibility of a RESOLVED reference (RefLocation declares
+# REFERENCE TO Location - fixture extended with SpecialLocation
 # EXTENDS Location, tests/fixtures/xtf/reference_model.ili) ---
 
 
@@ -214,9 +213,9 @@ def test_reference_resolved_to_declared_class_has_no_issue(ref_builder):
 
 
 def test_reference_resolved_to_subclass_is_compatible(ref_builder):
-    """Polymorphisme INTERLIS standard : une reference declaree vers
-    Location doit accepter une cible reelle de type SpecialLocation
-    (EXTENDS Location) sans le signaler comme incompatible."""
+    """Standard INTERLIS polymorphism: a reference declared to Location
+    must accept a real target of type SpecialLocation (EXTENDS Location)
+    without flagging it as incompatible."""
     special = XtfObject(
         tid="loc-1",
         qualified_class="RefTest.MainTopic.SpecialLocation",
@@ -259,11 +258,10 @@ def test_reference_resolved_to_incompatible_class_is_error(ref_builder):
     assert any("incompatible" in m for m in msgs)
 
 
-# --- Lot 32 : roles d'association embarques comme pseudo-attributs
-# (tests/fixtures/xtf/reference_model.ili : ASSOCIATION Location_Indicator
-# = rLocation -<#> Location; rIndicator -- {0..*} Indicator; - meme forme
-# que ASSOCIATION MeasurementLocation_Indicator sur le corpus reel
-# RoadTrafficCensus_V1_1) ---
+# --- Embedded association roles as pseudo-attributes (tests/fixtures/xtf/
+# reference_model.ili : ASSOCIATION Location_Indicator = rLocation -<#>
+# Location; rIndicator -- {0..*} Indicator; - same shape as ASSOCIATION
+# MeasurementLocation_Indicator in the real RoadTrafficCensus_V1_1 corpus) ---
 
 
 def test_embedded_role_resolved_is_not_unknown_attribute(ref_builder):
@@ -284,11 +282,11 @@ def test_embedded_role_resolved_is_not_unknown_attribute(ref_builder):
 
 
 def test_embedded_role_not_exposed_on_opposite_class(ref_builder):
-    """rLocation ne doit PAS apparaitre comme pseudo-attribut de Location
-    elle-meme (il s'embarque uniquement cote Indicator, la classe dont le
-    role oppose - rIndicator - a une cardinalite {0..*}) - meme si Location
-    porte par ailleurs un AUTRE role reellement embarque sur elle-meme
-    (rNote, ASSOCIATION Location_Note, voir tests Lot 47 ci-dessous)."""
+    """rLocation must NOT appear as a pseudo-attribute of Location itself
+    (it embeds only on the Indicator side, the class whose opposite role
+    - rIndicator - has cardinality {0..*}) - even though Location does
+    carry ANOTHER role genuinely embedded on itself (rNote, ASSOCIATION
+    Location_Note, see the tests further below)."""
     from interlis.xtf.schema import embedded_roles_of, resolve_class
 
     location_cls = resolve_class(LOCATION_CLASS, symbol_table=ref_builder.symbol_table, repository=None)
@@ -308,14 +306,14 @@ def test_embedded_role_unresolved_ref_is_warning(ref_builder):
     assert any("not found in this transfer" in m for m in msgs)
 
 
-# --- Lot 47 : embedded_roles_of doit suivre la chaine EXTENDS (tests/fixtures/
-# xtf/reference_model.ili : ASSOCIATION Location_Note embarque rNote sur
-# Location - CLASS SpecialLocation EXTENDS Location (deja utilisee par les
-# tests Lot 40 ci-dessus) doit donc HERITER ce pseudo-attribut, confirme reel
-# (RULE #4) responsable de 93-95% des avertissements sur
-# IVS_V2_1_national/regional_lokal_LV95.xtf avant ce lot - CLASS ivs_punkt-
-# objekte_base (ABSTRACT) porte le role embarque, les objets XTF reels sont
-# tous de la sous-classe concrete ivs_punktobjekte_lv95/_lv03.) ---
+# --- embedded_roles_of must follow the EXTENDS chain (tests/fixtures/
+# xtf/reference_model.ili : ASSOCIATION Location_Note embeds rNote on
+# Location - CLASS SpecialLocation EXTENDS Location (already used by the
+# tests above) must therefore INHERIT this pseudo-attribute, confirmed real
+# (RULE #4) as the cause of 93-95% of the warnings on
+# IVS_V2_1_national/regional_lokal_LV95.xtf - CLASS ivs_punkt-
+# objekte_base (ABSTRACT) carries the embedded role, the real XTF objects
+# are all the concrete subclass ivs_punktobjekte_lv95/_lv03.) ---
 
 SPECIAL_LOCATION_CLASS = "RefTest.MainTopic.SpecialLocation"
 
@@ -348,16 +346,16 @@ def test_embedded_role_from_base_class_resolved_on_subclass_instance_has_no_issu
     assert _messages(issues, attribute="rNote") == []
 
 
-# --- Lot 43 (suite Lot 45) : statut EXTERNAL d'un role d'association
-# embarque lui-meme (tests/fixtures/xtf/reference_model.ili : ASSOCIATION
+# --- EXTERNAL status of an embedded association role itself
+# (tests/fixtures/xtf/reference_model.ili : ASSOCIATION
 # Location_ExternalIndicator, rExtLocation (EXTERNAL) -<#> Location) ---
 
 
 def test_embedded_role_external_unresolved_ref_reports_catalogue_expected(ref_builder):
-    """rExtLocation porte sa PROPRE clause (EXTERNAL) sur le role - un REF
-    non resolu doit etre signale comme la situation NORMALE attendue
-    (meme message qu'une REFERENCE TO (EXTERNAL) ordinaire, Lot 35), pas
-    comme un signal de donnee incorrecte."""
+    """rExtLocation carries its OWN (EXTERNAL) clause on the role - an
+    unresolved REF must be flagged as the EXPECTED normal situation
+    (same message as an ordinary REFERENCE TO (EXTERNAL)), not as a
+    signal of bad data."""
     indicator = XtfObject(
         tid="ind-1",
         qualified_class=INDICATOR_CLASS,
@@ -388,7 +386,7 @@ def test_embedded_role_non_external_unresolved_ref_flags_data_issue(ref_builder)
     assert any("NOT declared as EXTERNAL" in m for m in msgs)
 
 
-# --- Lot 35 : catalogue objects (REFERENCE TO (EXTERNAL), --catalog) ---
+# --- Catalogue objects (REFERENCE TO (EXTERNAL), --catalog) ---
 
 
 def test_non_external_unresolved_ref_flags_data_issue(ref_builder):
@@ -426,10 +424,10 @@ def test_external_unresolved_ref_reports_catalogue_expected(ref_builder):
 
 
 def test_external_ref_resolved_via_catalog_argument_has_no_issue(ref_builder):
-    """Le TID d'un objet-catalogue EXTERNAL vit typiquement dans un fichier
-    .xtf SEPARE du transfert principal (Lot 35, `--catalog`) - passer ce
-    transfert-catalogue via `catalogs=` doit le rendre resoluble, exactement
-    comme un objet du transfert principal."""
+    """The TID of an EXTERNAL catalogue object typically lives in a
+    SEPARATE `.xtf` file from the main transfer (`--catalog`) - passing
+    that catalogue transfer via `catalogs=` must make it resolvable,
+    exactly like an object of the main transfer."""
     catalog_item = XtfObject(
         tid="ext.catalog.99", qualified_class=LOCATION_CLASS, attributes=dict([_text_attr("Name", "Catalogue")])
     )
@@ -457,12 +455,12 @@ def test_external_ref_resolved_via_catalog_argument_has_no_issue(ref_builder):
     assert _messages(issues_with_catalog, attribute="RefCatalogItem") == []
 
 
-# --- Lot 41 : 3e forme d'encodage XTF (CLASS RESTRICTION(A; B; ...) sur des
-# STRUCTUREs a 1 attribut, valeur texte nue - tests/fixtures/xtf/restriction_model.ili :
-# `Selector = CLASS RESTRICTION(sColor; sSize)` (2 candidats pleinement
-# verifiables, chacun un enum inline) et `SelectorWithExternal = CLASS
-# RESTRICTION(sColor; sExternal)` (1 candidat verifiable + 1 dont le type
-# interne est une reference, jamais verifiable par ce mecanisme) ---
+# --- 3rd XTF encoding form (CLASS RESTRICTION(A; B; ...) on 1-attribute
+# STRUCTUREs, bare text value - tests/fixtures/xtf/restriction_model.ili :
+# `Selector = CLASS RESTRICTION(sColor; sSize)` (2 fully verifiable
+# candidates, each an inline enum) and `SelectorWithExternal = CLASS
+# RESTRICTION(sColor; sExternal)` (1 verifiable candidate + 1 whose
+# internal type is a reference, never verifiable by this mechanism) ---
 
 RESTRICTION_FIXTURE = Path(__file__).parent / "fixtures/xtf/restriction_model.ili"
 WIDGET_CLASS = "RestrictionTest.MainTopic.Widget"
@@ -485,10 +483,10 @@ def test_restriction_text_matching_first_candidate_has_no_issue(restriction_buil
 
 
 def test_restriction_text_matching_second_candidate_has_no_issue(restriction_builder):
-    """La valeur "Small" appartient au domaine inline de sSize - le 2e candidat,
-    PAS le 1er (regression Lot 41 : la segmentation SEMI-naive tronquait
-    silencieusement `_build_domain_class_restriction` a son 1er candidat
-    seulement, avant le fix de profondeur LPAR/RPAR)."""
+    """The value "Small" belongs to sSize's inline domain - the 2nd
+    candidate, NOT the 1st (regression guard: the naive SEMI-splitting
+    used to silently truncate `_build_domain_class_restriction` to its
+    1st candidate only, before the LPAR/RPAR depth fix)."""
     obj = XtfObject(tid="w1", qualified_class=WIDGET_CLASS, attributes=dict([_text_attr("Sel", "Small")]))
     basket = XtfBasket(bid="b1", qualified_topic="RestrictionTest.MainTopic", kind=None, endstate=None, objects=[obj])
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
@@ -527,11 +525,11 @@ def test_restriction_text_with_unverifiable_candidate_is_info_not_warning(restri
     assert _messages(issues, attribute="Sel", severity="warning") == []
 
 
-# --- Lot 42 : geometrie/coordonnees (tests/fixtures/xtf/geometry_model.ili :
-# Coord2 = COORD 0..100, 0..200 ; MultiCoord2 = MULTICOORD (meme plage) ;
+# --- Geometry/coordinates (tests/fixtures/xtf/geometry_model.ili :
+# Coord2 = COORD 0..100, 0..200 ; MultiCoord2 = MULTICOORD (same range) ;
 # Line = POLYLINE VERTEX Coord2 ; MultiLine = MULTIPOLYLINE VERTEX Coord2 ;
 # Area = SURFACE VERTEX Coord2 - Point.Pos/MultiPoint.Pos/Way.Geom/
-# MultiWay.Geom/Zone.Geom, un attribut de chaque forme) ---
+# MultiWay.Geom/Zone.Geom, one attribute of each form) ---
 
 GEOMETRY_FIXTURE = Path(__file__).parent / "fixtures/xtf/geometry_model.ili"
 POINT_CLASS = "GeomTest.MainTopic.Point"
@@ -573,11 +571,11 @@ def test_coord_within_range_has_no_issue(geometry_builder):
 
 
 def test_coord_within_rounding_tolerance_has_no_issue(geometry_builder):
-    """Lot 48 - RULE #4, eCH-0031 V2.1.0 §2.8/§4.3.11.4 (meme raisonnement
-    que test_numeric_within_rounding_tolerance_has_no_issue) : Coord2 (3
-    decimales, `0.000 .. 100.000`) - une valeur transferee avec une
-    precision superieure qui arrondit encore dans la plage (100.0004 ->
-    100.000, exactement Max) ne doit PAS etre signalee."""
+    """RULE #4, eCH-0031 V2.1.0 §2.8/§4.3.11.4 (same reasoning as
+    test_numeric_within_rounding_tolerance_has_no_issue): Coord2 (3
+    decimals, `0.000 .. 100.000`) - a value transferred with higher
+    precision that still rounds into range (100.0004 -> 100.000, exactly
+    Max) must NOT be flagged."""
     obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("100.0004", "100.0")))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     assert _messages(issues, attribute="Pos") == []
@@ -609,10 +607,10 @@ def test_coord_non_numeric_component_flagged(geometry_builder):
 
 
 def test_coord_component_count_mismatch_flagged(geometry_builder):
-    """CoordType.Axis declare 2 axes - un seul C1 present doit etre signale
-    (regression directe du fix Lot 42 sur CoordType.Axis/wrap - sans lui,
-    `axes` restait toujours vide et ce desaccord n'aurait jamais pu etre
-    detecte)."""
+    """CoordType.Axis declares 2 axes - only C1 present must be flagged
+    (direct regression guard for the CoordType.Axis/wrap fix - without
+    it, `axes` always stayed empty and this mismatch could never have
+    been detected)."""
     obj = _obj(POINT_CLASS, "p1", _geom_attr("Pos", _coord_node("50.0")))
     issues = _validate_one(obj, geometry_builder.symbol_table)
     msgs = _messages(issues, attribute="Pos", severity="error")
@@ -635,10 +633,10 @@ def test_multicoord_valid_has_no_issue(geometry_builder):
 
 
 def test_polyline_valid_has_no_issue(geometry_builder):
-    """Exerce aussi le fix Lot 42 LineType.CoordType (VERTEX Coord2, jamais
-    attache avant ce lot) - sans lui, `axes` serait vide et le Max de C1
-    (100.0, hors plage volontairement testee ci-dessous par contraste)
-    resterait invisible."""
+    """Also exercises the LineType.CoordType fix (VERTEX Coord2, never
+    attached before it) - without it, `axes` would be empty and C1's Max
+    (100.0, deliberately tested out of range below by contrast) would
+    stay invisible."""
     inner = RawNode(
         tag="POLYLINE",
         text=None,
@@ -654,9 +652,8 @@ def test_polyline_valid_has_no_issue(geometry_builder):
 
 
 def test_polyline_out_of_range_vertex_flagged(geometry_builder):
-    """Preuve directe que le fix LineType.CoordType (Lot 42) alimente
-    reellement la verification de plage sur un segment de POLYLINE, pas
-    seulement la structure."""
+    """Direct proof that the LineType.CoordType fix actually feeds the
+    range check on a POLYLINE segment, not just the structure."""
     inner = RawNode(
         tag="POLYLINE",
         text=None,
@@ -673,9 +670,9 @@ def test_polyline_out_of_range_vertex_flagged(geometry_builder):
 
 
 def test_polyline_inherited_coord_type_via_extends_has_no_issue(geometry_builder):
-    """Lot 44 : DirectedLine EXTENDS Line = DIRECTED POLYLINE; (aucune
-    clause VERTEX propre, meme forme que CHBase reel) - la plage d'axe doit
-    etre retrouvee en remontant Super jusqu'a Line, pas seulement absente."""
+    """DirectedLine EXTENDS Line = DIRECTED POLYLINE; (no VERTEX clause of
+    its own, same shape as the real CHBase) - the axis range must be
+    found by walking Super up to Line, not just come back absent."""
     inner = RawNode(
         tag="POLYLINE",
         text=None,
@@ -802,9 +799,9 @@ def test_surface_valid_has_no_issue(geometry_builder):
 
 
 def test_multipolyline_valid_has_no_issue(geometry_builder):
-    """MultiWay.Geom (Lot 42 - correctif Multi, `presence: true` sur un
-    field compose etait auparavant TOUJOURS ignore par le moteur - Multi
-    contenait le TEXTE LITTERAL du token matche au lieu d'un booleen)."""
+    """MultiWay.Geom (the Multi fix - `presence: true` on a composed
+    field was previously ALWAYS ignored by the engine - Multi held the
+    LITERAL matched-token TEXT instead of a boolean)."""
     polyline_a = RawNode(
         tag="POLYLINE",
         text=None,
@@ -829,17 +826,17 @@ def test_multipolyline_valid_has_no_issue(geometry_builder):
     assert _messages(issues, attribute="Geom") == []
 
 
-# --- Lot 46 : role d'association embarque, defini dans un modele IMPORTE
+# --- Embedded association role defined in an IMPORTED model
 # (tests/fixtures/embedded_roles_cross_model/{base,importer}.ili) - EmbedBase
-# declare ASSOCIATION Parent_Child (Children -- {0..*} Child; Parent -<#> {1}
-# Parent;), donc embarque le role "Parent" sur Child. EmbedImporter (racine
-# de la validation, comme SectoralPlanForRoadInfrastructure_LV95_V1_4 dans le
-# corpus reel) IMPORTS EmbedBase mais n'a AUCUNE association propre - seule
-# la table de symboles d'EmbedBase (via ModelRepository, PAS celle
-# d'EmbedImporter) contient Parent_Child. Confirme reel (RULE #4) sur
-# 2021-01-12_SectoralPlanForRoadInfrastructure_LV95.xtf : 770 pseudo-
-# attributs (Object/SectoralPlan) faussement "absents du schema" avant ce
-# lot, correctement reconnus apres. ---
+# declares ASSOCIATION Parent_Child (Children -- {0..*} Child; Parent -<#> {1}
+# Parent;), thus embedding the role "Parent" on Child. EmbedImporter (the
+# validation root, like SectoralPlanForRoadInfrastructure_LV95_V1_4 in the
+# real corpus) IMPORTS EmbedBase but has NO association of its own - only
+# EmbedBase's own symbol table (via ModelRepository, NOT EmbedImporter's)
+# holds Parent_Child. Confirmed real (RULE #4) on
+# 2021-01-12_SectoralPlanForRoadInfrastructure_LV95.xtf: 770 pseudo-
+# attributes (Object/SectoralPlan) wrongly reported "absent from schema"
+# before this fix, correctly recognized after. ---
 
 CROSS_MODEL_FIXTURES_DIR = Path(__file__).parent / "fixtures/embedded_roles_cross_model"
 EMBED_PARENT_CLASS = "EmbedBase.MainTopic.Parent"
@@ -870,11 +867,11 @@ def test_embedded_role_from_imported_model_is_not_unknown_attribute(cross_model_
 
 
 def test_embedded_role_from_imported_model_missing_without_home_table_lookup(cross_model_builder):
-    """Regression-guard direct sur schema.py : chercher l'association dans
-    la table RACINE (EmbedImporter, sans association propre) plutot que
-    dans la table qui la declare REELLEMENT (EmbedBase, via
-    home_symbol_table) ne trouve pas le role embarque - la faute corrigee
-    par ce lot, isolee de toute la couche validate.py."""
+    """Direct regression guard on schema.py: looking up the association in
+    the ROOT table (EmbedImporter, with no association of its own) rather
+    than the table that ACTUALLY declares it (EmbedBase, via
+    home_symbol_table) fails to find the embedded role - the fault, in
+    isolation from the whole validate.py layer."""
     from interlis.xtf.schema import embedded_roles_of, home_symbol_table, resolve_class
 
     builder, repository = cross_model_builder
@@ -884,14 +881,14 @@ def test_embedded_role_from_imported_model_missing_without_home_table_lookup(cro
     assert set(embedded_roles_of(cls, home_table)) == {"Parent"}
 
 
-# --- Lot 50 : validation recursive du contenu des STRUCTURE (attributs
-# propres + BAG/LIST de structure, MultiValue) - tests/fixtures/xtf/
+# --- Recursive validation of STRUCTURE content (own attributes + BAG/LIST
+# of structure, MultiValue) - tests/fixtures/xtf/
 # structure_content_model.ili : STRUCTURE Note (Text: MANDATORY TEXT) ;
 # STRUCTURE Address (Street: MANDATORY TEXT ; Notes: BAG {0..*} OF Note) ;
 # CLASS Person (Name, HomeAddress: Address, Tags: BAG {0..*} OF Note).
-# Confirme reel (RULE #1/#4) responsable de la quasi-totalite des `info`
-# "type non verifie"/"structure sans REF reconnu" restants sur le corpus
-# XTF complet avant ce lot (MultilingualText/ModInfo/Point/Surface/
+# Confirmed real (RULE #1/#4) as the cause of nearly all the remaining
+# `info` "type not verified"/"structure with no recognized REF" on the
+# full XTF corpus before this fix (MultilingualText/ModInfo/Point/Surface/
 # KGS_PBC.Objektart-EGID-Adressen...). ---
 
 STRUCT_CONTENT_FIXTURE = Path(__file__).parent / "fixtures/xtf/structure_content_model.ili"
@@ -928,9 +925,9 @@ def _validate_struct_person(obj: XtfObject, symbol_table):
 
 
 def test_nested_structure_own_attribute_validated(struct_content_builder):
-    """`HomeAddress.Street` (MANDATORY, present) doit etre reconnu et valide
-    - PAS "type non verifie" (comportement d'avant ce lot pour toute
-    STRUCTURE sans REF)."""
+    """`HomeAddress.Street` (MANDATORY, present) must be recognized and
+    validated - NOT "type not verified" (the previous behavior for any
+    STRUCTURE without a REF)."""
     wrapper = _struct_wrapper(_text_attr("Street", "Bahnhofstrasse 1"))
     obj = _obj(PERSON_CLASS, "p1", _text_attr("Name", "Alice"), _geom_attr("HomeAddress", wrapper))
     issues = _validate_struct_person(obj, struct_content_builder.symbol_table)
@@ -938,9 +935,9 @@ def test_nested_structure_own_attribute_validated(struct_content_builder):
 
 
 def test_nested_structure_missing_mandatory_sub_attribute_flagged(struct_content_builder):
-    """`HomeAddress` present mais SANS son `Street` MANDATORY - doit etre
-    signale au chemin imbrique `HomeAddress.Street`, PAS silencieusement
-    ignore (aucune verification n'existait sur ce contenu avant ce lot)."""
+    """`HomeAddress` present but WITHOUT its `Street` MANDATORY - must be
+    flagged at the nested path `HomeAddress.Street`, NOT silently
+    ignored (no check existed on this content before this fix)."""
     wrapper = _struct_wrapper()
     obj = _obj(PERSON_CLASS, "p1", _text_attr("Name", "Alice"), _geom_attr("HomeAddress", wrapper))
     issues = _validate_struct_person(obj, struct_content_builder.symbol_table)

@@ -1,7 +1,7 @@
-"""Tests pour src/interlis/runtime/parse.py (parse_file/parse_text) -
-Lot 52 : repli ISO-8859-1 pour les fichiers .ili non-UTF-8 (RULE #1,
-confirme reel sur des variantes obsolete du corpus large models.geo.admin.ch,
-ex. obsolete/CHBase_Part1_GEOMETRY_V1_o0.ili)."""
+"""Tests for src/interlis/runtime/parse.py (parse_file/parse_text) -
+ISO-8859-1 fallback for non-UTF-8 .ili files (RULE #1, confirmed real on
+obsolete variants of the large models.geo.admin.ch corpus, e.g.
+obsolete/CHBase_Part1_GEOMETRY_V1_o0.ili)."""
 
 from pathlib import Path
 

@@ -1,10 +1,8 @@
 """CONSTRAINT attachment and Expression tree correctness.
 
-Investigation triggered by backlog item 8's WHERE-clause scope decision
-(.claude/PROGRESS.md, item 8 Lot C/D): a real `MANDATORY CONSTRAINT` build
-revealed several real, previously undetected bugs - nothing in this
-runtime evaluated an Expression tree before, so none of this was ever
-exercised:
+A real `MANDATORY CONSTRAINT` build revealed several real, previously
+undetected bugs - nothing in this runtime evaluated an Expression tree
+before, so none of this was ever exercised:
 
 - 4 of 5 constraint-producing rules (`mandatoryConstraint`/
   `plausibilityConstraint`/`uniquenessConstraint`/`setConstraint`) had no
@@ -244,11 +242,11 @@ def test_others_enumeration_constant_value():
 
 
 def test_predefined_function_call_builds_a_real_functioncall_not_its_bare_argument():
-    """Real corpus bug (2026-08-27, `ili_corpus/Naturereigniskataster_MGDM_V1.ili`): `factor`'s `INTERLIS DOT
-    (Name|URI|UUIDOID) (LPAR ... RPAR)?` alternative had no `when_present` branch, so the generic pass-through swept
-    past the `INTERLIS.len` wrapper and returned the single argument's OWN built value - `INTERLIS.len(ASV) == 3` built
-    identically to plain `ASV == 3`, silently evaluating/serializing the wrong condition downstream (see
-    spec/grammar/mapping/07_constraints.yml's `factor.INTERLIS` entry).
+    """`factor`'s `INTERLIS DOT (Name|URI|UUIDOID) (LPAR ... RPAR)?` alternative had no `when_present` branch, so the
+    generic pass-through swept past the `INTERLIS.len` wrapper and returned the single argument's OWN built value -
+    `INTERLIS.len(ASV) == 3` built identically to plain `ASV == 3`, silently evaluating/serializing the wrong
+    condition downstream (see spec/grammar/mapping/07_constraints.yml's `factor.INTERLIS` entry; real-world shape
+    from `ili_corpus/Naturereigniskataster_MGDM_V1.ili`).
     """
     cls = _class_with_constraint("MANDATORY CONSTRAINT (INTERLIS.len(ASV)) == 3;")
     call = cls.Constraint[0].LogicalExpression.SubExpressions[0]

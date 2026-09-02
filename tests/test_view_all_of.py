@@ -1,7 +1,7 @@
 """VIEW ... ATTRIBUTE ALL OF <Name>; -> View.ClassAttribute.
 
-Real gap found while adding VIEW support to InterlisModelBuilder (backlog
-item 8, .claude/PROGRESS.md): spec/grammar/mapping/09_views_graphics.yml's
+Real gap found while adding VIEW support to InterlisModelBuilder:
+spec/grammar/mapping/09_views_graphics.yml's
 `viewAttributes.all_of_redefinition` binding is `status: not_applicable` by
 design ("ALL OF Name" has no dedicated metamodel construct of its own - see
 that entry's note) and documents that the ModelBuilder itself must expand
@@ -19,8 +19,8 @@ can still be an unresolved ForwardRef at construction time for a
 forward/cross-file base).
 
 Real corpus caveat, confirmed by direct AST inspection and since FIXED at
-the grammar level (2026-08-24, `vendor/interlis-antlr4/InterlisParser.g4`,
-matching the official EBNF, Reference Manual eCH-0031 V2.1.0 §3.15):
+the grammar level (`vendor/interlis-antlr4/InterlisParser.g4`, matching
+the official EBNF, Reference Manual eCH-0031 V2.1.0 §3.15):
 `ili_corpus/ERKAS_Strassen_V2_0.ili`'s `VIEW vVA`/`vER` each have TWO
 consecutive "ALL OF <Name>;" statements (one per JOIN OF base) - the
 grammar's OLD `viewAttributes()` only supported ONE "ALL OF" per call (a

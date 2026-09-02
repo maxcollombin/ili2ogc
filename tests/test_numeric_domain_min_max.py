@@ -1,4 +1,4 @@
-"""NumType.Min/Max (Lot 25) : numeric()._refsys_clause (spec/grammar/mapping/06_types.yml)
+"""NumType.Min/Max: numeric()._refsys_clause (spec/grammar/mapping/06_types.yml)
 always builds a NumsRefSys instance via _build_nested, even when no refsys
 clause is present in the source - all its fields stay None (hollow). Before
 the fix, InterlisModelBuilder._relay's "single wrapped MetaInstance" fast

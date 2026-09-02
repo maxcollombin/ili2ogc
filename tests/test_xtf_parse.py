@@ -1,9 +1,9 @@
-"""Parseur structurel XTF (Lot 26/27) : couvre les 3 formes d'attribut
-trouvees sur le corpus reel (data.geo.admin.ch, voir
-scripts/fetch_xtf_corpus.py) - simple, reference imbriquee
-(<Reference REF="..."/>), coordonnee (<COORD><C1>/<C2></COORD>) - via une
-fixture reduite (tests/fixtures/xtf/sample.xtf, extrait fidele d'un
-fichier reel telecharge, pas invente)."""
+"""Structural XTF parser: covers the 3 attribute forms found in the real
+corpus (data.geo.admin.ch, see scripts/fetch_xtf_corpus.py) - simple,
+nested reference (<Reference REF="..."/>), coordinate
+(<COORD><C1>/<C2></COORD>) - via a reduced fixture
+(tests/fixtures/xtf/sample.xtf, a faithful extract of a real downloaded
+file, not invented)."""
 
 from pathlib import Path
 

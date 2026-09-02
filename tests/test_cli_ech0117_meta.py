@@ -319,7 +319,7 @@ def test_convert_sql_folds_in_a_referenced_structure_but_not_an_unreferenced_lib
     assert 'CREATE TABLE "dictionary"' not in ddl  # unreferenced library class - not folded
 
 
-# --- shared diagnostics core (Lot 2): --output-format / --report / --strict / exit codes ---
+# --- shared diagnostics core: --output-format / --report / --strict / exit codes ---
 
 _MODEL_WITH_UNSUPPORTED_CHECK = """INTERLIS 2.4;
 MODEL Deg AT "http://x" VERSION "1" =

@@ -2,8 +2,7 @@
 InterlisModelBuilder._apply_pending_mandatory_overrides.
 
 See docs/sql-conversion-strategy.md ("One more real gap found") for the
-full investigation: found while building backlog item 14 (SQL DDL). Every
-attribute referencing a named domain resolves to the SAME registered
+full investigation. Every attribute referencing a named domain resolves to the SAME registered
 DomainType instance (confirmed empirically) - `DomainType.Mandatory` is
 the only place `MANDATORY` can attach in this metamodel (`AttrOrParam`
 itself has none), so naively setting it there would incorrectly mark

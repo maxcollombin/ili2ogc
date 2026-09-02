@@ -1,4 +1,4 @@
-"""CLI wiring for `interlis write-xtf` (backlog item 15)."""
+"""CLI wiring for `interlis write-xtf`."""
 
 from pathlib import Path
 

@@ -1,5 +1,4 @@
-"""Backlog item 14, Lot 1 - .ili -> SQL DDL (PostgreSQL + GeoPackage/SQLite): tables, columns, UNIQUE/FOREIGN KEY
-constraints.
+""".ili -> SQL DDL (PostgreSQL + GeoPackage/SQLite): tables, columns, UNIQUE/FOREIGN KEY constraints.
 
 See docs/sql-conversion-strategy.md for the design decision and scope.
 """
@@ -88,9 +87,9 @@ def test_geometry_column_uses_sfa_type_and_resolved_srid():
     assert geom.geometry_type == "Point"
     assert geom.srid == 2056
     # `MANDATORY <named domain>` (e.g. `Geom : MANDATORY Coord2D;`) is a
-    # reference to a domain SHARED by every attribute using it - fixed
-    # 2026-08-27 (InterlisModelBuilder._apply_pending_mandatory_overrides,
-    # see docs/sql-conversion-strategy.md): this attribute gets its OWN
+    # reference to a domain SHARED by every attribute using it
+    # (InterlisModelBuilder._apply_pending_mandatory_overrides, see
+    # docs/sql-conversion-strategy.md): this attribute gets its OWN
     # private, Mandatory=True clone of Coord2D, never mutating the shared
     # domain instance any OTHER attribute might still reference.
     assert not geom.nullable
@@ -179,7 +178,7 @@ def test_reference_becomes_fk_column_and_constraint():
 
 def test_foreign_key_dropped_when_target_not_converted():
     """A REFERENCE TO target NOT in `classes` (real corpus case: a cross-model reference) keeps its column but drops the
-    FK - never a dangling `REFERENCES` (found via a live PostGIS run, 2026-08-27).
+    FK - never a dangling `REFERENCES` (verified against a live PostGIS run).
     """
     builder = _build(_MODEL)
     parcel = _resolved_class(builder, "Foo.T.Parcel")
@@ -377,8 +376,8 @@ def test_render_gpkg_non_spatial_table_registered_as_attributes():
 
 
 def test_duplicate_class_name_across_topics_gets_disambiguated():
-    """Real corpus case (multiple files): two different classes named "Item" in different TOPICs - found via a live
-    SQLite/PostgreSQL run, 2026-08-27 ("table already exists").
+    """Real corpus case (multiple files): two different classes named "Item" in different TOPICs - a live
+    SQLite/PostgreSQL run rejects the naive DDL with "table already exists".
     """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
@@ -456,7 +455,7 @@ END Foo.
 
 def test_attribute_literally_named_id_gets_renamed_not_the_identity_column():
     """Real corpus case (ili_corpus/WasserBase_V1_1.ili): `ID : MANDATORY TEXT*25;` lowercases to the SAME name as the
-    reserved identity column - found via a live SQLite run ("duplicate column name: id"), 2026-08-27.
+    reserved identity column - a live SQLite run rejects the naive DDL with "duplicate column name: id".
     """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =
@@ -749,11 +748,11 @@ def test_check_constraint_executes_against_real_sqlite_and_enforces_the_rule():
 
 
 def test_unsupported_constraint_expression_becomes_a_note_not_a_wrong_check():
-    """Real corpus bug (2026-08-27, `ili_corpus/Naturereigniskataster_MGDM_V1.ili`): a `factor` alt this project's
-    grammar mapping used to lose entirely (`INTERLIS.len(...)`, see spec/grammar/mapping/07_constraints.yml's
-    `factor.INTERLIS` entry) collapsed to a bare attribute path - `INTERLIS.len(ParcelNr) == 3` would have silently
-    built (and rendered a CHECK for) the wrong condition `ParcelNr == 3`. Fixed at construction (a real `FunctionCall`
-    node now), so this must surface as an unsupported note - never a column comparison.
+    """Real corpus case (`ili_corpus/Naturereigniskataster_MGDM_V1.ili`): a `factor` alt the grammar mapping used to
+    lose entirely (`INTERLIS.len(...)`, see spec/grammar/mapping/07_constraints.yml's `factor.INTERLIS` entry)
+    collapsed to a bare attribute path - `INTERLIS.len(ParcelNr) == 3` would silently build (and render a CHECK for)
+    the wrong condition `ParcelNr == 3`. With a real `FunctionCall` node built at construction, this must surface as
+    an unsupported note - never a column comparison.
     """
     builder = _build("""INTERLIS 2.4;
 MODEL Foo AT "http://x" VERSION "1" =

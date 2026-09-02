@@ -122,7 +122,7 @@ def test_real_corpus_pattern_compiles_full_tree():
 
 def test_function_call_raises_unsupported():
     """`INTERLIS.len(...)` (real corpus pattern, `Naturereigniskataster_*` - also used in VIEW WHERE tests)
-    builds as a `FunctionCall` node - outside constraint_eval.py's scope, so outside CQL2 Lot 1 too."""
+    builds as a `FunctionCall` node - outside constraint_eval.py's scope, so outside CQL2's scope too."""
     with pytest.raises(UnsupportedExpressionError):
         constraint_to_cql2(_constraint("MANDATORY CONSTRAINT INTERLIS.len(Datum) >= 3;"))
 

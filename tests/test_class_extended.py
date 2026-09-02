@@ -1,25 +1,23 @@
 """`CLASS X (EXTENDED)` reopening a same-named class from a `TOPIC ... EXTENDS ...` base.
 
-Real corpus gap found via item 13's VIEW-corpus pipeline
-(`.claude/PROGRESS.md`, `docs/fgdm4gs-view-strategy.md`): `ISOS_V2.ili`
-uses `TOPIC ISOS EXTENDS ISOS_V2.ISOSBase = CLASS Ortsbild (EXTENDED) =
-<additional attrs> ... END Ortsbild; ... END ISOS;` - eCH-0031 V2.1.0
-§3.5.2, exact citation: "Erweitert z.B. ein Thema T2 das Thema T1, das
-die Klasse C enthaelt, gibt es mit C (EXTENDED) innerhalb von T2 nur eine
-Klasse, naemlich C" (there is only ONE class C). `classDef.Super`
-(`spec/grammar/mapping/03_classes_and_structures.yml`) only ever fired
-for an EXPLICIT `EXTENDS classOrStructureRef` clause - `(EXTENDED)` has
-no such clause (its target is implicit: the same-named class in the
-topic named by the enclosing topic's own `EXTENDS`), so the reopening
-class was left with no `Super` at all, and any VIEW/converter reading an
-attribute inherited from the base topic's class (`name`/`id`/`kantone` in
-the real ISOS case) found nothing.
+`ISOS_V2.ili` uses `TOPIC ISOS EXTENDS ISOS_V2.ISOSBase = CLASS Ortsbild
+(EXTENDED) = <additional attrs> ... END Ortsbild; ... END ISOS;` -
+eCH-0031 V2.1.0 §3.5.2, exact citation: "Erweitert z.B. ein Thema T2 das
+Thema T1, das die Klasse C enthaelt, gibt es mit C (EXTENDED) innerhalb
+von T2 nur eine Klasse, naemlich C" (there is only ONE class C).
+`classDef.Super` (`spec/grammar/mapping/03_classes_and_structures.yml`)
+only ever fired for an EXPLICIT `EXTENDS classOrStructureRef` clause -
+`(EXTENDED)` has no such clause (its target is implicit: the same-named
+class in the topic named by the enclosing topic's own `EXTENDS`), so the
+reopening class was left with no `Super` at all, and any VIEW/converter
+reading an attribute inherited from the base topic's class
+(`name`/`id`/`kantone` in the real ISOS case) found nothing.
 
 `InterlisModelBuilder._fix_class_extended_super` approximates "one class
 C" as ordinary single inheritance (`Super` -> the base topic's class),
 reusing the existing `Super`-chain walk (`xtf.schema.attributes_of`) for
-free - confirmed on both real corpus patterns found (a sondage of the 71
-`ili_corpus/` files, 2026-08-31): a cross-MODEL, same-FILE `TOPIC EXTENDS`
+free - confirmed on both real corpus patterns found in `ili_corpus/`: a
+cross-MODEL, same-FILE `TOPIC EXTENDS`
 (`CHBase_Part4_ADMINISTRATIVEUNITS_V1.ili`'s `AdministrativeUnion`/
 `Agency`, 2 hits) and a cross-file one via `IMPORTS` (`ISOS_V2.ili`,
 `Naturereigniskataster_umfassend_V1.ili`, 19 hits) - the fixtures here

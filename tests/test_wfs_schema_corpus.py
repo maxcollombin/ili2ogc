@@ -1,7 +1,7 @@
 """The frozen geodienste.ch WFS `DescribeFeatureType` corpus (`tests/fixtures/wfs-schemas/`).
 
 A published cantonal geoservice's schema is the ground-truth oracle for
-which attributes a derived-VIEW `.ili` should expose (backlog item 11).
+which attributes a derived-VIEW `.ili` should expose.
 Unlike the transfer data, a `DescribeFeatureType` response is a small,
 stable XSD - so it lives in the repo as a frozen fixture. Captured (and
 refreshed) by the overlay's `scripts/fetch_wfs_schemas.py`; reproduction

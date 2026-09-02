@@ -67,10 +67,9 @@ def test_repository_indexes_declared_model_names(repository):
 
 
 def test_availability_builtin_available_missing_and_failed(repository):
-    """Lot 39 - `ModelRepository.availability()`, verification proactive de
-    completude header-vs-resolu pour `interlis validate` : les 4 etats
-    possibles, chacun exerce concretement (pas seulement "un des 4 marche",
-    RULE #1)."""
+    """`ModelRepository.availability()`, proactively verifying header-vs-resolved
+    completeness for `interlis validate`: all 4 possible states, each
+    exercised concretely (not just "one of the 4 works", RULE #1)."""
     _build(repository)  # lie bind_builder_factory (necessaire a _get_table)
     assert repository.availability("INTERLIS") == "builtin"
     assert repository.availability("Base") == "available"
@@ -78,13 +77,13 @@ def test_availability_builtin_available_missing_and_failed(repository):
     assert repository.availability("BrokenSyntax") == "indexed_but_failed"
 
 
-# --- Lot 46 point 2 : `TOPIC ... EXTENDS ...` (DataUnit.Super, y compris
-# cross-modele via IMPORTS) - tests/fixtures/topic_extends/{base,importer}.ili.
+# --- `TOPIC ... EXTENDS ...` (DataUnit.Super, including cross-model via
+# IMPORTS) - tests/fixtures/topic_extends/{base,importer}.ili.
 # ExtendsBase.MainTopic (CLASS Item) + ExtendsBase.DependsOnly (DEPENDS ON
-# MainTopic, PAS d'EXTENDS - regression-guard sur le bug `index: 0` separe,
-# qui confondait la 1ere cible DEPENDS ON avec une cible EXTENDS avant ce
-# lot). ExtendsImporter.MainTopic EXTENDS ExtendsBase.MainTopic (corps vide,
-# meme forme que SectoralPlanForRoadInfrastructure_V1_4.ili reel). ---
+# MainTopic, no EXTENDS - regression guard for the separate `index: 0` bug,
+# which confused the 1st DEPENDS ON target with an EXTENDS target).
+# ExtendsImporter.MainTopic EXTENDS ExtendsBase.MainTopic (empty body, same
+# shape as the real SectoralPlanForRoadInfrastructure_V1_4.ili). ---
 
 TOPIC_EXTENDS_FIXTURES_DIR = Path(__file__).parent / "fixtures/topic_extends"
 
@@ -95,12 +94,12 @@ def _build_topic_extends(entry_file: str):
 
 
 def test_topic_extends_super_resolves_to_base_dataunit_cross_model():
-    """`TOPIC MainTopic EXTENDS ExtendsBase.MainTopic` (modele IMPORTE) doit
-    attacher `Super` a la DataUnit JUMELLE du SubModel de base resolu - pas
-    au SubModel lui-meme (type incompatible avec Inheritance.Super, qui
-    cible ExtendableME), et pas rester `None` (bug avant ce lot : la cle de
-    binding, sans `association`/`role`, faisait toujours echouer
-    `attach()`, silencieusement absorbe par `source.optional: true`)."""
+    """`TOPIC MainTopic EXTENDS ExtendsBase.MainTopic` (IMPORTED model) must
+    attach `Super` to the TWIN DataUnit of the resolved base SubModel - not
+    to the SubModel itself (type-incompatible with Inheritance.Super, which
+    targets ExtendableME), and must not stay `None` (bug: the binding key,
+    missing `association`/`role`, always made `attach()` fail, silently
+    absorbed by `source.optional: true`)."""
     _builder, model = _build_topic_extends("importer.ili")
     topic = model.Element[0]
     du = topic._twin
@@ -110,36 +109,35 @@ def test_topic_extends_super_resolves_to_base_dataunit_cross_model():
 
 
 def test_topic_without_extends_but_with_depends_on_has_no_super():
-    """Regression-guard sur le bug SEPARE trouve en corrigeant celui
-    ci-dessus : `ExtendsBase.DependsOnly` n'a AUCUN `EXTENDS`, seulement un
-    `DEPENDS ON MainTopic` - `topicRef(0)` (avant ce lot) aurait capture a
-    tort cette cible DEPENDS ON comme si c'etait une cible EXTENDS.
-    `anchor: EXTENDS` doit laisser `Super` a `None` ici."""
+    """Regression guard for a SEPARATE bug found while fixing the one
+    above: `ExtendsBase.DependsOnly` has NO `EXTENDS` at all, only a
+    `DEPENDS ON MainTopic` - a bare `topicRef(0)` would wrongly capture
+    that DEPENDS ON target as if it were an EXTENDS target.
+    `anchor: EXTENDS` must leave `Super` at `None` here."""
     _builder, model = _build_topic_extends("base.ili")
     depends_only = next(t for t in model.Element if getattr(t, "Name", None) == "DependsOnly")
     assert getattr(depends_only._twin, "Super", None) is None
 
 
-# --- Lot 49 : SymbolTable.resolve() sur une collision de nom court entre un
-# symbole LOCAL et un symbole IMPORTE (tests/fixtures/cross_model_short_name_
+# --- SymbolTable.resolve() on a short-name collision between a LOCAL
+# symbol and an IMPORTED one (tests/fixtures/cross_model_short_name_
 # collision/{base,importer}.ili) - CollisionBase.ModInfo (LatestModification:
 # MANDATORY TEXT) + CollisionImporter.MainTopic.ModInfo EXTENDS
-# CollisionBase.ModInfo (vide, aucun attribut propre) : meme forme EXACTE que
-# le cas reel trouve sur BaseModel_SectoralPlans_V1_4.ili/
+# CollisionBase.ModInfo (empty, no attribute of its own): the EXACT same
+# shape as the real case found in BaseModel_SectoralPlans_V1_4.ili/
 # CHBase_Part5_MODIFICATIONINFO_V1.ili (WithLatestModification_V1.ModInfo),
-# "ModInfo" existant LOCALEMENT ET dans le modele importe. ---
+# where "ModInfo" exists both LOCALLY and in the imported model. ---
 
 COLLISION_FIXTURES_DIR = Path(__file__).parent / "fixtures/cross_model_short_name_collision"
 
 
 def test_extends_cross_model_short_name_collision_resolves_to_imported_class():
-    """`STRUCTURE ModInfo EXTENDS CollisionBase.ModInfo` (nom qualifie, PAS
-    le nom court "ModInfo" seul) doit resoudre vers le ModInfo IMPORTE - pas
-    vers le ModInfo LOCAL lui-meme (self-loop, bug avant ce lot : `resolve()`
-    retombait sur le repli par nom court AVANT que le repli cross-fichier
-    n'ait sa chance, des qu'une correspondance qualifiee exacte manquait -
-    meme si le prefixe qualifie ("CollisionBase") ne designait PAS du tout
-    ce fichier)."""
+    """`STRUCTURE ModInfo EXTENDS CollisionBase.ModInfo` (qualified name, NOT
+    the bare short name "ModInfo") must resolve to the IMPORTED ModInfo -
+    not to the LOCAL ModInfo itself (self-loop bug: `resolve()` fell back
+    to the short-name match BEFORE the cross-file fallback got a chance,
+    as soon as an exact qualified match was missing - even when the
+    qualified prefix ("CollisionBase") didn't name this file at all)."""
     repository = ModelRepository([COLLISION_FIXTURES_DIR])
     builder = build_from_file(COLLISION_FIXTURES_DIR / "importer.ili", repository=repository)
 

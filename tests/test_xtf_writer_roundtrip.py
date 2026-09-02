@@ -1,6 +1,6 @@
 """`render_xtf`'s generic round-trip - independent of any VIEW.
 
-Answers a question raised while framing backlog item 15: does the
+Answers a question raised while framing the `write-xtf` writer: does the
 writer's core serialization work for ANY model, not just VIEW-derived
 data? Yes - `render_xtf` never inspects `XtfObject.qualified_class` for
 VIEW-ness, it just re-serializes whatever `XtfBasket`/`XtfObject`/

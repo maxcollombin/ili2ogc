@@ -1,4 +1,4 @@
-"""Backlog item 14, Lot 2 - `.ili` VIEW -> SQL `CREATE VIEW`.
+"""`.ili` VIEW -> SQL `CREATE VIEW`.
 
 A `Projection`/`Join` VIEW becomes `SELECT <attr := path> ... FROM <base
 tables, comma-joined> WHERE <translated Where predicates>` - see

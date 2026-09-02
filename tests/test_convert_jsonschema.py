@@ -1,4 +1,4 @@
-"""Lot 1 (backlog item 5) - .ili -> JSON Schema, scalar types only.
+""".ili -> JSON Schema, scalar types only.
 
 See docs/jsonschema-conversion-strategy.md for the design decision and
 mappings/ilismeta16-to-jsonschema-rules.yml /
@@ -287,7 +287,7 @@ def test_embedded_role_gets_reference_schema_with_symbol_table():
 def test_embedded_role_target_never_gets_a_defs_entry():
     """An embedded role is a REFERENCE (REF/OID), not containment - its
     target must not be pulled into $defs the way a STRUCTURE would be
-    (same as a plain REFERENCE TO target, Lot 6)."""
+    (same as a plain REFERENCE TO target)."""
     builder = _build(_ASSOCIATION_MODEL)
     classes = [
         instance
