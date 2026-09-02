@@ -51,3 +51,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked
       - run: uv run pytest
+      # Report-only, no --cov-fail-under - same non-blocking status as the
+      # mypy step in the lint job (docs/testing-strategy.md, Remediation
+      # plan phase 4). Run once (not across the whole matrix): coverage is
+      # a static property of the source tree, not of the Python version
+      # running it, and re-running it 3x would only add noise/cost.
+      - if: matrix.python-version == '3.14'
+        run: uv run pytest --cov=src/interlis --cov-report=term-missing
