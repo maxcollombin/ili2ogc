@@ -26,9 +26,8 @@ Refman SS4182/SS4728 gate VIEW transfer on `VIEW TOPIC` specifically (a VIEW ins
 `TOPIC` compiles with `ili2c` but is silently absent from the generated
 XSD and from any transfer) - `write_view_basket` doesn't enforce this
 itself (the caller already resolved `view` off a built model, where
-`ViewUnit` on the containing topic already reflects it, see
-`docs/view-transfer-format-comparison.md`), it only assembles the wire
-content once a VIEW TOPIC's basket is what's wanted.
+`ViewUnit` on the containing topic already reflects it), it only
+assembles the wire content once a VIEW TOPIC's basket is what's wanted.
 """
 
 from xml.etree import ElementTree as ET
@@ -146,8 +145,8 @@ def write_view_basket(
     "%TransferKind%...Falls das Attribut fehlt, wird FULL angenommen"
     (if the attribute is missing, FULL is assumed), and SS4182/SS4728:
     VIEW objects have no stable identity across transfers, so a VIEW
-    TOPIC basket is only ever meaningfully transferred `FULL` (see
-    `docs/view-transfer-format-comparison.md`) - omitting `KIND` is both
+    TOPIC basket is only ever meaningfully transferred `FULL` - omitting
+    `KIND` is both
     spec-faithful (never redundant) and matches a real ili2c-compiled
     schema for a simple transfer (confirmed empirically: `ili2c -oXSD`
     does not declare a `KIND` attribute at all when the model has no
@@ -241,8 +240,7 @@ def write_xtf(
     appear in this transfer at all - only VIEW instances do, refman
     SS4.3.4's "Hauptmodelle...zu welchen Objekte im Transfer vorkommen
     können"). This is the direct wire-form counterpart of "the result of
-    evaluating this VIEW" - what the item 15 spike hand-verified against
-    `ili2c`/`xmllint` (`docs/view-transfer-format-comparison.md`).
+    evaluating this VIEW" - hand-verified against `ili2c`/`xmllint`.
 
     `merge_with_source=True`: refman SS4.3.5's `DataSection = { Basket }`
     - a transfer holding arbitrarily many baskets, even across models, is
@@ -252,7 +250,7 @@ def write_xtf(
     so one file self-describes both the raw base data and its
     pre-computed VIEW result together, closer to the original
     SQL-identifier-naming-friction motivation for a `.xtf` writer at all
-    (docs/sql-conversion-strategy.md) than handing out a VIEW-only
+    than handing out a VIEW-only
     fragment. Not the default only because it widens
     what a single call has to get right at once (the untouched source
     baskets survive byte-for-byte ALONGSIDE the new one) - not because it

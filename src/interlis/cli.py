@@ -203,10 +203,10 @@ def cmd_build(args: argparse.Namespace) -> int:
     return ExitCode.OK
 
 
-# All five `View` formation laws are translated by every converter - see
-# docs/view-formation-support.md for the per-kind semantics and the parts
-# that stay a `-- NOTE` (an AGGREGATION whose columns are user-FUNCTION
-# results over the implicit AGGREGATES bag, a geometry INSPECTION).
+# All five `View` formation laws are translated by every converter,
+# except the parts that stay a `-- NOTE` (an AGGREGATION whose columns
+# are user-FUNCTION results over the implicit AGGREGATES bag, a geometry
+# INSPECTION).
 _SUPPORTED_VIEW_FORMATION_KINDS = ("Projection", "Join", "Union", "Aggregation", "Inspection")
 _SQL_VIEW_FORMATION_KINDS = _SUPPORTED_VIEW_FORMATION_KINDS
 
@@ -214,15 +214,14 @@ _SQL_VIEW_FORMATION_KINDS = _SUPPORTED_VIEW_FORMATION_KINDS
 def cmd_convert(args: argparse.Namespace) -> int:
     """Convert an .ili model to JSON Schema.
 
-    See docs/jsonschema-conversion-strategy.md and
-    mappings/ilismeta16-to-jsonschema-rules.yml for scope - a mapped type
-    outside this converter's coverage gets an explicit
+    See `mappings/ilismeta16-to-jsonschema-rules.yml` for scope - a mapped
+    type outside this converter's coverage gets an explicit
     `x-unsupported` marker rather than being silently dropped.
 
     Every `Class` becomes its own `$defs` entry, as before. A `VIEW` is
     ALSO a root, for every `FormationKind`
-    (`_SUPPORTED_VIEW_FORMATION_KINDS` - Projection/Join/Union/Aggregation/
-    Inspection, see docs/view-formation-support.md). `View` extends
+    (`_SUPPORTED_VIEW_FORMATION_KINDS` -
+    Projection/Join/Union/Aggregation/Inspection). `View` extends
     `Class` in the metamodel (`ilismeta16-classes.yml`) and its
     `ClassAttribute` list is populated the same way -
     `class_to_json_schema`/`model_to_json_schema` need no View-
@@ -257,8 +256,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         # comments were, via ModelRepository._get_table), so a model that
         # declares its own geometry domain rather than importing
         # CHBase_Part1_GEOMETRY_V1 silently lost its CRS, and MODEL-level
-        # metadata had nowhere to attach at all - see
-        # docs/ech-0117-meta-attributes.md.
+        # metadata had nowhere to attach at all.
         root = builder.build(tree, meta_attributes=meta_attribute_comments_in_file(path))
     bag.extend(builder_warnings_to_diagnostics(caught, file=str(path)))
 
@@ -385,8 +383,7 @@ def _fold_in_dependency_models(classes, views, root_table, repository, class_sym
 def cmd_convert_sql(args: argparse.Namespace) -> int:
     """Convert an .ili model to SQL DDL, PostgreSQL or GeoPackage/SQLite.
 
-    See docs/sql-conversion-strategy.md for the design decision and scope
-    - this project generates the full schema (`CREATE TABLE` + `UNIQUE` +
+    This project generates the full schema (`CREATE TABLE` + `UNIQUE` +
     `FOREIGN KEY` + `CHECK`, the latter from a row-local `MANDATORY
     CONSTRAINT`); GDAL (`ogr2ogr -append`) is expected to load the actual
     .xtf-derived data into the tables this command creates, never the
@@ -404,7 +401,7 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     `SELECT ... GROUP BY <key>`. A branch that can't be translated
     faithfully (an AGGREGATION column that is a user-FUNCTION call over the
     implicit `AGGREGATES` bag, a geometry INSPECTION) demotes that whole
-    View to a `-- NOTE` (docs/view-formation-support.md). A View's
+    View to a `-- NOTE`. A View's
     base classes live in an IMPORTED model, so pass that model via
     `--catalog` too - a View whose base table isn't in this conversion, or
     whose `Where`/`ATTRIBUTE` expressions fall outside the translatable
@@ -423,7 +420,7 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     column kept, because that target table doesn't exist in THIS
     conversion's output. A catalogue model (e.g. a value-list Class
     hierarchy extending `CatalogueObjects_V1.Catalogues.Item`) is the
-    single most common real case (docs/sql-conversion-strategy.md) - but
+    single most common real case - but
     this flag is generic, not catalogue-specific: any additional model
     works the same way.
     """
@@ -521,8 +518,7 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
     # tables (and the CREATE VIEW / FOREIGN KEY that need them) to exist.
     # Any such model that `builder.build()` already resolved through
     # `--repo` is folded in automatically here, so `--catalog` is only
-    # needed for a model NOT reachable via `--repo`. See
-    # docs/sql-conversion-strategy.md.
+    # needed for a model NOT reachable via `--repo`.
     _fold_in_dependency_models(classes, views, builder.symbol_table, repository, class_symbol_tables)
 
     class_table_names: dict[int, str] = {}
@@ -569,7 +565,7 @@ def _resolve_schema_model_path(
     """Resolve the .ili file describing `transfer`'s schema, or print an error and return the `ExitCode` to exit with.
 
     Shared between `cmd_validate` and `cmd_convert_jsonfg` (same
-    resolution rule, see docs/model-resolution-strategy.md):
+    resolution rule):
     - an explicit `--model <file.ili>` (historical behavior, still
       supported);
     - otherwise, auto-detected from the transfer itself (never a Model
@@ -609,7 +605,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     """Validate an .xtf transfer file against its schema.
 
     Checks base types, MANDATORY, structure, and cross-basket TID/REF
-    resolution (see docs/xtf-transfer-encoding-notes.md for exact scope).
+    resolution.
     Schema resolution: see `_resolve_schema_model_path`.
     """
     xtf_path = Path(args.xtf)
@@ -712,7 +708,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     """Convert an .xtf transfer to a JSON-FG FeatureCollection.
 
-    See docs/jsonfg-conversion-strategy.md for scope - the "core" and
+    Scope: the "core" and
     "types-schemas" JSON-FG requirements classes only: scalar properties,
     OID, featureType, and single-attribute point/line/polygon geometry
     (`"place"`) with its `"coordRefSys"` resolved from the eCH-0117
@@ -769,8 +765,7 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         # ModelRepository._get_table), so a model that declares its own
         # geometry domain locally (rather than importing
         # CHBase_Part1_GEOMETRY_V1) would never resolve a CRS, and "place"
-        # would silently stay unsupported - see
-        # docs/ech-0117-meta-attributes.md.
+        # would silently stay unsupported.
         builder.build(tree, meta_attributes=meta_attribute_comments_in_file(model_path))
     bag.extend(builder_warnings_to_diagnostics(caught, file=str(model_path)))
 
@@ -1067,7 +1062,7 @@ def main(argv: list[str] | None = None) -> int:
         "in the SAME run keeps its column but drops the FOREIGN KEY constraint (the target table doesn't "
         "exist in this conversion's own output). Also required to turn a VIEW into a CREATE VIEW: pass the "
         "base model(s) the VIEW's JOIN OF/PROJECTION OF classes come from, else the VIEW is emitted as a "
-        "-- NOTE - see docs/sql-conversion-strategy.md.",
+        "'-- NOTE' comment instead.",
     )
     convert_sql_parser.add_argument(
         "--lang",
@@ -1092,7 +1087,7 @@ def main(argv: list[str] | None = None) -> int:
         "--model",
         default=None,
         help="Path to the .ili file describing the expected schema. Omitted: auto-detected from the "
-        "transfer's own HEADERSECTION/DATASECTION (requires --repo, see docs/model-resolution-strategy.md).",
+        "transfer's own HEADERSECTION/DATASECTION (requires --repo).",
     )
     validate_parser.add_argument(
         "--repo",
@@ -1107,8 +1102,7 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         metavar="FILE.xtf",
         help="Additional catalogue .xtf file (repeatable) - its objects also count for TID/REF "
-        "resolution (EXTERNAL references not included in the main transfer, see "
-        "docs/model-resolution-strategy.md).",
+        "resolution (EXTERNAL references not included in the main transfer).",
     )
     validate_parser.add_argument("-q", "--quiet", action="store_true", help="Only print the final summary.")
     validate_parser.add_argument(
@@ -1129,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
         "--model",
         default=None,
         help="Path to the .ili file describing the expected schema. Omitted: auto-detected from the "
-        "transfer's own HEADERSECTION/DATASECTION (requires --repo, see docs/model-resolution-strategy.md).",
+        "transfer's own HEADERSECTION/DATASECTION (requires --repo).",
     )
     convert_jsonfg_parser.add_argument(
         "--repo",
@@ -1164,7 +1158,7 @@ def main(argv: list[str] | None = None) -> int:
         "--include-child-rows",
         action="store_true",
         help="Also emit one Feature per BAG/LIST OF occurrence, with its own 'featureType' matching a "
-        "'interlis convert-sql' child table name (see docs/sql-conversion-strategy.md) - loaded into that same "
+        "'interlis convert-sql' child table name - loaded into that same "
         "table by GDAL's own featureType-based table splitting, in the SAME 'ogr2ogr -append' as the main data. "
         "Omitted (default): BAG/LIST occurrences stay inlined as a plain JSON array property, as before.",
     )

@@ -1,9 +1,8 @@
 """.ili -> JSON Schema conversion: scalar types, STRUCTURE/BAG/LIST nesting, plain REFERENCE TO, embedded association
 roles, and ABSTRACT structure polymorphism.
 
-See docs/jsonschema-conversion-strategy.md for the design decision and
-mappings/ilismeta16-to-jsonschema-rules.yml /
-spec/conversion/jsonschema-mapping.yml for the concept/field contract this
+See `mappings/ilismeta16-to-jsonschema-rules.yml` /
+`spec/conversion/jsonschema-mapping.yml` for the concept/field contract this
 module implements. Walks IlisMeta16 instances already built by
 InterlisModelBuilder, reusing xtf.schema's type-resolution helpers
 (resolve_attribute/attributes_of/schema_members_of/enum_values) rather than
@@ -36,7 +35,7 @@ JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
 def _meta_marker(instance: MetaInstance | None) -> dict[str, str]:
     """Return `instance`'s eCH-0117 `!!@Name=Value` meta-attributes as a plain `Name -> Value` dict, or `{}`.
 
-    See docs/ech-0117-meta-attributes.md - a `MetaAttribute` is only ever
+    A `MetaAttribute` is only ever
     present when the caller built the model with `meta_attributes=...`
     (`InterlisModelBuilder.build`); otherwise `instance.MetaAttribute` is
     simply absent/empty, so this degrades to `{}` with no special-casing
@@ -89,8 +88,7 @@ def _is_integer_range(min_raw: str | None, max_raw: str | None) -> bool:
     """True if both bounds are present and neither has a decimal point.
 
     Same shape heuristic already used (read-only, not duplicated) by
-    xtf/validate.py's `_decimal_places` for range-tolerance rounding - see
-    docs/jsonschema-conversion-strategy.md.
+    xtf/validate.py's `_decimal_places` for range-tolerance rounding.
     """
     return min_raw is not None and max_raw is not None and "." not in min_raw and "." not in max_raw
 
@@ -153,11 +151,10 @@ def _formatted_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     """FormattedType always describes a formatted TEXT value - `type: string`.
 
     `Format` names a predefined/custom format (e.g. `INTERLIS.XMLDate`) or
-    a STRUCT-based template - no regex `pattern` is derived from it (see
-    docs/jsonschema-conversion-strategy.md), but the 3 recognized
-    date/time format names get the matching JSON Schema `format` hint
-    (see docs/ech-0118-gml-mapping-analysis.md, finding 1) - additive,
-    `type: string` alone still covers every legal value regardless.
+    a STRUCT-based template - no regex `pattern` is derived from it, but
+    the 3 recognized date/time format names get the matching JSON Schema
+    `format` hint - additive, `type: string` alone still covers every
+    legal value regardless.
     """
     schema: dict[str, Any] = {"type": "string"}
     json_format = _KNOWN_FORMAT_TO_JSON_FORMAT.get(getattr(type_instance, "Format", None))
@@ -174,8 +171,7 @@ def _blackbox_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     (RULE #5, same pattern as MultiValue's `x-ordered`). The
     BINARY variant additionally gets `contentEncoding: "base64"` (JSON
     Schema 2020-12 SS8.3) - matching eCH-0118 SS6.15.6, which maps BINARY
-    specifically to `xsd:base64Binary` (see
-    docs/ech-0118-gml-mapping-analysis.md, finding 1). XML has no
+    specifically to `xsd:base64Binary`. XML has no
     equivalent native JSON Schema content-shape keyword, stays plain
     `string`.
     """
@@ -190,8 +186,7 @@ def _blackbox_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
 
 def _enum_type_schema(type_instance: MetaInstance) -> dict[str, Any]:
     # "OTHERS" is a transfer-time escape valid for any INTERLIS enum
-    # (eCH-0031 SS4.3.11.3), not a declared domain value - excluded here,
-    # see docs/jsonschema-conversion-strategy.md.
+    # (eCH-0031 SS4.3.11.3), not a declared domain value - excluded here.
     values = enum_values(type_instance) - {"OTHERS"}
     return {"type": "string", "enum": sorted(values)}
 
@@ -465,8 +460,7 @@ def _attribute_schema(
     An attribute whose type falls outside the mapped set (NumType/
     TextType/EnumType/BooleanType/FormattedType/BlackboxType/CoordType/
     LineType/ReferenceType/Class/MultiValue) is never silently dropped -
-    it gets an explicit `x-unsupported` marker instead (RULE #5,
-    see docs/jsonschema-conversion-strategy.md).
+    it gets an explicit `x-unsupported` marker instead (RULE #5).
 
     `type_kind == "Class"` covers two DIFFERENT things (see `_is_structure`):
     genuine STRUCTURE nesting (`$ref`/`anyOf` if ABSTRACT, see
@@ -482,7 +476,7 @@ def _attribute_schema(
     which branch below produced the schema - real corpus evidence:
     `!!@basketRef=...` lands on the FIRST attribute right after `CLASS
     Datenbestand =` (this project's "first following construct"
-    attachment, not the CLASS itself - see docs/ech-0117-meta-attributes.md),
+    attachment, not the CLASS itself),
     confirmed empirically on `ili_corpus/Zones_reservees_V1_1_o1.ili`.
     """
     if resolved.type_kind == "MultiValue" and resolved.type_instance is not None:
@@ -613,7 +607,7 @@ def class_to_json_schema(
     `_attribute_schema`) are surfaced as a top-level `x-meta` -
     no real corpus evidence of a CLASS-level meta-attribute has been found
     so far (MODEL/DOMAIN/CONSTRAINT/ATTRIBUTE are the confirmed real
-    attachment points, see docs/ech-0117-meta-attributes.md), but the
+    attachment points), but the
     mechanism is generic (any `MetaElement`, `Class` included) and this
     costs nothing extra to support - verified by a synthetic fixture
     rather than real-corpus proof for this specific branch.
@@ -718,8 +712,7 @@ def model_to_json_schema(
     meta_attributes=...)`'s own return value for a single-MODEL file, or
     `builder.symbol_table.resolve(<Model-Name>)`) - its eCH-0117
     meta-attributes (`technicalContact`/`furtherInformation`/`IDGeoIV`,
-    by far the most common real attachment point, see
-    docs/ech-0117-meta-attributes.md) are surfaced as a top-level
+    by far the most common real attachment point) are surfaced as a top-level
     `"x-meta"`, the same mechanism already used at class/attribute level
     (`_meta_marker`). `None` (the default): omitted entirely, unchanged
     from before this parameter existed.

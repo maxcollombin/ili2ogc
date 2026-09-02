@@ -1,6 +1,5 @@
 """XTF data instance -> JSON-FG conversion: Feature/FeatureCollection, scalar properties, OID, featureType, geometry.
 
-See docs/jsonfg-conversion-strategy.md for the design decision and scope.
 `object_to_feature` converts one already-parsed XtfObject (xtf/parse.py,
 structural layer) into a JSON-FG (OGC 21-045r1) Feature object;
 `transfer_to_feature_collection` wraps every resolvable object of an
@@ -22,8 +21,7 @@ builders as the top-level `place`, which stays the ONLY thing under
 geometry-typed attributes gets a single "place" of type
 `GeometryCollection` bundling every one of them (JSON-FG issue #134 added
 `GeometryCollection` to `place.json`'s allowed types - no separate
-conformance class needed, unlike circular-arcs/polyhedra) - see
-docs/interlis-geometry-sfa-mapping.md. Reuses the schema resolution
+conformance class needed, unlike circular-arcs/polyhedra). Reuses the schema resolution
 already proven by
 xtf/validate.py (resolve_attribute/attributes_of/coord_axes/
 line_coord_type) AND its wire-tag helpers (_geom_tag/_find_child/
@@ -78,7 +76,7 @@ _SCALAR_KINDS = {"NumType", "TextType", "EnumType", "BooleanType", "FormattedTyp
 _GEOMETRY_KINDS = {"CoordType", "LineType"}
 # JSON-FG Part 1 Core §7.5 (conformance class "circular-arcs") - geometry
 # "type" values that require CONF_CIRCULAR_ARCS to be declared in
-# "conformsTo" (docs/interlis-geometry-sfa-mapping.md).
+# "conformsTo".
 _CIRCULAR_ARC_TYPES = frozenset({"CircularString", "CompoundCurve", "CurvePolygon", "MultiCurve", "MultiSurface"})
 
 
@@ -243,9 +241,8 @@ def _sql_identifier(name: str) -> str:
     """Lowercase - matches `convert/sql.py`'s `_sql_identifier` EXACTLY (kept manually in sync, not imported:
     `convert/sql.py` already imports FROM this module, `_meta_value`, so importing back would be circular).
 
-    Only correct as long as both copies stay identical - see
-    `docs/sql-conversion-strategy.md`'s "BAG/LIST OF child tables" section
-    for the one real, documented limitation this creates: a child table
+    Only correct as long as both copies stay identical - the one real,
+    documented limitation this creates: a child table
     name/FK column here is NOT recomputed with the SAME cross-class
     disambiguation `convert/sql.py`'s `build_tables` applies on a real
     `Class.Name` collision (`_2`/`_3` suffix) - this module has no
@@ -261,11 +258,10 @@ def _child_row_features(obj: XtfObject, cls: MetaInstance, *, symbol_table: Symb
 
     Companion to `convert/sql.py`'s child tables (`_build_child_table`) -
     same schema, so GDAL's own `"featureType"`-based table splitting
-    (already relied on for the main data, `docs/interlis-ogc-architecture.md`)
+    (already relied on for the main data)
     routes these into the SAME child tables in the SAME `ogr2ogr -append`
     call as everything else - no separate file, no separate GDAL
-    invocation, no live-database dependency for this project (see
-    docs/sql-conversion-strategy.md).
+    invocation, no live-database dependency for this project.
 
     `featureType` = `"<parent_table>_<attr_name>"` (`convert/sql.py`'s own
     child table name). `properties` always carries `"<parent_table>_fk"`
@@ -366,7 +362,7 @@ def _members_value(
 # non-numeric component - so the caller falls back to leaving the attribute
 # in "properties" (RULE #5: never silently misrepresent geometry that
 # couldn't be read). An ARC segment IS representable (see `_read_polyline`
-# below, docs/interlis-geometry-sfa-mapping.md): a
+# below): a
 # straight-only POLYLINE/BOUNDARY still returns a plain position list (as
 # before, wrapped into LineString/Polygon by the caller), but one
 # containing at least one ARC returns an already-typed JSON-FG geometry
@@ -541,7 +537,7 @@ def _line_geometry(resolved: ResolvedAttribute, node: RawNode) -> dict[str, Any]
     of `MultiLineString`/`MultiPolygon` - both require every member to be a
     full geometry object, so a straight part is wrapped into a
     `LineString`/`Polygon` there too rather than left as a bare coordinate
-    array (docs/interlis-geometry-sfa-mapping.md).
+    array.
     """
     line_type = resolved.type_instance
     kind = getattr(line_type, "Kind", None)
@@ -595,8 +591,8 @@ def _crs_uri(coord_type: MetaInstance | None) -> str | None:
     `None` (never a guessed default) when the meta-attribute is absent or
     not an `EPSG:<digits>` value - Swiss data is never WGS84, so omitting
     `coordRefSys` would make a JSON-FG reader assume CRS84/CRS84h by the
-    spec's own default-CRS rule (a real misrepresentation, not just a gap)
-    - see docs/jsonfg-conversion-strategy.md. Requires
+    spec's own default-CRS rule (a real misrepresentation, not just a gap).
+    Requires
     `ModelRepository._get_table` to propagate `meta_attributes` into
     imported models (builder/repository.py) - without that fix this
     resolves to `None` for virtually every real Swiss geometry attribute,
@@ -706,8 +702,7 @@ def object_to_feature(
 
     Geometry ("place"/"coordRefSys"): every own+inherited attribute whose
     type resolves directly to CoordType/LineType (never via a BAG/LIST
-    wrapper - out of scope, no real corpus evidence, see
-    docs/jsonfg-conversion-strategy.md) AND whose actual wire value
+    wrapper - out of scope, no real corpus evidence) AND whose actual wire value
     converts cleanly (see `_place_and_crs` - a `None` result, e.g. a
     custom LINE FORM segment or an unresolved CRS, leaves that one
     attribute in "properties" instead, marked `x-unsupported` like any
@@ -766,7 +761,7 @@ def object_to_feature(
     # keeps the `x-unsupported` marker it always had - `_attribute_value`'s
     # GeoJSON-object output is for a NESTED geometry only, where there is
     # no `place` alternative. Resolving the top-level no-CRS case is a
-    # separate concern (docs/jsonfg-conversion-strategy.md).
+    # separate concern.
     for name in geometry_names:
         if name in properties and name not in placed_names:
             properties[name] = {"x-unsupported": resolved_attrs[name].type_kind}
@@ -931,8 +926,7 @@ def unsupported_view_reason(view: MetaInstance) -> str | None:
     via `--repo`), a `WHERE` construct outside the CONSTRAINT evaluator's
     scope (arithmetic / function call), and an AGGREGATION whose columns
     are user-FUNCTION results over the implicit `AGGREGATES` bag (needs a
-    function engine - out of scope by design, see
-    docs/fgdm4gs-view-strategy.md).
+    function engine - out of scope by design).
     """
     kind = getattr(view, "FormationKind", None)
     if kind not in ("Projection", "Join", "Union", "Aggregation", "Inspection"):
@@ -943,7 +937,7 @@ def unsupported_view_reason(view: MetaInstance) -> str | None:
         if isinstance(b, MetaInstance) and isinstance(b.BaseView, MetaInstance)
     ]
     if not bases:
-        return "base model not resolvable - pass it via --repo (see docs/model-resolution-strategy.md)"
+        return "base model not resolvable - pass it via --repo"
     if kind == "Inspection" and not _inspection_path(view):
         return "INSPECTION path (the '-> attribute' chain) was not built - InterlisModelBuilder gap"
     if kind == "Aggregation":
@@ -1642,8 +1636,7 @@ def transfer_to_feature_collection(
     own `"featureType"` matching a `convert/sql.py` child table name.
     GDAL's own `"featureType"`-based table splitting (already relied on
     for the main data) routes them into the SAME child tables in the SAME
-    `ogr2ogr -append` call as everything else - see
-    docs/sql-conversion-strategy.md ("BAG/LIST OF child tables").
+    `ogr2ogr -append` call as everything else.
 
     Walks all of `transfer`'s baskets (real corpus evidence: 11/12
     xtf_corpus/geoadmin files hold exactly 1 basket, the one exception
@@ -1681,7 +1674,7 @@ def transfer_to_feature_collection(
     seen so far uses one CRS throughout), per-feature "coordRefSys" is
     left as a conservative fallback rather than inventing an unverified
     geometry-level placement with no official example to check it
-    against (see docs/jsonfg-conversion-strategy.md).
+    against.
 
     `views` (optional): PROJECTION OF/JOIN OF Views
     already filtered by the caller to ones `evaluate_view` can actually

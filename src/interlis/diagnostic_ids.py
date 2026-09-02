@@ -3,9 +3,8 @@
 Each id names ONE signal site (or a family of structurally identical
 sites): a construct a converter cannot faithfully translate, or an input
 the caller did not supply. The id is stable - it is what a downstream
-tool, a SARIF consumer, or `docs/converter-limitations.md` keys off - so
-never rename one; retire it (drop the row here and in the doc) only once
-no site emits it.
+tool or a SARIF consumer keys off - so never rename one; retire it (drop
+the row here) only once no site emits it.
 
 `REGISTRY` maps id -> (klass, one_line). `klass` is the disposition:
 
@@ -20,10 +19,8 @@ no site emits it.
   pass ``--repo`` / ``--catalog``, or a reference target did not resolve.
   The message names the fix.
 
-`docs/converter-limitations.md` carries the human-facing detail (corpus
-evidence, where each is tracked). `scripts/check_diagnostic_ids.py`
-asserts this dict and that table stay in sync, and that every id here is
-actually referenced from ``src/``.
+A companion CI check asserts every id here is actually referenced from
+``src/``.
 """
 
 from __future__ import annotations

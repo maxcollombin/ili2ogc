@@ -101,7 +101,7 @@ def single_own_attribute(class_instance: MetaInstance) -> MetaInstance | None:
     `reference_external_status` (the `MandatoryCatalogueReference`
     pattern) AND by `restriction_candidates`/the XTF validator (3rd
     encoding form, `CLASS RESTRICTION(A; B; C)` over 1-attribute
-    STRUCTUREs, see docs/xtf-transfer-encoding-notes.md).
+    STRUCTUREs).
     """
     own = _own_attributes_of(class_instance)
     if len(own) == 1:
@@ -281,8 +281,8 @@ class ResolvedAttribute:
     Holds its AttrOrParam OR Role instance (embedded association roles are
     handled uniformly, via BaseClass instead of Type), its resolved
     Type/target class (can be None if unresolved - an external reference
-    out of scope, see docs/xtf-transfer-encoding-notes.md / README Known
-    limitations), and the short name of the Type's concrete metamodel
+    out of scope, see the README's Known limitations), and the short name
+    of the Type's concrete metamodel
     class (e.g. "TextType", "NumType", "EnumType", "ReferenceType",
     "Class" - never the abstract "DomainType").
     """
@@ -405,7 +405,7 @@ def concrete_structure_subclasses(
 def restriction_candidates(resolved: ResolvedAttribute) -> list[MetaInstance]:
     """Return every candidate class of a `CLASS RESTRICTION(A; B; C)`.
 
-    XTF's 3rd encoding form, see docs/xtf-transfer-encoding-notes.md.
+    XTF's 3rd encoding form.
     Length > 1 ONLY for this construct (e.g. `Owner = CLASS
     RESTRICTION(sCHOwnerCode; sCHCantonCode; sCHMunicipalityCode)`,
     RoadTrafficCensus_V1_1.ili); length 0 or 1 for a plain `REFERENCE
@@ -489,8 +489,7 @@ def reference_external_status(resolved: ResolvedAttribute) -> bool | None:
     (the `MandatoryCatalogueReference` pattern); and an embedded
     association role's own `(EXTERNAL)` clause on `roleDef()`. `None` for
     everything else (a genuinely undetermined status, not "assumed
-    False"). Full reasoning for each form, with real corpus examples:
-    docs/dev-notes/reference-external-status-investigation.md.
+    False").
     """
     if resolved.type_kind == "ReferenceType" and resolved.type_instance is not None:
         return bool(getattr(resolved.type_instance, "External", False))

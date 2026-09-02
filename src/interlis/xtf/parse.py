@@ -5,10 +5,9 @@ The XTF validator's first layer.
 Deliberately generic: captures each attribute as a raw XML subtree
 (`RawNode`), without interpreting whether it's a reference, a coordinate,
 or a plain value - that interpretation depends on the attribute's
-DECLARED TYPE on the schema (.ili) side, not on its XML shape alone (see
-docs/xtf-transfer-encoding-notes.md: checked against both the Reference
-Manual eCH-0031 V2.1.0 §4.3.9/4.3.11 and real files - the two diverge, see
-that document). A later layer, cross-referencing this result with
+DECLARED TYPE on the schema (.ili) side, not on its XML shape alone
+(checked against both the Reference Manual eCH-0031 V2.1.0 SS4.3.9/4.3.11
+and real files - the two diverge). A later layer, cross-referencing this result with
 IlisMeta16 (Class/AttrOrParam/DomainType already built by
 InterlisModelBuilder), does the interpretation.
 

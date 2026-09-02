@@ -1,10 +1,9 @@
 """IlisMeta16 -> SQL DDL conversion: tables, columns, UNIQUE/FOREIGN KEY/CHECK constraints.
 
-See docs/sql-conversion-strategy.md for the design decision and scope, and
-mappings/ilismeta16-to-sql-rules.yml / spec/conversion/sql-mapping.yml for
+See `mappings/ilismeta16-to-sql-rules.yml` / `spec/conversion/sql-mapping.yml` for
 the concept/field contract this module implements.
 
-Division of labor (docs/interlis-ogc-architecture.md): this module
+Division of labor: this module
 generates the SCHEMA only (`CREATE TABLE` + `UNIQUE` + `FOREIGN KEY`) -
 GDAL (`ogr2ogr -append`) still does the actual DATA LOADING, including
 into `BAG`/`LIST OF` child tables: `convert/jsonfg.py`'s
@@ -12,10 +11,9 @@ into `BAG`/`LIST OF` child tables: `convert/jsonfg.py`'s
 one synthetic Feature per `BAG`/`LIST` occurrence to the SAME
 FeatureCollection, each with its own `"featureType"` matching the child
 table name here - GDAL's JSONFG driver already splits a collection by
-`featureType` on `-append`, so ONE call loads parent and child rows both.
-See docs/sql-conversion-strategy.md for why this keeps the "this project
-transforms, GDAL loads" division intact rather than adding a
-live-database-write dependency.
+`featureType` on `-append`, so ONE call loads parent and child rows both -
+keeps the "this project transforms, GDAL loads" division intact rather
+than adding a live-database-write dependency.
 `build_tables()` produces a dialect-neutral intermediate representation
 (`Table`/`Column`/`UniqueConstraint`/`ForeignKey`) from already-built
 `IlisMeta16` instances, walked once via the SAME `resolve_attribute`/
@@ -83,8 +81,7 @@ table's `PRIMARY KEY` as an auto-managed FID slot, excluded from the INSERT colu
 to fill it in, e.g. `SERIAL`) - a Feature's `"id"` is NEVER written into it, `PRIMARY KEY "ogc_fid" text` silently
 stayed NULL and violated its own NOT NULL constraint. `"id"` matches EXACTLY what the JSON-FG reader (`ogrinfo`,
 confirmed) exposes as a plain STRING FIELD in its own right, separate from OGR's internal FID concept - declared `UNIQUE
-NOT NULL` (never `PRIMARY KEY`) so GDAL treats it as a normal field to WRITE, not a slot to manage. See
-docs/sql-conversion-strategy.md for the full investigation.
+NOT NULL` (never `PRIMARY KEY`) so GDAL treats it as a normal field to WRITE, not a slot to manage.
 """
 
 _GEOMETRY_KINDS = {"CoordType", "LineType"}
@@ -544,7 +541,7 @@ def _build_child_table(
     for one `BAG`/`LIST OF` attribute.
 
     Companion to `convert/jsonfg.py`'s `include_child_rows` synthetic
-    Features (see docs/sql-conversion-strategy.md) - GDAL loads them into
+    Features - GDAL loads them into
     the table this returns via the SAME `ogr2ogr -append` call that loads
     the parent data, routed by `"featureType"`. Schema: a `<parent>_fk` `FOREIGN KEY` back to the
     parent (own `id` identity column added by the renderer, like every
@@ -1979,7 +1976,7 @@ def _build_geometry_inspection_view(
     surface - decomposed here as ONE row per base object whose geometry
     IS that boundary (`ST_Boundary`, OGC SFA), the pragmatic reading a
     `GRAPHIC ... BASED ON` an inspection view actually needs (drawing the
-    boundary - see docs/view-formation-support.md), rather than the full
+    boundary), rather than the full
     nested `Lines`/`SurfaceEdge` structure - out of scope, eCH-0031 itself
     calls the geometric INSPECTION structures "a conceptual description
     only... generating views belongs to a separate conformance level".
@@ -2028,7 +2025,7 @@ def _build_aggregation_view(
     one instance; inside the view the implicit `AGGREGATES` bag holds the
     grouped objects, for a FUNCTION (`ElementCount := countB(AGGREGATES)`).
     A user FUNCTION body is out of scope by design (delegated to an
-    external engine - see docs/fgdm4gs-view-strategy.md) and demotes the
+    external engine) and demotes the
     whole view - EXCEPT the 2 INTERLIS STANDARD functions whose signature
     IS "count the members of a bag/object set" (`INTERLIS.objectCount`/
     `elementCount`), applied to the bag AGGREGATES itself: that becomes a
@@ -2570,7 +2567,7 @@ def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> s
     table's own FK target may be declared later in `tables`) rather than
     topologically sorting them, a real simplification PostgreSQL affords
     (unlike a future SQLite/GPKG renderer, which cannot add a FOREIGN KEY
-    to an existing table at all - see docs/sql-conversion-strategy.md -
+    to an existing table at all -
     and so will need to sort tables and declare FKs inline instead).
     """
     statements: list[str] = []
@@ -2615,7 +2612,7 @@ def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
 
     Unlike `render_postgresql`, `FOREIGN KEY` is declared INLINE at
     `CREATE TABLE` time (SQLite cannot add one to an existing table via
-    `ALTER TABLE` at all - see docs/sql-conversion-strategy.md) - verified
+    `ALTER TABLE` at all) - verified
     empirically that this needs NO topological sort of `tables`: SQLite
     tolerates a `FOREIGN KEY REFERENCES` naming a table that does not YET
     exist at `CREATE TABLE` time (only enforced later, at INSERT/UPDATE,
@@ -2623,7 +2620,7 @@ def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
 
     `gpkg_spatial_ref_sys.definition` (the SRS WKT text) is written as an
     explicit, LOUD placeholder rather than fabricated - this project stays
-    pure Python (no GDAL/PROJ dependency, see docs/sql-conversion-strategy.md),
+    pure Python (no GDAL/PROJ dependency),
     so it has no authoritative source for a real WKT string; `organization`/
     `organization_coordsys_id` (the EPSG code) are correct and are what
     `gpkg_geometry_columns.srs_id` actually keys off in practice - the

@@ -6,7 +6,7 @@ referenced by generic UUID - see GENERIC_ENUM_TYPE_UUID below).
 
 Four anonymous UML primitive types (raw xmi:id, no qualified_name) are used
 as an attribute's `type:` in ilismeta16-classes.yml/datatypes.yml (verified
-against the YAML + the source XMI, docs/uml/IlisMeta16-formatted.xmi):
+against the YAML + the source XMI):
 EnumerationType (279A049B...), NumericType (39FDCDA0...), TextType
 (C16095C6...), PolylineType (F466480C..., single use:
 INTERLIS.SurfaceEdge.Geometry - a geometry type out of scope for this

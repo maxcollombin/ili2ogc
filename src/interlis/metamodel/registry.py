@@ -2,8 +2,10 @@
 
 Built from mappings/ilismeta16-*.yml at every startup (never written to
 disk or committed separately) - the YAML stays the single source of
-truth. Design rationale (why fields are typed `Any`, why generation
-needs no forward-ref resolution): docs/dev-notes/metamodel-registry-any-typing.md.
+truth. Fields are typed `Any` and generation needs no forward-ref
+resolution because the metamodel changes with the spec, not with the
+code - a hand-maintained class hierarchy would drift from
+`mappings/ilismeta16-*.yml` the moment either one changed alone.
 """
 
 from typing import Any

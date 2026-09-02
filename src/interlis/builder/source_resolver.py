@@ -268,7 +268,7 @@ def resolve_source(
         # Diagnostic id BUILD-SPEC-GAP-ALT-ABSENT (interlis.diagnostic_ids):
         # a class-A mapping gap, but mostly benign optional-absent noise -
         # left as a plain warning, not surfaced by the CLI diagnostics bag
-        # by default (see docs/converter-limitations.md).
+        # by default.
         warnings.warn(
             f"[BUILD-SPEC-GAP-ALT-ABSENT] [{rule}] no alternative present among {names!r} - treated as absent/None",
         )

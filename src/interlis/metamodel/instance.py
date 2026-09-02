@@ -25,8 +25,7 @@ class MetaInstance(BaseModel):
     if TYPE_CHECKING:
         # Every IlisMeta16 attribute/association end reaches an instance
         # dynamically (extra="allow", set by AttachmentResolver from the
-        # YAML metamodel - see interlis.metamodel.registry and
-        # docs/dev-notes/metamodel-registry-any-typing.md). There is no
+        # YAML metamodel - see interlis.metamodel.registry). There is no
         # static field list to give mypy; treat any attribute as Any
         # rather than scatter per-access ignores. Type-check-only, no
         # runtime effect (pydantic's own __getattr__ serves extras).

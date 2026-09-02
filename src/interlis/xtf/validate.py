@@ -17,9 +17,7 @@ tolerance, and recursive validation of STRUCTURE/BAG/LIST content. Not yet
 covered: attributes inherited via EXTENDS from an unloaded imported model,
 and the internal structure of a custom LINE FORM segment (its presence is
 surfaced as an `info` issue rather than silently dropped - no confirmed
-real-world tag encoding exists to validate its content against). Full
-detail, severity rationale, and real-corpus evidence for each item:
-docs/dev-notes/xtf-validator-scope.md.
+real-world tag encoding exists to validate its content against).
 """
 
 from dataclasses import dataclass
@@ -82,7 +80,6 @@ class ValidationIssue:
 def _extract_reference(node: RawNode) -> str | None:
     """Find a reference attribute's target TID/OID, in one of 3 known forms.
 
-    See docs/xtf-transfer-encoding-notes.md:
     - spec form (canonical INTERLIS 2.4): an `ili:ref` XML attribute
       directly on the node - the namespace isn't stripped by the
       structural parser (RawNode keeps `elem.attrib` as-is), so this
@@ -225,8 +222,7 @@ def _validate_scalar(resolved: ResolvedAttribute, node: RawNode, ctx: str) -> li
 # XTF 2.3 (every file in xtf_corpus/ and tests/fixtures/xtf/xtf23overlap/,
 # ili2pg/ili2gpkg-generated - the ONLY convention seen in real, currently-
 # published Swiss open data, federal or cantonal): no "geom:" namespace
-# (like ili:ref/REF, already documented for references in
-# docs/xtf-transfer-encoding-notes.md), UPPERCASE, an exact mirror of the
+# (like ili:ref/REF, above), UPPERCASE, an exact mirror of the
 # grammar keyword: `<AttrName><COORD><C1>x</C1><C2>y</C2>[<C3>z</C3>]
 # </COORD></AttrName>` (RoadTrafficAccidentLocations.xtf, xtf_corpus/, 3D);
 # `<AttrName><SURFACE><BOUNDARY><POLYLINE><COORD>...</COORD>...</POLYLINE>
@@ -567,8 +563,7 @@ def _validate_line_attribute(resolved: ResolvedAttribute, node: RawNode, ctx: st
 
 
 _GENERIC_RESTRICTION_INFO = (
-    "reference/structure-typed attribute with no recognized REF (bare text value, "
-    "likely a 1-attribute structure - see docs/xtf-transfer-encoding-notes.md)"
+    "reference/structure-typed attribute with no recognized REF (bare text value, " "likely a 1-attribute structure)"
 )
 
 
@@ -584,8 +579,7 @@ def _validate_restriction_text(
 ) -> "ValidationIssue | None":
     """Interpret the 3rd XTF encoding form: `CLASS RESTRICTION(A; B; C)`.
 
-    See docs/xtf-transfer-encoding-notes.md "Third form found". An
-    attribute whose Type resolves to `ReferenceType` with SEVERAL
+    An attribute whose Type resolves to `ReferenceType` with SEVERAL
     `BaseClass` candidates (`CLASS RESTRICTION(A; B; C)`,
     `restriction_candidates`), each candidate itself a 1-own-attribute
     STRUCTURE (`single_own_attribute`) - ili2fme appears to transfer this
@@ -650,7 +644,7 @@ def _build_tid_index(transfer: XtfTransfer, catalogs: list[XtfTransfer] | None =
     see cli.py): an EXTERNAL catalogue object (e.g. MLocStatus, eCH-0031
     V2.1.0 §3.6.3) typically lives in a basket/file SEPARATE from the main
     data transfer - this file isn't auto-discovered (no public source
-    identified for this corpus, see docs/model-resolution-strategy.md),
+    identified for this corpus),
     but if the operator provides one, its objects become resolvable just
     like the main transfer's. A TID duplicated across baskets (main
     transfer OR catalogue) would already be an invalid object (each TID
@@ -1001,9 +995,8 @@ def _validate_resolved_attr(
             # way, this only makes the distinction in the message text.
             # `reference_external_status` covers the direct ReferenceType
             # case, the CatalogueObjects_V1 structure-wrapper pattern, and
-            # the embedded association role's own EXTERNAL clause - see
-            # docs/dev-notes/reference-external-status-investigation.md for
-            # the full breakdown. Tri-state: `None` means genuinely
+            # the embedded association role's own EXTERNAL clause.
+            # Tri-state: `None` means genuinely
             # undetermined (e.g. a structure wrapping non-reference content
             # like geometry), never asserted as "not declared" by default.
             status = reference_external_status(resolved)

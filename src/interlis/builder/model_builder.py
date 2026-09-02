@@ -811,8 +811,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         `UUIDOID`/`ANYOID` (bare or `INTERLIS.`-qualified) are reserved
         lexer tokens, never resolvable via a name lookup like an ordinary
-        domain (see docs/dev-notes/predefined-interlis-namespace.md,
-        "ANYOID/UUIDOID deliberately absent") - built directly as a bare
+        domain - built directly as a bare
         `AnyOIDType` marker instead, same construction as `oIDType`'s own
         "OID ANY"/"UUIDOID" alternative (spec/grammar/mapping/06_types.yml:
         "no ANY/UUIDOID distinction is carried"). Otherwise (`Name` /
@@ -972,8 +971,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
         `resolve_source`/`alt:`) because `ctx.getAltNumber()` is
         unconditionally 0 for unlabeled-alternative rules in the vendored
         grammar - a known, wider engine limitation affecting every `alt:
-        <int>` binding, not fixed here. Full design rationale and the
-        related grammar findings: docs/dev-notes/type-string-range-investigation.md.
+        <int>` binding, not fixed here.
         """
         strings = [
             c for c in (ctx.children or []) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.STRING
@@ -2147,7 +2145,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
 
         `self._current_topic_extends_hint(ctx)` (already built for
         `topicDef.Super`/generic unqualified-name resolution across a
-        `TOPIC EXTENDS`, `docs/dev-notes/topicdef-super-binding-investigation.md`)
+        `TOPIC EXTENDS`)
         supplies the raw EXTENDS text (e.g. `"ISOS_V2.ISOSBase"`) - the
         `Super` reference is built ALREADY FULLY QUALIFIED
         (`f"{hint}.{name}"`, e.g. `"ISOS_V2.ISOSBase.Ortsbild"`) rather

@@ -29,10 +29,15 @@ from interlis.runtime.parse import meta_attribute_comments, meta_attribute_comme
 _MODEL_NAME_RE = re.compile(r"\bMODEL\s+([A-Za-z_][A-Za-z0-9_]*)")
 
 # The predefined "INTERLIS" namespace model, built via the real parse+build
-# pipeline rather than hand-crafted Python instances. Design rationale
-# (why ANYOID/UUIDOID/BOOLEAN are deliberately absent, why GregorianYear/
-# XMLDate/XMLTime/XMLDateTime/INTERLIS_1_DATE were added):
-# docs/dev-notes/predefined-interlis-namespace.md.
+# pipeline rather than hand-crafted Python instances (same guarantees as
+# any other model). ANYOID/UUIDOID/BOOLEAN cannot be declared as an
+# ordinary DOMAIN here - they are reserved lexer tokens in the grammar,
+# so `DOMAIN ANYOID = ...` is a syntax error; where a real attribute needs
+# one, InterlisModelBuilder synthesizes the equivalent type at resolution
+# time instead (see `_predefined_type`). GregorianYear/XMLDate/XMLTime/
+# XMLDateTime/INTERLIS_1_DATE ARE ordinary names and so are declared here
+# directly - added because real corpus models reference them (eCH-0031
+# SS3.8.7) and previously resolved to an unchecked/unsupported type.
 _PREDEFINED_MODEL_INTERNAL_NAME = "PredefinedInterlisNamespace"
 _PREDEFINED_INTERLIS_SOURCE = f"""\
 INTERLIS 2.4;
@@ -174,8 +179,7 @@ class ModelRepository:
         to get this treatment. Every Swiss geometry domain in practice is
         imported (from `CHBase_Part1_GEOMETRY_V1`), never declared
         locally, so without this the CRS meta-attribute mechanism used by
-        `.xtf` -> JSON-FG geometry conversion
-        (`docs/jsonfg-conversion-strategy.md`) had zero real coverage.
+        `.xtf` -> JSON-FG geometry conversion had zero real coverage.
         """
         if model_name in self._cache:
             return self._cache[model_name]

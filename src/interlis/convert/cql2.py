@@ -115,8 +115,7 @@ def _compile_compound(expr: MetaInstance) -> dict[str, Any]:
     if op == "Or":
         return {"op": "or", "args": [to_cql2(sub) for sub in subs]}
     if op == "Implication":
-        # CQL2 has no direct implication operator - `A => B` == `NOT A OR B`
-        # (`docs/cql2-expression-mapping-strategy.md`'s mapping table).
+        # CQL2 has no direct implication operator - `A => B` == `NOT A OR B`.
         if len(subs) != 2:
             raise UnsupportedExpressionError("implication needs exactly 2 operands")
         return {"op": "or", "args": [{"op": "not", "args": [to_cql2(subs[0])]}, to_cql2(subs[1])]}

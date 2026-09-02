@@ -1,11 +1,10 @@
 """Resolve the root model(s) required to validate an XTF transfer.
 
-Driven EXCLUSIVELY by the file's own content (architecture decision
-documented in docs/model-resolution-strategy.md: never a Model Repository
+Driven EXCLUSIVELY by the file's own content: never a Model Repository
 queried live the way iliValidator does it, always the transfer's explicit
-references plus a `.ili` corpus downloaded locally beforehand - the same
+references plus a `.ili` corpus resolved locally beforehand - the same
 reproducibility principle already applied to IMPORTS: "never network
-during a build()").
+during a build()".
 
 Two distinct sources of information - don't guess, verify:
 - `HEADERSECTION/MODELS` (`XtfTransfer.models`, parse.py): declares which

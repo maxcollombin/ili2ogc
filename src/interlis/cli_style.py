@@ -2,7 +2,7 @@
 
 Kept separate from `interlis.cli` so the two exit-code axes never blur
 together at the call site: `interlis.diagnostics.DiagnosticBag.exit_code()`
-(0 clean / 2 degraded / 1 failed, see docs/diagnostics.md) already owns
+(0 clean / 2 degraded / 1 failed) already owns
 0/1/2 for every command that produces a `DiagnosticBag` - `ExitCode`
 mirrors those three values under a name rather than redefining them, and
 only ADDS 3/5 for the hard stops that happen before any bag exists (bad
@@ -23,8 +23,8 @@ class ExitCode(IntEnum):
     """Process exit codes for `interlis.cli.main`.
 
     0/1/2 are exactly `DiagnosticBag.exit_code()`'s values (never
-    repurpose them - see docs/diagnostics.md). 3-5 classify a hard stop
-    that happens before any `DiagnosticBag` is even built.
+    repurpose them). 3-5 classify a hard stop that happens before any
+    `DiagnosticBag` is even built.
     """
 
     OK = 0
