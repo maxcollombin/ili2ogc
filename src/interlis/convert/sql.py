@@ -1,4 +1,4 @@
-"""IlisMeta16 -> SQL DDL conversion: tables, columns, UNIQUE/FOREIGN KEY/CHECK constraints (backlog item 14).
+"""IlisMeta16 -> SQL DDL conversion: tables, columns, UNIQUE/FOREIGN KEY/CHECK constraints.
 
 See docs/sql-conversion-strategy.md for the design decision and scope, and
 mappings/ilismeta16-to-sql-rules.yml / spec/conversion/sql-mapping.yml for

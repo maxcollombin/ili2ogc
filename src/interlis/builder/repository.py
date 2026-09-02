@@ -171,11 +171,11 @@ class ModelRepository:
         imported model's own MetaAttribute instances (e.g. `!!@CRS=...`
         on a CoordType domain) are otherwise never captured, since only
         the file passed directly to `InterlisModelBuilder.build()` used
-        to get this treatment. A real-corpus gap surfaced while building
-        `.xtf` -> JSON-FG geometry conversion (backlog item 5): every
-        Swiss geometry domain in practice is imported (from
-        `CHBase_Part1_GEOMETRY_V1`), never declared locally, so without
-        this the CRS meta-attribute mechanism had zero real coverage.
+        to get this treatment. Every Swiss geometry domain in practice is
+        imported (from `CHBase_Part1_GEOMETRY_V1`), never declared
+        locally, so without this the CRS meta-attribute mechanism used by
+        `.xtf` -> JSON-FG geometry conversion
+        (`docs/jsonfg-conversion-strategy.md`) had zero real coverage.
         """
         if model_name in self._cache:
             return self._cache[model_name]

@@ -49,15 +49,15 @@ class AttachmentResolver:
             return
 
         raise BuildError(
-            f"impossible d'attacher {key!r} sur {instance._qualified_class} "
-            f"(ni attribut own/inherited, ni role d'association trouve)",
+            f"cannot attach {key!r} to {instance._qualified_class} "
+            f"(no own/inherited attribute, no association role found)",
             rule=rule,
         )
 
     def _attach_via_named_association(self, instance, association, role, value, *, rule):
         assoc_el = self.uml.find_association_by_name(association)
         if assoc_el is None:
-            raise BuildError(f"association {association!r} introuvable", rule=rule)
+            raise BuildError(f"association {association!r} not found", rule=rule)
         upper = None
         for end in assoc_el.get("ends", []):
             if end.get("role") == role:

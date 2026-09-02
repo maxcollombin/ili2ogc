@@ -31,9 +31,8 @@ each `IMPORTS` a real Swiss federal MGDM and defines a `VIEW`
 (`PROJECTION OF`/`JOIN OF ... WHERE`) that flattens it for geoservice
 publication. The companion "_gm" (graphic model) files in the
 same repo are deliberately NOT vendored here - they add `StandardSymbology`
-`GRAPHIC` definitions for cartographic representation, a separate concern
-(backlog item 6, `.claude/PROGRESS.md`), not needed to exercise the VIEW
-mapping itself.
+`GRAPHIC` definitions for cartographic representation, a separate
+concern not needed to exercise the VIEW mapping itself.
 
 The repo has no declared license (`license: null` via the GitHub API,
 checked 2026-08-24). The report and this repo share an author with this
@@ -47,10 +46,10 @@ no role in the tests).
 all "_d" files exclusively use the `Name := expression` view attribute
 redefinition form (`viewAttributes`'s `bare_redefinition_list`/
 `modifier_reassignment` alternative) - NONE use `ALL OF`. This form was
-previously `status: unresolved` in `InterlisModelBuilder` with "no real
-corpus evidence" noted (backlog item 8 Lot A2) - these files are that
-evidence. `View.RenamedBaseView`/`FormationKind`/`Where` and, since item
-10, `View.ClassAttribute` all build correctly.
+previously `status: unresolved` in `InterlisModelBuilder` for lack of
+real corpus evidence - these files are that evidence.
+`View.RenamedBaseView`/`FormationKind`/`Where`/`ClassAttribute` all build
+correctly.
 
 **To build these against their full IMPORTS closure**, a repo directory
 also containing the base MGDMs they import is needed: `Axis_LV95_V1_1`

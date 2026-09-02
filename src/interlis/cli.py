@@ -383,7 +383,7 @@ def _fold_in_dependency_models(classes, views, root_table, repository, class_sym
 
 
 def cmd_convert_sql(args: argparse.Namespace) -> int:
-    """Convert an .ili model to SQL DDL, PostgreSQL or GeoPackage/SQLite (backlog item 14).
+    """Convert an .ili model to SQL DDL, PostgreSQL or GeoPackage/SQLite.
 
     See docs/sql-conversion-strategy.md for the design decision and scope
     - this project generates the full schema (`CREATE TABLE` + `UNIQUE` +

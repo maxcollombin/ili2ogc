@@ -339,7 +339,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
             return self._relay(ctx, rule_name, entry)
         if entry.kind == "Reference":
             return self._resolve_or_defer(ctx, rule_name, entry)
-        raise BuildError(f"kind inconnu {entry.kind!r}", rule=rule_name, ctx=ctx)
+        raise BuildError(f"unknown kind {entry.kind!r}", rule=rule_name, ctx=ctx)
 
     @staticmethod
     def _rule_name(ctx: ParserRuleContext) -> str:
@@ -2477,7 +2477,7 @@ class InterlisModelBuilder(InterlisParserVisitor):
         `Waldabstand_Linie`/`Typ`, item 13/15) - the wrong order is
         invisible to `.ili -> JSON Schema`/`.xtf -> JSON-FG`/`convert-sql`
         (none of the three care about `ClassAttribute` order), but a real
-        `.xtf` writer (`convert/xtf_writer.py`, backlog item 15) DOES:
+        `.xtf` writer (`convert/xtf_writer.py`) DOES:
         refman eCH-0031 V2.1.0 SS4.3.7's "Zwiebelprinzip" - a compiled
         schema's XSD `xsd:sequence` rejects an out-of-order instance -
         confirmed empirically (`ili2c -oXSD` + `xmllint --schema` on a

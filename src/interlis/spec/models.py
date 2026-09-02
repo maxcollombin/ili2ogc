@@ -49,5 +49,5 @@ class SpecEntry(BaseModel, extra="allow"):
     @classmethod
     def kind_known(cls, v):
         if v not in KNOWN_KINDS:
-            raise ValueError(f"kind inconnu: {v!r} (attendu un de {KNOWN_KINDS})")
+            raise ValueError(f"unknown kind: {v!r} (expected one of {KNOWN_KINDS})")
         return v
