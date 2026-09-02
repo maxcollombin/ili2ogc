@@ -83,11 +83,18 @@ def test_grenzpunkt_gueltig_geometry_unique_and_liegenschaft_gueltig_set_stay_no
 
 
 def test_dmav_create_views_and_unique_triggers_compile_against_a_real_sqlite_engine():
-    """The generated `CREATE VIEW`/`CREATE TRIGGER` text is valid SQL, not just Python-assembled - run it."""
+    """The generated `CREATE VIEW`/`CREATE TRIGGER` text is valid SQL, not just Python-assembled - run it.
+
+    A malformed `CREATE VIEW`/`CREATE TRIGGER` fails `executescript`/`execute`
+    with `sqlite3.OperationalError`, so the absence of an exception already is
+    the compile-validity assertion; the `fetchall() == []` below only pins
+    down the (trivial, since the tables are empty) expected result shape so a
+    reader doesn't have to infer it.
+    """
     sql_views, tables = _views_and_tables("DMAV_Grundstuecke_V1_1.ili")
     full = render_gpkg(tables, tuple(sql_views))
     schema = "\n".join(line for line in full.splitlines() if not line.startswith(("INSERT INTO gpkg_", "-- TODO:")))
     conn = sqlite3.connect(":memory:")
     conn.executescript(schema)
     for v in sql_views:
-        conn.execute(f'SELECT * FROM "{v.name}"').fetchall()  # empty tables, but the plan compiles
+        assert conn.execute(f'SELECT * FROM "{v.name}"').fetchall() == []

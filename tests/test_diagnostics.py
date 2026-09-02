@@ -91,4 +91,7 @@ def test_render_sarif_validates_against_the_2_1_0_schema():
 
 
 def test_empty_bag_sarif_still_valid():
-    Draft4Validator(SARIF_SCHEMA).validate(render_sarif(DiagnosticBag()))
+    log = render_sarif(DiagnosticBag())
+    Draft4Validator(SARIF_SCHEMA).validate(log)  # raises on schema violation - the pass/fail signal
+    assert log["runs"][0]["results"] == []
+    assert log["runs"][0]["tool"]["driver"]["rules"] == []

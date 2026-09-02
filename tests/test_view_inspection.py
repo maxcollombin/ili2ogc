@@ -30,9 +30,26 @@ END Foo.
 """
 
 
+def _inspection_view(builder):
+    return next(
+        inst
+        for inst in builder.symbol_table.all_registered()
+        if getattr(inst, "_qualified_class", None) == "IlisMeta16.ModelData.View"
+    )
+
+
 def test_inspection_without_area_does_not_raise():
-    _build(_model(""))
+    # AREA vs. its absence is not preserved as a distinct field anywhere in the
+    # built object graph (the `inspection` Container's `_kind` binding has no
+    # downstream consumer - grep confirms no converter reads it) - the only
+    # content assertion available is that the View still comes out well-formed,
+    # not just that construction didn't crash.
+    view = _inspection_view(_build(_model("")))
+    assert view.FormationKind == "Inspection"
+    assert view._inspection_path == ["Attr"]
 
 
 def test_inspection_with_area_does_not_raise():
-    _build(_model("AREA "))
+    view = _inspection_view(_build(_model("AREA ")))
+    assert view.FormationKind == "Inspection"
+    assert view._inspection_path == ["Attr"]
