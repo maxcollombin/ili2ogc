@@ -27,36 +27,8 @@ class _OidMixin(_Base):
     def _scan_oid_clauses(self, ctx: ParserRuleContext, rule_name: str) -> list[dict]:
         """Positionally scan `ctx.children` for OID clauses (classDef/topicDef).
 
-        Both rules inline the SAME grammar fragment for an OID
-        declaration - `(BASKET)? OID AS <domain-ref> SEMI` (topicDef, up
-        to 2 occurrences: an optional basket-level clause then an
-        optional class-default one) or `(OID AS <domain-ref> | NO OID)
-        SEMI` (classDef, at most 1) - never delegated to a sub-rule
-        (confirmed by direct read of ClassDefContext/TopicDefContext via
-        `mappings/antlr-rule-index.yml`, RULE #2bis: neither exposes a
-        `domainRef()` accessor, only bare `OID`/`AS`/`Name`/`DOT`/
-        `UUIDOID`/`INTERLIS`/`ANYOID`/`NO`/`BASKET` tokens), so there's no
-        accessor to bind declaratively - walked positionally instead
-        (`ctx.getAltNumber()` is unusable here too, always 0 for this
-        vendored grammar, see source_resolver.py).
-
-        Telling a basket-level clause from a class-default one when a
-        topic has exactly ONE bare `OID AS` clause (no `BASKET` keyword)
-        can't rely on which internal ANTLR alternative fired - both
-        produce an IDENTICAL parse tree (same tokens), so nothing in the
-        tree records that choice. BASKET presence at the position
-        immediately preceding `OID` is the only reliable, OBSERVABLE
-        signal - confirmed against real corpus evidence
-        (LWB_Perimeter_Terrassenreben_V2_0.ili: `TOPIC Terrassenreben =
-        OID AS INTERLIS.UUIDOID;`, no BASKET keyword, immediately followed
-        by `CLASS Bezugsjahr` with no OID clause of its own - for that
-        class to get ANY identifier at all, per eCH-0031 V2.1.0 §3.5.2's
-        "sofern bei der jeweiligen Klasse keine spezifische Definition
-        dafuer gemacht wird", this bare clause must be the class-default,
-        not a basket-only one; LWB_Perimeter_LandwirtschaftlicheNutzflaeche_
-        Soemmerung_V2_0.ili confirms both clauses can coexist in the fixed
-        `BASKET OID AS X; OID AS Y;` order the manual's citation shows).
-
+        Both rules inline the same grammar fragment with no accessor to
+        bind declaratively (RULE #2bis) - walked positionally instead.
         Returns clauses in source order, each `{"basket": bool, "no_oid":
         bool, "value": ForwardRef | MetaInstance | None}` (`value` is
         `None` only for a `no_oid` clause).
@@ -93,15 +65,9 @@ class _OidMixin(_Base):
     def _resolve_oid_domain_ref(self, tokens: list[Any], ctx: ParserRuleContext, rule_name: str) -> Any:
         """Resolve one OID clause's domain-ref tokens (between AS and SEMI).
 
-        `UUIDOID`/`ANYOID` (bare or `INTERLIS.`-qualified) are reserved
-        lexer tokens, never resolvable via a name lookup like an ordinary
-        domain - built directly as a bare
-        `AnyOIDType` marker instead, same construction as `oIDType`'s own
-        "OID ANY"/"UUIDOID" alternative (spec/grammar/mapping/06_types.yml:
-        "no ANY/UUIDOID distinction is carried"). Otherwise (`Name` /
-        `Name DOT Name` / `INTERLIS DOT Name`), a genuine named domain
-        reference - `ForwardRef`, same dot-join convention as
-        `_build_control_points_ref`.
+        `UUIDOID`/`ANYOID` are reserved lexer tokens, never resolvable via
+        a name lookup - built as a bare `AnyOIDType` marker instead.
+        Otherwise, a genuine named domain reference (`ForwardRef`).
         """
         if any(
             isinstance(t, TerminalNode) and t.symbol.type in (InterlisParser.UUIDOID, InterlisParser.ANYOID)
@@ -125,13 +91,9 @@ class _OidMixin(_Base):
     def _attach_class_oid(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
         """Attach classDef's own `OID AS <domain-ref>` / `NO OID` clause, if present.
 
-        `ObjectOID` (Class <-> Oid:DomainType, ilismeta16-associations.yml).
         Marks `instance._own_oid_clause` whenever a clause is present at
-        all (even `NO OID`, or one whose domain-ref failed to resolve to
-        anything) - `_apply_topic_oid_clauses`'s class-default propagation
-        must never override a class that already made its own decision,
-        per eCH-0031 V2.1.0 §3.5.2 ("sofern bei der jeweiligen Klasse
-        keine spezifische Definition dafuer gemacht wird").
+        all (even `NO OID`) - `_apply_topic_oid_clauses`'s class-default
+        propagation must never override a class that already decided.
         """
         clauses = self._scan_oid_clauses(ctx, "classDef")
         if not clauses:
@@ -147,14 +109,9 @@ class _OidMixin(_Base):
     def _apply_topic_oid_clauses(self, ctx: ParserRuleContext, instances: dict[str, MetaInstance]) -> None:
         """Wire topicDef's OID clauses (see `_scan_oid_clauses`).
 
-        The basket-level clause (`BASKET OID AS ...`) feeds `BasketOID`
-        (DataUnit <-> Oid:DomainType) directly. The class-default clause
-        (bare `OID AS ...`) is propagated to every `Class` (Kind='Class' -
-        excludes STRUCTURE, which shares the same metamodel class but is
-        never directly identified) declared in this topic that carries no
-        `_own_oid_clause` of its own (`_attach_class_oid`) - same
-        `ObjectOID` association as an explicit per-class clause, per eCH-
-        0031 V2.1.0 §3.5.2's default-value semantics.
+        The basket-level clause feeds `BasketOID` directly. The
+        class-default clause is propagated to every `Class` in this
+        topic that carries no `_own_oid_clause` of its own.
         """
         clauses = self._scan_oid_clauses(ctx, "topicDef")
         data_unit = instances.get("DataUnit")

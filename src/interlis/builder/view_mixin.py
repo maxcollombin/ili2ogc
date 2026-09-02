@@ -37,22 +37,13 @@ class _ViewBuildingMixin(_Base):
     def _set_view_formation_kind(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
         """Set View.FormationKind from which formationDef() alternative matched.
 
-        `formationDef()` is a pure dispatcher (no own metamodel instance,
-        spec/grammar/mapping/09_views_graphics.yml) - by the time this runs,
-        the natural unclaimed-children sweep in `_build_instance` has
-        already visited it once and, through it, built and attached every
-        `RenamedBaseView` reachable from `projection()`/`join()`/etc. (each
-        has its own `parent: {association: BaseViewDef, role:
-        RenamedBaseView}` binding, applied against `instance` since it's
-        still on top of `_parent_stack`). There is therefore nothing left
-        to VISIT here - reads the raw `ViewDefContext` directly instead
-        (`ctx.formationDef()`, then which of ITS OWN 5 sub-rule accessors
-        matched) to determine the enum value, exactly once, with no side
-        effects of its own. A view using `EXTENDS viewRef` instead of a
-        `formationDef` (grammatically mutually exclusive, see viewDef())
-        has no FormationKind of its own to set here - left unset,
-        inherited from the extended view via the separate
-        `extends_viewRef`/Inheritance binding.
+        By the time this runs, the unclaimed-children sweep in
+        `_build_instance` has already visited `formationDef()` (a pure
+        dispatcher) and built every `RenamedBaseView` reachable from it -
+        nothing left to VISIT, so this reads the raw `ViewDefContext`
+        directly instead. A view using `EXTENDS viewRef` has no
+        `FormationKind` of its own to set - left unset, inherited from
+        the extended view.
         """
         formation = ca.call(ctx, "formationDef")
         if formation is None:
@@ -71,23 +62,12 @@ class _ViewBuildingMixin(_Base):
     def _stash_aggregation_key(self, view: MetaInstance, aggregation_ctx: ParserRuleContext) -> None:
         """Record `AGGREGATION OF ... EQUAL(uniqueEl)`'s grouping key as `view._aggregation_key`.
 
-        Same class of gap as `_stash_inspection_path` right below: the
-        spec's `aggregation.FormationParameter` binding (`uniqueEl`,
-        `feeds_into: PathOrInspFactor`) IS declared, but the generic
-        `Container` resolution machinery only materializes it when a
-        parent instance's own attribute_bindings drive the merge - called
-        this way, directly from `_set_view_formation_kind` (no such parent
-        instance in progress), `self.visit(...)` on the underlying
-        `objectOrAttributePath` returns the raw bag dict
-        (`{"PathEls": [...]}`, confirmed empirically - see
-        `_merge_bag_into_instance`'s own docstring on why a `Container`
-        rule with `feeds_into:` must stay a bag, never auto-unwrapped) -
-        never a `PathOrInspFactor` instance on its own. Materialized here
-        by hand: a fresh `PathOrInspFactor` + `_merge_bag_into_instance`,
-        the SAME merge step a normal attribute-binding chain would apply
-        automatically. `ALL` (no `uniqueEl` in this VIEW) leaves
-        `_aggregation_key` unset - `convert/sql.py`'s `_build_aggregation_view`
-        treats that as the `ALL` collapse-to-one-row-or-DISTINCT reading.
+        The generic `Container` resolution machinery only materializes
+        `uniqueEl` when a parent instance's own attribute_bindings drive
+        the merge - called directly here instead (no such parent in
+        progress), so it's materialized by hand: a fresh
+        `PathOrInspFactor` + `_merge_bag_into_instance`. `ALL` (no
+        `uniqueEl`) leaves `_aggregation_key` unset.
         """
         unique_el = ca.call(aggregation_ctx, "uniqueEl")
         if unique_el is None:
@@ -120,29 +100,12 @@ class _ViewBuildingMixin(_Base):
     def _set_join_or_null(self, view: MetaInstance, join_ctx: ParserRuleContext) -> None:
         """Set `RenamedBaseView.OrNull` for every base of a `JOIN OF` carrying a trailing `(OR NULL)`.
 
-        `join()`'s own grammar (`RenamedViewableRef (',' RenamedViewableRef
-        ['(' 'OR' 'NULL' ')'])*`, eCH-0031 V2.1.0 SS3.15) attaches an
-        optional `(OR NULL)` to the IMMEDIATELY PRECEDING
-        `renamedViewableRef` positionally among `join_ctx`'s own children -
-        never to the 1st base (only "further" bases of a JOIN can be
-        outer-joined against the first, per the manual's own text).
-        `renamedViewableRef()` has no accessor of its own for this sibling
-        token (it lives on `join()`'s context, one level up), so - like
-        `_set_view_formation_kind` for `FormationKind` above - this reads
-        `join_ctx.children` directly rather than a binding on
-        `renamedViewableRef` itself (spec/grammar/mapping/09_views_graphics.yml,
-        `join.attribute_bindings._resolution`/`renamedViewableRef.attribute_bindings.OrNull`
-        both already documented this as fed by the caller, never
-        implemented until this fix). Positional pairing with
-        `view.RenamedBaseView` (i-th `renamedViewableRef` -> i-th base)
-        relies on the same depth-first, source-order build guarantee
-        already used by `_apply_pending_view_all_of`.
-
-        Previously never implemented (no real corpus `(OR NULL)`
-        occurrence existed to surface the gap) - `RenamedBaseView.OrNull`
-        stayed `None`/falsy for every JOIN, silently breaking
-        `convert/jsonfg.py`'s outer-join evaluation
-        (`_join_combinations`) until a synthetic fixture caught it.
+        `join()`'s grammar attaches an optional `(OR NULL)` to the
+        IMMEDIATELY PRECEDING `renamedViewableRef` positionally - never
+        to the 1st base. `renamedViewableRef()` has no accessor of its
+        own for this sibling token, so this reads `join_ctx.children`
+        directly. Previously never implemented (no real corpus `(OR
+        NULL)` occurrence existed to surface the gap).
         """
         bases = [b for b in getattr(view, "RenamedBaseView", None) or [] if isinstance(b, MetaInstance)]
         children = list(join_ctx.children or [])
@@ -156,24 +119,11 @@ class _ViewBuildingMixin(_Base):
     def _expand_view_all_of(self, view: MetaInstance, ctx: ParserRuleContext) -> None:
         """Record a View's `ATTRIBUTE ALL OF <Name>;` for deferred expansion.
 
-        `viewAttributes()` (spec/grammar/mapping/09_views_graphics.yml,
-        `all_of_redefinition`, `status: not_applicable`) documents this as
-        "a pure syntax shortcut on the ModelBuilder side ... iterate the
-        attributes of the resolved BaseView Class and create one ClassAttr
-        per attribute, empty Derivates" - `viewAttributes()`'s own
-        `attribute_bindings` never produce a `ClassAttr` for this
-        alternative (`ALL_OF` has no accessor of its own to bind against;
-        it's a bare-token alternative), so without this, a View built this
-        way has NO usable attribute list of its own for a future
-        View->JSON Schema stage, even though it structurally builds fine.
-
-        Only records here (`view`, `ctx`) rather than expanding immediately:
-        the matched `RenamedBaseView.BaseView` can still be an unresolved
-        `ForwardRef` at this point (e.g. a base declared later in the file,
-        or in another TOPIC/model reached via `DEPENDS ON`/`IMPORTS`) -
-        `forward_refs.resolve_all()` only runs once, at the very end of
-        `build()`. The real expansion happens in
-        `_apply_pending_view_all_of`, called right after that.
+        `viewAttributes()`'s own `attribute_bindings` never produce a
+        `ClassAttr` for this bare-token alternative. Only records here
+        rather than expanding immediately: `RenamedBaseView.BaseView` can
+        still be an unresolved `ForwardRef` at this point. Real expansion
+        happens in `_apply_pending_view_all_of`, after `resolve_all()`.
         """
         va = ca.call(ctx, "viewAttributes")
         if va is None or not ca.has_accessor(va, "ALL") or ca.call(va, "ALL") is None:
@@ -183,39 +133,15 @@ class _ViewBuildingMixin(_Base):
     def _apply_pending_view_all_of(self) -> None:
         """Expand every View recorded by `_expand_view_all_of`, once refs are resolved.
 
-        Only OWN attributes of the matched base
-        (`base.BaseView.ClassAttribute` - inherited attributes via EXTENDS
-        not walked here: no real corpus evidence yet that a View's
-        "ALL OF" base itself has an EXTENDS chain, and duplicating
-        `xtf.schema.attributes_of`'s inheritance walk here would cross a
-        layering boundary - `xtf/schema.py` imports FROM
-        `interlis.builder`, not the other way around). A base that's
-        still unresolved after `resolve_all()` (e.g.
-        `UnresolvedNamedReference`, a genuinely absent cross-file model) is
-        skipped, same "no crash on a known limit" stance as
-        `xtf.schema.attributes_of`.
-
-        `viewAttributes()`'s grammar (`vendor/interlis-antlr4/InterlisParser.g4`,
-        matching the official EBNF, Reference Manual eCH-0031 V2.1.0 §3.15
-        "ViewAttributes = [ATTRIBUTE] {'ALL' 'OF' Base-Name ';' |
-        AttributeDef | Attribute-Name Properties<...> ':=' Expression
-        ';'}.") loops (`(ALL OF Name SEMI | attributeDef | Name
-        (Properties)? ASSIGN expression SEMI)*`), so ANY number of
-        "ALL OF" clauses (freely interleaved with `attributeDef`/
-        `Name := expression` redefinitions, in any order, exactly per the
-        EBNF) land in the SAME `ViewAttributesContext` - a real, legal
-        pattern with MULTIPLE consecutive "ALL OF Name;" statements (one
-        per base of a multi-base `JOIN OF`/`UNION OF`, e.g.
-        `ili_corpus/ERKAS_Strassen_V2_0.ili`'s `VIEW vVA`/`vER`,
-        `ALL()`/`Name()` accessors both multi there). Walks `va.children`
-        positionally (same technique as `_register_unqualified_imports`)
-        to pair each `ALL` terminal with the `Name` terminal immediately
-        following its `OF` - the ONLY reliable way to recover "which Name
-        belongs to which ALL OF", since `Name` is ALSO used by the
-        (unrelated) `Name := expression` alternative in the same repeated
-        group. `attributeDef`-form attributes (bare `Name: Type;` inside
-        ATTRIBUTE) are unaffected either way - already handled generically
-        by the existing engine, independently of how many times it repeats.
+        Only OWN attributes of the matched base are walked - inherited
+        attributes via EXTENDS are not (no real corpus evidence yet, and
+        duplicating `xtf.schema.attributes_of`'s walk here would cross a
+        layering boundary). `viewAttributes()`'s grammar loops, so ANY
+        number of "ALL OF" clauses can be freely interleaved with
+        redefinitions in the SAME `ViewAttributesContext` - walks
+        `va.children` positionally to pair each `ALL` terminal with the
+        `Name` immediately following its `OF`, the only reliable way to
+        tell which name belongs to which `ALL OF`.
         """
         pending = self._pending_view_all_of
         self._pending_view_all_of = []
@@ -246,43 +172,18 @@ class _ViewBuildingMixin(_Base):
     def _reorder_view_class_attributes(view: MetaInstance, va: ParserRuleContext | None) -> None:
         """Reorder `view.ClassAttribute` to match `viewAttributes()`'s own SOURCE order.
 
-        An `ATTRIBUTE ALL OF <Base>;` expansion (just above) and a bare
-        `Name := expression` redefinition (`_build_view_bare_attributes`)
-        attach to `ClassAttribute` at DIFFERENT TIMES during `build()`
-        (bare ones immediately during the main tree walk; `ALL OF` only
-        after `forward_refs.resolve_all()`, since its base can still be a
-        `ForwardRef` until then) - so whichever forms are mixed in one
-        `ATTRIBUTE` block, `ClassAttribute` used to end up with every
-        bare-assign attribute BEFORE every `ALL OF` expansion, regardless
-        of which was actually declared first in the source.
-
-        Real corpus evidence this matters (RULE #7): `ALL OF <Base>;
-        <Name> := <OtherBase> -> <Attr>;` is exactly the shape a `JOIN
-        OF` VIEW needs to project one base wholesale and rename
-        attributes from another (e.g. `Waldabstandslinien_V1_2`'s
-        `Waldabstand_Linie`/`Typ`, item 13/15) - the wrong order is
-        invisible to `.ili -> JSON Schema`/`.xtf -> JSON-FG`/`convert-sql`
-        (none of the three care about `ClassAttribute` order), but a real
-        `.xtf` writer (`convert/xtf_writer.py`) DOES:
-        refman eCH-0031 V2.1.0 SS4.3.7's "Zwiebelprinzip" - a compiled
-        schema's XSD `xsd:sequence` rejects an out-of-order instance -
-        confirmed empirically (`ili2c -oXSD` + `xmllint --schema` on a
-        real `Waldabstandslinien_V1_2_d` model) before this fix existed.
-
-        Reorders by the position of each attribute's OWN declaring token
-        in `va.children` (the `ALL` terminal for an `ALL OF` group -
-        every attribute it expanded to moves together, keeping their OWN
-        relative order - or the `Name` terminal for a bare redefinition),
-        matched back to the already-built `ClassAttribute` entries by
-        their `_all_of_identity` marker (`ALL OF` copies) or by name
-        (bare redefinitions, unique names within one VIEW). An
-        `attributeDef`-form attribute (bare `Name: Type;`, built
-        generically elsewhere, not by either method above) has no
-        recorded position here - no real corpus evidence yet of it mixed
-        with `ALL OF` in the same VIEW (`_bare_view_attribute_assignments`'s
-        own docstring) - so it keeps its current position, anchored via
-        its own current list index (never worse than before this fix for
-        that combination).
+        An `ATTRIBUTE ALL OF <Base>;` expansion and a bare `Name :=
+        expression` redefinition attach to `ClassAttribute` at DIFFERENT
+        TIMES during `build()` (bare ones immediately; `ALL OF` only
+        after `resolve_all()`) - so `ClassAttribute` used to end up with
+        every bare-assign attribute BEFORE every `ALL OF` expansion,
+        regardless of source order. A real `.xtf` writer needs the true
+        order (refman §4.3.7's "Zwiebelprinzip" - a compiled XSD
+        `xsd:sequence` rejects an out-of-order instance, confirmed
+        empirically). Reorders by the position of each attribute's OWN
+        declaring token in `va.children`, matched back to the
+        already-built `ClassAttribute` entries by `_all_of_identity` or
+        by name.
         """
         if va is None:
             return
@@ -339,13 +240,10 @@ class _ViewBuildingMixin(_Base):
 
         `ALL OF <base>` re-exports each base attribute unchanged; a
         consumer that projects a view by expression rather than by name
-        (`convert/sql.py`'s `CREATE VIEW` `SELECT`) needs the same
+        (`convert/sql/views.py`'s `CREATE VIEW` `SELECT`) needs the same
         `Derivates` a `<attr> := <base> -> <attr>` redefinition would
-        carry. Shape and `Kind="ReferenceAttr"` throughout match a real
-        `Name := expression` path (see `_build_local_uniqueness_def` for
-        the same permissive `Kind` convention). `Type` is still set
-        directly from the base attribute, so this path is never walked for
-        type resolution - only for value projection.
+        carry. `Type` is still set directly from the base attribute, so
+        this path is never walked for type resolution.
         """
         factor = self.registry.new_instance("IlisMeta16.ModelData.PathOrInspFactor")
         els: list[MetaInstance] = []
@@ -366,12 +264,10 @@ class _ViewBuildingMixin(_Base):
     def _all_of_base_names(va: ParserRuleContext) -> list[str]:
         """Extract every "ALL OF <Name>" base name from a ViewAttributesContext, in order.
 
-        Positional walk (same technique as `_register_unqualified_imports`):
-        an `ALL` terminal is always immediately followed by `OF` then the
-        base `Name` (`ALL OF Name SEMI`, see `_apply_pending_view_all_of`'s
-        docstring) - `Name` alone isn't enough to disambiguate, since the
-        SAME accessor is also used by the unrelated `Name ':=' expression`
-        alternative in the same repeated group.
+        Positional walk: an `ALL` terminal is always immediately followed
+        by `OF` then the base `Name` - `Name` alone isn't enough to
+        disambiguate, since the SAME accessor is also used by the
+        unrelated `Name ':=' expression` alternative in the same group.
         """
         if not ca.has_accessor(va, "ALL"):
             return []
@@ -387,11 +283,9 @@ class _ViewBuildingMixin(_Base):
     def _find_renamed_base_view(view: MetaInstance, name: str) -> MetaInstance | None:
         """Find `view`'s RenamedBaseView referred to by "ALL OF <name>"/"<name> ASSIGN ...".
 
-        `name` is the base's rename alias if one was given (`Name TILDE
-        viewableRef`), or - the majority real-world case, e.g. `PROJECTION
-        OF Test.Base.B;` + `ALL OF B;` - the base Class's own short name
-        when no alias was used (`renamedViewableRef.Name` then stays
-        unset).
+        `name` is the base's rename alias if one was given, or - the
+        majority real-world case - the base Class's own short name when
+        no alias was used.
         """
         for base in getattr(view, "RenamedBaseView", None) or []:
             base_view = base.BaseView if isinstance(base.BaseView, MetaInstance) else None
@@ -411,21 +305,13 @@ class _ViewBuildingMixin(_Base):
     def _bare_view_attribute_assignments(va: ParserRuleContext) -> list[tuple[str, set[int], ParserRuleContext]]:
         """Extract every "Name (Properties<...>)? ASSIGN expression SEMI" occurrence from a ViewAttributesContext.
 
-        `viewAttributes()`'s 3rd alternative (spec/grammar/mapping/09_views_graphics.yml,
-        `bare_redefinition_list`/`modifier_reassignment`) - real corpus proof:
+        `viewAttributes()`'s 3rd alternative - real corpus proof:
         `tests/fixtures/fgdm4gs/` (5 real VIEW models, none use `ALL OF`).
-        Same positional-walk technique as `_all_of_base_names` (`va.children`
-        in source order): a top-level `Name` terminal belongs to THIS
-        alternative unless it's the base name of an "ALL OF Name" triple
-        (excluded via the same index arithmetic as `_all_of_base_names`) -
-        `attributeDef`'s own `Name` is nested inside its own
-        `AttributeDefContext` subtree, never a direct child of `va`, so no
-        3-way ambiguity exists at this flat level. Scans forward from each
-        such `Name` to its `ASSIGN`, collecting any modifier token
-        (`ABSTRACT`/`EXTENDED`/`FINAL`/`TRANSIENT`) met along the way
-        (inside the optional `LPAR ... RPAR`); a `SEMI` met before `ASSIGN`
-        means this `Name` wasn't actually alt3 (defensive - never observed
-        in real corpus, the grammar itself guarantees this won't happen).
+        Same positional-walk technique as `_all_of_base_names`: a
+        top-level `Name` terminal belongs to THIS alternative unless it's
+        the base name of an "ALL OF Name" triple. Scans forward from each
+        such `Name` to its `ASSIGN`, collecting any modifier token met
+        along the way.
         """
         children = list(va.children or [])
         all_of_name_ids = set()
@@ -468,25 +354,14 @@ class _ViewBuildingMixin(_Base):
     def _build_view_bare_attributes(self, view: MetaInstance, ctx: ParserRuleContext) -> None:
         """Build one `AttrOrParam` per `viewAttributes()` "Name := expression" occurrence.
 
-        Reference Manual 2006-04-13 SS2.15: "it is sufficient to indicate
-        the attribute name and the assignation to the basic attribute. Such
-        definitions are always final" - `Final=True` unconditionally,
-        regardless of the optional modifier bracket. Of the 4 possible
-        modifier tokens (`ABSTRACT`/`EXTENDED`/`FINAL`/`TRANSIENT`), only
-        `TRANSIENT` maps onto a confirmed `AttrOrParam` own attribute
-        (`Transient`, ilismeta16-classes.yml); `ABSTRACT` has no evidence
-        its refman `Class.Abstract`-like semantics were meant to apply to a
-        single computed view attribute, and `EXTENDED` has no matching
-        metamodel attribute at all anywhere in `ilismeta16-*.yml` - neither
-        is guessed at (RULE #5), and no real corpus example uses this
-        optional bracket at all (all 5 `tests/fixtures/fgdm4gs/` models use
-        the bare form).
-
-        `Type` is NOT set here - `RenamedBaseView.BaseView` (needed to walk
-        the assigned expression's path) can still be an unresolved
-        `ForwardRef` at this point, same timing issue as `_expand_view_all_of`.
-        Recorded in `_pending_view_bare_attrs` for `_apply_pending_view_bare_attr_types`,
-        called after `forward_refs.resolve_all()`.
+        Reference Manual 2006-04-13 §2.15: "such definitions are always
+        final" - `Final=True` unconditionally. Of the 4 possible modifier
+        tokens, only `TRANSIENT` maps onto a confirmed `AttrOrParam`
+        attribute; `ABSTRACT`/`EXTENDED` are never guessed at (RULE #5),
+        and no real corpus example uses the optional bracket at all.
+        `Type` is NOT set here - `RenamedBaseView.BaseView` can still be
+        unresolved; recorded in `_pending_view_bare_attrs` for
+        `_apply_pending_view_bare_attr_types`, after `resolve_all()`.
         """
         va = ca.call(ctx, "viewAttributes")
         if va is None:
@@ -516,29 +391,13 @@ class _ViewBuildingMixin(_Base):
 
         Walks the assigned expression's `PathOrInspFactor.PathEls`
         statically against the metamodel (no XTF instance data needed -
-        this only answers "what's this computed attribute's declared
-        type", for `.ili -> JSON Schema`; evaluating the expression against
-        real data (`.xtf -> JSON-FG`) is a separate concern, handled by
-        `convert/jsonfg.py`'s own WHERE-clause evaluator instead. First `PathEl` selects
-        the `RenamedBaseView` (same lookup `_find_renamed_base_view`
-        already uses for `ALL OF`); each subsequent `PathEl` is tried
-        first as a plain `ClassAttribute` by name (the JOIN OF case, e.g.
-        `Axis -> AxisType` in `tests/fixtures/fgdm4gs/Axis_V1_1_d.ili`) and,
-        if that fails, as an association `Role` by name whose `BaseClass`
-        becomes the next hop's class (the PROJECTION OF an ASSOCIATION
-        case, e.g. `TypPZ_Planungszone -> Planungszone -> Geometrie` in
-        `tests/fixtures/fgdm4gs/Planungszonen_V2_d_B.ili` - `Planungszone`
-        is a role of the `TypPZ_Planungszone` association, not an
-        attribute). Only the LAST `PathEl` may resolve `Type` (a role alone
-        has none); `_find_class_attribute` walks own-then-`Super` (real
-        corpus case, `ISOS_V2.ili`'s `name := Ortsbild -> name`, `name`
-        only declared on the base topic's `Ortsbild` before `(EXTENDED)`
-        reopens it - see that method's own docstring, supersedes the
-        former "own attributes only, no EXTENDS walk" stance). An
-        expression that isn't a plain path (no real corpus example), or a
-        path that fails to resolve at any hop, leaves `Type` unset - same
-        graceful-degradation stance as everywhere else in this builder
-        (RULE #5), not a crash.
+        real-data evaluation is `convert/jsonfg.py`'s separate concern).
+        First `PathEl` selects the `RenamedBaseView`; each subsequent
+        `PathEl` is tried first as a plain `ClassAttribute` by name (JOIN
+        OF), then as an association `Role` (PROJECTION OF an
+        ASSOCIATION). Only the LAST `PathEl` may resolve `Type`. An
+        expression that isn't a plain path, or fails to resolve at any
+        hop, leaves `Type` unset (RULE #5), not a crash.
         """
         pending = self._pending_view_bare_attrs
         self._pending_view_bare_attrs = []
@@ -587,21 +446,11 @@ class _ViewBuildingMixin(_Base):
     def _find_class_attribute(cls_or_assoc: MetaInstance, name: str) -> MetaInstance | None:
         """Own attribute by name, then inherited via the `Super` chain (`EXTENDS`/`(EXTENDED)`).
 
-        Real corpus evidence found - the `_fix_class_extended_super`
-        gap fix (`ISOS_V2.ili`'s `TOPIC ISOS EXTENDS ISOS_V2.ISOSBase =
-        CLASS Ortsbild (EXTENDED) = ...`) makes `Super` resolve for a
-        reopened class, but a VIEW attribute assigned from one of the
-        BASE topic's attributes (`name := Ortsbild -> name`, `name` only
-        declared on `ISOSBase.Ortsbild`) still failed to resolve `Type`
-        without this walk - own-only was previously a deliberate,
-        evidence-based stance (see this method's former docstring/
-        `_resolve_view_attribute_type`, "no real corpus evidence yet" -
-        all 5 `tests/fixtures/fgdm4gs/` models only reference OWN
-        attributes), now superseded by this real corpus case. Own wins
-        over inherited on a name collision (checked before ascending to
-        `Super`) - same precedence `xtf.schema.attributes_of` documents
-        for the general case; a local walk here (not a call to that
-        function) avoids a builder -> xtf import for a two-line loop.
+        Real corpus evidence found (the `_fix_class_extended_super` gap
+        fix, `ISOS_V2.ili`'s reopened `Ortsbild` class): own-only was
+        previously a deliberate, evidence-based stance, superseded once a
+        VIEW attribute needed to resolve `Type` from a BASE topic's
+        attribute. Own wins over inherited on a name collision.
         """
         current: MetaInstance | None = cls_or_assoc
         seen: set[int] = set()
@@ -626,9 +475,7 @@ class _ViewBuildingMixin(_Base):
         REFERENCE TO).
 
         Duplicated here rather than imported from `xtf.schema` - that
-        module imports FROM `interlis.builder`, not the other way around
-        (see `_apply_pending_view_all_of`'s note on the same layering
-        constraint).
+        module imports FROM `interlis.builder`, not the other way around.
         """
         base = getattr(role, "BaseClass", None)
         if isinstance(base, list):

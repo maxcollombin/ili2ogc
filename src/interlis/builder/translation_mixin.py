@@ -1,9 +1,8 @@
 """TRANSLATION OF - positional alignment of a translation model against its base.
 
-Mixed into `InterlisModelBuilder` - `_register_translation_of` records
-the clause during construction; `_apply_pending_translations` (called
-from `build()`, after `forward_refs.resolve_all()`) does the actual
-alignment.
+`_register_translation_of` records the clause during construction;
+`_apply_pending_translations` (called from `build()`, after
+`forward_refs.resolve_all()`) does the actual alignment.
 """
 
 from __future__ import annotations
@@ -29,16 +28,10 @@ class _TranslationMixin(_Base):
     def _register_translation_of(self, model: MetaInstance, ctx: ParserRuleContext) -> None:
         """Record `MODEL X (fr) ... TRANSLATION OF Y ["ver"]` for deferred alignment against `Y`.
 
-        The grammar (`modeldef`) matches `TRANSLATION OF Name LSBR STRING
-        RSBR`; the `Model` metamodel class has no field for it
-        (`spec/grammar/mapping/02_packages.yml`). A translation model
-        re-declares the base's whole structure with translated
-        identifiers, matched POSITIONALLY (the grammar has no `==` rename
-        syntax) - `_apply_pending_translations`, after `resolve_all()`,
-        walks the two built element trees in parallel and records the name
-        map. The transfer format is unchanged for a translation (refman
-        §4.3.3), so this only feeds a `--lang` output overlay in the
-        converters, never parsing.
+        `Model` has no field for this clause - recorded here, actual
+        alignment (matched POSITIONALLY, no `==` rename syntax in the
+        grammar) happens in `_apply_pending_translations` after
+        `resolve_all()`.
         """
         if ca.call(ctx, "TRANSLATION") is None:
             return
@@ -54,26 +47,14 @@ class _TranslationMixin(_Base):
     def _apply_pending_translations(self) -> None:
         """Align every `TRANSLATION OF` model against its base, building an `IlisMeta16.ModelTranslation.Translation`.
 
-        A translation model re-declares the base's whole structure with
-        translated identifiers, matched POSITIONALLY (the grammar has no
-        `==` rename syntax; refman: the two models must "strukturell exakt
-        uebereinstimmen"). `_align_translation` walks
-        `Model.Element` / `Class.ClassAttribute` / `EnumType.EnumElement`
-        of both trees in parallel; every base element whose name changed
-        becomes one `METranslation` (`Of` = a real reference to that base
-        `MetaElement`, `TranslatedName` = the new name) on a single
-        `Translation` (`Language` = the translation model's own). This is
-        exactly `IlisMeta16.ModelTranslation` (IlisMeta16.ili's
-        `TOPIC ModelTranslation`) - a free-standing object referencing the
-        base, no `Model <-> Translation` association exists, so it is kept
-        reachable from Python as `model._translation_object` (same as how
-        `Import` instances are kept under a raw key).
-
-        Also derives the lookup maps the `--lang` converter overlay uses
-        (`model._translation`, `elements`/`attributes` by short name -
-        `convert/translation.py`). A base that did not resolve (not on
-        `--repo`) is skipped with a warning; a structural mismatch aligns
-        the common prefix of that scope and warns, never guesses (RULE #5).
+        `_align_translation` walks `Model.Element`/`Class.ClassAttribute`/
+        `EnumType.EnumElement` of both trees in parallel; every renamed
+        base element becomes one `METranslation`, kept reachable as
+        `model._translation_object` (no real `Model <-> Translation`
+        association exists) - plus the `--lang` overlay's lookup maps
+        (`model._translation`). A base that did not resolve is skipped
+        with a warning; a structural mismatch aligns the common prefix
+        and warns, never guesses (RULE #5).
         """
         pending = self._pending_translations
         self._pending_translations = []

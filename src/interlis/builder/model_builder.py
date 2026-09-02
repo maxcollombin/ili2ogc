@@ -5,10 +5,8 @@ method. The generic visit(ctx) derives the rule name from
 type(ctx).__name__, loads the matching spec/grammar/mapping/*.yml entry,
 and applies one of 4 execution strategies depending on `kind`.
 
-VIEW construction, OID clauses, and TRANSLATION OF alignment are mixed
-in from view_mixin.py/oid_mixin.py/translation_mixin.py - self-contained
-INTERLIS-construct concerns pulled out of this file, unlike the dispatch
-engine itself (this file), which stays one unit by necessity.
+VIEW/OID/TRANSLATION OF are mixed in from view_mixin.py/oid_mixin.py/
+translation_mixin.py - this file stays one unit by necessity.
 """
 
 from pathlib import Path
@@ -47,11 +45,9 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _from_shared(cls, schema, registry, spec, attachment, repository) -> "InterlisModelBuilder":
         """Build a sub-builder for an imported file (see ModelRepository).
 
-        Reuses the session's shared components instead of reloading them
-        from mappings_dir/spec_dir - critical for the dynamic Pydantic
-        classes (MetamodelRegistry) to be the same Python objects across
-        files, not a distinct class per file despite the same
-        qualified_name.
+        Reuses the session's shared components rather than reloading -
+        critical for the dynamic Pydantic classes (MetamodelRegistry) to
+        stay the same Python objects across files.
         """
         self = cls.__new__(cls)
         self._init_shared(schema, registry, spec, attachment, repository)
@@ -129,19 +125,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def build(self, tree: ParserRuleContext, *, meta_attributes: list[tuple[int, str, str]] | None = None) -> Any:
         """Build `tree`, optionally capturing eCH-0117 `!!@Name=Value` comments.
 
-        `meta_attributes` (typically `runtime.parse.meta_attribute_comments(text)`
-        for this SAME source text) is attached to the built instances via
+        `meta_attributes` is attached to the built instances via
         `_attach_pending_meta_attributes`, per eCH-0117's "first following
-        language construct" rule - a `MetaAttribute` instance per pair, via
-        the real `MetaAttributes` association (IlisMeta16.ModelData), so it
-        shows up as `instance.MetaAttribute` (a list) exactly like any
-        other multi-valued association. Omitted (the default): no
-        meta-attribute capture, zero behavior change from before this was
-        added. Only `tree` itself is covered by THIS call - an imported
-        model gets the same treatment independently, via its own
-        sub-builder's `build()` call (`ModelRepository._get_table` passes
-        that model's own `meta_attribute_comments`/
-        `meta_attribute_comments_in_file`, not this call's `meta_attributes`).
+        language construct" rule. Only `tree` itself is covered by THIS
+        call - an imported model gets the same treatment independently,
+        via its own sub-builder's `build()` call.
         """
         self._pending_meta_attributes = sorted(meta_attributes or [], key=lambda triple: triple[0])
         self._meta_attribute_index = 0
@@ -156,29 +144,13 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _apply_pending_mandatory_overrides(self) -> None:
         """Give each attribute queued in `_pending_mandatory_overrides` its OWN, Mandatory=True `Type` clone.
 
-        `DomainType.Mandatory` (own attribute) is the ONLY place
-        `MANDATORY` can attach in this metamodel (`AttrOrParam` itself has
-        none - confirmed against `ilismeta16-classes.yml`) - correct for
-        an INLINE type (a fresh instance already built just for that one
-        attribute) but wrong for a NAMED domain reference: every attribute
-        referencing that domain resolves to the SAME registered instance
-        (confirmed empirically), so setting `Mandatory` directly on it
-        would incorrectly mark every OTHER use of the same domain as
-        mandatory too - eCH-0031 SS3.6 confirms `MANDATORY <DomainRef>` is
-        real, legal syntax (`AttrTypeDef = 'MANDATORY' [ AttrType ] | ...`,
-        `AttrType` includes `DomainRef`), and real corpus-wide (292 raw
-        occurrences, `ili_corpus/`), not a rare edge case.
-
-        Runs AFTER `forward_refs.resolve_all()`, so `instance.Type` (still
-        a `ForwardRef` at the point `_attach_unclaimed_results` queued this
-        instance) now holds the actual resolved instance - a plain shallow
-        clone of it (own+inherited fields, no need to deep-copy any
-        composite association like `MetaAttribute`: nothing mutates a
-        built DomainType instance further after this point) with
-        `Mandatory` forced `True` replaces `instance.Type`, leaving the
-        original SHARED instance completely untouched for every other
-        attribute still referencing it. A domain already declared
-        `Mandatory=True` itself needs no clone (already correct).
+        `DomainType.Mandatory` is the ONLY place `MANDATORY` can attach -
+        correct for an INLINE type but wrong for a NAMED domain
+        reference, since every attribute referencing it resolves to the
+        SAME registered instance (real corpus-wide, 292 occurrences).
+        Runs AFTER `resolve_all()`: a shallow clone with `Mandatory`
+        forced `True` replaces `instance.Type`, leaving the original
+        SHARED instance untouched for every other attribute.
         """
         for instance in self._pending_mandatory_overrides:
             resolved = getattr(instance, "Type", None)
@@ -206,11 +178,9 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _predefined_type(self, token: str) -> MetaInstance | None:
         """Return the shared IlisMeta16 instance for a predefined `INTERLIS.<token>` type.
 
-        `token` is the bare segment (`HALIGNMENT`/`VALIGNMENT`/`BOOLEAN`/
-        `URI`/`UUIDOID`). One instance per token per builder - `Mandatory`
-        is never set here; an attribute needing it gets a private clone via
-        `_pending_mandatory_overrides`, the same mechanism as a named
-        DOMAIN reference.
+        One instance per token per builder - `Mandatory` is never set
+        here; an attribute needing it gets a private clone via
+        `_pending_mandatory_overrides`.
         """
         cached = self._predefined_type_cache.get(token)
         if cached is not None:
@@ -261,13 +231,9 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
         """Replace a predefined-`INTERLIS`-token sentinel in an `attrTypeDef` bag with a real Type.
 
         `bag["Type"]` reaches `_attach_unclaimed_results` as an opaque
-        `"INTERLIS.HALIGNMENT"`/`"INTERLIS.VALIGNMENT"` string (from
-        `alignmentType`, which builds no instance) or as an
-        `INTERLIS.BOOLEAN`/`URI`/`UUIDOID` `structureRef` ForwardRef (which
-        resolves to nothing - the name is not a real structure Class). Swap
-        in the materialised type so the rest of the bag loop attaches it
-        like any other; queue `_pending_mandatory_overrides` for a leading
-        `MANDATORY` (dropped here so the shared instance is never mutated).
+        string or a `structureRef` ForwardRef that resolves to nothing.
+        Swaps in the materialised type; queues
+        `_pending_mandatory_overrides` for a leading `MANDATORY`.
         """
         type_value = bag.get("Type")
         token: str | None = None
@@ -297,15 +263,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _attach_pending_meta_attributes(self, instance: MetaInstance, ctx: Any) -> None:
         """Attach every pending meta-attribute comment up to `ctx`'s own line.
 
-        eCH-0117 SS3: "le meta-attribut se rapporte a la premiere
-        construction de langue suivante" - since built instances are
-        visited depth-first in source order (matching ANTLR's own
-        traversal), and `_pending_meta_attributes` is consumed by a single
-        monotonic index (never re-scanned/reset), the first instance whose
-        own line is >= a pending comment's line IS that "first following
-        construct". No-op if `ctx`'s line can't be determined (e.g. a
-        synthetic instance with no real source position) or nothing is
-        pending.
+        eCH-0117 §3: "the meta-attribute applies to the first following
+        language construct" - built instances are visited depth-first in
+        source order, and `_pending_meta_attributes` is consumed by a
+        single monotonic index, so the first instance whose own line is
+        >= a pending comment's line IS that construct.
         """
         line = self._ctx_line(ctx)
         if line is None or self._meta_attribute_index >= len(self._pending_meta_attributes):
@@ -429,20 +391,12 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _register_unqualified_imports(self, ctx: ParserRuleContext) -> None:
         """Detect which `IMPORTS` names are prefixed with `UNQUALIFIED`.
 
-        Reads the raw ModeldefContext (e.g. `IMPORTS UNQUALIFIED
-        INTERLIS;`). Feeds symbol_table.unqualified_imports, used by
-        ForwardRefResolver._resolve_one to let an unqualified reference
+        Feeds `symbol_table.unqualified_imports`, used by
+        `ForwardRefResolver._resolve_one` to let an unqualified reference
         resolve into an imported model. Not expressible via the generic
-        for_each/attribute_bindings mechanism (see modeldef.imports,
-        spec/grammar/mapping/02_packages.yml): the Import metamodel class
-        has no attribute of its own for UNQUALIFIED, so this stays an
-        internal detail of the resolution engine, never persisted on a
-        MetaInstance.
-
-        UNQUALIFIED always immediately precedes the name it modifies in the
-        grammar ('IMPORTS UNQUALIFIED? (Name|INTERLIS) (COMMA UNQUALIFIED?
-        (Name|INTERLIS))* SEMI'), so a simple positional walk over
-        ctx.children is enough - no need for more complex correlation.
+        `for_each`/`attribute_bindings` mechanism: `Import` has no
+        attribute of its own for `UNQUALIFIED`. It always immediately
+        precedes the name it modifies, so a positional walk suffices.
         """
         if not ca.has_accessor(ctx, "UNQUALIFIED"):
             return
@@ -539,30 +493,15 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _build_multi_declaration(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry):
         """Split a domainDef() into its N independent declarations.
 
-        domainDef() is the only one of the 121 rules that grammatically
-        loops over N independent declarations sharing a single DOMAIN
-        keyword (e.g. "DOMAIN Code = 0..255; MultRange = 0..2147483647;
-        LengthRange EXTENDS MultRange = 1..2147483647;" - confirmed on the
-        real generated code, InterlisParser.py, domainDef(): a "while _alt
-        != 2" loop, each iteration Name (...)? EQ MANDATORY?
-        (type_()|numeric()|enumeration()|STRING DOTDOT STRING|CLASS
-        RESTRICTION(...)) SEMI). Each SEMI delimits a declaration - splits
-        ctx.children into segments by position rather than accessor name
-        (no existing generic mechanism, e.g. for_each, correlates several
-        DIFFERENT accessors - Name/type_/numeric/enumeration - at the SAME
-        position across N occurrences).
-
-        `RESTRICTION LPAR classOrAssociationRef (SEMI classOrAssociationRef)*
-        RPAR` contains its own INTERNAL SEMIs (separators between
-        candidates, not declaration terminators, e.g.
-        "CHCantonCode_Extended = CLASS RESTRICTION(sAbroadCode;
-        sCHCantonCode);") - a naive split on every SEMI would cut a segment
-        in the middle of the candidate list, silently truncating
-        `_build_domain_class_restriction` to its 1st candidate only (the
-        rest landing in a residual segment with no leading Name, rejected
-        by `name_node is None: continue` below - never a crash, just silent
-        data loss). This now tracks LPAR/RPAR depth: a SEMI only delimits a
-        declaration outside any open parenthesis.
+        `domainDef()` is the only one of the 121 rules that grammatically
+        loops over N independent declarations sharing a single `DOMAIN`
+        keyword. Each SEMI delimits a declaration - splits `ctx.children`
+        into segments by position (no existing generic mechanism
+        correlates several DIFFERENT accessors at the SAME position).
+        `RESTRICTION(...)` contains its own INTERNAL SEMIs (separators
+        between candidates, not declaration terminators) - this tracks
+        LPAR/RPAR depth so a SEMI only delimits a declaration outside any
+        open parenthesis.
         """
         children = list(ctx.children or [])
         segments: list[list[Any]] = []
@@ -677,20 +616,12 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
         """Attach `Super` for a `DOMAIN X EXTENDS Y = ...;` declaration.
 
         `domainDef()`'s optional `(EXTENDS domainRef)?` clause sits just
-        before `EQ`, inside the same segment already split out by
-        `_build_multi_declaration` (e.g. `LengthRange EXTENDS MultRange =
-        1..2147483647;`, `models/IlisMeta16.ili`, or `DirectedLine EXTENDS
-        Line = DIRECTED POLYLINE;`, CHBase). Previously never attached,
-        regardless of the domain's content type (`NumType`/`EnumType`/
-        `CoordType`/`LineType`/...) - content construction (Min/Max/Axis/
-        Kind/etc.) only handled its own content alternative, never the
-        optional `EXTENDS domainRef` prefix in front of it. Needed for
-        `schema.line_coord_type` to walk the EXTENDS chain of a `LineType`
-        with no `VERTEX` of its own. Same policy as
-        `classDef`/`structureDef.Super`: `graceful=True` - an unresolved
-        base domain (external model missing from `--repo`, or itself
-        failing to build) degrades to `UnresolvedNamedReference`, never
-        crashes the whole file.
+        before `EQ`, inside the segment `_build_multi_declaration` already
+        split out. Previously never attached - content construction only
+        handled its own content alternative, never this optional prefix.
+        Needed for `schema.line_coord_type` to walk the EXTENDS chain of a
+        `LineType` with no `VERTEX` of its own. `graceful=True`, same
+        policy as `classDef`/`structureDef.Super`.
         """
         extends_idx = next(
             (
@@ -722,34 +653,16 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _build_domain_class_restriction(self, segment: list[Any], rule_name: str) -> MetaInstance:
         """Build `DOMAIN X = CLASS RESTRICTION(A; B; ...);`.
 
-        domainDef()'s 5th alternative, inlined directly in its ANTLR body
-        (`CLASS (RESTRICTION LPAR classOrAssociationRef (SEMI
-        classOrAssociationRef)* RPAR)?`, not a call to a dedicated
-        sub-rule) - previously never built (found on
-        RoadTrafficCensus_V1_1.ili: "CHCantonCode_Extended = CLASS
-        RESTRICTION(sAbroadCode; sCHCantonCode);"). Corresponds to the
-        manual's "ClassType" alternative (eCH-0031 V2.1.0, "ClassType =
-        'CLASS' ['RESTRICTION' '(' ViewableRef {';' ViewableRef} ')'] |
-        ...") - target metaclass isn't "ClassType" (absent from
-        ilismeta16-*.yml) but IlisMeta16.ModelData.ReferenceType, the same
-        target as referenceAttr() (REFERENCE TO ...): Class EXTENDS Type,
-        so usable directly as AttrOrParamType's Type role - but this
-        grammar alternative has no EXTERNAL clause (unlike referenceAttr),
-        so External=False unconditionally. BaseClass attaches via the same
-        association as referenceAttr.BaseClass/roleDef.BaseClass
-        (ClassRelatedType) - CRT {0..*} <-> BaseClass {0..*}
-        (ilismeta16-associations.yml, already multi-valued on the
-        BaseClass side): attaches ALL classOrAssociationRef in the segment
-        (not just the first), needed to interpret the 3rd XTF encoding
-        form - `CLASS RESTRICTION(A; B; C)` with several real candidates,
-        e.g. `Owner = CLASS RESTRICTION (sCHOwnerCode; sCHCantonCode;
-        sCHMunicipalityCode)` (RoadTrafficCensus_V1_1.ili, see
-        xtf/schema.py: restriction_candidates). Each `attach()` on this
-        multi-valued role APPENDS to the list
-        (`AttachmentResolver._set_field`, upper='*'), never replaces - no
-        change in shape for the single-candidate case (a plain REFERENCE
-        TO, roleDef): `.BaseClass` was already a one-element list before
-        this, this loop just appends further elements if any.
+        `domainDef()`'s 5th alternative, inlined directly in its ANTLR
+        body - previously never built (found on
+        `RoadTrafficCensus_V1_1.ili`). Target metaclass is
+        `IlisMeta16.ModelData.ReferenceType`, same as `referenceAttr()`,
+        but this alternative has no `EXTERNAL` clause, so
+        `External=False` unconditionally. Attaches ALL
+        `classOrAssociationRef` in the segment (not just the first),
+        needed to interpret the 3rd XTF encoding form - `CLASS
+        RESTRICTION(A; B; C)` with several real candidates (see
+        `xtf/schema.py::restriction_candidates`).
         """
         instance = self.registry.new_instance("IlisMeta16.ModelData.ReferenceType")
         instance.External = False
@@ -776,14 +689,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
         """Build type()'s 3rd alternative: a bare `STRING DOTDOT STRING` domain.
 
         E.g. `Angle_DMS_90 EXTENDS Angle_DMS = "-90:00:00.000" ..
-        "90:00:00.000";` (CoordSys-20151124.ili). Maps to
-        `IlisMeta16.ModelData.FormattedType` (`Min`/`Max`), by analogy with
-        `formattedType()`'s own STRING DOTDOT STRING alternative - the same
-        target class, same field semantics. Built by hand (not via
-        `resolve_source`/`alt:`) because `ctx.getAltNumber()` is
-        unconditionally 0 for unlabeled-alternative rules in the vendored
-        grammar - a known, wider engine limitation affecting every `alt:
-        <int>` binding, not fixed here.
+        "90:00:00.000";` (`CoordSys-20151124.ili`). Maps to
+        `IlisMeta16.ModelData.FormattedType`, by analogy with
+        `formattedType()`'s own alternative. Built by hand because
+        `ctx.getAltNumber()` is unconditionally 0 for unlabeled-alternative
+        rules in the vendored grammar.
         """
         strings = [
             c for c in (ctx.children or []) if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.STRING
@@ -798,23 +708,12 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _build_control_points_ref(self, ctx: ParserRuleContext, rule_name: str) -> ForwardRef | None:
         """Build a ForwardRef from `controlPoints()` (`VERTEX Name(DOT Name)*`).
 
-        E.g. "VERTEX Coord2" - geometry XTF's 5th special case. Its
-        declarative binding (`_resolution: {field: Name, multi: true}`)
-        used to produce only a LIST of Name token texts, never attached
-        anywhere (`LineType.CoordType` stayed `None` for every built
-        instance, even `Line = POLYLINE ... VERTEX Coord2;` on
-        `CHBase_Part1_GEOMETRY_V1.ili`) - the generic `_resolve_or_defer`
-        (kind: Reference) doesn't fit either: its `ctx.getText()` would
-        capture the VERTEX token along with the qualified name
-        (`controlPoints()` carries its own keyword, unlike `domainRef()`
-        which contains only the name). This rebuilds the qualified name by
-        hand from the `Name` tokens only (ignoring VERTEX), same dot-join
-        convention as `domainRef`. Returns a `ForwardRef` (never resolved
-        here) - attached generically by `_apply_one_binding` via the
-        `lineType.CoordType` binding (`association: LineCoord, role:
-        CoordType`, see 06_types.yml), which already handles the
-        `isinstance(value, ForwardRef)` case on its own (attach +
-        `register_pending`, no extra code needed here).
+        E.g. "VERTEX Coord2" - its declarative binding used to produce
+        only a LIST of Name token texts, never attached anywhere
+        (`LineType.CoordType` stayed `None`) - the generic
+        `_resolve_or_defer` doesn't fit either, since `ctx.getText()`
+        would capture the `VERTEX` token along with the qualified name.
+        Rebuilds the name by hand from the `Name` tokens only.
         """
         names = [n.getText() for n in ca.call_list(ctx, "Name")]
         if not names:
@@ -831,46 +730,14 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _build_local_uniqueness_def(self, ctx: ParserRuleContext) -> dict[str, Any]:
         """Build `{Kind: "LocalU", UniqueDef: [PathOrInspFactor, ...]}` for `localUniqueness()`.
 
-        Grammar: `LPAR LOCAL RPAR (Name COLON)? Name (MINUS GT Name)* (COLON
-        Name (COMMA Name)*)?` - real corpus usage (confirmed against every
-        `UNIQUE (LOCAL)` occurrence in ili_corpus/) is always the single
-        shape `RoleName: AttrName` (e.g. `UNIQUE (LOCAL) Entries: Code;`,
-        `Entries` the `BAG`/`LIST OF STRUCTURE` attribute, `Code` a member
-        of that structure) - never the optional leading `(Name COLON)?`
-        label, never a multi-hop role path, never more than one trailing
-        attribute name.
-
-        This can't be a generic `attribute_bindings` entry: `ctx.Name()`
-        returns EVERY `Name` token in the rule (label + role path + trailing
-        attributes all share the one accessor, like `pathEl`'s alternatives)
-        - AND, confirmed empirically (`ParserATNSimulator.adaptivePredict`
-        instrumented directly against the real corpus shape), ANTLR's own
-        `la_` decision for the leading `(Name COLON)?` is genuinely
-        AMBIGUOUS for `Entries: Code` (both "label=Entries, role=[Code],
-        no trailing attrs" and "no label, role=[Entries], trailing=[Code]"
-        are equally valid completions of the rule alone) and resolves to
-        the WRONG one for this project's real usage (greedily takes the
-        optional branch, discarding `Entries` - the actual `BAG`/`LIST`
-        attribute - as an unused label and misreading `Code` as the role
-        path instead). The parse TREE (raw children) still holds the
-        correct token sequence either way (ANTLR's internal branch choice
-        only decides which `match()` calls fire, not what children get
-        appended) - re-derived here directly, ignoring that internal
-        choice entirely: everything up to the FIRST `COLON` is the role
-        path (`Name`/`MINUS`/`GT` alternation), everything after is the
-        comma-separated attribute list. No real corpus case has a second
-        `COLON` (the label form) to conflict with this reading.
-
-        One `PathOrInspFactor` per trailing attribute name, `PathEls` =
-        the role path's `PathEl`s + that attribute's own `PathEl` (`Kind`
-        always `"ReferenceAttr"`, same permissive convention as
-        `globalUniqueness`'s cross-reference paths and
-        `constraint_eval.py`'s `_resolve_path`) - `convert/sql.py` maps
-        this directly onto the `<attr>_<subattr>`-flattened columns of the
-        `BAG`/`LIST OF STRUCTURE`'s own child table. No trailing attribute
-        at all (not seen in the real corpus either) falls back to a single
-        `PathOrInspFactor` over the role path alone (the element's own
-        scalar value must be locally unique).
+        Real corpus usage (confirmed against every `UNIQUE (LOCAL)`
+        occurrence in `ili_corpus/`) is always the single shape
+        `RoleName: AttrName`. Can't be a generic `attribute_bindings`
+        entry: `ctx.Name()` returns EVERY `Name` token in the rule, and
+        ANTLR's own decision for the leading `(Name COLON)?` is genuinely
+        AMBIGUOUS for `Entries: Code` and resolves to the WRONG one for
+        this project's real usage - re-derived here directly from the
+        raw children, ignoring ANTLR's internal branch choice.
         """
         children = list(ctx.getChildren())[3:]  # skip LPAR LOCAL RPAR
         colon_index = next(
@@ -913,31 +780,15 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _build_enumeration_tree(self, ctx: ParserRuleContext, rule_name: str, entry: SpecEntry) -> None:
         """Build the EnumNode tree of an `enumeration()` correctly.
 
-        Each enumElement self-attaching via `parent: {association: TopNode,
-        role: TopNode}` (the naive per-element approach) can only represent
-        a linear chain, never a branching tree - for a nested definition
-        like "KGS_Kategorie : MANDATORY (A (A, verstaerkter_Schutz), B);"
-        it would produce TopNode=A/A.Sub=[B], losing A's real children
-        entirely and conflating B - a sibling of A at the root level - with
-        a child. See `enumElement` (spec/grammar/mapping/06_types.yml) for
-        the binding this method replaces. `models/IlisMeta16.ili` documents
-        the convention on EnumNode: "MetaElement.Name := 'TOP' for topnode"
-        - a synthetic root node, never a real element.
-
-        Distinguishes the level by the current PARENT's class
-        (`_parent_stack[-1]`, already pushed by `visit_wrapped` for the TOP
-        call, or by `_build_instance` of the enclosing enumElement for a
-        NESTED call - Sub-Enumeration):
-        - TOP call (parent = EnumType): creates the synthetic TOP node,
-          attaches it as EnumType.TopNode, attaches EACH enumElement of the
-          flat list to it as a direct child (role Node, association
-          SubNode) - Order/Final apply to the EnumType itself.
-        - NESTED call (parent = EnumNode, the enclosing enumElement):
-          attaches this Sub-Enumeration's enumElements directly as children
-          of THAT node (no extra synthetic TOP - the enclosing enumElement
-          already serves as local root) - Final applies to that node itself
-          (marks it non-extensible), Order is `not_applicable` at this
-          level (already documented as such).
+        Each `enumElement` self-attaching via its own `parent:` (the naive
+        per-element approach) can only represent a linear chain, never a
+        branching tree - for a nested definition like `"KGS_Kategorie :
+        MANDATORY (A (A, verstaerkter_Schutz), B);"` it would lose A's
+        real children entirely. Distinguishes TOP vs NESTED by the
+        current PARENT's class (`_parent_stack[-1]`): TOP creates a
+        synthetic `TOP` node (`models/IlisMeta16.ili`'s documented
+        convention); NESTED attaches directly to the enclosing
+        `enumElement`, which already serves as local root.
         """
         parent_context = self._parent_stack[-1] if self._parent_stack else None
         is_top_level = (
@@ -1294,18 +1145,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
         """Return the raw text of ctx's enclosing TOPIC's 1st topicRef(), if any.
 
         Only if that TOPIC carries an EXTENDS (see
-        ForwardRef.topic_extends_hint for the full rationale,
-        forward_refs.py). Walks `ctx.parentCtx` up to the first
-        `TopicDefContext` found (the ANTLR tree exactly mirrors the
-        grammar's nesting - classDef/structureDef/etc. are always direct
-        descendants of the topicDef containing them, so this walk always
-        finds the right enclosing topic, no other correlation needed).
-        Reads raw text rather than consulting already-built state
-        (DataUnit.Super): avoids any dependency on the order pending
-        ForwardRefs get resolved in (`definitions` - i.e. a topic's
-        classDef/structureDef - is always processed BEFORE
-        `extends_topicRef` in `_build_multi_target`, so DataUnit.Super
-        wouldn't be resolved yet when this text is needed).
+        `ForwardRef.topic_extends_hint`, `forward_refs.py`). Walks
+        `ctx.parentCtx` up to the first `TopicDefContext` found. Reads
+        raw text rather than consulting already-built state
+        (`DataUnit.Super`): avoids depending on ForwardRef resolution
+        order.
         """
         node = ctx.parentCtx
         while node is not None and type(node).__name__ != "TopicDefContext":
@@ -1321,11 +1165,9 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
         """Return the name of the MODEL enclosing the current construction.
 
         Walks `_parent_stack` from the end. Used to disambiguate a short
-        name that's still present in several models of a multi-MODEL file
-        ("PointStructure" declared separately in
-        BaseModel_SectoralPlans_LV03_V1_4 AND _LV95_V1_4, same file, SAME
-        symbol_table - previously invisible since only one model per file
-        was ever built).
+        name still present in several models of a multi-MODEL file (real
+        case: "PointStructure" declared separately in two models of the
+        SAME file/symbol_table).
         """
         for inst in reversed(self._parent_stack):
             if inst._qualified_class == "IlisMeta16.ModelData.Model":
@@ -1335,16 +1177,13 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _expand_kind_hint(self, short_name: str) -> list[str]:
         """Expand an abstract metamodel class hint into its concrete subclasses.
 
-        A hint (`resolves_to`/`target`) can name an ABSTRACT metamodel
-        class (e.g. "DomainType", isAbstract=true in the XMI - no instance
-        is ever literally of that class, always a concrete subclass like
-        EnumType/NumType/TextType) - the strict `_qualified_class == hint`
-        comparison in `SymbolTable.resolve` therefore never matched for
-        `domainRef` (hint="DomainType"), making its disambiguation
-        completely inert (found on models.geo.admin.ch:
-        "Bodenbedeckungsart: Bodenbedeckungsart;", the attribute and its
-        EnumType domain share the same short name, never disambiguated). A
-        hint that's already concrete (e.g. "Class") is returned unchanged.
+        A hint can name an ABSTRACT metamodel class (e.g. "DomainType" -
+        no instance is ever literally of that class, always a concrete
+        subclass like EnumType/NumType/TextType) - the strict
+        `_qualified_class == hint` comparison in `SymbolTable.resolve`
+        never matched for `domainRef`, making disambiguation inert (real
+        corpus case: `"Bodenbedeckungsart: Bodenbedeckungsart;"`, the
+        attribute and its domain sharing the same short name).
         """
         qualified = next((qn for qn in self.schema.uml.qualified if qn.rsplit(".", 1)[-1] == short_name), None)
         if qualified is None:
@@ -1547,17 +1386,12 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     ) -> None:
         """Build one `target` instance per element of a resolved list.
 
-        For `for_each:` bindings, instead of a single instance - needed for
-        rules where a grammatical loop (e.g. modeldef.imports: a repeated
-        IMPORTS clause) must produce N distinct linked instances (e.g. N
-        Import associations), not a single standard nested construction
-        (see _build_nested, which assumes one instance per binding).
-
+        For `for_each:` bindings, instead of a single instance - needed
+        for rules where a grammatical loop (e.g. `modeldef.imports`) must
+        produce N distinct linked instances, not a single standard nested
+        construction (`_build_nested` assumes one instance per binding).
         Each sub-binding can read the loop's current element via
-        `source: {field: null, context_key: '__item__'}` (the generic
-        field: null mechanism, just under a synthetic key dedicated to this
-        loop - same principle as the construction context propagated
-        elsewhere, e.g. interlis2def.iliVersion).
+        `source: {field: null, context_key: '__item__'}`.
         """
         items = self._resolve_binding_value(
             ctx, rule_name, key, {"source": binding["for_each"]}, construction_ctx, consumed
@@ -1648,18 +1482,12 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def visit_wrapped(self, node: ParserRuleContext, target: str, rule_name: str) -> MetaInstance:
         """Visit a bag rule, wrapped into a typed metamodel instance.
 
-        For a Container/ValueObject rule (e.g. numeric()/enumeration()),
-        wraps it into a typed metamodel instance (e.g. NumType/EnumType) -
-        used when an enclosing rule (e.g. attrTypeDef.Type) knows which
-        class this bag actually represents.
-
-        The instance is created and pushed onto the construction stack
-        BEFORE the visit, not after: some children of the bag rule
-        self-attach via their OWN `parent:` DURING the visit (e.g.
-        enumElement -> TopNode/SubNode association). Wrapping afterward
-        would attach them to the wrong parent (whatever is already on top
-        of the stack at that point, e.g. the enclosing AttrOrParam) instead
-        of this new instance.
+        For a Container/ValueObject rule (e.g. `numeric()`/`enumeration()`),
+        used when an enclosing rule knows which class this bag actually
+        represents. The instance is pushed onto the construction stack
+        BEFORE the visit: some children of the bag rule self-attach via
+        their OWN `parent:` DURING the visit - wrapping afterward would
+        attach them to the wrong parent.
         """
         instance = self.registry.new_instance(target)
         instance._source_ctx = node
@@ -1676,17 +1504,13 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _merge_bag_into_instance(self, instance: MetaInstance, bag: Any, rule_name: str) -> None:
         """Merge a bag dict onto `instance`.
 
-        The bag is the result of `_relay` on a Container rule (e.g.
-        numeric()/enumeration()) - attaches every non-empty/non-hollow
-        field, resolves pending ForwardRefs. Shared by `visit_wrapped`
-        (explicit wrap:) and `_build_conditional` (`when_present` branch
-        whose token/rule IS itself a rule with its own structured content,
-        e.g. oIDType.numeric -> numeric()) - previously, only
-        `visit_wrapped` applied this hollow filter; `_build_conditional`
-        never visited the matched branch's node at all, losing all of
-        numeric()/textType()'s own content (Min/Max/Circular/Clockwise/Unit)
-        for any numeric/text OID rule (e.g. `I32OID = OID
-        0..2147483647;`, predefined INTERLIS namespace).
+        The bag is the result of `_relay` on a Container rule - attaches
+        every non-empty/non-hollow field, resolves pending ForwardRefs.
+        Shared by `visit_wrapped` and `_build_conditional`'s
+        `when_present` branch - previously `_build_conditional` never
+        visited the matched branch's node at all, losing all of
+        `numeric()`/`textType()`'s own content for any numeric/text OID
+        rule (e.g. `I32OID = OID 0..2147483647;`).
         """
         if not isinstance(bag, dict):
             return
@@ -1783,20 +1607,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _register_unit_alias(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
         """Register a UNIT's bracketed short-name alias under the SAME instance too.
 
-        Grammar (unitDef, InterlisParser.py): `UNIT? Name (LSBR Name RSBR)?
-        ...` - `ctx.Name(0)` is the primary Name (already registered by
-        `_maybe_register_symbol` above), `ctx.Name(1)` the optional
-        bracketed alias (e.g. `CubicMeterPerSecond [m3sec] = ...;`). The
-        metamodel's `Unit` class has no dedicated ShortName attribute (only
-        the inherited `Name`, `ilismeta16-classes.yml`), so without this the
-        alias is never registered anywhere - confirmed on real corpus data
-        (`PlanerischerGewaesserschutz_V1_1.ili`/`Hazard_Mapping_V1_3.ili`):
-        a later `[m3sec]`/`[m2s]` unitRef elsewhere in the SAME file raised
-        `BuildError: unresolved reference, not attributable to an import`,
-        since only the primary Name was ever findable. Registers a SECOND
-        symbol table entry pointing at the SAME instance - same alias
-        mechanism already used by `SymbolTable.rekey_model_prefix`, applied
-        here per-unit instead of per-model.
+        `ctx.Name(1)` is the optional bracketed alias (e.g.
+        `CubicMeterPerSecond [m3sec] = ...;`). The metamodel's `Unit`
+        class has no dedicated ShortName attribute, so without this the
+        alias is never registered anywhere - confirmed on real corpus
+        data: a later `[m3sec]` unitRef elsewhere raised a `BuildError`.
         """
         names = ctx.Name()
         if len(names) < 2:
@@ -1807,18 +1622,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _fix_existence_constraint_attr(self, instance: MetaInstance) -> None:
         """Re-wrap `ExistenceConstraint.Attr` as a real `PathOrInspFactor` instance.
 
-        Same class of gap as `_stash_aggregation_key`/`_stash_inspection_path`
-        (spec/grammar/mapping/07_constraints.yml's own `existenceConstraint.Attr`
-        note): the declarative `Attr` binding (`attributePath(0)`, `feeds_into:
-        PathOrInspFactor`) DOES fire and set `instance.Attr`, but only with the
-        raw Container bag (`{"PathEls": [...]}`) - the wrapping into a proper
+        Same class of gap as `_stash_aggregation_key`/`_stash_inspection_path`:
+        the declarative `Attr` binding fires and sets `instance.Attr`, but
+        only with the raw Container bag - the wrapping into a proper
         instance normally happens in `factor()`'s own `Conditional` branch
-        merge, which `existenceConstraint`'s grammar never routes through (it
-        calls `attributePath()` directly, not `factor()`). Confirmed
-        empirically before this fix: `ec.Attr` was a plain `dict`,
-        `getattr(ec.Attr, "PathEls", None)` raised `AttributeError` - any
-        consumer expecting the normal Expression-node interface (every other
-        constraint's own path/expression fields) would break the same way.
+        merge, which `existenceConstraint`'s grammar never routes through.
         """
         bag = getattr(instance, "Attr", None)
         if not isinstance(bag, dict):
@@ -1830,64 +1638,22 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _fix_class_extended_super(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
         """Resolve `Super` for `CLASS X (EXTENDED)` reopening a same-named class from the enclosing TOPIC's base.
 
-        Real corpus gap (item 13's VIEW-corpus pipeline, `ISOS_V2.ili`):
-        `TOPIC ISOS EXTENDS ISOS_V2.ISOSBase = CLASS Ortsbild (EXTENDED) =
-        <additional attrs> ... END Ortsbild; ... END ISOS;` - eCH-0031
-        V2.1.0 SS3.5.2, exact citation: "Erweitert z.B. ein Thema T2 das
-        Thema T1, das die Klasse C enthaelt, gibt es mit C (EXTENDED)
-        innerhalb von T2 nur eine Klasse, naemlich C" (there is only ONE
-        class C, not two). `classDef.Super` (this file's own declarative
-        binding, `spec/grammar/mapping/03_classes_and_structures.yml`)
-        only fires for an EXPLICIT `EXTENDS classOrStructureRef` clause -
-        `(EXTENDED)` has no such clause at all (its target is implicit:
-        the same-named class in the topic named by the ENCLOSING topic's
-        own `EXTENDS`), so it was silently left with no `Super` at all -
-        confirmed empirically (`getattr(cls, "Super", None) is None`,
-        `attributes_of(cls)` returning only the reopening's OWN attrs) -
-        any VIEW/converter reading the reopened class's inherited
-        attributes (`name`/`id`/`kantone` in the real case) found nothing.
+        Real corpus gap (`ISOS_V2.ili`): `TOPIC ISOS EXTENDS
+        ISOS_V2.ISOSBase = CLASS Ortsbild (EXTENDED) = ...` - eCH-0031
+        §3.5.2: there is only ONE class C, not two. `classDef.Super` only
+        fires for an EXPLICIT `EXTENDS classOrStructureRef` clause -
+        `(EXTENDED)` has no such clause (its target is implicit: the
+        same-named class in the topic named by the ENCLOSING topic's own
+        `EXTENDS`), so it was silently left with no `Super` at all.
 
-        Approximates "one class C" as ordinary single inheritance (`Super`
-        -> the base topic's class) rather than a true single merged
-        instance: reuses the EXISTING, already-correct `attributes_of`/
-        `schema_members_of` Super-chain walk (own-then-inherited) for
-        free, and - deliberately - lets `xtf.schema.is_class_compatible`
-        keep a real object's WIRE TAG as the disambiguator between "has
-        the extension" and "doesn't": confirmed on the real `.xtf`
-        (`ch.bak.bundesinventar-schuetzenswerte-ortsbilder`) that objects
-        tagged with the base topic's qualified name (1101, no extension
-        data) and the extending topic's (151, WITH it) are two, wholly
-        DISJOINT sets (0 TID/own-`id`-attribute overlap) - a real
-        producer's tagging choice, not an artifact to paper over. A
-        `PROJECTION OF` the extended class must therefore see only the
-        151 - a merge into a single instance (indistinguishable from the
-        base by name) would need a parallel mechanism to keep that split,
-        for no added benefit to any converter in this project.
-
-        `self._current_topic_extends_hint(ctx)` (already built for
-        `topicDef.Super`/generic unqualified-name resolution across a
-        `TOPIC EXTENDS`)
-        supplies the raw EXTENDS text (e.g. `"ISOS_V2.ISOSBase"`) - the
-        `Super` reference is built ALREADY FULLY QUALIFIED
-        (`f"{hint}.{name}"`, e.g. `"ISOS_V2.ISOSBase.Ortsbild"`) rather
-        than a bare short name resolved generically: a bare `name` (this
-        class's own short name, e.g. `"Ortsbild"`) is deliberately
-        AMBIGUOUS in this exact file (two classes are genuinely named
-        that - the base one AND this very reopening), and
-        `SymbolTable.resolve`'s short-name fallback can, in the ABSENCE
-        of a second candidate (e.g. no `--repo`, so the base class was
-        never built at all), resolve straight back to THIS SAME instance -
-        confirmed empirically as a real self-loop before this fix (`Super
-        is instance`). A fully qualified name never risks this: it either
-        matches `_qualified[name]` exactly (this file, or - `graceful=True`
-        (like the explicit `EXTENDS` case) - via `ModelRepository` for a
-        base topic in an imported file, mirroring the real corpus case
-        `ISOS_V2.ili`) or resolves to nothing (`UnresolvedNamedReference`,
-        never a crash, RULE #5) - it can never accidentally re-select the
-        very instance being built. No hint, or a same-file/unqualified
-        `TOPIC EXTENDS` (hint without a `.`) - no real corpus evidence for
-        the latter (RULE #7, all 3 real occurrences found are qualified) -
-        leaves `Super` unset rather than guessing.
+        Approximates "one class C" as ordinary single inheritance rather
+        than a true merged instance, reusing the existing Super-chain
+        walk. The `Super` reference is built ALREADY FULLY QUALIFIED
+        (`f"{hint}.{name}"`) rather than a bare short name: a bare name is
+        deliberately AMBIGUOUS here (two classes are genuinely named
+        that), and `SymbolTable.resolve`'s short-name fallback could
+        resolve straight back to THIS SAME instance - confirmed
+        empirically as a real self-loop before this fix.
         """
         if getattr(instance, "Super", None) is not None:
             return  # an explicit `EXTENDS classOrStructureRef` already won - mutually exclusive per spec
@@ -1911,19 +1677,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _relation_kind(self, ctx: ParserRuleContext) -> str | None:
         """Resolve `relation()`'s matched alternative to its `CompoundExpr.Operation` child value.
 
-        See spec/grammar/mapping/07_constraints.yml's `relation` note for
-        why this can't be a generic `attribute_bindings` entry (no real
-        ANTLR accessor for a composed multi-token alternative like
-        "EQ EQ"/"LT GT"). Reads `RelationContext`'s real accessors
-        directly instead, same "read the raw ctx" pattern as
-        `_set_view_formation_kind`/`_set_join_or_null`.
-
-        `EQ()` is a MULTI accessor (alt1, "==", consumes 2 EQ tokens) -
-        `>= 2` distinguishes it unambiguously from every other alternative
-        (EQ never appears anywhere else in this rule). `LT()`/`GT()` are
-        each used BOTH standalone (alt6/alt7, "<"/">") AND together
-        (alt3, "<>" - not-equal) - only checking whether BOTH are present
-        at once disambiguates "<>" from a lone "<" or ">".
+        No real ANTLR accessor for a composed multi-token alternative like
+        "EQ EQ"/"LT GT" - reads `RelationContext`'s real accessors
+        directly. `EQ()` is a MULTI accessor (`>= 2` distinguishes "==").
+        `LT()`/`GT()` are each used standalone AND together ("<>") - only
+        checking whether BOTH are present disambiguates it.
         """
         if len(ca.call_list(ctx, "EQ")) >= 2:
             return "Equal"
@@ -1940,16 +1698,12 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _set_path_el_kind(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
         """Resolve `pathEl()`'s matched alternative to its `PathEl.Kind` value.
 
-        See spec/grammar/mapping/07_constraints.yml's `pathEl` note for
-        why this can't be a generic `attribute_bindings` entry (6 of the
-        9 alternatives share the same leading `Name` token, so no
-        composed field name matches a real ANTLR accessor). Checks the
-        unambiguous single-token/single-subrule alternatives first
-        (THIS/THISAREA/THATAREA/PARENT/associationPath/attributeRef),
-        then disambiguates the 3 remaining bare-`Name` alternatives via
-        COLON (alt6, Role), a double `EQ` (alt9, "Name==STRING",
-        MetaObject) or `LSBR` (alt5 WITH its bracket, ViewBase) -
-        anything else is alt5 without a bracket (ReferenceAttr).
+        6 of the 9 alternatives share the same leading `Name` token, so no
+        composed field name matches a real ANTLR accessor. Checks the
+        unambiguous alternatives first, then disambiguates the 3
+        remaining bare-`Name` ones via `COLON` (Role), a double `EQ`
+        (MetaObject) or `LSBR` (ViewBase) - anything else is
+        ReferenceAttr.
         """
         if ca.call(ctx, "THIS") is not None:
             instance.Kind = "This"
@@ -1975,19 +1729,13 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _normalize_enumeration_const_value(self, instance: MetaInstance) -> None:
         """Join a `Constant(Type=Enumeration)`'s raw `enumerationConst` bag into a plain dotted-path string.
 
-        `constant()`'s generic `Value` binding (spec/grammar/mapping/06_types.yml)
-        dispatches via `alt_rule` to whichever sub-rule matched
-        (numericConst/textConst/.../enumerationConst) and assigns its
-        resolved value AS-IS - correct for every OTHER alternative
-        (already a plain string), but `enumerationConst` is a `Container`
-        with 2 REAL keys (`Value`: the Name segments, `Others`: a bool) -
-        never unwrapped to a bare value by `_relay` (2 keys, not 1).
-        Without this, `Constant.Value` for e.g. `#false` was the raw bag
-        `{"Value": ["false"], "Others": False}` instead of the plain
-        dotted-path string `"false"` the metamodel actually declares
-        (TEXT, ilismeta16-datatypes.yml) - same "Name(.Name)*(.OTHERS)?"/
-        bare "OTHERS" convention `xtf.schema.enum_values` already uses for
-        a real `EnumType`'s own node tree (eCH-0031 V2.1.0 SS4.3.11.3).
+        `constant()`'s generic `Value` binding assigns whichever sub-rule
+        matched AS-IS - correct for every OTHER alternative, but
+        `enumerationConst` is a Container with 2 REAL keys (`Value`: the
+        Name segments, `Others`: a bool), never unwrapped to a bare value
+        by `_relay`. Without this, `Constant.Value` for e.g. `#false` was
+        the raw bag instead of the plain dotted-path string the metamodel
+        declares.
         """
         value = getattr(instance, "Value", None)
         if not isinstance(value, dict):
@@ -2002,19 +1750,10 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _set_defined_subexpression(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
         """Set `UnaryExpr(Operation=Defined).SubExpression` from `DEFINED LPAR factor RPAR`'s own factor.
 
-        See spec/grammar/mapping/07_constraints.yml's `predicate` note:
-        alt3's `factor` accessor has no direct role/attribute name to bind
-        against via the generic `attribute_bindings` mechanism (unlike
-        alt2's `expression`, which the SAME `SubExpression` binding
-        already handles for the NOT branch) - `UnaryExpr.SubExpression`
-        is typed `Expression`, and `factor()` builds a `Factor`
-        (`Factor EXTENDS Expression`, ilismeta16-datatypes.yml), so a
-        direct assignment is enough, no wrapping needed.
-
-        Called only when `predicate`'s DEFINED branch matched (`ctx.factor()`
-        unambiguously refers to alt3's factor in that case - `PredicateContext`
-        has a single `factor()` accessor, shared by alt1 and alt3, but alt1
-        never reaches here since it isn't a `when_present` branch).
+        `factor` has no direct role/attribute name to bind against via
+        the generic mechanism. `UnaryExpr.SubExpression` is typed
+        `Expression`, and `factor()` builds a `Factor` (`Factor EXTENDS
+        Expression`), so a direct assignment is enough.
         """
         factor_node = ca.call(ctx, "factor")
         if factor_node is None:
@@ -2027,13 +1766,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
         """Set `FunctionCall.Function`/`.Arguments` from `factor`'s alt4 (predefined functions, e.g.
         `INTERLIS.len(...)`).
 
-        See spec/grammar/mapping/07_constraints.yml's `factor` entry (the
-        `INTERLIS` `when_present` branch) for why this needs a dedicated
-        hook: `Function` needs 2 tokens joined (`INTERLIS` + the matched
+        `Function` needs 2 tokens joined (`INTERLIS` + the matched
         `Name`/`URI`/`UUIDOID`), and `Arguments` needs each bare
         `expression()` wrapped in a synthetic `ActualArgument` - this alt
-        never goes through the `argument()` rule (unlike `functionCall`'s
-        own `Arguments`), so neither has a matching direct accessor.
+        never goes through the `argument()` rule, so neither has a
+        matching direct accessor.
         """
         names = ctx.Name()
         name_token = names[0] if names else (ctx.URI() or ctx.UUIDOID())
@@ -2059,24 +1796,14 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
     def _apply_sibling_bag_values(self, result: MetaInstance, real_values: dict) -> None:
         """Apply sibling bag values that `result` actually inherits/owns.
 
-        A Container rule with its OWN attribute_bindings (e.g.
-        domainDef.Name/Mandatory) whose real content is ANOTHER value from
-        the same bag (e.g. domainDef._domain_content, wrap: on bare
-        numeric()/enumeration()) or comes from an unclaimed child (e.g.
-        enumerationType -> EnumType, via the type_() dispatcher) used to
-        lose these values - pushed only into the construction context
-        (field: null mechanism), never applied onto the returned instance
-        itself, even when that instance genuinely INHERITS the field
-        concerned (e.g. EnumType.Name via MetaElement - confirmed in
-        ilismeta16-classes.yml, DomainType.attributes.inherited.Name).
-        Concrete consequence found: a DOMAIN named via a bare enumeration
-        (e.g. "DOMAIN CodeWeekDayType = (MON, TUE, ...);", no ENUM keyword)
-        produced an EnumType with no Name -> never registered in the
-        SymbolTable -> any later reference by name
-        (domainRef/restrictedStructureRef) failed with a BuildError "not
-        resolved and not attributable to an import". Only applies keys
-        that are genuinely own/inherited on `result`'s metamodel class, and
-        not already set.
+        A Container rule whose real content is ANOTHER value from the
+        same bag (e.g. `domainDef._domain_content`, `wrap:` on bare
+        `numeric()`/`enumeration()`) used to lose these values - pushed
+        only into the construction context, never applied onto the
+        returned instance itself. Concrete consequence found: a DOMAIN
+        named via a bare enumeration produced an `EnumType` with no
+        `Name` -> never registered in the SymbolTable -> any later
+        reference by name failed with a `BuildError`.
         """
         element = self.schema.uml.qualified.get(result._qualified_class, {})
         registered_name = False
@@ -2113,14 +1840,10 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
         """Try to attach unclaimed children that produced a concrete result.
 
         For a child not claimed by attribute_bindings whose rule has NO
-        `parent:` of its own (so it hasn't already self-attached) but
-        produces a concrete result: try to attach it via the association
-        connecting the two known classes (e.g. attrTypeDef ->
-        AttrOrParamType.Type, see
-        AttachmentResolver.find_association_connecting). Best-effort:
-        silent if no association connects the two classes (the result then
-        stays only whatever side effect it already produced, e.g.
-        registration in the symbol table).
+        `parent:` of its own but produces a concrete result: tries to
+        attach it via the association connecting the two known classes
+        (`AttachmentResolver.find_association_connecting`). Best-effort:
+        silent if no association connects the two classes.
         """
         for child_rule, value in sweep_results:
             if value is None:
