@@ -80,12 +80,12 @@ def test_write_xtf_happy_path_prints_the_view_basket(tmp_path, capsys):
 
 
 def test_write_xtf_defaults_sender_rather_than_omitting_it(tmp_path, capsys):
-    """A real ili2c-compiled schema marks HEADERSECTION's SENDER required (verified empirically, item 15) -
+    """A real ili2c-compiled schema marks HEADERSECTION's SENDER required (verified empirically) -
     --sender defaults to a real value instead of silently omitting the attribute."""
     model_path, xtf_path = _write(tmp_path, _VIEW_TOPIC_MODEL)
 
     assert main(["write-xtf", str(model_path), str(xtf_path)]) == ExitCode.OK
-    assert 'SENDER="interlis-runtime"' in capsys.readouterr().out
+    assert 'SENDER="ili-ogc"' in capsys.readouterr().out
 
 
 def test_write_xtf_rejects_a_view_declared_in_a_plain_topic(tmp_path, capsys):

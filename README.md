@@ -1,9 +1,11 @@
-# interlis-runtime
+# ili-ogc
 
-A pure-Python INTERLIS 2 runtime: parses `.ili` models into a graph of typed
+A pure-Python INTERLIS 2 toolkit: parses `.ili` models into a graph of typed
 Python objects (the IlisMeta16 metamodel), validates `.xtf` data transfers
-against them, and converts both to JSON Schema, SQL DDL, OGC JSON-FG,
-CQL2-JSON filters, and back to `.xtf`.
+against them, and converts both to JSON Schema, SQL DDL (PostgreSQL/
+GeoPackage), OGC JSON-FG, CQL2-JSON filters, and back to `.xtf`. `TRANSLATION
+OF` models are supported throughout via `--lang` (renames identifiers/keys
+in the output, the transfer wire format itself is unaffected).
 
 ## Installation
 
