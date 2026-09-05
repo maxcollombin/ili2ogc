@@ -1,0 +1,17 @@
+INTERLIS 2.4;
+
+MODEL LidarScan_V1 (en)
+  AT "https://example.org/models/" VERSION "2026-09-04" =
+
+  IMPORTS Geometry3D_V2, ContextCHLV95_V2;
+
+  TOPIC Scans =
+
+    CLASS LidarScan =
+      Name: MANDATORY TEXT*80;
+      Cloud: MANDATORY Geometry3D_V2.PointCloud3D;
+    END LidarScan;
+
+  END Scans;
+
+END LidarScan_V1.

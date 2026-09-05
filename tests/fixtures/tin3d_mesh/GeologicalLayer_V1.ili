@@ -1,0 +1,17 @@
+INTERLIS 2.4;
+
+MODEL GeologicalLayer_V1 (en)
+  AT "https://example.org/models/" VERSION "2026-09-04" =
+
+  IMPORTS Geometry3D_V2, ContextCHLV95_V2;
+
+  TOPIC Geology =
+
+    CLASS LayerBoundary =
+      Name: MANDATORY TEXT*80;
+      Surface: MANDATORY Geometry3D_V2.Tin3D;
+    END LayerBoundary;
+
+  END Geology;
+
+END GeologicalLayer_V1.

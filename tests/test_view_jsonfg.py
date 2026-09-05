@@ -353,7 +353,9 @@ def test_transfer_to_feature_collection_without_views_param_is_unchanged():
     collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
 
     assert len(collection["features"]) == 1
-    assert collection["features"][0]["featureType"] == "B"
+    # Homogeneous collection: hoisted to the collection, removed from the feature.
+    assert collection["featureType"] == "B"
+    assert "featureType" not in collection["features"][0]
 
 
 _KINDS_MODEL = """INTERLIS 2.4;

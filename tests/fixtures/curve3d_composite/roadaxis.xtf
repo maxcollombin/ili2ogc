@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?><TRANSFER xmlns="http://www.interlis.ch/INTERLIS2.3">
+<HEADERSECTION SENDER="claude-test" VERSION="2.3"><MODELS><MODEL NAME="RoadAxis_V1" VERSION="2026-09-04" URI="https://example.org/models/"></MODEL></MODELS></HEADERSECTION>
+<DATASECTION>
+<RoadAxis_V1.Roads BID="8a1e1e1e-0003-4000-8000-000000000003">
+<RoadAxis_V1.Roads.RoadAxis TID="8a1e1e1e-0004-4000-8000-000000000004">
+<Name>Test Road</Name>
+<Axis>
+<Geometry3D_V2.CompositeCurve3D>
+<Simplified>
+<Geometry3D_V2.PolylineStraight3D>
+<Directed>true</Directed>
+<Geometry><POLYLINE><COORD><C1>2600000.000</C1><C2>1200000.000</C2><C3>500.000</C3></COORD><COORD><C1>2600010.000</C1><C2>1200000.000</C2><C3>505.000</C3></COORD></POLYLINE></Geometry>
+</Geometry3D_V2.PolylineStraight3D>
+<Geometry3D_V2.PolylineStraight3D>
+<Directed>true</Directed>
+<Geometry><POLYLINE><COORD><C1>2600010.000</C1><C2>1200000.000</C2><C3>505.000</C3></COORD><COORD><C1>2600010.000</C1><C2>1200010.000</C2><C3>510.000</C3></COORD></POLYLINE></Geometry>
+</Geometry3D_V2.PolylineStraight3D>
+</Simplified>
+</Geometry3D_V2.CompositeCurve3D>
+</Axis>
+</RoadAxis_V1.Roads.RoadAxis>
+</RoadAxis_V1.Roads>
+</DATASECTION>
+</TRANSFER>

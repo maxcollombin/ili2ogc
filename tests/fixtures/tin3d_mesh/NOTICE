@@ -1,0 +1,46 @@
+# NOTICE
+
+Synthetic example exercising `Geometry3D_V2.Tin3D -> MultiPolygon`
+(`convert/jsonfg.py`), the RULE #7 exception documented in
+`docs/dev-notes/composite-surface3d-mapping.md` - kept here so the same
+end-to-end example (and its JSON-FG output) is reproducible for external
+tooling, not just inline in a pytest fixture string. Same template as
+`tests/fixtures/solid3d_polyhedron/`/`tests/fixtures/curve3d_composite/`.
+
+Copied unmodified from the swisstopo/interlis.ch model repositories -
+`GEOMETRY3D_V2.ili` included, byte-for-byte
+`https://models.geo.admin.ch/CH/CHBase_Part8_GEOMETRY3D_V2.ili`
+(2023-10-18):
+
+- `CHBase_Part1_GEOMETRY_V2.ili` - `https://models.geo.admin.ch/CH/`,
+  VERSION "2025-07-30" (provides `GeometryCHLV95_V2.Coord3`, EPSG:2056).
+- `CHBase_Part7_CONTEXT_V2.ili` - `https://models.geo.admin.ch/CH/`,
+  VERSION "2021-01-06" (`ContextCHLV95_V2`).
+- `Units-20120220.ili`, `CoordSys-20151124.ili` -
+  `http://www.interlis.ch/models` (canonical base models, IMPORTS
+  closure of `Geometry3D_V2`).
+
+`GeologicalLayer_V1.ili` imports both `Geometry3D_V2` AND
+`ContextCHLV95_V2`, same pattern as the other 2 `Geometry3D_V2` fixture
+dirs.
+
+**Synthetic, authored for this example** (not from any external source):
+`GeologicalLayer_V1.ili` (a minimal `LayerBoundary` class with a
+`Surface: Geometry3D_V2.Tin3D` attribute - the swisstopo "Basismodul 3D"
+doc's own §1.2 application example, "Géologie : le type Tin3D peut être
+utilisé pour des surfaces de séparation entre des couches géologiques")
+and `layerboundary.xtf` (one `LayerBoundary`, two triangles sharing an
+edge - an OPEN mesh, not a closed shell, exercising the case a
+`Polyhedron` cannot represent).
+
+`layerboundary.jsonfg.json` is the `interlis convert-jsonfg` output
+against these fixtures (reference/golden output, not re-derived by a test
+at import time) - validated with zero errors against the official
+JSON-FG 1.0.0 schemas (`opengeospatial/ogc-feat-geo-json`, tag `v1.0.0`,
+`core/schemas/*.json`) using the Python `jsonschema` library.
+
+**No real corpus evidence for `Tin3D`/`SurfaceShell3D`/
+`CompositeSurface3D` exists (0/71 real `.ili` files, 0/92 real `.xtf`
+files, as of 2026-09-04)** - this whole fixture is synthetic and has not
+been checked against a real producer's data. Revalidate against a real
+example the day one surfaces.

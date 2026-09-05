@@ -1,0 +1,55 @@
+# NOTICE
+
+Synthetic example exercising `Geometry3D_V2.PointCloud3D -> MultiPoint`
+(`convert/jsonfg.py`), the RULE #7 exception documented in
+`docs/dev-notes/pointcloud3d-mapping.md` - kept here so the same
+end-to-end example (and its JSON-FG output) is reproducible for external
+tooling, not just inline in a pytest fixture string. Same template as
+`tests/fixtures/solid3d_polyhedron/`/`tests/fixtures/curve3d_composite/`/
+`tests/fixtures/tin3d_mesh/`.
+
+Copied unmodified from the swisstopo/interlis.ch model repositories -
+`GEOMETRY3D_V2.ili` included, byte-for-byte
+`https://models.geo.admin.ch/CH/CHBase_Part8_GEOMETRY3D_V2.ili`
+(2023-10-18):
+
+- `CHBase_Part1_GEOMETRY_V2.ili` - `https://models.geo.admin.ch/CH/`,
+  VERSION "2025-07-30" (provides `GeometryCHLV95_V2.Coord3`, EPSG:2056).
+- `CHBase_Part7_CONTEXT_V2.ili` - `https://models.geo.admin.ch/CH/`,
+  VERSION "2021-01-06" (`ContextCHLV95_V2`).
+- `Units-20120220.ili`, `CoordSys-20151124.ili` -
+  `http://www.interlis.ch/models` (canonical base models, IMPORTS
+  closure of `Geometry3D_V2`).
+
+`LidarScan_V1.ili` imports both `Geometry3D_V2` AND `ContextCHLV95_V2`,
+same pattern as the other `Geometry3D_V2` fixture dirs.
+
+**Synthetic, authored for this example** (not from any external source):
+`LidarScan_V1.ili` (a minimal `LidarScan` class with a `Cloud:
+Geometry3D_V2.PointCloud3D` attribute - the swisstopo "Basismodul 3D"
+doc's own §2.7 rationale, "Un seul type multiple est proposé pour les
+données Lidar") and `lidarscan.xtf` (one `LidarScan`, 3 points).
+
+**Wire shape for `Points: BAG {1..*} OF Geometry_V2.Coord3`, chosen
+without real corpus evidence (see the dev-note's "Wire shape" section for
+why)**: each occurrence is wrapped in a `<Geometry_V2.Coord3>` tag
+(the domain's own qualified name, matching the convention already
+observed for `BAG OF <STRUCTURE>` occurrences elsewhere in this project)
+around the `<COORD>` element - `<Points><Geometry_V2.Coord3><COORD>...
+</COORD></Geometry_V2.Coord3>...</Points>`. This is a REASONABLE
+extrapolation, not a confirmed real encoding - `PointCloud3D` is the only
+construct in `Geometry3D_V2` combining `BAG OF` with a plain (non-STRUCTURE)
+domain, so no existing corpus file anywhere in this project exercises
+this exact shape.
+
+`lidarscan.jsonfg.json` is the `interlis convert-jsonfg` output against
+these fixtures (reference/golden output, not re-derived by a test at
+import time) - validated with zero errors against the official JSON-FG
+1.0.0 schemas (`opengeospatial/ogc-feat-geo-json`, tag `v1.0.0`,
+`core/schemas/*.json`) using the Python `jsonschema` library.
+
+**No real corpus evidence for `PointCloud3D` exists (0/71 real `.ili`
+files, 0/92 real `.xtf` files, as of 2026-09-04)** - this whole fixture is
+synthetic and has not been checked against a real producer's data.
+Revalidate against a real example the day one surfaces - including the
+wire shape itself, not just the JSON-FG target.

@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "conformsTo": [
+    "http://www.opengis.net/spec/json-fg-1/1.0/conf/core",
+    "http://www.opengis.net/spec/json-fg-1/1.0/conf/types-schemas"
+  ],
+  "features": [
+    {
+      "type": "Feature",
+      "id": "8a1e1e1e-0004-4000-8000-000000000004",
+      "geometry": null,
+      "place": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2600000.0,
+            1200000.0,
+            500.0
+          ],
+          [
+            2600010.0,
+            1200000.0,
+            505.0
+          ],
+          [
+            2600010.0,
+            1200010.0,
+            510.0
+          ]
+        ]
+      },
+      "properties": {
+        "Name": "Test Road"
+      }
+    }
+  ],
+  "featureType": "RoadAxis",
+  "coordRefSys": "http://www.opengis.net/def/crs/EPSG/0/2056"
+}

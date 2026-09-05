@@ -1,0 +1,48 @@
+# NOTICE
+
+Synthetic example exercising `Geometry3D_V2.Solid3D -> Polyhedron`
+(`convert/jsonfg.py`), the RULE #7 exception documented in
+`docs/dev-notes/solid3d-polyhedron-mapping.md` - kept here so the same
+end-to-end example (and its JSON-FG output) is reproducible for external
+tooling (a third-party JSON-FG validator, QGIS, a JSON-FG viewer), not
+just inline in a pytest fixture string.
+
+Copied unmodified from the swisstopo/interlis.ch model repositories -
+`GEOMETRY3D_V2.ili` included, byte-for-byte
+`https://models.geo.admin.ch/CH/CHBase_Part8_GEOMETRY3D_V2.ili`
+(2023-10-18) - no local adaptation, see the dev-note above ("The CONTEXT
+mechanism"):
+
+- `CHBase_Part1_GEOMETRY_V2.ili` - `https://models.geo.admin.ch/CH/`,
+  VERSION "2025-07-30" (provides `GeometryCHLV95_V2.Coord3`, EPSG:2056).
+- `CHBase_Part7_CONTEXT_V2.ili` - `https://models.geo.admin.ch/CH/`,
+  VERSION "2021-01-06" (`ContextCHLV95_V2`: rebinds `Geometry_V2.Coord3`
+  to `GeometryCHLV95_V2.Coord3` for the whole importing model, per the
+  swisstopo "Basismodul 3D" documentation SS2.1 - see the dev-note).
+- `Units-20120220.ili`, `CoordSys-20151124.ili` -
+  `http://www.interlis.ch/models` (canonical base models, IMPORTS
+  closure of `Geometry3D_V2`).
+
+`Building3D_V1.ili` imports both `Geometry3D_V2` AND `ContextCHLV95_V2`
+(the swisstopo-documented pattern for using the 3D base module with a
+concrete Swiss CRS) - `PlanarSurface3D.Geometry`'s VERTEX stays bound to
+the GENERIC, unmodified `Geometry_V2.Coord3`; the CRS resolves through
+the `CONTEXT` rebinding, not a locally patched domain.
+
+**Synthetic, authored for this example** (not from any external source):
+`Building3D_V1.ili` (a minimal `Building` class with a `Volume:
+Geometry3D_V2.Solid3D` attribute) and `building3d.xtf` (one `Building`,
+a tetrahedron: 4 `Triangle3D` faces as the `OuterShell`, plus one small
+inner tetrahedron as an `InnerShells` occurrence, to exercise the
+multi-shell case too).
+
+`building3d.jsonfg.json` is the `interlis convert-jsonfg` output against
+these fixtures (reference/golden output, not re-derived by a test at
+import time) - validated with zero errors against the official JSON-FG
+1.0.0 schemas (`opengeospatial/ogc-feat-geo-json`, tag `v1.0.0`,
+`core/schemas/*.json`) using the Python `jsonschema` library.
+
+**No real corpus evidence for `Solid3D` exists (0/54 real `.ili` files,
+as of 2026-09-03)** - this whole fixture is synthetic and has not been
+checked against a real producer's data. Revalidate against a real
+example the day one surfaces (see the dev-note's "action item").

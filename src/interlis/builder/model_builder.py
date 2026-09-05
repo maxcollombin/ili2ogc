@@ -19,6 +19,7 @@ from interlis.antlr.InterlisParser import InterlisParser
 from interlis.antlr.InterlisParserVisitor import InterlisParserVisitor
 from interlis.builder import context_access as ca
 from interlis.builder.attach import AttachmentResolver
+from interlis.builder.context_mixin import _ContextMixin
 from interlis.builder.errors import BuildError
 from interlis.builder.forward_refs import ForwardRef, ForwardRefResolver, SymbolTable
 from interlis.builder.oid_mixin import _OidMixin
@@ -33,7 +34,7 @@ from interlis.spec.models import SpecEntry
 from interlis.spec.spec_index import load_spec
 
 
-class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, InterlisParserVisitor):
+class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _ContextMixin, InterlisParserVisitor):
     def __init__(self, mappings_dir: Path, spec_dir: Path, *, repository: ModelRepository | None = None):
         schema = MetamodelSchema.load(mappings_dir)
         registry = MetamodelRegistry.build(schema)
@@ -375,6 +376,8 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, Int
             self._set_path_el_kind(instance, ctx)
         elif rule_name == "existenceConstraint":
             self._fix_existence_constraint_attr(instance)
+        elif rule_name == "contextDef":
+            self._build_context_domain_pairs(instance, ctx)
 
         if entry.parent and self._parent_stack:
             self.attachment.attach(

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?><TRANSFER xmlns="http://www.interlis.ch/INTERLIS2.3">
+<HEADERSECTION SENDER="claude-test" VERSION="2.3"><MODELS><MODEL NAME="LidarScan_V1" VERSION="2026-09-04" URI="https://example.org/models/"></MODEL></MODELS></HEADERSECTION>
+<DATASECTION>
+<LidarScan_V1.Scans BID="8a1e1e1e-0007-4000-8000-000000000007">
+<LidarScan_V1.Scans.LidarScan TID="8a1e1e1e-0008-4000-8000-000000000008">
+<Name>Test Scan</Name>
+<Cloud>
+<Geometry3D_V2.PointCloud3D>
+<Points>
+<Geometry_V2.Coord3><COORD><C1>2600000.000</C1><C2>1200000.000</C2><C3>500.000</C3></COORD></Geometry_V2.Coord3>
+<Geometry_V2.Coord3><COORD><C1>2600001.500</C1><C2>1200002.000</C2><C3>500.400</C3></COORD></Geometry_V2.Coord3>
+<Geometry_V2.Coord3><COORD><C1>2600003.000</C1><C2>1200001.000</C2><C3>500.200</C3></COORD></Geometry_V2.Coord3>
+</Points>
+</Geometry3D_V2.PointCloud3D>
+</Cloud>
+</LidarScan_V1.Scans.LidarScan>
+</LidarScan_V1.Scans>
+</DATASECTION>
+</TRANSFER>

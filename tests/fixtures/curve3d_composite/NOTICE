@@ -1,0 +1,47 @@
+# NOTICE
+
+Synthetic example exercising `Geometry3D_V2.CompositeCurve3D -> LineString`
+(`convert/jsonfg.py`), the RULE #7 exception documented in
+`docs/dev-notes/curve3d-mapping.md` - kept here so the same end-to-end
+example (and its JSON-FG output) is reproducible for external tooling (a
+third-party JSON-FG validator, QGIS, a JSON-FG viewer), not just inline in
+a pytest fixture string. Same template as `tests/fixtures/solid3d_polyhedron/`.
+
+Copied unmodified from the swisstopo/interlis.ch model repositories -
+`GEOMETRY3D_V2.ili` included, byte-for-byte
+`https://models.geo.admin.ch/CH/CHBase_Part8_GEOMETRY3D_V2.ili`
+(2023-10-18):
+
+- `CHBase_Part1_GEOMETRY_V2.ili` - `https://models.geo.admin.ch/CH/`,
+  VERSION "2025-07-30" (provides `GeometryCHLV95_V2.Coord3`, EPSG:2056).
+- `CHBase_Part7_CONTEXT_V2.ili` - `https://models.geo.admin.ch/CH/`,
+  VERSION "2021-01-06" (`ContextCHLV95_V2`: rebinds `Geometry_V2.Coord3`
+  to `GeometryCHLV95_V2.Coord3` for the whole importing model, per the
+  swisstopo "Basismodul 3D" documentation SS2.1).
+- `Units-20120220.ili`, `CoordSys-20151124.ili` -
+  `http://www.interlis.ch/models` (canonical base models, IMPORTS
+  closure of `Geometry3D_V2`).
+
+`RoadAxis_V1.ili` imports both `Geometry3D_V2` AND `ContextCHLV95_V2`,
+same pattern as `Building3D_V1.ili` in `tests/fixtures/solid3d_polyhedron/`.
+
+**Synthetic, authored for this example** (not from any external source):
+`RoadAxis_V1.ili` (a minimal `RoadAxis` class with an `Axis:
+Geometry3D_V2.CompositeCurve3D` attribute - the swisstopo "Basismodul 3D"
+doc's own §1.2 application example, "des axes routiers peuvent être
+modélisés avec le type CompositeCurve3D") and `roadaxis.xtf` (one
+`RoadAxis`, two connected `PolylineStraight3D` segments in `Simplified` -
+exercises both the single-segment `Geometry` read AND the multi-segment
+concatenation).
+
+`roadaxis.jsonfg.json` is the `interlis convert-jsonfg` output against
+these fixtures (reference/golden output, not re-derived by a test at
+import time) - validated with zero errors against the official JSON-FG
+1.0.0 schemas (`opengeospatial/ogc-feat-geo-json`, tag `v1.0.0`,
+`core/schemas/*.json`) using the Python `jsonschema` library.
+
+**No real corpus evidence for `CompositeCurve3D`/`PolylineStraight3D`
+exists (0/71 real `.ili` files, 0/92 real `.xtf` files, as of
+2026-09-04)** - this whole fixture is synthetic and has not been checked
+against a real producer's data. Revalidate against a real example the day
+one surfaces.

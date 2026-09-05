@@ -4,7 +4,8 @@
 structural layer) into a JSON-FG (OGC 21-045r1) Feature object;
 `transfer_to_feature_collection` wraps every resolvable object of an
 XtfTransfer into one FeatureCollection. Both conform to the "core" and
-"types-schemas" requirements classes only - single-attribute point/line/
+"types-schemas" requirements classes always, plus "circular-arcs"/
+"polyhedra" when "place" needs them - single-attribute point/line/
 polygon geometry -> "place" (never "geometry", which stays `null` - no
 WGS84 reprojection, see module docs); a plain REFERENCE TO, an embedded
 association role, or a 1-own-attribute STRUCTURE wrapping a REFERENCE TO
@@ -21,7 +22,14 @@ builders as the top-level `place`, which stays the ONLY thing under
 geometry-typed attributes gets a single "place" of type
 `GeometryCollection` bundling every one of them (JSON-FG issue #134 added
 `GeometryCollection` to `place.json`'s allowed types - no separate
-conformance class needed, unlike circular-arcs/polyhedra). Reuses the schema resolution
+conformance class needed). A `Geometry3D_V2.Solid3D`-typed attribute
+(matched by qualified name, not structurally - RULE #7 exception, no real
+corpus evidence yet) becomes a `Polyhedron` the same way; a
+`PolylineStraight3D`/`CompositeCurve3D`-typed attribute becomes a
+`LineString`, and a standalone `Tin3D`/`SurfaceShell3D`/
+`CompositeSurface3D`-typed attribute becomes a `MultiPolygon`; a
+`PointCloud3D`-typed attribute becomes a `MultiPoint` (all 4 the same
+RULE #7 exception, same matching approach). Reuses the schema resolution
 already proven by
 xtf/validate.py (resolve_attribute/attributes_of/coord_axes/
 line_coord_type) AND its wire-tag helpers (_geom_tag/_find_child/
@@ -70,6 +78,7 @@ JSON_FG_VERSION = "1.0"
 CONF_CORE = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/conf/core"
 CONF_TYPES_SCHEMAS = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/conf/types-schemas"
 CONF_CIRCULAR_ARCS = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/conf/circular-arcs"
+CONF_POLYHEDRA = f"http://www.opengis.net/spec/json-fg-1/{JSON_FG_VERSION}/conf/polyhedra"
 CRS_URI_PREFIX = "http://www.opengis.net/def/crs/EPSG/0/"
 
 _SCALAR_KINDS = {"NumType", "TextType", "EnumType", "BooleanType", "FormattedType", "BlackboxType"}
@@ -78,6 +87,16 @@ _GEOMETRY_KINDS = {"CoordType", "LineType"}
 # "type" values that require CONF_CIRCULAR_ARCS to be declared in
 # "conformsTo".
 _CIRCULAR_ARC_TYPES = frozenset({"CircularString", "CompoundCurve", "CurvePolygon", "MultiCurve", "MultiSurface"})
+_POLYHEDRA_TYPES = frozenset({"Polyhedron", "MultiPolyhedron"})
+# `Geometry3D_V2.Solid3D` (CHBase Part VIII, models.geo.admin.ch) is the
+# only published INTERLIS 3D solid structure - matched by Name + its
+# distinctive `OuterShell` attribute (see `_is_solid3d`), not by qualified
+# model path (`SymbolTable.qualified_name_of` only resolves within the
+# model actually being built, never an imported one - same cross-model
+# identity limitation already documented on `concrete_structure_subclasses`
+# in xtf/schema.py). No real corpus file uses this construct yet (RULE
+# #7: a synthetic, unvalidated exception - see
+# docs/dev-notes/solid3d-polyhedron-mapping.md).
 
 
 def _scalar_value(resolved: ResolvedAttribute, node: RawNode) -> Any:
@@ -585,14 +604,90 @@ def _meta_value(instance: MetaInstance | None, name: str) -> str | None:
     return None
 
 
-def _crs_uri(coord_type: MetaInstance | None) -> str | None:
+def _context_instances(symbol_table: SymbolTable | None, repository: ModelRepository | None) -> list[MetaInstance]:
+    """Every `Context` (`CONTEXT <Name> = ...;`) declared directly in a MODEL actually IMPORTed, deduplicated.
+
+    Scoped to `Model.Element` of the SPECIFIC model each name in
+    `repository.loaded_models()` was resolved through (never a blanket
+    scan of every instance in that model's file) - a file can declare
+    SEVERAL sibling `MODEL`s sharing one symbol table (e.g. swisstopo's
+    `CHBase_Part7_CONTEXT_V2.ili`: `ContextCH_V2`/`ContextCHLV03_V2`/
+    `ContextCHLV95_V2` in one file), and only the model actually named in
+    an `IMPORTS` clause should contribute its `CONTEXT` rebindings - an
+    unrelated sibling's (possibly ambiguous, `OR`-joined) rebinding for
+    the SAME generic domain must never shadow it.
+    """
+    models: list[MetaInstance] = []
+    if symbol_table is not None:
+        models.extend(
+            inst
+            for inst in symbol_table.all_registered()
+            if isinstance(inst, MetaInstance) and inst._qualified_class == "IlisMeta16.ModelData.Model"
+        )
+    if repository is not None:
+        for model_name, table in repository.loaded_models().items():
+            if table is None:
+                continue
+            model = table.resolve(model_name, kind_hint="Model")
+            if isinstance(model, MetaInstance):
+                models.append(model)
+    seen: set[int] = set()
+    contexts: list[MetaInstance] = []
+    for model in models:
+        for element in getattr(model, "Element", None) or []:
+            if (
+                isinstance(element, MetaInstance)
+                and element._qualified_class == "IlisMeta16.ModelData.Context"
+                and id(element) not in seen
+            ):
+                seen.add(id(element))
+                contexts.append(element)
+    return contexts
+
+
+def _context_concrete_domain(
+    coord_type: MetaInstance | None, symbol_table: SymbolTable | None, repository: ModelRepository | None
+) -> MetaInstance | None:
+    """Rebind a GENERIC domain (e.g. `Geometry_V2.Coord3`) via a `CONTEXT default = Generic=Concrete;` clause.
+
+    `None` (never a guessed default) when `coord_type` is not the
+    `GenericDomain` of any built `Context`, or its pair-group offers
+    several OR-ed concrete alternatives (ambiguous, e.g. `ContextCH_V2`'s
+    `Coord3=GeometryCHLV03_V2.Coord3 OR GeometryCHLV95_V2.Coord3`) - same
+    no-default policy as `_crs_uri` itself.
+    """
+    if coord_type is None:
+        return None
+    for context in _context_instances(symbol_table, repository):
+        for generic_def in getattr(context, "GenericDef", None) or []:
+            domains = getattr(generic_def, "GenericDomain", None) or []
+            if not domains or domains[0] is not coord_type:
+                continue
+            links = getattr(generic_def, "ConcreteForGeneric", None) or []
+            concretes = [
+                c
+                for link in links
+                for c in (getattr(link, "ConcreteDomain", None) or [])
+                if isinstance(c, MetaInstance)
+            ]
+            return concretes[0] if len(concretes) == 1 else None
+    return None
+
+
+def _crs_uri(
+    coord_type: MetaInstance | None,
+    *,
+    symbol_table: SymbolTable | None = None,
+    repository: ModelRepository | None = None,
+) -> str | None:
     """Resolve a CoordType's `!!@CRS=EPSG:<code>` meta-attribute (eCH-0117) into a JSON-FG `coordRefSys` URI.
 
-    `None` (never a guessed default) when the meta-attribute is absent or
-    not an `EPSG:<digits>` value - Swiss data is never WGS84, so omitting
-    `coordRefSys` would make a JSON-FG reader assume CRS84/CRS84h by the
-    spec's own default-CRS rule (a real misrepresentation, not just a gap).
-    Requires
+    `None` (never a guessed default) when the meta-attribute is absent (and
+    no `CONTEXT` rebinding resolves it either - see
+    `_context_concrete_domain`) or not an `EPSG:<digits>` value - Swiss
+    data is never WGS84, so omitting `coordRefSys` would make a JSON-FG
+    reader assume CRS84/CRS84h by the spec's own default-CRS rule (a real
+    misrepresentation, not just a gap). Requires
     `ModelRepository._get_table` to propagate `meta_attributes` into
     imported models (builder/repository.py) - without that fix this
     resolves to `None` for virtually every real Swiss geometry attribute,
@@ -600,14 +695,23 @@ def _crs_uri(coord_type: MetaInstance | None) -> str | None:
     """
     raw = _meta_value(coord_type, "CRS")
     if raw is None:
-        return None
+        concrete = _context_concrete_domain(coord_type, symbol_table, repository)
+        if concrete is None or concrete is coord_type:
+            return None
+        return _crs_uri(concrete, symbol_table=symbol_table, repository=repository)
     scheme, _, code = raw.partition(":")
     if scheme.strip().upper() != "EPSG" or not code.strip().isdigit():
         return None
     return f"{CRS_URI_PREFIX}{code.strip()}"
 
 
-def _place_and_crs(resolved: ResolvedAttribute, node: RawNode) -> tuple[dict[str, Any], str] | None:
+def _place_and_crs(
+    resolved: ResolvedAttribute,
+    node: RawNode,
+    *,
+    symbol_table: SymbolTable | None = None,
+    repository: ModelRepository | None = None,
+) -> tuple[dict[str, Any], str] | None:
     """Return `(geometry, coordRefSys)` for one geometry-typed attribute occurrence, or `None`."""
     if resolved.type_kind == "CoordType":
         geometry = _coord_geometry(resolved, node)
@@ -619,8 +723,317 @@ def _place_and_crs(resolved: ResolvedAttribute, node: RawNode) -> tuple[dict[str
         return None
     if geometry is None:
         return None
-    crs = _crs_uri(coord_type)
+    crs = _crs_uri(coord_type, symbol_table=symbol_table, repository=repository)
     return None if crs is None else (geometry, crs)
+
+
+def _is_solid3d(type_instance: MetaInstance | None) -> bool:
+    """Whether `type_instance` is (an occurrence of) `Geometry3D_V2.Solid3D` - see module-level constant."""
+    return (
+        isinstance(type_instance, MetaInstance)
+        and getattr(type_instance, "Kind", None) == "Structure"
+        and getattr(type_instance, "Name", None) == "Solid3D"
+        and "OuterShell" in attributes_of(type_instance)
+    )
+
+
+def _solid3d_coord_type(solid_class: MetaInstance) -> MetaInstance | None:
+    """Walk `Solid3D.OuterShell -> Simplified -> Triangle3D.Geometry` to the ultimate `CoordType`, for CRS lookup.
+
+    Unlike a plain `CoordType`/`LineType` attribute, a `Solid3D` value has
+    no single geometry-typed attribute of its own to read a `CoordType`
+    off of - the schema has to be walked down to the one place a
+    `CoordType` actually lives (every `Triangle3D.Geometry`, all sharing
+    the same declared VERTEX domain by construction).
+    """
+
+    def _attr_type(cls: MetaInstance, name: str) -> ResolvedAttribute | None:
+        attr = attributes_of(cls).get(name)
+        return resolve_attribute(attr) if attr is not None else None
+
+    shell = _attr_type(solid_class, "OuterShell")
+    shell_class = shell.type_instance if shell is not None else None
+    if not isinstance(shell_class, MetaInstance):
+        return None
+    simplified = _attr_type(shell_class, "Simplified")
+    triangle_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
+    if not isinstance(triangle_class, MetaInstance):
+        return None
+    geometry = _attr_type(triangle_class, "Geometry")
+    if geometry is None or geometry.type_kind != "LineType":
+        return None
+    return line_coord_type(geometry.type_instance)
+
+
+def _polyhedron_shell(shell: Any) -> list[Any] | None:
+    """One JSON-FG Polyhedron shell (a MultiPolygon-shaped patch list) from an already-decoded `SurfaceShell3D` dict.
+
+    Only `Simplified` (guaranteed straight-only triangles, `BAG {1..*}`)
+    feeds the shell - `Native` (arbitrary `Surface3D` subclasses, possibly
+    non-planar) has no guaranteed straight-only representation and is left
+    out, same non-lossy-preferred stance already taken for circular-arcs.
+    """
+    if not isinstance(shell, dict):
+        return None
+    simplified = shell.get("Simplified")
+    if not isinstance(simplified, list) or not simplified:
+        return None
+    patches: list[Any] = []
+    for item in simplified:
+        geometry = item.get("Geometry") if isinstance(item, dict) else None
+        if not isinstance(geometry, dict) or geometry.get("type") != "Polygon":
+            return None
+        coordinates = geometry.get("coordinates")
+        if not isinstance(coordinates, list):
+            return None
+        patches.append(coordinates)
+    return patches
+
+
+def _solid3d_polyhedron(value: dict[str, Any]) -> dict[str, Any] | None:
+    """A `Geometry3D_V2.Solid3D` value (already decoded by `_structure_value`) -> a JSON-FG `Polyhedron` geometry.
+
+    Each shell (`OuterShell`, then every `InnerShells` occurrence) becomes
+    one entry of `coordinates` (JSON-FG Part 1 §7.4: "a solid defined by
+    shells, each shell a closed, simple MultiPolygon") - `Solid3D`'s own
+    `InnerShells` (voids enclosed by the outer shell) map onto this
+    one-for-one.
+    """
+    outer_shell = _polyhedron_shell(value.get("OuterShell"))
+    if outer_shell is None:
+        return None
+    shells = [outer_shell]
+    for inner in value.get("InnerShells") or []:
+        inner_shell = _polyhedron_shell(inner)
+        if inner_shell is None:
+            return None
+        shells.append(inner_shell)
+    return {"type": "Polyhedron", "coordinates": shells}
+
+
+def _solid3d_place_and_crs(
+    resolved: ResolvedAttribute,
+    raw_nodes: list[RawNode],
+    symbol_table: SymbolTable | None,
+    repository: ModelRepository | None = None,
+) -> tuple[dict[str, Any], str] | None:
+    """`Solid3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, builds a `Polyhedron`."""
+    if not isinstance(resolved.type_instance, MetaInstance):
+        return None
+    crs = _crs_uri(_solid3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
+    if crs is None:
+        return None
+    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
+    polyhedron = _solid3d_polyhedron(value)
+    return None if polyhedron is None else (polyhedron, crs)
+
+
+def _is_curve3d(type_instance: MetaInstance | None) -> bool:
+    """Whether `type_instance` is `Geometry3D_V2.PolylineStraight3D` or `.CompositeCurve3D`.
+
+    Same Name+shape matching as `_is_solid3d` (cross-model qualified-name
+    lookup doesn't work here either). `Pipe3D` (`EXTENDS CompositeCurve3D`,
+    no JSON-FG target - no tube/extrusion primitive exists in any
+    conformance class) is excluded by construction: its own `Name` is
+    `"Pipe3D"`, never `"CompositeCurve3D"`.
+    """
+    if not isinstance(type_instance, MetaInstance) or getattr(type_instance, "Kind", None) != "Structure":
+        return False
+    name = getattr(type_instance, "Name", None)
+    attrs = attributes_of(type_instance)
+    if name == "PolylineStraight3D":
+        return "Geometry" in attrs
+    if name == "CompositeCurve3D":
+        return "Simplified" in attrs
+    return False
+
+
+def _curve3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
+    """Walk a `PolylineStraight3D`/`CompositeCurve3D` type down to its ultimate `CoordType`, for CRS lookup."""
+
+    def _attr_type(cls: MetaInstance, name: str) -> ResolvedAttribute | None:
+        attr = attributes_of(cls).get(name)
+        return resolve_attribute(attr) if attr is not None else None
+
+    name = getattr(type_instance, "Name", None)
+    if name == "PolylineStraight3D":
+        geometry = _attr_type(type_instance, "Geometry")
+        if geometry is None or geometry.type_kind != "LineType":
+            return None
+        return line_coord_type(geometry.type_instance)
+    if name == "CompositeCurve3D":
+        simplified = _attr_type(type_instance, "Simplified")
+        segment_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
+        if not isinstance(segment_class, MetaInstance):
+            return None
+        return _curve3d_coord_type(segment_class)
+    return None
+
+
+def _composite_curve3d_linestring(value: dict[str, Any]) -> dict[str, Any] | None:
+    """A `CompositeCurve3D` value (already decoded by `_structure_value`) -> one JSON-FG `LineString`.
+
+    `Simplified` (`LIST {1..*} OF PolylineStraight3D`) is a CONNECTED
+    sequence (swisstopo "Basismodul 3D" SS2.3: each segment's start point
+    equals the previous segment's end point, except the first/last) - the
+    segments concatenate into a SINGLE `LineString`, never
+    `MultiLineString`/`MultiCurve` (those would misrepresent it as
+    disconnected pieces). The shared joint point is dropped once per
+    junction only when it is actually identical on both sides - never
+    guessed away otherwise (RULE #5).
+    """
+    segments = value.get("Simplified")
+    if not isinstance(segments, list) or not segments:
+        return None
+    coordinates: list[Any] = []
+    for segment in segments:
+        geometry = segment.get("Geometry") if isinstance(segment, dict) else None
+        if not isinstance(geometry, dict) or geometry.get("type") != "LineString":
+            return None
+        points = geometry.get("coordinates")
+        if not isinstance(points, list) or not points:
+            return None
+        if coordinates and coordinates[-1] == points[0]:
+            coordinates.extend(points[1:])
+        else:
+            coordinates.extend(points)
+    return {"type": "LineString", "coordinates": coordinates} if coordinates else None
+
+
+def _curve3d_place_and_crs(
+    resolved: ResolvedAttribute,
+    raw_nodes: list[RawNode],
+    symbol_table: SymbolTable | None,
+    repository: ModelRepository | None = None,
+) -> tuple[dict[str, Any], str] | None:
+    """`Curve3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, builds a `LineString`."""
+    if not isinstance(resolved.type_instance, MetaInstance):
+        return None
+    crs = _crs_uri(_curve3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
+    if crs is None:
+        return None
+    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
+    if getattr(resolved.type_instance, "Name", None) == "PolylineStraight3D":
+        geometry = value.get("Geometry")
+        linestring = geometry if isinstance(geometry, dict) and geometry.get("type") == "LineString" else None
+    else:
+        linestring = _composite_curve3d_linestring(value)
+    return None if linestring is None else (linestring, crs)
+
+
+def _is_composite_surface3d(type_instance: MetaInstance | None) -> bool:
+    """Whether `type_instance` is `Geometry3D_V2.Tin3D`/`.SurfaceShell3D`/`.CompositeSurface3D`, standing alone.
+
+    Same Name+shape matching as `_is_solid3d`. A `SurfaceShell3D` NESTED
+    inside `Solid3D.OuterShell`/`.InnerShells` is never reached by this
+    check - it is only ever a top-level Class attribute here, read
+    directly via `_polyhedron_shell` as part of `Solid3D` otherwise.
+    """
+    return (
+        isinstance(type_instance, MetaInstance)
+        and getattr(type_instance, "Kind", None) == "Structure"
+        and getattr(type_instance, "Name", None) in {"Tin3D", "SurfaceShell3D", "CompositeSurface3D"}
+        and "Simplified" in attributes_of(type_instance)
+    )
+
+
+def _composite_surface3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
+    """Walk a `Tin3D`/`SurfaceShell3D`/`CompositeSurface3D` type down to its ultimate `CoordType`, for CRS lookup."""
+    attr = attributes_of(type_instance).get("Simplified")
+    simplified = resolve_attribute(attr) if attr is not None else None
+    triangle_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
+    if not isinstance(triangle_class, MetaInstance):
+        return None
+    geometry_attr = attributes_of(triangle_class).get("Geometry")
+    geometry = resolve_attribute(geometry_attr) if geometry_attr is not None else None
+    if geometry is None or geometry.type_kind != "LineType":
+        return None
+    return line_coord_type(geometry.type_instance)
+
+
+def _composite_surface3d_multipolygon(value: dict[str, Any]) -> dict[str, Any] | None:
+    """A `Tin3D`/`SurfaceShell3D`/`CompositeSurface3D` value (already decoded by `_structure_value`) -> `MultiPolygon`.
+
+    Flattened as a plain mesh of triangle patches (`_polyhedron_shell`,
+    shared with `Solid3D`'s own shell reading) - a standalone
+    `SurfaceShell3D`'s closure is NOT reconstructed into a single-shell
+    `Polyhedron` here (that would need detecting watertightness, which
+    this converter has no way to check from the wire alone); the open
+    (`Tin3D`) and closed (`SurfaceShell3D`) cases both get the same
+    honest "here are the triangles" representation.
+    """
+    patches = _polyhedron_shell(value)
+    return None if patches is None else {"type": "MultiPolygon", "coordinates": patches}
+
+
+def _composite_surface3d_place_and_crs(
+    resolved: ResolvedAttribute,
+    raw_nodes: list[RawNode],
+    symbol_table: SymbolTable | None,
+    repository: ModelRepository | None = None,
+) -> tuple[dict[str, Any], str] | None:
+    """`CompositeSurface3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract."""
+    if not isinstance(resolved.type_instance, MetaInstance):
+        return None
+    crs = _crs_uri(
+        _composite_surface3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository
+    )
+    if crs is None:
+        return None
+    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
+    multipolygon = _composite_surface3d_multipolygon(value)
+    return None if multipolygon is None else (multipolygon, crs)
+
+
+def _is_pointcloud3d(type_instance: MetaInstance | None) -> bool:
+    """Whether `type_instance` is (an occurrence of) `Geometry3D_V2.PointCloud3D` - see module-level constant."""
+    return (
+        isinstance(type_instance, MetaInstance)
+        and getattr(type_instance, "Kind", None) == "Structure"
+        and getattr(type_instance, "Name", None) == "PointCloud3D"
+        and "Points" in attributes_of(type_instance)
+    )
+
+
+def _pointcloud3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
+    """The `CoordType` of `PointCloud3D.Points` (`BAG {1..*} OF Coord3`), for CRS lookup."""
+    attr = attributes_of(type_instance).get("Points")
+    resolved = resolve_attribute(attr) if attr is not None else None
+    base_type = getattr(resolved.type_instance, "BaseType", None) if resolved is not None else None
+    return base_type if isinstance(base_type, MetaInstance) else None
+
+
+def _pointcloud3d_multipoint(value: dict[str, Any]) -> dict[str, Any] | None:
+    """A `PointCloud3D` value (already decoded by `_structure_value`) -> a JSON-FG `MultiPoint`."""
+    points = value.get("Points")
+    if not isinstance(points, list) or not points:
+        return None
+    positions: list[Any] = []
+    for point in points:
+        if not isinstance(point, dict) or point.get("type") != "Point":
+            return None
+        coordinates = point.get("coordinates")
+        if not isinstance(coordinates, list):
+            return None
+        positions.append(coordinates)
+    return {"type": "MultiPoint", "coordinates": positions}
+
+
+def _pointcloud3d_place_and_crs(
+    resolved: ResolvedAttribute,
+    raw_nodes: list[RawNode],
+    symbol_table: SymbolTable | None,
+    repository: ModelRepository | None = None,
+) -> tuple[dict[str, Any], str] | None:
+    """`PointCloud3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, a `MultiPoint`."""
+    if not isinstance(resolved.type_instance, MetaInstance):
+        return None
+    crs = _crs_uri(_pointcloud3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
+    if crs is None:
+        return None
+    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
+    multipoint = _pointcloud3d_multipoint(value)
+    return None if multipoint is None else (multipoint, crs)
 
 
 def _feature_schema_ref(schema_url: str, feature_type: str) -> str:
@@ -641,6 +1054,7 @@ def object_to_feature(
     *,
     standalone: bool = True,
     symbol_table: SymbolTable | None = None,
+    repository: ModelRepository | None = None,
     schema_url: str | None = None,
     omit_multivalue: bool = False,
 ) -> dict[str, Any]:
@@ -734,14 +1148,48 @@ def object_to_feature(
     place: dict[str, Any] | None = None
     crs_uri: str | None = None
     geometry_names = [name for name, r in resolved_attrs.items() if r.type_kind in _GEOMETRY_KINDS]
+    solid3d_names = [name for name, r in resolved_attrs.items() if _is_solid3d(r.type_instance)]
+    curve3d_names = [name for name, r in resolved_attrs.items() if _is_curve3d(r.type_instance)]
+    composite_surface3d_names = [name for name, r in resolved_attrs.items() if _is_composite_surface3d(r.type_instance)]
+    pointcloud3d_names = [name for name, r in resolved_attrs.items() if _is_pointcloud3d(r.type_instance)]
     resolved_geometries: list[tuple[str, dict[str, Any], str]] = []
     for geom_name in geometry_names:
         raw_nodes = obj.attributes.get(geom_name)
         if not raw_nodes:
             continue
-        result = _place_and_crs(resolved_attrs[geom_name], raw_nodes[0])
+        result = _place_and_crs(
+            resolved_attrs[geom_name], raw_nodes[0], symbol_table=symbol_table, repository=repository
+        )
         if result is not None:
             resolved_geometries.append((geom_name, *result))
+    for solid_name in solid3d_names:
+        raw_nodes = obj.attributes.get(solid_name)
+        if not raw_nodes:
+            continue
+        result = _solid3d_place_and_crs(resolved_attrs[solid_name], raw_nodes, symbol_table, repository)
+        if result is not None:
+            resolved_geometries.append((solid_name, *result))
+    for curve_name in curve3d_names:
+        raw_nodes = obj.attributes.get(curve_name)
+        if not raw_nodes:
+            continue
+        result = _curve3d_place_and_crs(resolved_attrs[curve_name], raw_nodes, symbol_table, repository)
+        if result is not None:
+            resolved_geometries.append((curve_name, *result))
+    for surface_name in composite_surface3d_names:
+        raw_nodes = obj.attributes.get(surface_name)
+        if not raw_nodes:
+            continue
+        result = _composite_surface3d_place_and_crs(resolved_attrs[surface_name], raw_nodes, symbol_table, repository)
+        if result is not None:
+            resolved_geometries.append((surface_name, *result))
+    for cloud_name in pointcloud3d_names:
+        raw_nodes = obj.attributes.get(cloud_name)
+        if not raw_nodes:
+            continue
+        result = _pointcloud3d_place_and_crs(resolved_attrs[cloud_name], raw_nodes, symbol_table, repository)
+        if result is not None:
+            resolved_geometries.append((cloud_name, *result))
     placed_names: set[str] = set()
     if len(resolved_geometries) == 1:
         geom_name, place, crs_uri = resolved_geometries[0]
@@ -774,6 +1222,8 @@ def object_to_feature(
             place_types = {g.get("type") for g in place.get("geometries", [])}
         if place_types & _CIRCULAR_ARC_TYPES:
             conforms_to.append(CONF_CIRCULAR_ARCS)
+        if place_types & _POLYHEDRA_TYPES:
+            conforms_to.append(CONF_POLYHEDRA)
         feature["conformsTo"] = conforms_to
     if obj.tid is not None:
         feature["id"] = obj.tid
@@ -1324,6 +1774,7 @@ def evaluate_view(
                 _inspection_path(view),
                 standalone,
                 symbol_table,
+                repository,
             )
         n_bases = len(bases)
         return [
@@ -1332,6 +1783,7 @@ def evaluate_view(
                 view,
                 standalone=standalone,
                 symbol_table=symbol_table,
+                repository=repository,
             )
             for base_index, objs in enumerate(objects_by_base)
             for obj in objs
@@ -1346,6 +1798,7 @@ def evaluate_view(
                 view,
                 standalone=standalone,
                 symbol_table=symbol_table,
+                repository=repository,
             )
             for combo in combos
             if combo[0] is not None
@@ -1359,6 +1812,7 @@ def evaluate_view(
             view,
             standalone=standalone,
             symbol_table=symbol_table,
+            repository=repository,
         )
         members = _join_members(bases, combo)
         if members:
@@ -1476,6 +1930,7 @@ def _evaluate_geometry_inspection(
     geom_attr_name: str,
     standalone: bool,
     symbol_table: SymbolTable,
+    repository: ModelRepository | None = None,
 ) -> list[dict[str, Any]]:
     """One Feature per base object for a single-hop SURFACE/AREA geometry `INSPECTION`.
 
@@ -1503,7 +1958,9 @@ def _evaluate_geometry_inspection(
             out_names.append(getattr(attr, "Name", None) or "")
     features: list[dict[str, Any]] = []
     for base_obj in base_objects:
-        feature = object_to_feature(base_obj, view, standalone=standalone, symbol_table=symbol_table)
+        feature = object_to_feature(
+            base_obj, view, standalone=standalone, symbol_table=symbol_table, repository=repository
+        )
         nodes = base_obj.attributes.get(geom_attr_name) or []
         boundary = _surface_boundary_geometry(nodes[0]) if nodes else None
         if boundary is not None:
@@ -1520,6 +1977,7 @@ def _evaluate_inspection(
     path: list[str],
     standalone: bool,
     symbol_table: SymbolTable,
+    repository: ModelRepository | None = None,
 ) -> list[dict[str, Any]]:
     """One Feature per element of the inspected attribute (`INSPECTION OF base -> attr`) on each base object.
 
@@ -1541,7 +1999,7 @@ def _evaluate_inspection(
     """
     geom_attr = _single_hop_surface_attr(base_view, path, symbol_table)
     if geom_attr is not None:
-        return _evaluate_geometry_inspection(view, base_objects, geom_attr, standalone, symbol_table)
+        return _evaluate_geometry_inspection(view, base_objects, geom_attr, standalone, symbol_table, repository)
     elements, element_type = _inspection_elements(view, base_view, base_objects, path, symbol_table)
     features: list[dict[str, Any]] = []
     for element in elements:
@@ -1550,6 +2008,7 @@ def _evaluate_inspection(
             element_type if element_type is not None else view,
             standalone=standalone,
             symbol_table=symbol_table,
+            repository=repository,
         )
         feature["featureType"] = getattr(view, "Name", None) or feature["featureType"]
         features.append(feature)
@@ -1655,10 +2114,14 @@ def transfer_to_feature_collection(
     Each Feature is produced with `standalone=False` (no per-feature
     "conformsTo" - the FeatureCollection is the JSON-FG root object here,
     RULE /req/core/metadata.C). When every produced Feature shares the
-    same "featureType", it is ALSO set once on the collection itself
-    (clause 13 Recommendation A, "homogeneous feature collections") -
-    purely additive, never replaces the per-feature member (clause 13
-    Requirement B already allows either placement, so both stay valid).
+    same "featureType", it is hoisted once onto the collection itself
+    (clause 13 Recommendation A, "homogeneous feature collections") AND
+    removed from every Feature - same hoist-and-remove pattern as
+    "coordRefSys" below, and matching the Standard's own official example
+    (`core/examples/airports.json`: `"featureType"` on the collection,
+    absent from every feature). Clause 13 Requirement B's "either...or"
+    is satisfied by the collection alone; a real third-party validator
+    (`geonovum.github.io/ogc-checker`) rejects a document carrying both.
 
     "coordRefSys" hoisting (uniform case only) is NOT an optional
     optimization - it is what `/req/core/same-crs` actually requires
@@ -1711,6 +2174,7 @@ def transfer_to_feature_collection(
                     cls,
                     standalone=False,
                     symbol_table=symbol_table,
+                    repository=repository,
                     omit_multivalue=include_child_rows,
                 )
             )
@@ -1725,6 +2189,8 @@ def transfer_to_feature_collection(
     conforms_to = [CONF_CORE, CONF_TYPES_SCHEMAS]
     if any(f.get("place", {}).get("type") in _CIRCULAR_ARC_TYPES for f in features):
         conforms_to.append(CONF_CIRCULAR_ARCS)
+    if any(f.get("place", {}).get("type") in _POLYHEDRA_TYPES for f in features):
+        conforms_to.append(CONF_POLYHEDRA)
     collection: dict[str, Any] = {
         "type": "FeatureCollection",
         "conformsTo": conforms_to,
@@ -1733,6 +2199,8 @@ def transfer_to_feature_collection(
     feature_types = {f["featureType"] for f in features}
     if len(feature_types) == 1:
         collection["featureType"] = next(iter(feature_types))
+        for f in features:
+            f.pop("featureType", None)
 
     if schema_url is not None and feature_types:
         if len(feature_types) == 1:

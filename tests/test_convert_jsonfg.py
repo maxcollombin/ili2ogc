@@ -9,6 +9,7 @@ from conftest import build_from_text
 from interlis.convert.jsonfg import (
     CONF_CIRCULAR_ARCS,
     CONF_CORE,
+    CONF_POLYHEDRA,
     CONF_TYPES_SCHEMAS,
     _child_row_features,
     object_to_feature,
@@ -54,6 +55,10 @@ def _wrap(tag: str, *children: RawNode) -> RawNode:
 
 def _coord(c1: str, c2: str) -> RawNode:
     return _wrap("COORD", _node("C1", c1), _node("C2", c2))
+
+
+def _coord3(c1: str, c2: str, c3: str) -> RawNode:
+    return _wrap("COORD", _node("C1", c1), _node("C2", c2), _node("C3", c3))
 
 
 _REF_MODEL = """INTERLIS 2.4;
@@ -1056,7 +1061,10 @@ def test_child_row_features_never_produced_by_default():
     transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
     collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
     assert len(collection["features"]) == 1
-    assert collection["features"][0]["featureType"] == "Parcel"
+    # Homogeneous collection: hoisted to the collection, removed from the feature
+    # (same pattern as "coordRefSys" - matches core/examples/airports.json).
+    assert collection["featureType"] == "Parcel"
+    assert "featureType" not in collection["features"][0]
 
 
 def test_transfer_to_feature_collection_include_child_rows_appends_them():
@@ -1114,3 +1122,495 @@ def test_transfer_to_feature_collection_hoists_uniform_coord_ref_sys():
     assert collection["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
     assert all("coordRefSys" not in f for f in collection["features"])
     assert all(f["place"]["type"] == "Point" for f in collection["features"])
+
+
+# --- Solid3D -> Polyhedron (RULE #7 exception, synthetic - see
+# docs/dev-notes/solid3d-polyhedron-mapping.md) -----------------------------
+#
+# Matched by Name ("Solid3D") + its distinctive "OuterShell" attribute
+# (_is_solid3d), not by qualified model path - see the dev-note for why.
+# These fixtures reproduce the shape of the real, published
+# Geometry3D_V2.Solid3D (CHBase Part VIII) inline rather than importing it,
+# same as every other geometry fixture in this file.
+
+_SOLID3D_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    !!@CRS=EPSG:2056
+    Coord3D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000, -1000.000 .. 9000.000;
+    SolidSurface = SURFACE WITH (STRAIGHTS) VERTEX Coord3D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    STRUCTURE Triangle3D =
+      Geometry : MANDATORY SolidSurface;
+    END Triangle3D;
+    STRUCTURE SurfaceShell3D =
+      Simplified : BAG {1..*} OF Triangle3D;
+    END SurfaceShell3D;
+    STRUCTURE Solid3D =
+      OuterShell : MANDATORY SurfaceShell3D;
+      InnerShells : BAG {0..*} OF SurfaceShell3D;
+    END Solid3D;
+    CLASS ASolid =
+      Volume : MANDATORY Solid3D;
+    END ASolid;
+  END T;
+END Foo.
+"""
+
+_SOLID3D_NO_CRS_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord3D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000, -1000.000 .. 9000.000;
+    SolidSurface = SURFACE WITH (STRAIGHTS) VERTEX Coord3D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    STRUCTURE Triangle3D =
+      Geometry : MANDATORY SolidSurface;
+    END Triangle3D;
+    STRUCTURE SurfaceShell3D =
+      Simplified : BAG {1..*} OF Triangle3D;
+    END SurfaceShell3D;
+    STRUCTURE Solid3D =
+      OuterShell : MANDATORY SurfaceShell3D;
+      InnerShells : BAG {0..*} OF SurfaceShell3D;
+    END Solid3D;
+    CLASS ASolid =
+      Volume : MANDATORY Solid3D;
+    END ASolid;
+  END T;
+END Foo.
+"""
+
+
+def _triangle_wire(*points: RawNode) -> RawNode:
+    return _wrap("Triangle3D", _wrap("Geometry", _wrap("SURFACE", _wrap("BOUNDARY", _wrap("POLYLINE", *points)))))
+
+
+def _solid3d_volume_wire() -> RawNode:
+    outer_triangle_1 = _triangle_wire(
+        _coord3("2600000.0", "1200000.0", "500.0"),
+        _coord3("2600010.0", "1200000.0", "500.0"),
+        _coord3("2600005.0", "1200008.0", "500.0"),
+        _coord3("2600000.0", "1200000.0", "500.0"),
+    )
+    outer_triangle_2 = _triangle_wire(
+        _coord3("2600000.0", "1200000.0", "500.0"),
+        _coord3("2600005.0", "1200008.0", "500.0"),
+        _coord3("2600005.0", "1200003.0", "508.0"),
+        _coord3("2600000.0", "1200000.0", "500.0"),
+    )
+    inner_triangle = _triangle_wire(
+        _coord3("2600002.0", "1200002.0", "501.0"),
+        _coord3("2600004.0", "1200002.0", "501.0"),
+        _coord3("2600003.0", "1200003.0", "501.0"),
+        _coord3("2600002.0", "1200002.0", "501.0"),
+    )
+    return _wrap(
+        "Volume",
+        _wrap(
+            "Solid3D",
+            _wrap(
+                "OuterShell",
+                _wrap("SurfaceShell3D", _wrap("Simplified", outer_triangle_1, outer_triangle_2)),
+            ),
+            _wrap(
+                "InnerShells",
+                _wrap("SurfaceShell3D", _wrap("Simplified", inner_triangle)),
+            ),
+        ),
+    )
+
+
+def test_solid3d_attribute_becomes_place_polyhedron_with_crs():
+    builder = _build(_SOLID3D_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ASolid")
+    obj = XtfObject(tid="s-1", qualified_class="Foo.T.ASolid", attributes={"Volume": [_solid3d_volume_wire()]})
+    feature = object_to_feature(obj, cls)
+    assert feature["place"]["type"] == "Polyhedron"
+    assert feature["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+    assert "Volume" not in feature["properties"]
+    shells = feature["place"]["coordinates"]
+    assert len(shells) == 2  # OuterShell, then one InnerShells occurrence
+    outer_shell, inner_shell = shells
+    assert len(outer_shell) == 2  # the 2 Simplified triangles
+    assert len(inner_shell) == 1
+    assert outer_shell[0] == [
+        [
+            [2600000.0, 1200000.0, 500.0],
+            [2600010.0, 1200000.0, 500.0],
+            [2600005.0, 1200008.0, 500.0],
+            [2600000.0, 1200000.0, 500.0],
+        ]
+    ]
+    assert CONF_POLYHEDRA in feature["conformsTo"]
+
+
+def test_solid3d_without_resolvable_crs_stays_a_nested_structure_property():
+    """Same conservative "no CRS -> no place" policy as any 2D geometry attribute (`_place_and_crs`).
+
+    Unlike a top-level CoordType/LineType (which gets replaced by an
+    `x-unsupported` marker in this case), a Solid3D that can't become
+    `place` keeps its full nested-STRUCTURE representation in
+    `properties` - already a complete, useful value, unlike the
+    marker-only fallback a bare CoordType/LineType has nothing better to
+    offer.
+    """
+    builder = _build(_SOLID3D_NO_CRS_MODEL)
+    cls = _resolved_class(builder, "ASolid")
+    obj = XtfObject(tid="s-2", qualified_class="Foo.T.ASolid", attributes={"Volume": [_solid3d_volume_wire()]})
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert "coordRefSys" not in feature
+    assert feature["properties"]["Volume"]["OuterShell"]["Simplified"][0]["Geometry"]["type"] == "Polygon"
+    assert CONF_POLYHEDRA not in feature["conformsTo"]
+
+
+def test_transfer_to_feature_collection_hoists_polyhedra_conforms_to():
+    builder = _build(_SOLID3D_MODEL, capture_meta=True)
+    basket = XtfBasket(
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
+        objects=[XtfObject(tid="s-1", qualified_class="Foo.T.ASolid", attributes={"Volume": [_solid3d_volume_wire()]})],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
+    assert CONF_POLYHEDRA in collection["conformsTo"]
+    assert collection["features"][0]["place"]["type"] == "Polyhedron"
+
+
+# --- PolylineStraight3D/CompositeCurve3D -> LineString (RULE #7 exception,
+# synthetic - see docs/dev-notes/curve3d-mapping.md) -------------------------
+#
+# Matched by Name ("PolylineStraight3D"/"CompositeCurve3D") + shape
+# (_is_curve3d), same approach as _is_solid3d. `Pipe3D` (`EXTENDS
+# CompositeCurve3D`, no JSON-FG target) is excluded by construction: its
+# `Name` is "Pipe3D", never "CompositeCurve3D".
+
+_CURVE3D_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    !!@CRS=EPSG:2056
+    Coord3D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000, -1000.000 .. 9000.000;
+    Line3D = POLYLINE WITH (STRAIGHTS) VERTEX Coord3D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    STRUCTURE PolylineStraight3D =
+      Geometry : MANDATORY Line3D;
+    END PolylineStraight3D;
+    STRUCTURE CompositeCurve3D =
+      Simplified : LIST {1..*} OF PolylineStraight3D;
+    END CompositeCurve3D;
+    CLASS ARoad =
+      Axis : MANDATORY CompositeCurve3D;
+    END ARoad;
+    CLASS ASegment =
+      Axis : MANDATORY PolylineStraight3D;
+    END ASegment;
+  END T;
+END Foo.
+"""
+
+_CURVE3D_NO_CRS_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord3D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000, -1000.000 .. 9000.000;
+    Line3D = POLYLINE WITH (STRAIGHTS) VERTEX Coord3D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    STRUCTURE PolylineStraight3D =
+      Geometry : MANDATORY Line3D;
+    END PolylineStraight3D;
+    STRUCTURE CompositeCurve3D =
+      Simplified : LIST {1..*} OF PolylineStraight3D;
+    END CompositeCurve3D;
+    CLASS ARoad =
+      Axis : MANDATORY CompositeCurve3D;
+    END ARoad;
+  END T;
+END Foo.
+"""
+
+
+def _polyline_segment_wire(*points: RawNode) -> RawNode:
+    return _wrap("PolylineStraight3D", _wrap("Geometry", _wrap("POLYLINE", *points)))
+
+
+def test_composite_curve3d_attribute_becomes_place_linestring_with_crs():
+    builder = _build(_CURVE3D_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ARoad")
+    segment_1 = _polyline_segment_wire(
+        _coord3("2600000.0", "1200000.0", "500.0"), _coord3("2600010.0", "1200000.0", "505.0")
+    )
+    segment_2 = _polyline_segment_wire(
+        _coord3("2600010.0", "1200000.0", "505.0"), _coord3("2600010.0", "1200010.0", "510.0")
+    )
+    obj = XtfObject(
+        tid="r-1",
+        qualified_class="Foo.T.ARoad",
+        attributes={"Axis": [_wrap("Axis", _wrap("CompositeCurve3D", _wrap("Simplified", segment_1, segment_2)))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "LineString",
+        "coordinates": [
+            [2600000.0, 1200000.0, 500.0],
+            [2600010.0, 1200000.0, 505.0],
+            [2600010.0, 1200010.0, 510.0],
+        ],
+    }
+    assert feature["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+    assert "Axis" not in feature["properties"]
+    assert CONF_POLYHEDRA not in feature["conformsTo"]
+    assert CONF_CIRCULAR_ARCS not in feature["conformsTo"]
+
+
+def test_composite_curve3d_keeps_a_non_matching_joint_instead_of_guessing():
+    """RULE #5: the shared-joint dedup only fires on an EXACT match - a model violation is surfaced, not hidden."""
+    builder = _build(_CURVE3D_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ARoad")
+    segment_1 = _polyline_segment_wire(
+        _coord3("2600000.0", "1200000.0", "500.0"), _coord3("2600010.0", "1200000.0", "505.0")
+    )
+    segment_2 = _polyline_segment_wire(
+        _coord3("2699999.0", "1200000.0", "505.0"), _coord3("2600010.0", "1200010.0", "510.0")
+    )
+    obj = XtfObject(
+        tid="r-2",
+        qualified_class="Foo.T.ARoad",
+        attributes={"Axis": [_wrap("Axis", _wrap("CompositeCurve3D", _wrap("Simplified", segment_1, segment_2)))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"]["coordinates"] == [
+        [2600000.0, 1200000.0, 500.0],
+        [2600010.0, 1200000.0, 505.0],
+        [2699999.0, 1200000.0, 505.0],
+        [2600010.0, 1200010.0, 510.0],
+    ]
+
+
+def test_polyline_straight3d_attribute_becomes_place_linestring_with_crs():
+    builder = _build(_CURVE3D_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ASegment")
+    obj = XtfObject(
+        tid="s-1",
+        qualified_class="Foo.T.ASegment",
+        attributes={
+            "Axis": [
+                _wrap(
+                    "Axis",
+                    _wrap(
+                        "PolylineStraight3D",
+                        _wrap(
+                            "Geometry",
+                            _wrap(
+                                "POLYLINE",
+                                _coord3("2600000.0", "1200000.0", "500.0"),
+                                _coord3("2600010.0", "1200000.0", "505.0"),
+                            ),
+                        ),
+                    ),
+                )
+            ]
+        },
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "LineString",
+        "coordinates": [[2600000.0, 1200000.0, 500.0], [2600010.0, 1200000.0, 505.0]],
+    }
+    assert feature["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+
+
+def test_composite_curve3d_without_resolvable_crs_stays_a_nested_structure_property():
+    builder = _build(_CURVE3D_NO_CRS_MODEL)
+    cls = _resolved_class(builder, "ARoad")
+    segment = _polyline_segment_wire(
+        _coord3("2600000.0", "1200000.0", "500.0"), _coord3("2600010.0", "1200000.0", "505.0")
+    )
+    obj = XtfObject(
+        tid="r-3",
+        qualified_class="Foo.T.ARoad",
+        attributes={"Axis": [_wrap("Axis", _wrap("CompositeCurve3D", _wrap("Simplified", segment)))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert "coordRefSys" not in feature
+    assert feature["properties"]["Axis"]["Simplified"][0]["Geometry"]["type"] == "LineString"
+
+
+# --- Tin3D/SurfaceShell3D/CompositeSurface3D -> MultiPolygon (RULE #7
+# exception, synthetic - see docs/dev-notes/composite-surface3d-mapping.md) -
+#
+# Matched by Name ("Tin3D"/"SurfaceShell3D"/"CompositeSurface3D") + shape
+# (_is_composite_surface3d), same approach as _is_solid3d.
+
+_COMPOSITE_SURFACE3D_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    !!@CRS=EPSG:2056
+    Coord3D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000, -1000.000 .. 9000.000;
+    SolidSurface = SURFACE WITH (STRAIGHTS) VERTEX Coord3D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    STRUCTURE Triangle3D =
+      Geometry : MANDATORY SolidSurface;
+    END Triangle3D;
+    STRUCTURE Tin3D =
+      Simplified : BAG {1..*} OF Triangle3D;
+    END Tin3D;
+    CLASS AMesh =
+      Surface : MANDATORY Tin3D;
+    END AMesh;
+  END T;
+END Foo.
+"""
+
+_COMPOSITE_SURFACE3D_NO_CRS_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord3D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000, -1000.000 .. 9000.000;
+    SolidSurface = SURFACE WITH (STRAIGHTS) VERTEX Coord3D WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    STRUCTURE Triangle3D =
+      Geometry : MANDATORY SolidSurface;
+    END Triangle3D;
+    STRUCTURE Tin3D =
+      Simplified : BAG {1..*} OF Triangle3D;
+    END Tin3D;
+    CLASS AMesh =
+      Surface : MANDATORY Tin3D;
+    END AMesh;
+  END T;
+END Foo.
+"""
+
+
+def _mesh_triangles_wire() -> tuple[RawNode, RawNode]:
+    triangle_1 = _triangle_wire(
+        _coord3("2600000.0", "1200000.0", "400.0"),
+        _coord3("2600010.0", "1200000.0", "402.0"),
+        _coord3("2600005.0", "1200008.0", "398.0"),
+        _coord3("2600000.0", "1200000.0", "400.0"),
+    )
+    triangle_2 = _triangle_wire(
+        _coord3("2600010.0", "1200000.0", "402.0"),
+        _coord3("2600015.0", "1200008.0", "399.0"),
+        _coord3("2600005.0", "1200008.0", "398.0"),
+        _coord3("2600010.0", "1200000.0", "402.0"),
+    )
+    return triangle_1, triangle_2
+
+
+def test_tin3d_attribute_becomes_place_multipolygon_with_crs():
+    builder = _build(_COMPOSITE_SURFACE3D_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "AMesh")
+    triangle_1, triangle_2 = _mesh_triangles_wire()
+    obj = XtfObject(
+        tid="m-1",
+        qualified_class="Foo.T.AMesh",
+        attributes={"Surface": [_wrap("Surface", _wrap("Tin3D", _wrap("Simplified", triangle_1, triangle_2)))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"]["type"] == "MultiPolygon"
+    assert feature["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+    assert "Surface" not in feature["properties"]
+    patches = feature["place"]["coordinates"]
+    assert len(patches) == 2  # the 2 Simplified triangles, an open (non-watertight) mesh
+    assert CONF_POLYHEDRA not in feature["conformsTo"]
+
+
+def test_composite_surface3d_without_resolvable_crs_stays_a_nested_structure_property():
+    builder = _build(_COMPOSITE_SURFACE3D_NO_CRS_MODEL)
+    cls = _resolved_class(builder, "AMesh")
+    triangle_1, triangle_2 = _mesh_triangles_wire()
+    obj = XtfObject(
+        tid="m-2",
+        qualified_class="Foo.T.AMesh",
+        attributes={"Surface": [_wrap("Surface", _wrap("Tin3D", _wrap("Simplified", triangle_1, triangle_2)))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert "coordRefSys" not in feature
+    assert feature["properties"]["Surface"]["Simplified"][0]["Geometry"]["type"] == "Polygon"
+
+
+# --- PointCloud3D -> MultiPoint (RULE #7 exception, synthetic - see
+# docs/dev-notes/pointcloud3d-mapping.md) -----------------------------------
+#
+# Matched by Name ("PointCloud3D") + shape (_is_pointcloud3d), same
+# approach as _is_solid3d. Occurrence wire shape (each `Points` element
+# wrapped in a `Coord3D` tag around `COORD`) is a REASONABLE, UNVERIFIED
+# extrapolation - see the dev-note's "Wire shape" section for why no real
+# corpus evidence could settle this either way.
+
+_POINTCLOUD3D_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    !!@CRS=EPSG:2056
+    Coord3D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000, -1000.000 .. 9000.000;
+  TOPIC T =
+    STRUCTURE PointCloud3D =
+      Points : BAG {1..*} OF Coord3D;
+    END PointCloud3D;
+    CLASS ACloud =
+      Cloud : MANDATORY PointCloud3D;
+    END ACloud;
+  END T;
+END Foo.
+"""
+
+_POINTCLOUD3D_NO_CRS_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    Coord3D = COORD 2000000.000 .. 3000000.000, 1000000.000 .. 1400000.000, -1000.000 .. 9000.000;
+  TOPIC T =
+    STRUCTURE PointCloud3D =
+      Points : BAG {1..*} OF Coord3D;
+    END PointCloud3D;
+    CLASS ACloud =
+      Cloud : MANDATORY PointCloud3D;
+    END ACloud;
+  END T;
+END Foo.
+"""
+
+
+def _pointcloud3d_wire(*points: RawNode) -> RawNode:
+    return _wrap("Cloud", _wrap("PointCloud3D", _wrap("Points", *(_wrap("Coord3D", p) for p in points))))
+
+
+def test_pointcloud3d_attribute_becomes_place_multipoint_with_crs():
+    builder = _build(_POINTCLOUD3D_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ACloud")
+    obj = XtfObject(
+        tid="c-1",
+        qualified_class="Foo.T.ACloud",
+        attributes={
+            "Cloud": [
+                _pointcloud3d_wire(
+                    _coord3("2600000.0", "1200000.0", "500.0"),
+                    _coord3("2600001.5", "1200002.0", "500.4"),
+                )
+            ]
+        },
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"] == {
+        "type": "MultiPoint",
+        "coordinates": [[2600000.0, 1200000.0, 500.0], [2600001.5, 1200002.0, 500.4]],
+    }
+    assert feature["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+    assert "Cloud" not in feature["properties"]
+    assert CONF_POLYHEDRA not in feature["conformsTo"]
+
+
+def test_pointcloud3d_without_resolvable_crs_stays_a_nested_structure_property():
+    builder = _build(_POINTCLOUD3D_NO_CRS_MODEL)
+    cls = _resolved_class(builder, "ACloud")
+    obj = XtfObject(
+        tid="c-2",
+        qualified_class="Foo.T.ACloud",
+        attributes={"Cloud": [_pointcloud3d_wire(_coord3("2600000.0", "1200000.0", "500.0"))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert "coordRefSys" not in feature
+    assert feature["properties"]["Cloud"]["Points"][0]["type"] == "Point"

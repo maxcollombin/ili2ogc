@@ -1,0 +1,17 @@
+INTERLIS 2.4;
+
+MODEL RoadAxis_V1 (en)
+  AT "https://example.org/models/" VERSION "2026-09-04" =
+
+  IMPORTS Geometry3D_V2, ContextCHLV95_V2;
+
+  TOPIC Roads =
+
+    CLASS RoadAxis =
+      Name: MANDATORY TEXT*80;
+      Axis: MANDATORY Geometry3D_V2.CompositeCurve3D;
+    END RoadAxis;
+
+  END Roads;
+
+END RoadAxis_V1.

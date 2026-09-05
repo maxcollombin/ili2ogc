@@ -709,11 +709,12 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
     """Convert an .xtf transfer to a JSON-FG FeatureCollection.
 
     Scope: the "core" and
-    "types-schemas" JSON-FG requirements classes only: scalar properties,
-    OID, featureType, and single-attribute point/line/polygon geometry
-    (`"place"`) with its `"coordRefSys"` resolved from the eCH-0117
-    `!!@CRS` meta-attribute; `"geometry"` (the WGS84 GeoJSON fallback)
-    always stays `null`. Schema resolution: see
+    "types-schemas" JSON-FG requirements classes, plus "circular-arcs"/
+    "polyhedra" when "place" needs them: scalar properties,
+    OID, featureType, and single-attribute point/line/polygon/solid
+    geometry (`"place"`) with its `"coordRefSys"` resolved from the
+    eCH-0117 `!!@CRS` meta-attribute; `"geometry"` (the WGS84 GeoJSON
+    fallback) always stays `null`. Schema resolution: see
     `_resolve_schema_model_path` (same `--model`/`--repo` rule as
     `interlis validate`).
 

@@ -206,6 +206,9 @@ contextDef:
     rule: contextDef
   kind: Instance
   target: IlisMeta16.ModelData.Context
+  parent:
+    association: PackageElements
+    role: Element
   attribute_bindings:
     Name:
       source:
@@ -214,18 +217,20 @@ contextDef:
       note: 'inherited Name (MetaElement); IlisMeta16.ModelData.Context has no own attributes (attributes.own:
         {}, confirmed ilismeta16-classes.yml).'
     generic_concrete_pairs:
-      note: 'The compiled body confirms the exact structure: `(domainRef EQ domainRef (OR domainRef)*
-        SEMI)+` - a repeated outer loop of "pair-groups", each with EXACTLY ONE generic domainRef (left)
-        and 1+ OR-joined concrete domainRefs (right). ConcreteForGeneric.GenericDef has `target_kind:
-        Unknown` (confirmed in ilismeta16-associations.yml) - evidence that `GenericDef` is treated as a
-        reified association class (each link is individually referenceable, not just a role pair). A
-        single GenericDef shared across the whole contextDef would lose the generic/concrete pairing (all
-        ConcreteForGeneric instances would point to the same link, making it impossible to know which
-        concrete domains go with which generic domain) - only "one GenericDef PER pair-group" (Context=
-        this Context, shared across all pair-groups; GenericDomain=[this pair-group''s left domainRef
-        only]) preserves the source information faithfully. Each right-hand domainRef of the same
-        pair-group then creates a ConcreteForGeneric(GenericDef=this specific link, ConcreteDomain=
-        resolved domainRef).
+      note: 'Construction is handled explicitly by `InterlisModelBuilder._build_context_domain_pairs`
+        (context_mixin.py, a special case triggered on `rule_name == "contextDef"`, same family as
+        `controlPoints`/`_build_multi_declaration` - not expressible via a declarative `source:`, since
+        `ctx.domainRef()` returns every occurrence flattened into one list with no grouping of its own).
+        This entry stays a no-op in the generic engine (no `source:` key - see
+        `InterlisModelBuilder._apply_one_binding`''s "notes-only" branch), kept only as a record of the
+        design it follows: `(domainRef EQ domainRef (OR domainRef)* SEMI)+` - a repeated outer loop of
+        "pair-groups", each with EXACTLY ONE generic domainRef (left) and 1+ OR-joined concrete domainRefs
+        (right). `ConcreteForGeneric.GenericDef` has `target_kind: Unknown` (confirmed in
+        ilismeta16-associations.yml) - evidence that `GenericDef` is treated as a reified association class
+        (each link is individually referenceable, not just a role pair): one `GenericDef` instance PER
+        pair-group (`Context`=this Context, `GenericDomain`=[this pair-group''s left domainRef only]), each
+        right-hand domainRef of that pair-group creating one `ConcreteForGeneric` (`GenericDef`=[this
+        specific link], `ConcreteDomain`=[resolved domainRef]).
 
         '
 controlPoints:

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><TRANSFER xmlns="http://www.interlis.ch/INTERLIS2.3">
+<HEADERSECTION SENDER="claude-test" VERSION="2.3"><MODELS><MODEL NAME="GeologicalLayer_V1" VERSION="2026-09-04" URI="https://example.org/models/"></MODEL></MODELS></HEADERSECTION>
+<DATASECTION>
+<GeologicalLayer_V1.Geology BID="8a1e1e1e-0005-4000-8000-000000000005">
+<GeologicalLayer_V1.Geology.LayerBoundary TID="8a1e1e1e-0006-4000-8000-000000000006">
+<Name>Test Layer</Name>
+<Surface>
+<Geometry3D_V2.Tin3D>
+<Simplified>
+<Geometry3D_V2.Triangle3D>
+<Geometry><SURFACE><BOUNDARY><POLYLINE><COORD><C1>2600000.000</C1><C2>1200000.000</C2><C3>400.000</C3></COORD><COORD><C1>2600010.000</C1><C2>1200000.000</C2><C3>402.000</C3></COORD><COORD><C1>2600005.000</C1><C2>1200008.000</C2><C3>398.000</C3></COORD><COORD><C1>2600000.000</C1><C2>1200000.000</C2><C3>400.000</C3></COORD></POLYLINE></BOUNDARY></SURFACE></Geometry>
+</Geometry3D_V2.Triangle3D>
+<Geometry3D_V2.Triangle3D>
+<Geometry><SURFACE><BOUNDARY><POLYLINE><COORD><C1>2600010.000</C1><C2>1200000.000</C2><C3>402.000</C3></COORD><COORD><C1>2600015.000</C1><C2>1200008.000</C2><C3>399.000</C3></COORD><COORD><C1>2600005.000</C1><C2>1200008.000</C2><C3>398.000</C3></COORD><COORD><C1>2600010.000</C1><C2>1200000.000</C2><C3>402.000</C3></COORD></POLYLINE></BOUNDARY></SURFACE></Geometry>
+</Geometry3D_V2.Triangle3D>
+</Simplified>
+</Geometry3D_V2.Tin3D>
+</Surface>
+</GeologicalLayer_V1.Geology.LayerBoundary>
+</GeologicalLayer_V1.Geology>
+</DATASECTION>
+</TRANSFER>

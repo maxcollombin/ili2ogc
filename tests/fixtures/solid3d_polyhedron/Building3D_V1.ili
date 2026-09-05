@@ -1,0 +1,17 @@
+INTERLIS 2.4;
+
+MODEL Building3D_V1 (en)
+  AT "https://example.org/models/" VERSION "2026-09-03" =
+
+  IMPORTS Geometry3D_V2, ContextCHLV95_V2;
+
+  TOPIC Buildings =
+
+    CLASS Building =
+      Name: MANDATORY TEXT*80;
+      Volume: MANDATORY Geometry3D_V2.Solid3D;
+    END Building;
+
+  END Buildings;
+
+END Building3D_V1.
