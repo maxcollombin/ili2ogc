@@ -1,4 +1,4 @@
-# ili-ogc
+# ili2ogc
 
 A pure-Python INTERLIS 2 toolkit: parses `.ili` models into a graph of typed
 Python objects (the IlisMeta16 metamodel), validates `.xtf` data transfers

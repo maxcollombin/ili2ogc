@@ -318,7 +318,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ili-ogc"
+name = "ili2ogc"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

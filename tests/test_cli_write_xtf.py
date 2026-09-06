@@ -85,7 +85,7 @@ def test_write_xtf_defaults_sender_rather_than_omitting_it(tmp_path, capsys):
     model_path, xtf_path = _write(tmp_path, _VIEW_TOPIC_MODEL)
 
     assert main(["write-xtf", str(model_path), str(xtf_path)]) == ExitCode.OK
-    assert 'SENDER="ili-ogc"' in capsys.readouterr().out
+    assert 'SENDER="ili2ogc"' in capsys.readouterr().out
 
 
 def test_write_xtf_rejects_a_view_declared_in_a_plain_topic(tmp_path, capsys):

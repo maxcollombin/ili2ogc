@@ -1,5 +1,5 @@
 [project]
-name = "ili-ogc"
+name = "ili2ogc"
 version = "0.1.0"
 authors = [
     {name = "Maxime Collombin", email = "maxime.collombin@netplus.ch"},
@@ -30,9 +30,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/maxcollombin/ili-ogc"
-Repository = "https://github.com/maxcollombin/ili-ogc.git"
-Issues = "https://github.com/maxcollombin/ili-ogc/issues"
+Homepage = "https://github.com/maxcollombin/ili2ogc"
+Repository = "https://github.com/maxcollombin/ili2ogc.git"
+Issues = "https://github.com/maxcollombin/ili2ogc/issues"
 
 [project.scripts]
 interlis = "interlis.cli:main"

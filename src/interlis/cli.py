@@ -1194,12 +1194,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     write_xtf_parser.add_argument(
         "--sender",
-        default="ili-ogc",
+        default="ili2ogc",
         metavar="NAME",
         help="HEADERSECTION SENDER value for the written .xtf. Refman eCH-0031 V2.1.0 SS4.3.4 leaves it "
         "optional, but a real ili2c-compiled schema for a simple transfer marks it required (verified "
         "empirically) and every real .xtf this runtime has read always carries one - defaults to "
-        "'ili-ogc' rather than omitting it.",
+        "'ili2ogc' rather than omitting it.",
     )
     write_xtf_parser.add_argument(
         "--merge-with-source",

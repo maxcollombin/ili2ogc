@@ -181,7 +181,7 @@ def render_sarif(bag: DiagnosticBag, *, tool_version: str = "0") -> dict:
                 "tool": {
                     "driver": {
                         "name": "interlis",
-                        "informationUri": "https://github.com/maxcollombin/ili-ogc",
+                        "informationUri": "https://github.com/maxcollombin/ili2ogc",
                         "version": tool_version,
                         "rules": list(rules_seen.values()),
                     }
