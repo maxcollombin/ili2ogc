@@ -985,6 +985,84 @@ def _composite_surface3d_place_and_crs(
     return None if multipolygon is None else (multipolygon, crs)
 
 
+def _is_chbase_multisurface(type_instance: MetaInstance | None) -> bool:
+    """Whether `type_instance` is (an occurrence of) `GeometryCHLV95_V1`/`GeometryCHLV03_V1`'s `MultiSurface`.
+
+    A STRUCTURE wrapping `Surfaces: BAG {1..*} OF SurfaceStructure`, each
+    `SurfaceStructure` holding one `Surface` (`LineType`, Kind=Surface) -
+    the CHBase base-module convention for a multi-part surface predating
+    (or alongside) a native `LineType.Multi=True` attribute, which
+    `_line_geometry` already handles directly. Real corpus evidence:
+    `RichtplanungErneuerbareEnergien_V1.Objekte.Flaeche.Geometrie`.
+    """
+    return (
+        isinstance(type_instance, MetaInstance)
+        and getattr(type_instance, "Kind", None) == "Structure"
+        and getattr(type_instance, "Name", None) == "MultiSurface"
+        and "Surfaces" in attributes_of(type_instance)
+    )
+
+
+def _chbase_multisurface_surface_type(type_instance: MetaInstance) -> ResolvedAttribute | None:
+    """Resolve `MultiSurface.Surfaces`'s element type (`SurfaceStructure`) down to its own `Surface` LineType."""
+    surfaces_attr = attributes_of(type_instance).get("Surfaces")
+    surfaces = resolve_attribute(surfaces_attr) if surfaces_attr is not None else None
+    element_class = getattr(surfaces.type_instance, "BaseType", None) if surfaces is not None else None
+    if not isinstance(element_class, MetaInstance):
+        return None
+    surface_attr = attributes_of(element_class).get("Surface")
+    resolved = resolve_attribute(surface_attr) if surface_attr is not None else None
+    return resolved if resolved is not None and resolved.type_kind == "LineType" else None
+
+
+def _chbase_multisurface_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
+    """`GeometryCHLV95_V1`/`GeometryCHLV03_V1` `MultiSurface` counterpart of `_composite_surface3d_coord_type`."""
+    surface = _chbase_multisurface_surface_type(type_instance)
+    return None if surface is None else line_coord_type(surface.type_instance)
+
+
+def _chbase_multisurface_multipolygon(value: dict[str, Any]) -> dict[str, Any] | None:
+    """A `MultiSurface` value (already decoded by `_structure_value`) -> `MultiPolygon`/`MultiSurface`.
+
+    Each `SurfaceStructure.Surface` is already a fully-built `Polygon`/
+    `CurvePolygon` dict (`_line_geometry` ran on it during the generic
+    `_structure_value` recursion) - this just re-aggregates them one level
+    up, mirroring `_line_geometry`'s own straight-vs-curved branching for a
+    native `Multi=True` LineType attribute.
+    """
+    surfaces = value.get("Surfaces")
+    if not isinstance(surfaces, list) or not surfaces:
+        return None
+    geometries: list[dict[str, Any]] = []
+    for item in surfaces:
+        surface = item.get("Surface") if isinstance(item, dict) else None
+        if not isinstance(surface, dict):
+            return None
+        geometries.append(surface)
+    if any(g.get("type") == "CurvePolygon" for g in geometries):
+        return {"type": "MultiSurface", "geometries": geometries}
+    return {"type": "MultiPolygon", "coordinates": [g["coordinates"] for g in geometries]}
+
+
+def _chbase_multisurface_place_and_crs(
+    resolved: ResolvedAttribute,
+    raw_nodes: list[RawNode],
+    symbol_table: SymbolTable | None,
+    repository: ModelRepository | None = None,
+) -> tuple[dict[str, Any], str] | None:
+    """`GeometryCHLV95_V1`/`GeometryCHLV03_V1` `MultiSurface` counterpart of `_place_and_crs`."""
+    if not isinstance(resolved.type_instance, MetaInstance):
+        return None
+    crs = _crs_uri(
+        _chbase_multisurface_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository
+    )
+    if crs is None:
+        return None
+    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
+    multipolygon = _chbase_multisurface_multipolygon(value)
+    return None if multipolygon is None else (multipolygon, crs)
+
+
 def _is_pointcloud3d(type_instance: MetaInstance | None) -> bool:
     """Whether `type_instance` is (an occurrence of) `Geometry3D_V2.PointCloud3D` - see module-level constant."""
     return (
@@ -1115,12 +1193,16 @@ def object_to_feature(
     `model_to_json_schema` document will be reachable.
 
     Geometry ("place"/"coordRefSys"): every own+inherited attribute whose
-    type resolves directly to CoordType/LineType (never via a BAG/LIST
-    wrapper - out of scope, no real corpus evidence) AND whose actual wire value
-    converts cleanly (see `_place_and_crs` - a `None` result, e.g. a
-    custom LINE FORM segment or an unresolved CRS, leaves that one
-    attribute in "properties" instead, marked `x-unsupported` like any
-    other out-of-scope attribute - never a silent loss) is collected.
+    type resolves directly to CoordType/LineType, plus the specific
+    STRUCTURE-wrapped BAG/LIST shapes this module recognizes by name
+    (Solid3D, Curve3D, Tin3D/SurfaceShell3D/CompositeSurface3D,
+    PointCloud3D, GeometryCHLV95_V1/GeometryCHLV03_V1's MultiSurface - a
+    generic unnamed BAG/LIST wrapper stays out of scope, no real corpus
+    evidence) AND whose actual wire value converts cleanly (see
+    `_place_and_crs` - a `None` result, e.g. a custom LINE FORM segment or
+    an unresolved CRS, leaves that one attribute in "properties" instead,
+    marked `x-unsupported` like any other out-of-scope attribute - never a
+    silent loss) is collected.
     Exactly one such attribute becomes "place" directly (unchanged
     behaviour); two or more become a single "place" of type
     `GeometryCollection` bundling all of them, in declaration order - no
@@ -1152,6 +1234,7 @@ def object_to_feature(
     curve3d_names = [name for name, r in resolved_attrs.items() if _is_curve3d(r.type_instance)]
     composite_surface3d_names = [name for name, r in resolved_attrs.items() if _is_composite_surface3d(r.type_instance)]
     pointcloud3d_names = [name for name, r in resolved_attrs.items() if _is_pointcloud3d(r.type_instance)]
+    chbase_multisurface_names = [name for name, r in resolved_attrs.items() if _is_chbase_multisurface(r.type_instance)]
     resolved_geometries: list[tuple[str, dict[str, Any], str]] = []
     for geom_name in geometry_names:
         raw_nodes = obj.attributes.get(geom_name)
@@ -1190,6 +1273,15 @@ def object_to_feature(
         result = _pointcloud3d_place_and_crs(resolved_attrs[cloud_name], raw_nodes, symbol_table, repository)
         if result is not None:
             resolved_geometries.append((cloud_name, *result))
+    for multisurface_name in chbase_multisurface_names:
+        raw_nodes = obj.attributes.get(multisurface_name)
+        if not raw_nodes:
+            continue
+        result = _chbase_multisurface_place_and_crs(
+            resolved_attrs[multisurface_name], raw_nodes, symbol_table, repository
+        )
+        if result is not None:
+            resolved_geometries.append((multisurface_name, *result))
     placed_names: set[str] = set()
     if len(resolved_geometries) == 1:
         geom_name, place, crs_uri = resolved_geometries[0]

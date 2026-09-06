@@ -1532,6 +1532,88 @@ def test_composite_surface3d_without_resolvable_crs_stays_a_nested_structure_pro
     assert feature["properties"]["Surface"]["Simplified"][0]["Geometry"]["type"] == "Polygon"
 
 
+# --- GeometryCHLV95_V1/GeometryCHLV03_V1 MultiSurface -> MultiPolygon
+# (real corpus evidence: RichtplanungErneuerbareEnergien_V1.Objekte.Flaeche.
+# Geometrie) - matched by Name ("MultiSurface") + shape
+# (_is_chbase_multisurface), same approach as _is_composite_surface3d. A
+# STRUCTURE-wrapped BAG OF SurfaceStructure, not a native LineType
+# Multi=True attribute (_line_geometry already handles that case).
+
+_CHBASE_MULTISURFACE_MODEL = """INTERLIS 2.4;
+MODEL Foo AT "http://x" VERSION "1" =
+  DOMAIN
+    !!@CRS=EPSG:2056
+    Coord2 = COORD 2460000.000 .. 2870000.000, 1045000.000 .. 1310000.000;
+    Surface = SURFACE WITH (STRAIGHTS) VERTEX Coord2 WITHOUT OVERLAPS > 0.001;
+  TOPIC T =
+    STRUCTURE SurfaceStructure =
+      Surface : MANDATORY Surface;
+    END SurfaceStructure;
+    STRUCTURE MultiSurface =
+      Surfaces : BAG {1..*} OF SurfaceStructure;
+    END MultiSurface;
+    CLASS Flaeche =
+      Geometrie : MANDATORY MultiSurface;
+    END Flaeche;
+  END T;
+END Foo.
+"""
+
+_CHBASE_MULTISURFACE_NO_CRS_MODEL = _CHBASE_MULTISURFACE_MODEL.replace("!!@CRS=EPSG:2056\n    ", "")
+
+
+def _surface_structure_wire(*points: RawNode) -> RawNode:
+    return _wrap("SurfaceStructure", _wrap("Surface", _wrap("SURFACE", _wrap("BOUNDARY", _wrap("POLYLINE", *points)))))
+
+
+def test_chbase_multisurface_attribute_becomes_place_multipolygon_with_crs():
+    builder = _build(_CHBASE_MULTISURFACE_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "Flaeche")
+    surface_1 = _surface_structure_wire(
+        _coord("2600000.0", "1200000.0"),
+        _coord("2600010.0", "1200000.0"),
+        _coord("2600010.0", "1200010.0"),
+        _coord("2600000.0", "1200000.0"),
+    )
+    surface_2 = _surface_structure_wire(
+        _coord("2600100.0", "1200100.0"),
+        _coord("2600110.0", "1200100.0"),
+        _coord("2600110.0", "1200110.0"),
+        _coord("2600100.0", "1200100.0"),
+    )
+    obj = XtfObject(
+        tid="f-1",
+        qualified_class="Foo.T.Flaeche",
+        attributes={"Geometrie": [_wrap("Geometrie", _wrap("MultiSurface", _wrap("Surfaces", surface_1, surface_2)))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert feature["place"]["type"] == "MultiPolygon"
+    assert feature["coordRefSys"] == "http://www.opengis.net/def/crs/EPSG/0/2056"
+    assert "Geometrie" not in feature["properties"]
+    assert len(feature["place"]["coordinates"]) == 2
+    assert CONF_CIRCULAR_ARCS not in feature["conformsTo"]
+
+
+def test_chbase_multisurface_without_resolvable_crs_stays_a_nested_structure_property():
+    builder = _build(_CHBASE_MULTISURFACE_NO_CRS_MODEL)
+    cls = _resolved_class(builder, "Flaeche")
+    surface_1 = _surface_structure_wire(
+        _coord("2600000.0", "1200000.0"),
+        _coord("2600010.0", "1200000.0"),
+        _coord("2600010.0", "1200010.0"),
+        _coord("2600000.0", "1200000.0"),
+    )
+    obj = XtfObject(
+        tid="f-2",
+        qualified_class="Foo.T.Flaeche",
+        attributes={"Geometrie": [_wrap("Geometrie", _wrap("MultiSurface", _wrap("Surfaces", surface_1)))]},
+    )
+    feature = object_to_feature(obj, cls)
+    assert "place" not in feature
+    assert "coordRefSys" not in feature
+    assert feature["properties"]["Geometrie"]["Surfaces"][0]["Surface"]["type"] == "Polygon"
+
+
 # --- PointCloud3D -> MultiPoint (RULE #7 exception, synthetic - see
 # docs/dev-notes/pointcloud3d-mapping.md) -----------------------------------
 #
