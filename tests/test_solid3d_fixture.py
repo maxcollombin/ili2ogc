@@ -1,4 +1,4 @@
-"""End-to-end regression test for tests/fixtures/solid3d_polyhedron/ (see its NOTICE and
+"""End-to-end regression test for tests/fixtures/solid3d/ (see its NOTICE and
 docs/dev-notes/solid3d-polyhedron-mapping.md).
 
 Synthetic, not real-corpus evidence (RULE #7 exception) - this pins
@@ -17,7 +17,7 @@ from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection
 from interlis.xtf.parse import parse_xtf
 
-FIXTURE_DIR = Path(__file__).parent / "fixtures" / "solid3d_polyhedron"
+FIXTURE_DIR = Path(__file__).parent / "fixtures" / "solid3d"
 
 
 def test_solid3d_fixture_converts_to_the_pinned_polyhedron_output():

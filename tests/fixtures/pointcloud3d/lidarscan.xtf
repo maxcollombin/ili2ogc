@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?><TRANSFER xmlns="http://www.interlis.ch/INTERLIS2.3">
-<HEADERSECTION SENDER="claude-test" VERSION="2.3"><MODELS><MODEL NAME="LidarScan_V1" VERSION="2026-09-04" URI="https://example.org/models/"></MODEL></MODELS></HEADERSECTION>
+<HEADERSECTION SENDER="test" VERSION="2.3"><MODELS><MODEL NAME="LidarScan_V1" VERSION="2026-09-04" URI="https://example.org/models/"></MODEL></MODELS></HEADERSECTION>
 <DATASECTION>
 <LidarScan_V1.Scans BID="8a1e1e1e-0007-4000-8000-000000000007">
 <LidarScan_V1.Scans.LidarScan TID="8a1e1e1e-0008-4000-8000-000000000008">

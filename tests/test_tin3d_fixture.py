@@ -1,10 +1,10 @@
-"""End-to-end regression test for tests/fixtures/tin3d_mesh/ (see its NOTICE and
+"""End-to-end regression test for tests/fixtures/tin3d/ (see its NOTICE and
 docs/dev-notes/composite-surface3d-mapping.md).
 
 Synthetic, not real-corpus evidence (RULE #7 exception) - this pins
 `interlis convert-jsonfg`'s actual output against the vendored
 `Geometry3D_V2` model rather than an inline model string, same style as
-`test_solid3d_polyhedron_fixture.py`/`test_curve3d_composite_fixture.py`.
+`test_solid3d_fixture.py`/`test_compositecurve3d_fixture.py`.
 """
 
 import json
@@ -16,7 +16,7 @@ from interlis.builder.repository import ModelRepository
 from interlis.convert.jsonfg import transfer_to_feature_collection
 from interlis.xtf.parse import parse_xtf
 
-FIXTURE_DIR = Path(__file__).parent / "fixtures" / "tin3d_mesh"
+FIXTURE_DIR = Path(__file__).parent / "fixtures" / "tin3d"
 
 
 def test_tin3d_fixture_converts_to_the_pinned_multipolygon_output():

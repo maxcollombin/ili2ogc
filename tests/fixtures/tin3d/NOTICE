@@ -5,7 +5,7 @@ Synthetic example exercising `Geometry3D_V2.Tin3D -> MultiPolygon`
 `docs/dev-notes/composite-surface3d-mapping.md` - kept here so the same
 end-to-end example (and its JSON-FG output) is reproducible for external
 tooling, not just inline in a pytest fixture string. Same template as
-`tests/fixtures/solid3d_polyhedron/`/`tests/fixtures/curve3d_composite/`.
+`tests/fixtures/solid3d/`/`tests/fixtures/compositecurve3d/`.
 
 Copied unmodified from the swisstopo/interlis.ch model repositories -
 `GEOMETRY3D_V2.ili` included, byte-for-byte
