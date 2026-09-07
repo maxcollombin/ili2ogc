@@ -693,6 +693,7 @@ def _crs_uri(
     *,
     symbol_table: SymbolTable | None = None,
     repository: ModelRepository | None = None,
+    _seen: set[int] | None = None,
 ) -> str | None:
     """Resolve a CoordType's `!!@CRS=EPSG:<code>` meta-attribute (eCH-0117) into a JSON-FG `coordRefSys` URI.
 
@@ -706,13 +707,16 @@ def _crs_uri(
     imported models (builder/repository.py) - without that fix this
     resolves to `None` for virtually every real Swiss geometry attribute,
     since they import their CoordType rather than declaring it locally.
+    `_seen` guards against a `CONTEXT` rebinding cycle spanning more than
+    one hop (A -> B -> A) - not just the direct A -> A case.
     """
     raw = _meta_value(coord_type, "CRS")
     if raw is None:
         concrete = _context_concrete_domain(coord_type, symbol_table, repository)
-        if concrete is None or concrete is coord_type:
+        seen = _seen or set()
+        if concrete is None or concrete is coord_type or id(concrete) in seen:
             return None
-        return _crs_uri(concrete, symbol_table=symbol_table, repository=repository)
+        return _crs_uri(concrete, symbol_table=symbol_table, repository=repository, _seen=seen | {id(coord_type)})
     scheme, _, code = raw.partition(":")
     if scheme.strip().upper() != "EPSG" or not code.strip().isdigit():
         return None
