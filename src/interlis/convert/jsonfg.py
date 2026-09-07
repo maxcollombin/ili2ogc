@@ -831,17 +831,22 @@ def _solid3d_polyhedron(value: dict[str, Any]) -> dict[str, Any] | None:
 
 def _solid3d_place_and_crs(
     resolved: ResolvedAttribute,
-    raw_nodes: list[RawNode],
+    value: Any,
     symbol_table: SymbolTable | None,
     repository: ModelRepository | None = None,
 ) -> tuple[dict[str, Any], str] | None:
-    """`Solid3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, builds a `Polyhedron`."""
-    if not isinstance(resolved.type_instance, MetaInstance):
+    """`Solid3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, builds a `Polyhedron`.
+
+    `value` is the attribute's already-decoded `properties` value (built
+    once by `_members_value`/`_structure_value` for every attribute,
+    geometry or not) - reused here rather than re-decoding the same raw
+    wire nodes a second time.
+    """
+    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
         return None
     crs = _crs_uri(_solid3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
     if crs is None:
         return None
-    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
     polyhedron = _solid3d_polyhedron(value)
     return None if polyhedron is None else (polyhedron, crs)
 
@@ -920,17 +925,20 @@ def _composite_curve3d_linestring(value: dict[str, Any]) -> dict[str, Any] | Non
 
 def _curve3d_place_and_crs(
     resolved: ResolvedAttribute,
-    raw_nodes: list[RawNode],
+    value: Any,
     symbol_table: SymbolTable | None,
     repository: ModelRepository | None = None,
 ) -> tuple[dict[str, Any], str] | None:
-    """`Curve3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, builds a `LineString`."""
-    if not isinstance(resolved.type_instance, MetaInstance):
+    """`Curve3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, builds a `LineString`.
+
+    `value` is the attribute's already-decoded `properties` value - see
+    `_solid3d_place_and_crs`.
+    """
+    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
         return None
     crs = _crs_uri(_curve3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
     if crs is None:
         return None
-    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
     if getattr(resolved.type_instance, "Name", None) == "PolylineStraight3D":
         geometry = value.get("Geometry")
         linestring = geometry if isinstance(geometry, dict) and geometry.get("type") == "LineString" else None
@@ -986,19 +994,22 @@ def _composite_surface3d_multipolygon(value: dict[str, Any]) -> dict[str, Any] |
 
 def _composite_surface3d_place_and_crs(
     resolved: ResolvedAttribute,
-    raw_nodes: list[RawNode],
+    value: Any,
     symbol_table: SymbolTable | None,
     repository: ModelRepository | None = None,
 ) -> tuple[dict[str, Any], str] | None:
-    """`CompositeSurface3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract."""
-    if not isinstance(resolved.type_instance, MetaInstance):
+    """`CompositeSurface3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract.
+
+    `value` is the attribute's already-decoded `properties` value - see
+    `_solid3d_place_and_crs`.
+    """
+    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
         return None
     crs = _crs_uri(
         _composite_surface3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository
     )
     if crs is None:
         return None
-    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
     multipolygon = _composite_surface3d_multipolygon(value)
     return None if multipolygon is None else (multipolygon, crs)
 
@@ -1064,19 +1075,22 @@ def _chbase_multisurface_multipolygon(value: dict[str, Any]) -> dict[str, Any] |
 
 def _chbase_multisurface_place_and_crs(
     resolved: ResolvedAttribute,
-    raw_nodes: list[RawNode],
+    value: Any,
     symbol_table: SymbolTable | None,
     repository: ModelRepository | None = None,
 ) -> tuple[dict[str, Any], str] | None:
-    """`GeometryCHLV95_V1`/`GeometryCHLV03_V1` `MultiSurface` counterpart of `_place_and_crs`."""
-    if not isinstance(resolved.type_instance, MetaInstance):
+    """`GeometryCHLV95_V1`/`GeometryCHLV03_V1` `MultiSurface` counterpart of `_place_and_crs`.
+
+    `value` is the attribute's already-decoded `properties` value - see
+    `_solid3d_place_and_crs`.
+    """
+    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
         return None
     crs = _crs_uri(
         _chbase_multisurface_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository
     )
     if crs is None:
         return None
-    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
     multipolygon = _chbase_multisurface_multipolygon(value)
     return None if multipolygon is None else (multipolygon, crs)
 
@@ -1117,17 +1131,20 @@ def _pointcloud3d_multipoint(value: dict[str, Any]) -> dict[str, Any] | None:
 
 def _pointcloud3d_place_and_crs(
     resolved: ResolvedAttribute,
-    raw_nodes: list[RawNode],
+    value: Any,
     symbol_table: SymbolTable | None,
     repository: ModelRepository | None = None,
 ) -> tuple[dict[str, Any], str] | None:
-    """`PointCloud3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, a `MultiPoint`."""
-    if not isinstance(resolved.type_instance, MetaInstance):
+    """`PointCloud3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, a `MultiPoint`.
+
+    `value` is the attribute's already-decoded `properties` value - see
+    `_solid3d_place_and_crs`.
+    """
+    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
         return None
     crs = _crs_uri(_pointcloud3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
     if crs is None:
         return None
-    value = _structure_value(resolved, raw_nodes, symbol_table=symbol_table, already_unwrapped=False)
     multipoint = _pointcloud3d_multipoint(value)
     return None if multipoint is None else (multipoint, crs)
 
@@ -1268,15 +1285,15 @@ def object_to_feature(
         if name in geometry_names_set:
             result = _place_and_crs(resolved, raw_nodes[0], symbol_table=symbol_table, repository=repository)
         elif name in solid3d_names:
-            result = _solid3d_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+            result = _solid3d_place_and_crs(resolved, properties.get(name), symbol_table, repository)
         elif name in curve3d_names:
-            result = _curve3d_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+            result = _curve3d_place_and_crs(resolved, properties.get(name), symbol_table, repository)
         elif name in composite_surface3d_names:
-            result = _composite_surface3d_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+            result = _composite_surface3d_place_and_crs(resolved, properties.get(name), symbol_table, repository)
         elif name in pointcloud3d_names:
-            result = _pointcloud3d_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+            result = _pointcloud3d_place_and_crs(resolved, properties.get(name), symbol_table, repository)
         elif name in chbase_multisurface_names:
-            result = _chbase_multisurface_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+            result = _chbase_multisurface_place_and_crs(resolved, properties.get(name), symbol_table, repository)
         else:
             continue
         if result is not None:
