@@ -33,14 +33,8 @@ class _ContextMixin(_Base):
     def _build_context_domain_pairs(self, context: MetaInstance, ctx: ParserRuleContext) -> None:
         """Build one `GenericDef` (+ its `ConcreteForGeneric` links) per `generic = concrete (OR concrete)*` pair-group.
 
-        `context.GenericDef` and `generic_def.ConcreteForGeneric` are
-        bookkeeping lists (no reverse role for either exists in
-        ilismeta16-associations.yml - `GenericDef.Context`/`GenericDomain`
-        and `ConcreteForGeneric.GenericDef`/`ConcreteDomain` are the only
-        formally modeled ends), named after their own target class like
-        every other IlisMeta16 child collection (e.g. `Class.ClassAttribute`),
-        so `convert/jsonfg.py`'s CRS resolution can walk
-        Context -> GenericDef -> ConcreteForGeneric without a dedicated index.
+        Plain bookkeeping lists (no reverse role in ilismeta16-associations.yml) so
+        convert/jsonfg.py can walk Context -> GenericDef -> ConcreteForGeneric with no dedicated index.
         """
         name_token = ca.call(ctx, "Name")
         if name_token is None:
