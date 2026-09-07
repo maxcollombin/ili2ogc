@@ -1315,6 +1315,33 @@ def test_transfer_to_feature_collection_hoists_polyhedra_conforms_to_from_a_geom
     assert CONF_POLYHEDRA in collection["conformsTo"]
 
 
+_SOLID3D_BEFORE_ANCHOR_MODEL = _SOLID3D_MODEL.replace(
+    "Volume : MANDATORY Solid3D;",
+    "Volume : MANDATORY Solid3D;\n      Anchor : MANDATORY Coord3D;",
+)
+
+
+def test_geometry_collection_preserves_schema_declaration_order():
+    """A `GeometryCollection`'s member order must follow schema declaration order, not shape-category grouping.
+
+    Regression: geometries used to be collected shape-category by
+    shape-category (all `CoordType`/`LineType` first, then `Solid3D`,
+    ...) rather than in one pass over the class's actual attribute order.
+    """
+    builder = _build(_SOLID3D_BEFORE_ANCHOR_MODEL, capture_meta=True)
+    cls = _resolved_class(builder, "ASolid")
+    obj = XtfObject(
+        tid="s-3",
+        qualified_class="Foo.T.ASolid",
+        attributes={
+            "Volume": [_solid3d_volume_wire()],
+            "Anchor": [_wrap("Anchor", _coord3("2600000.0", "1200000.0", "500.0"))],
+        },
+    )
+    feature = object_to_feature(obj, cls)
+    assert [g["type"] for g in feature["place"]["geometries"]] == ["Polyhedron", "Point"]
+
+
 # --- PolylineStraight3D/CompositeCurve3D -> LineString (RULE #7 exception,
 # synthetic - see docs/dev-notes/curve3d-mapping.md) -------------------------
 #

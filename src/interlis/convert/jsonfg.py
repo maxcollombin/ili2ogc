@@ -1214,9 +1214,11 @@ def object_to_feature(
     generic unnamed BAG/LIST wrapper stays out of scope, no real corpus
     evidence) AND whose actual wire value converts cleanly (see
     `_place_and_crs` - a `None` result, e.g. a custom LINE FORM segment or
-    an unresolved CRS, leaves that one attribute in "properties" instead,
-    marked `x-unsupported` like any other out-of-scope attribute - never a
-    silent loss) is collected.
+    an unresolved CRS, leaves that one attribute in "properties" instead -
+    a bare CoordType/LineType gets the `x-unsupported` marker, while a
+    STRUCTURE-wrapped shape (Solid3D and the others above) keeps its full
+    nested-STRUCTURE value, already a complete, useful representation on
+    its own - never a silent loss either way) is collected.
     Exactly one such attribute becomes "place" directly (unchanged
     behaviour); two or more become a single "place" of type
     `GeometryCollection` bundling all of them, in declaration order - no
@@ -1244,58 +1246,37 @@ def object_to_feature(
     place: dict[str, Any] | None = None
     crs_uri: str | None = None
     geometry_names = [name for name, r in resolved_attrs.items() if r.type_kind in _GEOMETRY_KINDS]
-    solid3d_names = [name for name, r in resolved_attrs.items() if _is_solid3d(r.type_instance)]
-    curve3d_names = [name for name, r in resolved_attrs.items() if _is_curve3d(r.type_instance)]
-    composite_surface3d_names = [name for name, r in resolved_attrs.items() if _is_composite_surface3d(r.type_instance)]
-    pointcloud3d_names = [name for name, r in resolved_attrs.items() if _is_pointcloud3d(r.type_instance)]
-    chbase_multisurface_names = [name for name, r in resolved_attrs.items() if _is_chbase_multisurface(r.type_instance)]
+    geometry_names_set = set(geometry_names)
+    solid3d_names = {name for name, r in resolved_attrs.items() if _is_solid3d(r.type_instance)}
+    curve3d_names = {name for name, r in resolved_attrs.items() if _is_curve3d(r.type_instance)}
+    composite_surface3d_names = {name for name, r in resolved_attrs.items() if _is_composite_surface3d(r.type_instance)}
+    pointcloud3d_names = {name for name, r in resolved_attrs.items() if _is_pointcloud3d(r.type_instance)}
+    chbase_multisurface_names = {name for name, r in resolved_attrs.items() if _is_chbase_multisurface(r.type_instance)}
+    # Single pass over `resolved_attrs` (declaration order) so a class
+    # mixing a plain 2D/curve geometry with a 3D/CHBase shape gets its
+    # `GeometryCollection` in the documented declaration order, not
+    # grouped by shape category.
     resolved_geometries: list[tuple[str, dict[str, Any], str]] = []
-    for geom_name in geometry_names:
-        raw_nodes = obj.attributes.get(geom_name)
+    for name, resolved in resolved_attrs.items():
+        raw_nodes = obj.attributes.get(name)
         if not raw_nodes:
             continue
-        result = _place_and_crs(
-            resolved_attrs[geom_name], raw_nodes[0], symbol_table=symbol_table, repository=repository
-        )
-        if result is not None:
-            resolved_geometries.append((geom_name, *result))
-    for solid_name in solid3d_names:
-        raw_nodes = obj.attributes.get(solid_name)
-        if not raw_nodes:
+        if name in geometry_names_set:
+            result = _place_and_crs(resolved, raw_nodes[0], symbol_table=symbol_table, repository=repository)
+        elif name in solid3d_names:
+            result = _solid3d_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+        elif name in curve3d_names:
+            result = _curve3d_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+        elif name in composite_surface3d_names:
+            result = _composite_surface3d_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+        elif name in pointcloud3d_names:
+            result = _pointcloud3d_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+        elif name in chbase_multisurface_names:
+            result = _chbase_multisurface_place_and_crs(resolved, raw_nodes, symbol_table, repository)
+        else:
             continue
-        result = _solid3d_place_and_crs(resolved_attrs[solid_name], raw_nodes, symbol_table, repository)
         if result is not None:
-            resolved_geometries.append((solid_name, *result))
-    for curve_name in curve3d_names:
-        raw_nodes = obj.attributes.get(curve_name)
-        if not raw_nodes:
-            continue
-        result = _curve3d_place_and_crs(resolved_attrs[curve_name], raw_nodes, symbol_table, repository)
-        if result is not None:
-            resolved_geometries.append((curve_name, *result))
-    for surface_name in composite_surface3d_names:
-        raw_nodes = obj.attributes.get(surface_name)
-        if not raw_nodes:
-            continue
-        result = _composite_surface3d_place_and_crs(resolved_attrs[surface_name], raw_nodes, symbol_table, repository)
-        if result is not None:
-            resolved_geometries.append((surface_name, *result))
-    for cloud_name in pointcloud3d_names:
-        raw_nodes = obj.attributes.get(cloud_name)
-        if not raw_nodes:
-            continue
-        result = _pointcloud3d_place_and_crs(resolved_attrs[cloud_name], raw_nodes, symbol_table, repository)
-        if result is not None:
-            resolved_geometries.append((cloud_name, *result))
-    for multisurface_name in chbase_multisurface_names:
-        raw_nodes = obj.attributes.get(multisurface_name)
-        if not raw_nodes:
-            continue
-        result = _chbase_multisurface_place_and_crs(
-            resolved_attrs[multisurface_name], raw_nodes, symbol_table, repository
-        )
-        if result is not None:
-            resolved_geometries.append((multisurface_name, *result))
+            resolved_geometries.append((name, *result))
     placed_names: set[str] = set()
     if len(resolved_geometries) == 1:
         geom_name, place, crs_uri = resolved_geometries[0]
