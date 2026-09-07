@@ -1,11 +1,11 @@
 """Index of the IlisMeta16 metamodel (mappings/ilismeta16-*.yml).
 
-Reused by scripts/validate_spec.py (static validation, errors collected
-and reported at the end of the pass) and by interlis.builder
-(construction at runtime, errors propagated immediately as exceptions).
-Hence a side-effect-free API: resolve()/find_association() raise an
-exception instead of writing to a global list - it's up to the caller to
-decide whether to collect or let it propagate.
+Reused both by static mapping validation (errors collected and reported
+at the end of a pass) and by interlis.builder (construction at runtime,
+errors propagated immediately as exceptions). Hence a side-effect-free
+API: resolve()/find_association() raise an exception instead of writing
+to a global list - it's up to the caller to decide whether to collect or
+let it propagate.
 """
 
 import warnings

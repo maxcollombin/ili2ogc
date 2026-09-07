@@ -11,10 +11,9 @@ and real files - the two diverge). A later layer, cross-referencing this result 
 IlisMeta16 (Class/AttrOrParam/DomainType already built by
 InterlisModelBuilder), does the interpretation.
 
-Streaming (`ET.iterparse` + `elem.clear()` per object/attribute): the
-downloaded real corpus (`scripts/fetch_xtf_corpus.py`) contains
-files several hundred MB in size - the full XML tree must never be kept
-in memory.
+Streaming (`ET.iterparse` + `elem.clear()` per object/attribute): real
+Swiss open-data transfers run several hundred MB in size - the full XML
+tree must never be kept in memory.
 
 Accepts both real wire conventions for the envelope (section tags,
 BID/TID, model name/version/uri, sender) - XTF 2.3 (bare, UPPERCASE

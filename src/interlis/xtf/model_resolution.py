@@ -9,8 +9,7 @@ during a build()".
 Two distinct sources of information - don't guess, verify:
 - `HEADERSECTION/MODELS` (`XtfTransfer.models`, parse.py): declares which
   models AND WHICH VERSIONS were used to produce THIS transfer - the
-  canonical source for knowing WHAT to download (exact name+version+URI,
-  see scripts/fetch_ili_models.py, which already uses it for that).
+  canonical source for knowing WHAT to download (exact name+version+URI).
 - `DATASECTION` (the baskets actually present, `XtfBasket.qualified_topic`):
   the canonical source for knowing which model(s) are ACTUALLY the
   "business" (root) model(s) of THIS specific transfer - the header ALWAYS

@@ -1537,11 +1537,10 @@ def _project_object_under_view_names(view: MetaInstance, obj: XtfObject) -> XtfO
     `_merge_join_combo`)/AGGREGATION all fed the object straight through
     before this fix, so every such attribute was silently dropped (empty
     `properties`) - confirmed on real `xtf_corpus/geoadmin` data
-    (`MainRoads_LV95_V1_1_d.view_roadsegment`, item 13's VIEW corpus
-    pipeline), not a synthetic edge case: every one of the 10
-    `scripts/generate_view_corpus.py`-derived models names its VIEW
-    attributes after the source service's field names, virtually never
-    matching the base attribute's own spelling/case.
+    (`MainRoads_LV95_V1_1_d.view_roadsegment`), not a synthetic edge
+    case: a VIEW derived from a published geodata service routinely
+    names its attributes after the service's own field names, virtually
+    never matching the base attribute's own spelling/case.
 
     Mirrors `_union_projected_object`'s remap (that one is per-base/
     `n_bases`-aware, for UNION's one-`Derivates`-entry-per-base shape);
