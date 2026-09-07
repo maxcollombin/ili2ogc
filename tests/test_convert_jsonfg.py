@@ -1279,6 +1279,42 @@ def test_transfer_to_feature_collection_hoists_polyhedra_conforms_to():
     assert collection["features"][0]["place"]["type"] == "Polyhedron"
 
 
+_SOLID3D_WITH_ANCHOR_MODEL = _SOLID3D_MODEL.replace(
+    "Volume : MANDATORY Solid3D;",
+    "Anchor : MANDATORY Coord3D;\n      Volume : MANDATORY Solid3D;",
+)
+
+
+def test_transfer_to_feature_collection_hoists_polyhedra_conforms_to_from_a_geometry_collection():
+    """A Polyhedron wrapped inside a `GeometryCollection` `place` (a class with 2 geometry attributes) must still hoist `conf/polyhedra`.
+
+    Regression: the FeatureCollection-level check used to read
+    `place["type"]` directly, so it only ever matched a bare `Polyhedron`
+    `place` - never one nested a level down inside `GeometryCollection`.
+    """
+    builder = _build(_SOLID3D_WITH_ANCHOR_MODEL, capture_meta=True)
+    basket = XtfBasket(
+        bid="b1",
+        qualified_topic="Foo.T",
+        kind=None,
+        endstate=None,
+        objects=[
+            XtfObject(
+                tid="s-1",
+                qualified_class="Foo.T.ASolid",
+                attributes={
+                    "Anchor": [_wrap("Anchor", _coord3("2600000.0", "1200000.0", "500.0"))],
+                    "Volume": [_solid3d_volume_wire()],
+                },
+            )
+        ],
+    )
+    transfer = XtfTransfer(sender=None, ili_version=None, models=[], baskets=[basket])
+    collection = transfer_to_feature_collection(transfer, symbol_table=builder.symbol_table)
+    assert collection["features"][0]["place"]["type"] == "GeometryCollection"
+    assert CONF_POLYHEDRA in collection["conformsTo"]
+
+
 # --- PolylineStraight3D/CompositeCurve3D -> LineString (RULE #7 exception,
 # synthetic - see docs/dev-notes/curve3d-mapping.md) -------------------------
 #

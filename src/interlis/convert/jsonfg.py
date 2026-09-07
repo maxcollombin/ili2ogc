@@ -99,6 +99,20 @@ _POLYHEDRA_TYPES = frozenset({"Polyhedron", "MultiPolyhedron"})
 # docs/dev-notes/solid3d-polyhedron-mapping.md).
 
 
+def _place_type_names(place: dict[str, Any] | None) -> set[str]:
+    """Collect the "type" value(s) a `place` actually carries, unwrapping a `GeometryCollection` one level.
+
+    Shared between a single Feature's own `conformsTo` and a
+    FeatureCollection's aggregate one, so a `GeometryCollection`-wrapped
+    circular-arc/polyhedra shape is detected in both places alike.
+    """
+    if place is None:
+        return set()
+    if place.get("type") == "GeometryCollection":
+        return {g.get("type") for g in place.get("geometries", [])}
+    return {place.get("type")}
+
+
 def _scalar_value(resolved: ResolvedAttribute, node: RawNode) -> Any:
     """Read ONE scalar attribute's wire value off its RawNode.
 
@@ -1309,9 +1323,7 @@ def object_to_feature(
     feature: dict[str, Any] = {"type": "Feature"}
     if standalone:
         conforms_to = [CONF_CORE, CONF_TYPES_SCHEMAS]
-        place_types = {place.get("type")} if place is not None else set()
-        if place is not None and place.get("type") == "GeometryCollection":
-            place_types = {g.get("type") for g in place.get("geometries", [])}
+        place_types = _place_type_names(place)
         if place_types & _CIRCULAR_ARC_TYPES:
             conforms_to.append(CONF_CIRCULAR_ARCS)
         if place_types & _POLYHEDRA_TYPES:
@@ -2278,9 +2290,12 @@ def transfer_to_feature_collection(
         )
 
     conforms_to = [CONF_CORE, CONF_TYPES_SCHEMAS]
-    if any(f.get("place", {}).get("type") in _CIRCULAR_ARC_TYPES for f in features):
+    all_place_types: set[str] = set()
+    for f in features:
+        all_place_types |= _place_type_names(f.get("place"))
+    if all_place_types & _CIRCULAR_ARC_TYPES:
         conforms_to.append(CONF_CIRCULAR_ARCS)
-    if any(f.get("place", {}).get("type") in _POLYHEDRA_TYPES for f in features):
+    if all_place_types & _POLYHEDRA_TYPES:
         conforms_to.append(CONF_POLYHEDRA)
     collection: dict[str, Any] = {
         "type": "FeatureCollection",
