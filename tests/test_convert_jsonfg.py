@@ -1286,7 +1286,7 @@ _SOLID3D_WITH_ANCHOR_MODEL = _SOLID3D_MODEL.replace(
 
 
 def test_transfer_to_feature_collection_hoists_polyhedra_conforms_to_from_a_geometry_collection():
-    """A Polyhedron wrapped inside a `GeometryCollection` `place` (a class with 2 geometry attributes) must still hoist `conf/polyhedra`.
+    """A Polyhedron wrapped inside a `GeometryCollection` `place` must still hoist `conf/polyhedra`.
 
     Regression: the FeatureCollection-level check used to read
     `place["type"]` directly, so it only ever matched a bare `Polyhedron`
