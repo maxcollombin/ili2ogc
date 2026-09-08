@@ -30,6 +30,7 @@ import re
 from typing import Any
 
 from interlis.metamodel.instance import MetaInstance
+from interlis.runtime.parse import _unquote_interlis_string as _unquote_text
 
 _RELATIONAL_SYMBOLS = {
     "Equal": "==",
@@ -40,27 +41,10 @@ _RELATIONAL_SYMBOLS = {
     "GreaterOrEqual": ">=",
 }
 _MISSING = object()
-_STRING_ESCAPE_RE = re.compile(r'\\(["\\]|u[0-9a-fA-F]{4})')
 
 
 class UnsupportedExpressionError(Exception):
     """Raised when an Expression node needs context beyond a single Feature's `properties` dict."""
-
-
-def _unquote_text(raw: str) -> str:
-    r"""Undo the ANTLR `STRING` token's own quoting (`vendor/interlis-antlr4/InterlisLexer.g4`).
-
-    `textConst`'s binding captures the STRING token verbatim (surrounding
-    `"..."` and all) - `\\"`/`\\\\`/`\\uXXXX` are STRING's only 3 escape
-    forms, none else needs resolving.
-    """
-    if len(raw) < 2 or raw[0] != '"' or raw[-1] != '"':
-        return raw
-    inner = raw[1:-1]
-    return _STRING_ESCAPE_RE.sub(
-        lambda m: m.group(1) if m.group(1) in ('"', "\\") else chr(int(m.group(1)[1:], 16)),
-        inner,
-    )
 
 
 def _try_number(text: str, fallback: Any) -> Any:
