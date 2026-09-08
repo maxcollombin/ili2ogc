@@ -50,6 +50,13 @@ def render_postgresql(tables: list[Table], views: tuple[SqlView, ...] = ()) -> s
     return "\n".join(statements) + "\n"
 
 
+def _gpkg_base_geometry_type(geometry_type: str) -> tuple[str, bool]:
+    """Split a GeoPackage geometry type into its base name and whether it carries a trailing Z suffix."""
+    if geometry_type.endswith("Z"):
+        return geometry_type[:-1], True
+    return geometry_type, False
+
+
 def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
     """Render `tables` as SQLite/GeoPackage DDL text - everything inline at `CREATE TABLE` time, plus the GeoPackage
     bootstrap rows.
@@ -69,7 +76,7 @@ def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
         for column in table.columns:
             null_clause = "" if column.nullable else " NOT NULL"
             if column.geometry_type:
-                base_type = column.geometry_type[:-1] if column.geometry_type.endswith("Z") else column.geometry_type
+                base_type, _ = _gpkg_base_geometry_type(column.geometry_type)
                 sql_type = base_type.upper()
                 srids.add(column.srid)
             else:
@@ -98,8 +105,8 @@ def render_gpkg(tables: list[Table], views: tuple[SqlView, ...] = ()) -> str:
                 f"VALUES ('{table.name}', 'features', '{table.name}', {geom.srid});",
             )
             for column in geometry_columns:
-                base_type = column.geometry_type[:-1] if column.geometry_type.endswith("Z") else column.geometry_type
-                z = 1 if column.geometry_type.endswith("Z") else 0
+                base_type, has_z = _gpkg_base_geometry_type(column.geometry_type)
+                z = 1 if has_z else 0
                 statements.append(
                     f"INSERT INTO gpkg_geometry_columns (table_name, column_name, geometry_type_name, srs_id, z, m) "
                     f"VALUES ('{table.name}', '{column.name}', '{base_type.upper()}', {column.srid}, {z}, 0);",
