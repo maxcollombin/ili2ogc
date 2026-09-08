@@ -40,6 +40,7 @@ validate(), same split already established by convert/jsonschema.py.
 """
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from interlis.builder.forward_refs import SymbolTable
@@ -745,6 +746,40 @@ def _place_and_crs(
     return None if crs is None else (geometry, crs)
 
 
+def _resolve_named_attr(cls: MetaInstance, name: str) -> ResolvedAttribute | None:
+    """Resolve `cls`'s attribute `name`, or `None` if it has none - shared by the 3D/CHBase coord-type walkers."""
+    attr = attributes_of(cls).get(name)
+    return resolve_attribute(attr) if attr is not None else None
+
+
+def _place_and_crs_via(
+    coord_type_fn: Callable[[MetaInstance], MetaInstance | None],
+    geometry_fn: Callable[[MetaInstance, dict[str, Any]], dict[str, Any] | None],
+) -> Callable[[ResolvedAttribute, Any, SymbolTable | None, ModelRepository | None], tuple[dict[str, Any], str] | None]:
+    """Build one `_solid3d_place_and_crs`-shaped function from its shape-specific coord-type/geometry builders.
+
+    Every 3D/CHBase geometry shape shares the same guard/lookup skeleton
+    (`_solid3d_place_and_crs` and its 4 siblings used to duplicate it) -
+    only `coord_type_fn`/`geometry_fn` differ per shape.
+    """
+
+    def _place_and_crs_for_shape(
+        resolved: ResolvedAttribute,
+        value: Any,
+        symbol_table: SymbolTable | None,
+        repository: ModelRepository | None = None,
+    ) -> tuple[dict[str, Any], str] | None:
+        if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
+            return None
+        crs = _crs_uri(coord_type_fn(resolved.type_instance), symbol_table=symbol_table, repository=repository)
+        if crs is None:
+            return None
+        geometry = geometry_fn(resolved.type_instance, value)
+        return None if geometry is None else (geometry, crs)
+
+    return _place_and_crs_for_shape
+
+
 def _is_solid3d(type_instance: MetaInstance | None) -> bool:
     """Whether `type_instance` is (an occurrence of) `Geometry3D_V2.Solid3D` - see module-level constant."""
     return (
@@ -764,20 +799,15 @@ def _solid3d_coord_type(solid_class: MetaInstance) -> MetaInstance | None:
     `CoordType` actually lives (every `Triangle3D.Geometry`, all sharing
     the same declared VERTEX domain by construction).
     """
-
-    def _attr_type(cls: MetaInstance, name: str) -> ResolvedAttribute | None:
-        attr = attributes_of(cls).get(name)
-        return resolve_attribute(attr) if attr is not None else None
-
-    shell = _attr_type(solid_class, "OuterShell")
+    shell = _resolve_named_attr(solid_class, "OuterShell")
     shell_class = shell.type_instance if shell is not None else None
     if not isinstance(shell_class, MetaInstance):
         return None
-    simplified = _attr_type(shell_class, "Simplified")
+    simplified = _resolve_named_attr(shell_class, "Simplified")
     triangle_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
     if not isinstance(triangle_class, MetaInstance):
         return None
-    geometry = _attr_type(triangle_class, "Geometry")
+    geometry = _resolve_named_attr(triangle_class, "Geometry")
     if geometry is None or geometry.type_kind != "LineType":
         return None
     return line_coord_type(geometry.type_instance)
@@ -829,26 +859,13 @@ def _solid3d_polyhedron(value: dict[str, Any]) -> dict[str, Any] | None:
     return {"type": "Polyhedron", "coordinates": shells}
 
 
-def _solid3d_place_and_crs(
-    resolved: ResolvedAttribute,
-    value: Any,
-    symbol_table: SymbolTable | None,
-    repository: ModelRepository | None = None,
-) -> tuple[dict[str, Any], str] | None:
-    """`Solid3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, builds a `Polyhedron`.
-
-    `value` is the attribute's already-decoded `properties` value (built
-    once by `_members_value`/`_structure_value` for every attribute,
-    geometry or not) - reused here rather than re-decoding the same raw
-    wire nodes a second time.
-    """
-    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
-        return None
-    crs = _crs_uri(_solid3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
-    if crs is None:
-        return None
-    polyhedron = _solid3d_polyhedron(value)
-    return None if polyhedron is None else (polyhedron, crs)
+# `value` in each `_place_and_crs_via`-built function below is the attribute's
+# already-decoded `properties` value (built once by `_members_value`/
+# `_structure_value` for every attribute, geometry or not) - reused here
+# rather than re-decoding the same raw wire nodes a second time.
+_solid3d_place_and_crs = _place_and_crs_via(
+    _solid3d_coord_type, lambda _type_instance, value: _solid3d_polyhedron(value)
+)
 
 
 def _is_curve3d(type_instance: MetaInstance | None) -> bool:
@@ -873,19 +890,14 @@ def _is_curve3d(type_instance: MetaInstance | None) -> bool:
 
 def _curve3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
     """Walk a `PolylineStraight3D`/`CompositeCurve3D` type down to its ultimate `CoordType`, for CRS lookup."""
-
-    def _attr_type(cls: MetaInstance, name: str) -> ResolvedAttribute | None:
-        attr = attributes_of(cls).get(name)
-        return resolve_attribute(attr) if attr is not None else None
-
     name = getattr(type_instance, "Name", None)
     if name == "PolylineStraight3D":
-        geometry = _attr_type(type_instance, "Geometry")
+        geometry = _resolve_named_attr(type_instance, "Geometry")
         if geometry is None or geometry.type_kind != "LineType":
             return None
         return line_coord_type(geometry.type_instance)
     if name == "CompositeCurve3D":
-        simplified = _attr_type(type_instance, "Simplified")
+        simplified = _resolve_named_attr(type_instance, "Simplified")
         segment_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
         if not isinstance(segment_class, MetaInstance):
             return None
@@ -923,28 +935,20 @@ def _composite_curve3d_linestring(value: dict[str, Any]) -> dict[str, Any] | Non
     return {"type": "LineString", "coordinates": coordinates} if coordinates else None
 
 
-def _curve3d_place_and_crs(
-    resolved: ResolvedAttribute,
-    value: Any,
-    symbol_table: SymbolTable | None,
-    repository: ModelRepository | None = None,
-) -> tuple[dict[str, Any], str] | None:
-    """`Curve3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, builds a `LineString`.
+def _curve3d_geometry(type_instance: MetaInstance, value: dict[str, Any]) -> dict[str, Any] | None:
+    """The JSON-FG `LineString` for one already-decoded `Curve3D` value.
 
-    `value` is the attribute's already-decoded `properties` value - see
-    `_solid3d_place_and_crs`.
+    `PolylineStraight3D` reads its single `Geometry` directly;
+    `CompositeCurve3D` concatenates its segments via
+    `_composite_curve3d_linestring`.
     """
-    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
-        return None
-    crs = _crs_uri(_curve3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
-    if crs is None:
-        return None
-    if getattr(resolved.type_instance, "Name", None) == "PolylineStraight3D":
+    if getattr(type_instance, "Name", None) == "PolylineStraight3D":
         geometry = value.get("Geometry")
-        linestring = geometry if isinstance(geometry, dict) and geometry.get("type") == "LineString" else None
-    else:
-        linestring = _composite_curve3d_linestring(value)
-    return None if linestring is None else (linestring, crs)
+        return geometry if isinstance(geometry, dict) and geometry.get("type") == "LineString" else None
+    return _composite_curve3d_linestring(value)
+
+
+_curve3d_place_and_crs = _place_and_crs_via(_curve3d_coord_type, _curve3d_geometry)
 
 
 def _is_composite_surface3d(type_instance: MetaInstance | None) -> bool:
@@ -965,13 +969,11 @@ def _is_composite_surface3d(type_instance: MetaInstance | None) -> bool:
 
 def _composite_surface3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
     """Walk a `Tin3D`/`SurfaceShell3D`/`CompositeSurface3D` type down to its ultimate `CoordType`, for CRS lookup."""
-    attr = attributes_of(type_instance).get("Simplified")
-    simplified = resolve_attribute(attr) if attr is not None else None
+    simplified = _resolve_named_attr(type_instance, "Simplified")
     triangle_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
     if not isinstance(triangle_class, MetaInstance):
         return None
-    geometry_attr = attributes_of(triangle_class).get("Geometry")
-    geometry = resolve_attribute(geometry_attr) if geometry_attr is not None else None
+    geometry = _resolve_named_attr(triangle_class, "Geometry")
     if geometry is None or geometry.type_kind != "LineType":
         return None
     return line_coord_type(geometry.type_instance)
@@ -992,26 +994,9 @@ def _composite_surface3d_multipolygon(value: dict[str, Any]) -> dict[str, Any] |
     return None if patches is None else {"type": "MultiPolygon", "coordinates": patches}
 
 
-def _composite_surface3d_place_and_crs(
-    resolved: ResolvedAttribute,
-    value: Any,
-    symbol_table: SymbolTable | None,
-    repository: ModelRepository | None = None,
-) -> tuple[dict[str, Any], str] | None:
-    """`CompositeSurface3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract.
-
-    `value` is the attribute's already-decoded `properties` value - see
-    `_solid3d_place_and_crs`.
-    """
-    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
-        return None
-    crs = _crs_uri(
-        _composite_surface3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository
-    )
-    if crs is None:
-        return None
-    multipolygon = _composite_surface3d_multipolygon(value)
-    return None if multipolygon is None else (multipolygon, crs)
+_composite_surface3d_place_and_crs = _place_and_crs_via(
+    _composite_surface3d_coord_type, lambda _type_instance, value: _composite_surface3d_multipolygon(value)
+)
 
 
 def _is_chbase_multisurface(type_instance: MetaInstance | None) -> bool:
@@ -1034,13 +1019,11 @@ def _is_chbase_multisurface(type_instance: MetaInstance | None) -> bool:
 
 def _chbase_multisurface_surface_type(type_instance: MetaInstance) -> ResolvedAttribute | None:
     """Resolve `MultiSurface.Surfaces`'s element type (`SurfaceStructure`) down to its own `Surface` LineType."""
-    surfaces_attr = attributes_of(type_instance).get("Surfaces")
-    surfaces = resolve_attribute(surfaces_attr) if surfaces_attr is not None else None
+    surfaces = _resolve_named_attr(type_instance, "Surfaces")
     element_class = getattr(surfaces.type_instance, "BaseType", None) if surfaces is not None else None
     if not isinstance(element_class, MetaInstance):
         return None
-    surface_attr = attributes_of(element_class).get("Surface")
-    resolved = resolve_attribute(surface_attr) if surface_attr is not None else None
+    resolved = _resolve_named_attr(element_class, "Surface")
     return resolved if resolved is not None and resolved.type_kind == "LineType" else None
 
 
@@ -1073,26 +1056,9 @@ def _chbase_multisurface_multipolygon(value: dict[str, Any]) -> dict[str, Any] |
     return {"type": "MultiPolygon", "coordinates": [g["coordinates"] for g in geometries]}
 
 
-def _chbase_multisurface_place_and_crs(
-    resolved: ResolvedAttribute,
-    value: Any,
-    symbol_table: SymbolTable | None,
-    repository: ModelRepository | None = None,
-) -> tuple[dict[str, Any], str] | None:
-    """`GeometryCHLV95_V1`/`GeometryCHLV03_V1` `MultiSurface` counterpart of `_place_and_crs`.
-
-    `value` is the attribute's already-decoded `properties` value - see
-    `_solid3d_place_and_crs`.
-    """
-    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
-        return None
-    crs = _crs_uri(
-        _chbase_multisurface_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository
-    )
-    if crs is None:
-        return None
-    multipolygon = _chbase_multisurface_multipolygon(value)
-    return None if multipolygon is None else (multipolygon, crs)
+_chbase_multisurface_place_and_crs = _place_and_crs_via(
+    _chbase_multisurface_coord_type, lambda _type_instance, value: _chbase_multisurface_multipolygon(value)
+)
 
 
 def _is_pointcloud3d(type_instance: MetaInstance | None) -> bool:
@@ -1107,8 +1073,7 @@ def _is_pointcloud3d(type_instance: MetaInstance | None) -> bool:
 
 def _pointcloud3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
     """The `CoordType` of `PointCloud3D.Points` (`BAG {1..*} OF Coord3`), for CRS lookup."""
-    attr = attributes_of(type_instance).get("Points")
-    resolved = resolve_attribute(attr) if attr is not None else None
+    resolved = _resolve_named_attr(type_instance, "Points")
     base_type = getattr(resolved.type_instance, "BaseType", None) if resolved is not None else None
     return base_type if isinstance(base_type, MetaInstance) else None
 
@@ -1129,24 +1094,9 @@ def _pointcloud3d_multipoint(value: dict[str, Any]) -> dict[str, Any] | None:
     return {"type": "MultiPoint", "coordinates": positions}
 
 
-def _pointcloud3d_place_and_crs(
-    resolved: ResolvedAttribute,
-    value: Any,
-    symbol_table: SymbolTable | None,
-    repository: ModelRepository | None = None,
-) -> tuple[dict[str, Any], str] | None:
-    """`PointCloud3D` counterpart of `_place_and_crs` - same `(geometry, coordRefSys)` contract, a `MultiPoint`.
-
-    `value` is the attribute's already-decoded `properties` value - see
-    `_solid3d_place_and_crs`.
-    """
-    if not isinstance(resolved.type_instance, MetaInstance) or not isinstance(value, dict):
-        return None
-    crs = _crs_uri(_pointcloud3d_coord_type(resolved.type_instance), symbol_table=symbol_table, repository=repository)
-    if crs is None:
-        return None
-    multipoint = _pointcloud3d_multipoint(value)
-    return None if multipoint is None else (multipoint, crs)
+_pointcloud3d_place_and_crs = _place_and_crs_via(
+    _pointcloud3d_coord_type, lambda _type_instance, value: _pointcloud3d_multipoint(value)
+)
 
 
 def _feature_schema_ref(schema_url: str, feature_type: str) -> str:
