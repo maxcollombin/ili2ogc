@@ -9,6 +9,8 @@ VIEW/OID/TRANSLATION OF are mixed in from view_mixin.py/oid_mixin.py/
 translation_mixin.py - this file stays one unit by necessity.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -345,16 +347,11 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
         # <rule_name>` (the instance currently being built itself, e.g.
         # modeldef.imports.ImportingP) would only find the ENCLOSING rule's
         # context, never this one - see the field: null mechanism.
-        self._push_construction_context(rule_name, instance)
-        construction_ctx = self._construction_stack[-1]
-        self._parent_stack.append(instance)
-        try:
+        with self._pushed_context(rule_name, instance):
+            construction_ctx = self._construction_stack[-1]
             if entry.attribute_bindings:
                 self._apply_bindings(instance, ctx, rule_name, entry.attribute_bindings, construction_ctx, consumed)
             sweep_results = self._sweep_unclaimed_children(ctx, consumed)
-        finally:
-            self._parent_stack.pop()
-            self._pop_construction_context()
         self._attach_unclaimed_results(instance, sweep_results, rule_name)
 
         self._maybe_register_symbol(instance)
@@ -445,27 +442,17 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
             # rather than left to the generic _build_instance hook (which
             # _build_multi_target bypasses entirely).
             self._attach_pending_meta_attributes(submodel, ctx)
-            self._push_construction_context(rule_name, submodel)
-            self._parent_stack.append(submodel)
-            try:
+            with self._pushed_context(rule_name, submodel):
                 self._apply_bindings(
                     submodel, ctx, rule_name, prefixed_bindings.get("SubModel", {}), construction_ctx, consumed
                 )
-            finally:
-                self._parent_stack.pop()
-                self._pop_construction_context()
             self._maybe_register_symbol(submodel)
 
         for short, inst in instances.items():
             if short == "SubModel":
                 continue
-            self._push_construction_context(rule_name, inst)
-            self._parent_stack.append(inst)
-            try:
+            with self._pushed_context(rule_name, inst):
                 self._apply_bindings(inst, ctx, rule_name, prefixed_bindings.get(short, {}), construction_ctx, consumed)
-            finally:
-                self._parent_stack.pop()
-                self._pop_construction_context()
 
         if submodel is not None:
             for short, inst in instances.items():
@@ -892,9 +879,7 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
 
             construction_ctx = self._construction_stack[-1] if self._construction_stack else {}
             consumed: set[int] = set()
-            self._push_construction_context(rule_name, instance)
-            self._parent_stack.append(instance)
-            try:
+            with self._pushed_context(rule_name, instance):
                 if isinstance(node, ParserRuleContext):
                     # `token_or_rule` designates a REAL grammar rule (not a
                     # plain token), with its own structured content described
@@ -910,9 +895,6 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
                     self._set_defined_subexpression(instance, ctx)
                 if rule_name == "factor" and token_or_rule == "INTERLIS":
                     self._set_predefined_function_call(instance, ctx)
-            finally:
-                self._parent_stack.pop()
-                self._pop_construction_context()
             return instance
 
         # No when_present branch matched: pure pass-through (e.g. term ->
@@ -1360,21 +1342,19 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
             return None
         instance = self.registry.new_instance(target)
         instance._source_ctx = ctx
-        self._parent_stack.append(instance)
-        try:
-            self._apply_bindings(instance, ctx, rule_name, sub_bindings, construction_ctx, consumed)
-        except BuildError:
-            # A nested construction (e.g. attrTypeDef._collection ->
-            # MultiValue) represents ONE grammar alternative among others,
-            # not an always-present structure - if one of its required
-            # sub-bindings (a discriminant marker, e.g. BAG|LIST) fails,
-            # that's a sign this alternative simply wasn't taken here, not a
-            # real error. Discards the whole nested construction rather than
-            # letting it propagate (same logic as Conditional: inapplicable
-            # branch -> nothing built).
-            return None
-        finally:
-            self._parent_stack.pop()
+        with self._pushed_parent(instance):
+            try:
+                self._apply_bindings(instance, ctx, rule_name, sub_bindings, construction_ctx, consumed)
+            except BuildError:
+                # A nested construction (e.g. attrTypeDef._collection ->
+                # MultiValue) represents ONE grammar alternative among others,
+                # not an always-present structure - if one of its required
+                # sub-bindings (a discriminant marker, e.g. BAG|LIST) fails,
+                # that's a sign this alternative simply wasn't taken here, not a
+                # real error. Discards the whole nested construction rather than
+                # letting it propagate (same logic as Conditional: inapplicable
+                # branch -> nothing built).
+                return None
         return instance
 
     def _apply_for_each_binding(
@@ -1495,11 +1475,8 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
         instance = self.registry.new_instance(target)
         instance._source_ctx = node
         self._attach_pending_meta_attributes(instance, node)
-        self._parent_stack.append(instance)
-        try:
+        with self._pushed_parent(instance):
             bag = self.visit(node)
-        finally:
-            self._parent_stack.pop()
 
         self._merge_bag_into_instance(instance, bag, rule_name)
         return instance
@@ -1593,6 +1570,29 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
 
     def _pop_construction_context(self) -> None:
         self._construction_stack.pop()
+
+    @contextmanager
+    def _pushed_parent(self, instance: MetaInstance) -> Iterator[MetaInstance]:
+        """Push `instance` onto `_parent_stack` for the scope of the `with` block, popping it on any exit."""
+        self._parent_stack.append(instance)
+        try:
+            yield instance
+        finally:
+            self._parent_stack.pop()
+
+    @contextmanager
+    def _pushed_context(self, rule_name: str, instance: MetaInstance) -> Iterator[MetaInstance]:
+        """Push both the construction context AND `_parent_stack` for `instance`, popping both on any exit.
+
+        Same pairing as 4 call sites used to duplicate by hand (push both, pop `_parent_stack` first).
+        """
+        self._push_construction_context(rule_name, instance)
+        self._parent_stack.append(instance)
+        try:
+            yield instance
+        finally:
+            self._parent_stack.pop()
+            self._pop_construction_context()
 
     # ------------------------------------------------------------------
     # Table de symboles

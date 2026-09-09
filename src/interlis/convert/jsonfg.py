@@ -752,6 +752,18 @@ def _resolve_named_attr(cls: MetaInstance, name: str) -> ResolvedAttribute | Non
     return resolve_attribute(attr) if attr is not None else None
 
 
+def _resolve_base_type(cls: MetaInstance, attr_name: str) -> MetaInstance | None:
+    """Resolve `cls.<attr_name>`, then unwrap ITS OWN `.type_instance.BaseType`.
+
+    The shared two-step indirection behind every 3D/CHBase coord-type
+    walker below (`Simplified`/`Points`/`Surfaces` -> the element type one
+    level down) - was duplicated inline 5 times before being extracted here.
+    """
+    attr = _resolve_named_attr(cls, attr_name)
+    base_type = getattr(attr.type_instance, "BaseType", None) if attr is not None else None
+    return base_type if isinstance(base_type, MetaInstance) else None
+
+
 def _place_and_crs_via(
     coord_type_fn: Callable[[MetaInstance], MetaInstance | None],
     geometry_fn: Callable[[MetaInstance, dict[str, Any]], dict[str, Any] | None],
@@ -803,9 +815,8 @@ def _solid3d_coord_type(solid_class: MetaInstance) -> MetaInstance | None:
     shell_class = shell.type_instance if shell is not None else None
     if not isinstance(shell_class, MetaInstance):
         return None
-    simplified = _resolve_named_attr(shell_class, "Simplified")
-    triangle_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
-    if not isinstance(triangle_class, MetaInstance):
+    triangle_class = _resolve_base_type(shell_class, "Simplified")
+    if triangle_class is None:
         return None
     geometry = _resolve_named_attr(triangle_class, "Geometry")
     if geometry is None or geometry.type_kind != "LineType":
@@ -897,9 +908,8 @@ def _curve3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
             return None
         return line_coord_type(geometry.type_instance)
     if name == "CompositeCurve3D":
-        simplified = _resolve_named_attr(type_instance, "Simplified")
-        segment_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
-        if not isinstance(segment_class, MetaInstance):
+        segment_class = _resolve_base_type(type_instance, "Simplified")
+        if segment_class is None:
             return None
         return _curve3d_coord_type(segment_class)
     return None
@@ -969,9 +979,8 @@ def _is_composite_surface3d(type_instance: MetaInstance | None) -> bool:
 
 def _composite_surface3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
     """Walk a `Tin3D`/`SurfaceShell3D`/`CompositeSurface3D` type down to its ultimate `CoordType`, for CRS lookup."""
-    simplified = _resolve_named_attr(type_instance, "Simplified")
-    triangle_class = getattr(simplified.type_instance, "BaseType", None) if simplified is not None else None
-    if not isinstance(triangle_class, MetaInstance):
+    triangle_class = _resolve_base_type(type_instance, "Simplified")
+    if triangle_class is None:
         return None
     geometry = _resolve_named_attr(triangle_class, "Geometry")
     if geometry is None or geometry.type_kind != "LineType":
@@ -1019,9 +1028,8 @@ def _is_chbase_multisurface(type_instance: MetaInstance | None) -> bool:
 
 def _chbase_multisurface_surface_type(type_instance: MetaInstance) -> ResolvedAttribute | None:
     """Resolve `MultiSurface.Surfaces`'s element type (`SurfaceStructure`) down to its own `Surface` LineType."""
-    surfaces = _resolve_named_attr(type_instance, "Surfaces")
-    element_class = getattr(surfaces.type_instance, "BaseType", None) if surfaces is not None else None
-    if not isinstance(element_class, MetaInstance):
+    element_class = _resolve_base_type(type_instance, "Surfaces")
+    if element_class is None:
         return None
     resolved = _resolve_named_attr(element_class, "Surface")
     return resolved if resolved is not None and resolved.type_kind == "LineType" else None
@@ -1073,9 +1081,7 @@ def _is_pointcloud3d(type_instance: MetaInstance | None) -> bool:
 
 def _pointcloud3d_coord_type(type_instance: MetaInstance) -> MetaInstance | None:
     """The `CoordType` of `PointCloud3D.Points` (`BAG {1..*} OF Coord3`), for CRS lookup."""
-    resolved = _resolve_named_attr(type_instance, "Points")
-    base_type = getattr(resolved.type_instance, "BaseType", None) if resolved is not None else None
-    return base_type if isinstance(base_type, MetaInstance) else None
+    return _resolve_base_type(type_instance, "Points")
 
 
 def _pointcloud3d_multipoint(value: dict[str, Any]) -> dict[str, Any] | None:

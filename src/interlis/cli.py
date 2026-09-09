@@ -75,6 +75,15 @@ def _resource_dirs():
         yield _DEV_ROOT / "mappings", _DEV_ROOT / "spec/grammar/mapping"
 
 
+def _open_builder(repository: ModelRepository | None) -> InterlisModelBuilder:
+    """Construct an `InterlisModelBuilder` from the packaged/dev-repo grammar+mapping resources.
+
+    The constructor reads everything eagerly, so this scope can close right after - no timing change here.
+    """
+    with _resource_dirs() as (mappings_dir, spec_dir):
+        return InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+
+
 def _tool_version() -> str:
     try:
         from importlib.metadata import version
@@ -187,8 +196,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         return ExitCode.INVALID
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
-    with _resource_dirs() as (mappings_dir, spec_dir):
-        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    builder = _open_builder(repository)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         model = builder.build(tree)
@@ -245,8 +253,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
     bag = DiagnosticBag()
-    with _resource_dirs() as (mappings_dir, spec_dir):
-        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    builder = _open_builder(repository)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         # eCH-0117 `!!@Name=Value` meta-attributes declared directly in
@@ -438,8 +445,7 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
     bag = DiagnosticBag()
-    with _resource_dirs() as (mappings_dir, spec_dir):
-        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    builder = _open_builder(repository)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         builder.build(tree, meta_attributes=meta_attribute_comments_in_file(path))
@@ -499,8 +505,7 @@ def cmd_convert_sql(args: argparse.Namespace) -> int:
             for e in catalog_syntax_errors:
                 print(f"  {e}", file=sys.stderr)
             return ExitCode.INVALID
-        with _resource_dirs() as (mappings_dir, spec_dir):
-            catalog_builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+        catalog_builder = _open_builder(repository)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             catalog_builder.build(catalog_tree, meta_attributes=meta_attribute_comments_in_file(catalog_path))
@@ -628,8 +633,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
             print(f"  {e}", file=sys.stderr)
         return ExitCode.INVALID
 
-    with _resource_dirs() as (mappings_dir, spec_dir):
-        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    builder = _open_builder(repository)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         builder.build(tree)
@@ -756,8 +760,7 @@ def cmd_convert_jsonfg(args: argparse.Namespace) -> int:
         return ExitCode.INVALID
 
     bag = DiagnosticBag()
-    with _resource_dirs() as (mappings_dir, spec_dir):
-        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    builder = _open_builder(repository)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         # eCH-0117 `!!@Name=Value` meta-attributes declared directly in the
@@ -846,8 +849,7 @@ def cmd_write_xtf(args: argparse.Namespace) -> int:
         return ExitCode.INVALID
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
-    with _resource_dirs() as (mappings_dir, spec_dir):
-        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    builder = _open_builder(repository)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         builder.build(tree)
@@ -944,8 +946,7 @@ def cmd_convert_cql2(args: argparse.Namespace) -> int:
         return ExitCode.INVALID
 
     repository = ModelRepository([Path(d) for d in args.repo]) if args.repo else None
-    with _resource_dirs() as (mappings_dir, spec_dir):
-        builder = InterlisModelBuilder(mappings_dir, spec_dir, repository=repository)
+    builder = _open_builder(repository)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         builder.build(tree)
