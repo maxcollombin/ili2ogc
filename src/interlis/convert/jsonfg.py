@@ -1190,9 +1190,10 @@ def object_to_feature(
     PointCloud3D, GeometryCHLV95_V1/GeometryCHLV03_V1's MultiSurface - a
     generic unnamed BAG/LIST wrapper stays out of scope, no real corpus
     evidence) AND whose actual wire value converts cleanly (see
-    `_place_and_crs` - a `None` result, e.g. a custom LINE FORM segment or
-    an unresolved CRS, leaves that one attribute in "properties" instead -
-    a bare CoordType/LineType gets the `x-unsupported` marker, while a
+    `_place_and_crs` - a `None` result, e.g. an unresolved CRS, leaves that
+    one attribute in "properties" instead, still holding its own converted
+    GeoJSON-object value; only a genuine parse failure, e.g. a custom LINE
+    FORM segment, falls back to the `x-unsupported` marker there - a
     STRUCTURE-wrapped shape (Solid3D and the others above) keeps its full
     nested-STRUCTURE value, already a complete, useful representation on
     its own - never a silent loss either way) is collected.
@@ -1269,13 +1270,14 @@ def object_to_feature(
                 placed_names.add(geom_name)
 
     # A top-level geometry attribute that could NOT become `place` (no
-    # resolvable CRS, a custom LINE FORM, or a CRS mismatch across several)
-    # keeps the `x-unsupported` marker it always had - `_attribute_value`'s
-    # GeoJSON-object output is for a NESTED geometry only, where there is
-    # no `place` alternative. Resolving the top-level no-CRS case is a
-    # separate concern.
+    # resolvable CRS, or a CRS mismatch across several) already holds the
+    # same GeoJSON-object value `_attribute_value` computes for a NESTED
+    # geometry (`_coord_geometry`/`_line_geometry`) - keep it rather than
+    # discarding real coordinates. Only a genuine parse failure (custom
+    # LINE FORM segment, unreadable wire data - `properties[name]` is
+    # `None`) falls back to the `x-unsupported` marker.
     for name in geometry_names:
-        if name in properties and name not in placed_names:
+        if name in properties and name not in placed_names and not isinstance(properties[name], dict):
             properties[name] = {"x-unsupported": resolved_attrs[name].type_kind}
 
     feature: dict[str, Any] = {"type": "Feature"}

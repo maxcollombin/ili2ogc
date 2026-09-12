@@ -559,7 +559,7 @@ def test_multisurface_with_one_curved_part_becomes_multi_surface():
     assert CONF_CIRCULAR_ARCS in feature["conformsTo"]
 
 
-def test_missing_crs_meta_falls_back_to_unsupported_property():
+def test_missing_crs_meta_keeps_geometry_value_in_properties():
     builder = _build(_GEOM_MODEL, capture_meta=True)
     cls = _resolved_class(builder, "ANoCrs")
     obj = XtfObject(
@@ -569,7 +569,7 @@ def test_missing_crs_meta_falls_back_to_unsupported_property():
     )
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
-    assert feature["properties"]["Geom"] == {"x-unsupported": "CoordType"}
+    assert feature["properties"]["Geom"] == {"type": "Point", "coordinates": [100.0, 200.0]}
 
 
 def test_multi_geometry_class_gets_geometry_collection_place():
@@ -643,8 +643,8 @@ def test_multi_geometry_class_with_mismatched_crs_gets_no_place():
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
     assert "coordRefSys" not in feature
-    assert feature["properties"]["PointA"] == {"x-unsupported": "CoordType"}
-    assert feature["properties"]["PointB"] == {"x-unsupported": "CoordType"}
+    assert feature["properties"]["PointA"] == {"type": "Point", "coordinates": [2600000.0, 1200000.0]}
+    assert feature["properties"]["PointB"] == {"type": "Point", "coordinates": [600000.0, 200000.0]}
 
 
 def test_without_meta_capture_crs_is_unresolved():
@@ -658,7 +658,7 @@ def test_without_meta_capture_crs_is_unresolved():
     )
     feature = object_to_feature(obj, cls)
     assert "place" not in feature
-    assert feature["properties"]["Geom"] == {"x-unsupported": "CoordType"}
+    assert feature["properties"]["Geom"] == {"type": "Point", "coordinates": [2600000.0, 1200000.0]}
 
 
 def test_nested_geometry_and_formatted_type_in_a_structure_and_top_level():
@@ -1247,12 +1247,11 @@ def test_solid3d_attribute_becomes_place_polyhedron_with_crs():
 def test_solid3d_without_resolvable_crs_stays_a_nested_structure_property():
     """Same conservative "no CRS -> no place" policy as any 2D geometry attribute (`_place_and_crs`).
 
-    Unlike a top-level CoordType/LineType (which gets replaced by an
-    `x-unsupported` marker in this case), a Solid3D that can't become
-    `place` keeps its full nested-STRUCTURE representation in
-    `properties` - already a complete, useful value, unlike the
-    marker-only fallback a bare CoordType/LineType has nothing better to
-    offer.
+    Like a top-level CoordType/LineType (which also keeps its converted
+    GeoJSON value in this case, not just an `x-unsupported` marker), a
+    Solid3D that can't become `place` keeps a useful representation in
+    `properties` - here its full nested-STRUCTURE value rather than a
+    flat geometry object.
     """
     builder = _build(_SOLID3D_NO_CRS_MODEL)
     cls = _resolved_class(builder, "ASolid")
