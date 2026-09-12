@@ -120,3 +120,79 @@ END TestGraphicNoRestriction.
     graphic = builder.symbol_table.resolve("TestGraphicNoRestriction.TestTopic.MyGraphic")
     rule = graphic.DrawingRule[0] if isinstance(graphic.DrawingRule, list) else graphic.DrawingRule
     assert getattr(rule, "Class", None) is None
+
+
+def test_sign_basket_objects_of_registers_metaobjectdef_resolvable_by_name():
+    """`SIGN BASKET ... ~ <topicRef> OBJECTS OF <Class>: <name>(, <name>)*` real corpus shape.
+
+    Confirmed unbuildable before this fix (`BuildError: unresolved
+    reference, not attributable to an import: 'goodhealth'`/`'Building'`)
+    on every real GRAPHIC model found in the FGDM4GS corpus
+    (`RoadsExgm2ien.ili`, `modelPond.ili`, `Surface_Graphics.ili`) - each
+    uses this exact `SIGN BASKET`+`Sign := {name}` combination. `Base`/
+    `Consumer` mirrors the real shape: the OBJECTS OF class name
+    (`SurfaceSign`) is UNQUALIFIED and declared in the basket's OWN `~
+    topicRef` scope (`Base.Signs`), an IMPORTED model - not the enclosing
+    model's own namespace.
+    """
+    src = """INTERLIS 2.3;
+
+MODEL Base (en) AT "mailto:test@example.org" VERSION "2024-01-01" =
+  TOPIC Signs =
+    CLASS SurfaceSign =
+      Dummy: TEXT*10;
+    END SurfaceSign;
+  END Signs;
+END Base.
+
+MODEL Consumer (en) AT "mailto:test@example.org" VERSION "2024-01-01" =
+  IMPORTS Base;
+  SIGN BASKET MyBasket ~ Base.Signs
+    OBJECTS OF SurfaceSign: goodhealth;
+  TOPIC T =
+    CLASS MyClass =
+      Attr1: TEXT*10;
+    END MyClass;
+    GRAPHIC MyGraphic BASED ON MyClass =
+      MyRule: (Sign := {goodhealth});
+    END MyGraphic;
+  END T;
+END Consumer.
+"""
+    builder = _build(src)
+    graphic = builder.symbol_table.resolve("Consumer.T.MyGraphic")
+    rule = graphic.DrawingRule[0] if isinstance(graphic.DrawingRule, list) else graphic.DrawingRule
+    cond = rule.Rule[0] if isinstance(rule.Rule, list) else rule.Rule
+    spa = cond.Assignments[0] if isinstance(cond.Assignments, list) else cond.Assignments
+    metaobj = spa.Assignment
+    assert metaobj._qualified_class == "IlisMeta16.ModelData.MetaObjectDef"
+    assert metaobj.Name == "goodhealth"
+    assert metaobj.IsRefSystem is False
+    assert metaobj.Class is not None
+    assert metaobj.Class.Name == "SurfaceSign"
+
+    basket = builder.symbol_table.resolve("Consumer.MyBasket")
+    members = basket.Member if isinstance(basket.Member, list) else [basket.Member]
+    assert metaobj in members
+
+
+def test_refsystem_basket_objects_of_sets_is_ref_system_true():
+    """`REFSYSTEM BASKET` (the other `metaDataBasketDef` discriminant value) sets `IsRefSystem=True`."""
+    src = """INTERLIS 2.3;
+
+MODEL RefSystemModel (en) AT "mailto:test@example.org" VERSION "2024-01-01" =
+  TOPIC Systems =
+    CLASS MySystem =
+      Dummy: TEXT*10;
+    END MySystem;
+  END Systems;
+  REFSYSTEM BASKET MyRefBasket ~ Systems
+    OBJECTS OF MySystem: LV95;
+END RefSystemModel.
+"""
+    builder = _build(src)
+    basket = builder.symbol_table.resolve("RefSystemModel.MyRefBasket")
+    member = basket.Member[0] if isinstance(basket.Member, list) else basket.Member
+    assert member.Name == "LV95"
+    assert member.IsRefSystem is True
+    assert member.Class.Name == "MySystem"

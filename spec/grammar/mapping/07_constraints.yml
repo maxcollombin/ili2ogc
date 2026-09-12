@@ -482,10 +482,7 @@ metaDataBasketDef:
 
         '
     objects_of_clauses:
-      source:
-        field: Name|Name
-        multi: true
-      optional: true
+      status: not_applicable
       note: 'Not the same mechanism as AllowedInBasket
         (AllowedInBasket {OfDataUnit:DataUnit <-> ClassInBasket:Class} concerns classes allowed in an
         ordinary TRANSFER basket, a separate topic from this OBJECTS OF clause).
@@ -496,15 +493,19 @@ metaDataBasketDef:
         MetaBasketDef via MetaBasketMembers (MetaBasketDef {0..1} <-> Member {0..*} MetaObjectDef, composite)
         and (b) to the Class resolved via Class-Name via MetaObjectClass (MetaObjectDef {0..*} <-> Class {1..1}
         Class). Outer loop (one Class-Name per OBJECTS OF clause occurrence, several possible MetaObject-Name
-        per occurrence) to be iterated by ModelBuilder.
+        per occurrence).
 
-        Not implemented in the engine, same issue as topicRef above: `field: Name|Name, multi: true`
-        returns a flat list of all Name tokens (Class-Name AND MetaObject-Name mixed together, no grouping
-        by occurrence) - the MetaObjectDef/MetaBasketMembers/MetaObjectClass construction loop described
-        above would need a positional split of the rule''s children (same family as
-        `domainDef._build_multi_declaration`), not yet written. `optional: true` tolerates attach()
-        failure rather than aborting the whole build. MetaBasketDef is therefore built without its
-        MetaObjectDef children. Worth revisiting if resolving OBJECTS OF in full becomes a real need.
+        A declarative `field: Name|Name, multi: true` binding cannot express this: it returns a flat
+        list of all Name tokens (Class-Name AND MetaObject-Name mixed together, no grouping by
+        occurrence). Built instead by `InterlisModelBuilder._build_metadata_basket_members`
+        (rule_name == "metaDataBasketDef" special case in `_build_instance`, same family as
+        `domainDef._build_multi_declaration`): splits `ctx.children` into per-clause segments on each
+        `OBJECTS` token, the 1st `Name` per segment being the Class-Name and the rest the
+        Member-Name(s). Each MetaObjectDef is registered in the symbol table under its own (short) Name
+        so `Sign := {name}` (`signParamAssignment.metaobjectref_alt`) can resolve it - confirmed against
+        real corpus data (`RoadsExgm2ien.ili`: `Sign := {Building}`; `modelPond.ili`: `Sign :=
+        {goodhealth}`), previously a `BuildError` (`unresolved reference, not attributable to an
+        import`).
 
         '
   note: 'Kind resolved dynamically: SIGN -> SignB, REFSYSTEM -> RefSystemB'

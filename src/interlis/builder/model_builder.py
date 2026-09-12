@@ -375,6 +375,8 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
             self._fix_existence_constraint_attr(instance)
         elif rule_name == "contextDef":
             self._build_context_domain_pairs(instance, ctx)
+        elif rule_name == "metaDataBasketDef":
+            self._build_metadata_basket_members(instance, ctx)
 
         if entry.parent and self._parent_stack:
             self.attachment.attach(
@@ -601,6 +603,75 @@ class InterlisModelBuilder(_ViewBuildingMixin, _OidMixin, _TranslationMixin, _Co
         if not results:
             return None
         return results[0] if len(results) == 1 else results
+
+    def _build_metadata_basket_members(self, instance: MetaInstance, ctx: ParserRuleContext) -> None:
+        """Materialize `MetaObjectDef` children for each `OBJECTS OF <Class>: <Name>(, <Name>)*` clause.
+
+        `metaDataBasketDef()`'s generic `attribute_bindings` cannot express
+        this (see `objects_of_clauses` in `spec/grammar/mapping/07_constraints.yml`):
+        `Name()` returns every `Name` token flattened - the basket's own
+        name, then each clause's Class-Name and Member-Name(s), all mixed
+        together with no grouping. Clause boundaries only exist in the raw
+        token stream (grammar: `(OBJECTS OF Name COLON (Name (COMMA
+        Name)*) SEMI?)+`, each clause starting with its own `OBJECTS`
+        token) - same "walk `ctx.children` by hand" approach as
+        `_build_multi_declaration`. Without this, a `Sign := {name}`
+        (`signParamAssignment.metaobjectref_alt`) referencing a SIGN
+        BASKET member never resolves: no `MetaObjectDef` was ever
+        registered under that name - confirmed via `BuildError` on real
+        corpus data (`RoadsExgm2ien.ili`: `Sign := {Building}`;
+        `modelPond.ili`: `Sign := {goodhealth}`).
+        """
+        # `OBJECTS OF SurfaceSign: ...` names a Class UNQUALIFIED, resolved
+        # against the basket's OWN `~ topicRef` scope (e.g. "StandardSymbology.
+        # StandardSigns"), not the enclosing model's `IMPORTS UNQUALIFIED`
+        # fallback (real corpus basket defs never use UNQUALIFIED imports) -
+        # reuses `ForwardRef.topic_extends_hint`'s existing "try
+        # <hint>.<name> first" resolution, same mechanism a `TOPIC EXTENDS`
+        # namespace already relies on.
+        topic_ref_ctx = ctx.topicRef()
+        basket_topic_hint = topic_ref_ctx.getText() if topic_ref_ctx is not None else None
+        clauses: list[list[Any]] = []
+        current: list[Any] = []
+        for child in ctx.children or []:
+            if isinstance(child, TerminalNode) and child.symbol.type == InterlisParser.OBJECTS:
+                if current:
+                    clauses.append(current)
+                current = []
+            current.append(child)
+        if current:
+            clauses.append(current)
+        for clause in clauses:
+            if not (isinstance(clause[0], TerminalNode) and clause[0].symbol.type == InterlisParser.OBJECTS):
+                continue  # leading segment before the 1st OBJECTS token (basket name/EXTENDS/TILDE topicRef)
+            names = [c for c in clause if isinstance(c, TerminalNode) and c.symbol.type == InterlisParser.Name]
+            if len(names) < 2:
+                continue  # need a Class-Name plus at least one Member-Name
+            class_name, member_names = names[0].getText(), names[1:]
+            for member_token in member_names:
+                metaobj = self.registry.new_instance("IlisMeta16.ModelData.MetaObjectDef")
+                metaobj.Name = member_token.getText()
+                metaobj.IsRefSystem = getattr(instance, "Kind", None) == "RefSystemB"
+                self._maybe_register_symbol(metaobj)
+                self.attachment.attach(
+                    instance,
+                    "Member",
+                    metaobj,
+                    association="MetaBasketMembers",
+                    role="Member",
+                    rule="metaDataBasketDef",
+                )
+                class_ref = ForwardRef(
+                    name=class_name,
+                    resolves_to_hint="Class",
+                    rule="metaDataBasketDef",
+                    home_model=self._current_model_name(),
+                    topic_extends_hint=basket_topic_hint,
+                )
+                self.attachment.attach(
+                    metaobj, "Class", class_ref, association="MetaObjectClass", role="Class", rule="metaDataBasketDef"
+                )
+                self.forward_refs.register_pending(class_ref, metaobj, "Class")
 
     def _attach_domain_extends(self, instance: MetaInstance, segment: list[Any], rule_name: str) -> None:
         """Attach `Super` for a `DOMAIN X EXTENDS Y = ...;` declaration.
