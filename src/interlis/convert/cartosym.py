@@ -12,13 +12,15 @@ from typing import Any
 from lxml import etree
 from pycartosym import get_codec
 from pycartosym.models.styles import Style, StylingRule, Symbolizer
-from pycartosym.models.symbolizers import Fill, Font, Label, Stroke, TextAlignment, TextGraphic, Transform2D
+from pycartosym.models.symbolizers import Fill, Font, Label, Marker, Stroke, TextAlignment, TextGraphic, Transform2D
 from pycartosym.models.types import Angle, AngleUnit, RGBColor, UnitType, UnitValue
 from pycartosym.models.value_expressions import PropertyRef
 
 from interlis.convert.color import lch_to_srgb
 from interlis.convert.cql2 import to_cql2
 from interlis.metamodel.instance import MetaInstance
+from interlis.xtf.parse import XtfBasket, XtfObject
+from interlis.xtf.validate import _extract_reference
 
 _SE_NS = "http://www.opengis.net/se"
 _OGC_NS = "http://www.opengis.net/ogc"
@@ -125,20 +127,120 @@ def symbolizer_z_order(priority: float | None) -> float | None:
     return priority
 
 
-def styling_rule_from_drawing_rule(drawing_rule: MetaInstance) -> StylingRule:
+class SignLibrary:
+    """A parsed `SIGN BASKET` data section, indexed for `Sign := {name}` resolution.
+
+    `by_name` resolves the metaobject identity (`ili:Name`, a raw wire
+    child every real SIGN BASKET data object carries even though it is
+    never a declared `StandardSymbology` class attribute - confirmed
+    against `Point_Graphics_Signatures.xtf`). `by_tid` resolves the
+    `ili:ref` target of a REFERENCE-typed attribute (`Color`/`Symbol`/
+    `FillColor`/...) to the object it points at, within the same basket.
+    """
+
+    def __init__(self, basket: XtfBasket) -> None:
+        self.by_name: dict[str, XtfObject] = {}
+        self.by_tid: dict[str, XtfObject] = {}
+        for obj in basket.objects:
+            if obj.tid is not None:
+                self.by_tid[obj.tid] = obj
+            name_nodes = obj.attributes.get("Name")
+            if name_nodes and name_nodes[0].text:
+                self.by_name[name_nodes[0].text] = obj
+
+    def scalar(self, obj: XtfObject, attr: str) -> str | None:
+        nodes = obj.attributes.get(attr)
+        return nodes[0].text if nodes else None
+
+    def resolve_ref(self, obj: XtfObject, attr: str) -> XtfObject | None:
+        nodes = obj.attributes.get(attr)
+        if not nodes:
+            return None
+        tid = _extract_reference(nodes[0])
+        return self.by_tid.get(tid) if tid else None
+
+    def resolve_color(self, obj: XtfObject, attr: str) -> tuple[RGBColor | None, float | None]:
+        """Resolve a `Color`-typed reference attribute to `(RGBColor, opacity)` - `opacity` is `Color.T`."""
+        color_obj = self.resolve_ref(obj, attr)
+        if color_obj is None:
+            return None, None
+        lum, c, h, t = (self.scalar(color_obj, name) for name in ("L", "C", "H", "T"))
+        color = color_to_rgb(float(lum), float(c), float(h)) if lum and c and h else None
+        return color, (float(t) if t else None)
+
+
+def symbol_sign_object_to_marker(library: SignLibrary, obj: XtfObject) -> Marker:
+    """Build a `Marker` from a real `SymbolSign` data object (`Color`/`Symbol` resolved within the same SIGN BASKET).
+
+    Only the `Font.Type = text` case (`Symbol` -> `FontSymbol` -> `Font`)
+    has a target - a `Font.Type = symbol` `FontSymbol` (composite
+    geometry) has none yet. Verified against real corpus data
+    (`Point_Graphics_Signatures.xtf`'s `SymbolSign`/`FontSymbol`/`Font`).
+    """
+    # `color` (from `SymbolSignColorAssoc`) has no confirmed pycartosym
+    # target for a text-glyph Marker yet (neither `TextGraphic` nor `Font`
+    # has a color field) - only `opacity` (`Color.T`) is applied here,
+    # left as a follow-up rather than guessed.
+    _color, opacity = library.resolve_color(obj, "Color")
+    graphic = None
+    symbol_obj = library.resolve_ref(obj, "Symbol")
+    if symbol_obj is not None:
+        font_obj = library.resolve_ref(symbol_obj, "Font")
+        ucs4 = library.scalar(symbol_obj, "UCS4")
+        if font_obj is not None and ucs4 and library.scalar(font_obj, "Type") == "text":
+            graphic = font_symbol_text_to_graphic(character=chr(int(ucs4)), font_face=library.scalar(font_obj, "Name"))
+    return Marker(elements=[graphic] if graphic else None, opacity=opacity)
+
+
+def surface_sign_object_to_fill(library: SignLibrary, obj: XtfObject) -> Fill:
+    """Build a `Fill` from a real `SurfaceSign` data object's `FillColor` - `Border`/`HatchSymb` are not resolved here.
+
+    Same `Color` wire mechanism as `symbol_sign_object_to_marker`
+    (verified there against real data) applied to a different attribute
+    name (`FillColor` vs `Color`) - not itself corpus-verified (no real
+    `SurfaceSign` data object found in the fixtures fetched so far).
+    """
+    color, opacity = library.resolve_color(obj, "FillColor")
+    return surface_sign_to_fill(fill_color=color, opacity=opacity)
+
+
+def polyline_sign_object_to_stroke(library: SignLibrary, obj: XtfObject) -> Stroke:
+    """Build a `Stroke` from a real `PolylineSign` data object's `Color` - `Style` (width/join/cap/dash) not resolved.
+
+    Same `Color` wire mechanism as `symbol_sign_object_to_marker`
+    (verified there) applied to `PolylineSign.Color` - not itself
+    corpus-verified. `Style` (-> `LineStyle_Solid`/`_Dashed` -> their own
+    `PolylineAttrs`/`Dashes`) needs a real `PolylineSign` data object to
+    verify against, none found in the fixtures fetched so far - left for
+    a follow-up rather than guessed.
+    """
+    color, opacity = library.resolve_color(obj, "Color")
+    return polyline_sign_to_stroke(color=color, opacity=opacity)
+
+
+_SIGN_OBJECT_BUILDERS = {
+    _MARKER_SIGN_CLASS: ("marker", symbol_sign_object_to_marker),
+    _FILL_SIGN_CLASS: ("fill", surface_sign_object_to_fill),
+    _STROKE_SIGN_CLASS: ("stroke", polyline_sign_object_to_stroke),
+}
+
+
+def styling_rule_from_drawing_rule(drawing_rule: MetaInstance, sign_library: SignLibrary | None = None) -> StylingRule:
     """Build one pycartosym `StylingRule` from a built INTERLIS `DrawingRule`.
 
-    Covers what a `DrawingRule` can express WITHOUT resolving a `Sign :=
-    {name}` reference's own library-object data (not yet wired): the
-    `WHERE` selector (compiled
-    via `cql2.to_cql2`, the same CQL2-JSON shape `StylingRule.selector`
-    expects natively), `Priority` -> `z_order`, and - for a `TextSign`
-    only, since `Txt`/`Rotation`/`HAli`/`VAli` are genuine `PARAMETER`s
-    there (`AbstractSymbology.Signs.TextSign`), unlike `Height`/`Font`/
-    color which are OWN attributes only ever set via the referenced Sign
-    object - a `Label`. `PolylineSign`/`SurfaceSign`/`SymbolSign` get no
-    `Stroke`/`Fill`/`Marker` here yet: their color/width/symbol all come
-    from the `Sign` reference, not a direct `PARAMETER`.
+    The `WHERE` selector compiles via `cql2.to_cql2` (the same CQL2-JSON
+    shape `StylingRule.selector` expects natively). `Priority` ->
+    `z_order`. A `Sign := {name}` reference resolves (via `sign_library`,
+    a parsed SIGN BASKET data section - `None` skips it entirely, same as
+    before this was wired) to its own library-object data, dispatched by
+    `drawing_rule.Class` to `symbol_sign_object_to_marker`/
+    `surface_sign_object_to_fill`/`polyline_sign_object_to_stroke` -
+    those hold color/width/symbol; a `TextSign`'s `Txt`/`Rotation`/
+    `HAli`/`VAli` are genuine `PARAMETER`s (`AbstractSymbology.Signs.
+    TextSign`) set directly on the `DrawingRule`, unlike `Height`/`Font`
+    which are OWN attributes only ever set via the referenced Sign object
+    (not yet resolved for `TextSign` - no real corpus data found to
+    verify `Font`/`TextSignFontAssoc` resolution against).
 
     A `DrawingRule` with more than one `CondSignParamAssignment` (several
     independent `WHERE (...)` blocks under the same rule name, which would
@@ -152,11 +254,15 @@ def styling_rule_from_drawing_rule(drawing_rule: MetaInstance) -> StylingRule:
 
     raw_assignments = cond.Assignments if isinstance(cond.Assignments, list) else [cond.Assignments]
     params: dict[str, Any] = {}
+    sign_object: XtfObject | None = None
     for assignment in raw_assignments:
-        if assignment.Param in ("Sign", "Geometry"):
-            # Sign: resolves to a MetaObjectDef, not an Expression - its own
-            # data needs XTF wiring, not yet done. Geometry: which attribute
-            # carries the geometry, not a Symbolizer field.
+        if assignment.Param == "Geometry":
+            continue  # which attribute carries the geometry, not a Symbolizer field
+        if assignment.Param == "Sign":
+            target = assignment.Assignment
+            name = getattr(target, "Name", None) if isinstance(target, MetaInstance) else None
+            if sign_library is not None and name is not None:
+                sign_object = sign_library.by_name.get(name)
             continue
         params[assignment.Param] = to_cql2(assignment.Assignment)
 
@@ -164,6 +270,9 @@ def styling_rule_from_drawing_rule(drawing_rule: MetaInstance) -> StylingRule:
     if "Priority" in params:
         symbolizer_kwargs["z_order"] = symbolizer_z_order(params["Priority"])
     sign_class = getattr(getattr(drawing_rule, "Class", None), "Name", None)
+    if sign_object is not None and sign_library is not None and sign_class in _SIGN_OBJECT_BUILDERS:
+        field, builder = _SIGN_OBJECT_BUILDERS[sign_class]
+        symbolizer_kwargs[field] = builder(sign_library, sign_object)
     if sign_class == _TEXT_SIGN_CLASS and "Txt" in params:
         symbolizer_kwargs["label"] = text_sign_to_label(
             text=params.get("Txt"),

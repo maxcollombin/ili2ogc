@@ -1,0 +1,17 @@
+# NOTICE
+
+`Point_Graphics_Signatures.xtf` sourced unmodified from
+`https://github.com/MediaComem/FGDM4GS`, path
+`WP2-WP3/model/symbology/Point_Graphics_Signatures.xtf`. The repo has no
+declared license (`license: null` via the GitHub API, checked
+2026-09-12). The report and this repo share an author with this
+project's own maintainer - vendored here as real, author-confirmed
+corpus material for testing `SIGN BASKET` data resolution (`Sign :=
+{name}` -> real `.xtf` object), not redistributed for any other purpose.
+
+Real `SIGN BASKET StandardSymbology.StandardSigns` data: a `Color`
+library (`white`/`black`, LCh), a text `Font`/`FontSymbol` pair (an
+external TTF-based glyph symbol, `Tree`/`TreeClip`), and one `SymbolSign`
+(`ili:Name = Symbol`, `tid=2001`) referencing `Color`/`Symbol`/
+`ClipSymbol` by `ili:ref` within the same basket - exercises the exact
+wire shape `convert/cartosym.py::SignLibrary` resolves against.

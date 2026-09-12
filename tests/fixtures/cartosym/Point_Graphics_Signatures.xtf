@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- File Point_Graphics_Signatures.xtf 2024-03-22 -->
+
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS"
+  xmlns:geom="http://www.interlis.ch/geometry/1.0"
+  xmlns="http://www.interlis.ch/xtf/2.4/StandardSymbology"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+   <ili:headersection>
+      <ili:models>
+         <ili:model>Point_Graphics</ili:model>
+      </ili:models>
+      <ili:sender>HEIG-VD</ili:sender>
+      <ili:comment>Basic example of Point_Graphics Signatures</ili:comment>
+   </ili:headersection>
+   <ili:datasection>
+      <StandardSigns ili:bid="Point_Graphics">
+         <!-- Color Library -->
+         <Color ili:tid="1">
+            <Name>white</Name>
+            <L>100.0</L>
+            <C>0.0</C>
+            <H>0.0</H>
+            <T>1.0</T>
+         </Color>
+         <Color ili:tid="2">
+            <Name>black</Name>
+            <L>0.0</L>
+            <C>0.0</C>
+            <H>0.0</H>
+            <T>1.0</T>
+         </Color>
+         <!-- External Symbol Font "Symbols" -->
+         <!-- The Font "CadastraSymbol-Regular"
+         can be downloaded from the following link:
+         https://www.cadastre.ch/fr/manual-av/service/cadastral-map.html -->
+         <!-- It may also be necessary to convert unicodes from base 16 to base 10.
+         The following resource may be useful for achieving this:
+         https://www.rapidtables.com/convert/number/hex-to-decimal.html -->
+         <Font ili:tid="301">
+            <Name>CadastraSymbol-Regular</Name>
+            <Internal>false</Internal>
+            <Type>text</Type>
+         </Font>
+         <Font ili:tid="302">
+            <Name>CadastraSymbol-Mask</Name>
+            <Internal>false</Internal>
+            <Type>text</Type>
+         </Font>
+         <!-- FontSymbol Library-->
+         <!-- External symbols -->
+         <!-- Tree -->
+         <FontSymbol ili:tid="201">
+            <Name>Tree</Name>            
+            <UCS4>0077</UCS4>
+            <Font ili:ref="301"></Font>
+         </FontSymbol>
+         <!-- Tree Clip -->
+         <FontSymbol ili:tid="202">
+            <Name>TreeClip</Name>            
+            <UCS4>111</UCS4>
+            <Font ili:ref="302"></Font>
+         </FontSymbol>
+         <!-- Symbol Signs -->
+         <SymbolSign ili:tid="2001">
+            <ili:Name>Symbol</ili:Name>
+            <Scale>1.0</Scale>
+            <!-- Rotation is optional -->
+            <Rotation>0</Rotation>
+            <Color ili:ref="2"></Color>
+            <Symbol ili:ref="201"></Symbol>
+            <!-- ClipSymbol should only be used if a mask is needed -->
+            <ClipSymbol ili:ref="202"></ClipSymbol>
+         </SymbolSign>
+      </StandardSigns>
+   </ili:datasection>
+</ili:transfer>
