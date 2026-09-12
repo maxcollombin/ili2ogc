@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Synthetic SIGN BASKET data for pycartosym_examples.ili - see its own
+     header comment and tests/fixtures/cartosym/NOTICE. Colors are real
+     LCh(ab) conversions of the target SLD examples' own hex values
+     (computed via tests/test_convert_color.py's independent inverse
+     pipeline), not arbitrary numbers. -->
+
+<ili:transfer xmlns:ili="http://www.interlis.ch/xtf/2.4/INTERLIS"
+  xmlns="http://www.interlis.ch/xtf/2.4/PycartosymExamples">
+   <ili:headersection>
+      <ili:models>
+         <ili:model>PycartosymExamples</ili:model>
+      </ili:models>
+      <ili:sender>ili2ogc test fixture</ili:sender>
+      <ili:comment>Sign library data for the pycartosym examples/sld/*.sld round-trip tests</ili:comment>
+   </ili:headersection>
+   <ili:datasection>
+      <T ili:bid="PycartosymExamples">
+         <!-- Colors (LCh, real conversions of the target hex values) -->
+         <Color ili:tid="1"><!-- #808080 -->
+            <Name>gray50</Name>
+            <L>53.5850</L>
+            <C>0.0070</C>
+            <H>296.8129</H>
+            <T>0.5</T>
+         </Color>
+         <Color ili:tid="2"><!-- #202020 -->
+            <Name>darkgray</Name>
+            <L>12.2500</L>
+            <C>0.0028</C>
+            <H>296.8129</H>
+            <T>1.0</T>
+         </Color>
+         <Color ili:tid="3"><!-- #a9a9a9 -->
+            <Name>midgray</Name>
+            <L>69.2378</L>
+            <C>0.0086</C>
+            <H>296.8129</H>
+            <T>1.0</T>
+         </Color>
+         <Color ili:tid="4"><!-- #f5f5dc -->
+            <Name>beige</Name>
+            <L>95.9489</L>
+            <C>12.7479</C>
+            <H>109.1845</H>
+            <T>1.0</T>
+         </Color>
+         <Color ili:tid="5"><!-- #90ee90 -->
+            <Name>lightgreen</Name>
+            <L>86.5496</L>
+            <C>59.2552</C>
+            <H>141.4287</H>
+            <T>0.6</T>
+         </Color>
+         <Color ili:tid="6"><!-- #006400 -->
+            <Name>darkgreen</Name>
+            <L>36.2035</L>
+            <C>60.2761</C>
+            <H>136.0160</H>
+            <T>1.0</T>
+         </Color>
+
+         <!-- PolylineAttrs (Width) -->
+         <PolylineAttrs ili:tid="10">
+            <Width>2</Width>
+         </PolylineAttrs>
+         <PolylineAttrs ili:tid="11">
+            <Width>3</Width>
+         </PolylineAttrs>
+         <PolylineAttrs ili:tid="12">
+            <Width>1</Width>
+         </PolylineAttrs>
+
+         <!-- LineStyle_Solid / LineStyle_Dashed -->
+         <LineStyle_Solid ili:tid="20">
+            <LineAttrs ili:ref="10"></LineAttrs>
+         </LineStyle_Solid>
+         <LineStyle_Solid ili:tid="21">
+            <LineAttrs ili:ref="12"></LineAttrs>
+         </LineStyle_Solid>
+         <LineStyle_Dashed ili:tid="22">
+            <LineAttrs ili:ref="11"></LineAttrs>
+            <Dashes>
+               <DashRec>
+                  <DLength>4</DLength>
+               </DashRec>
+               <DashRec>
+                  <DLength>2</DLength>
+               </DashRec>
+            </Dashes>
+         </LineStyle_Dashed>
+
+         <!-- PolylineSign (used directly and as SurfaceSign.Border) -->
+         <PolylineSign ili:tid="100">
+            <ili:Name>ParkingBorder</ili:Name>
+            <Color ili:ref="2"></Color>
+            <Style ili:ref="20"></Style>
+         </PolylineSign>
+         <PolylineSign ili:tid="101">
+            <ili:Name>HighwayLine</ili:Name>
+            <Color ili:ref="3"></Color>
+            <Style ili:ref="22"></Style>
+         </PolylineSign>
+         <PolylineSign ili:tid="102">
+            <ili:Name>LanduseBorder</ili:Name>
+            <Color ili:ref="6"></Color>
+            <Style ili:ref="21"></Style>
+         </PolylineSign>
+
+         <!-- SurfaceSign -->
+         <SurfaceSign ili:tid="200">
+            <ili:Name>ParkingFill</ili:Name>
+            <FillColor ili:ref="1"></FillColor>
+            <Border ili:ref="100"></Border>
+         </SurfaceSign>
+         <SurfaceSign ili:tid="201">
+            <ili:Name>BuildingsFill</ili:Name>
+            <FillColor ili:ref="4"></FillColor>
+         </SurfaceSign>
+         <SurfaceSign ili:tid="202">
+            <ili:Name>LanduseFill</ili:Name>
+            <FillColor ili:ref="5"></FillColor>
+            <Border ili:ref="102"></Border>
+         </SurfaceSign>
+
+         <!-- Font / TextSign -->
+         <Font ili:tid="300">
+            <Name>Arial</Name>
+            <Internal>false</Internal>
+            <Type>text</Type>
+         </Font>
+         <TextSign ili:tid="400">
+            <ili:Name>AmenityLabel</ili:Name>
+            <Height>12</Height>
+            <Font ili:ref="300"></Font>
+         </TextSign>
+         <TextSign ili:tid="401">
+            <ili:Name>LanduseLabel</ili:Name>
+            <Height>10</Height>
+            <Font ili:ref="300"></Font>
+         </TextSign>
+      </T>
+   </ili:datasection>
+</ili:transfer>

@@ -1,0 +1,115 @@
+INTERLIS 2.3;
+
+!! Synthetic model mirroring 5 of pycartosym's own examples/sld/*.sld
+!! fixtures (1-polygon-fill-stroke, 2-line-stroke-dash, 4-text-label,
+!! 6-feature-type-name, 7-multi-symbolizer-rule) - no real .ili ever
+!! pairs a live Sign := {name}/SIGN BASKET combination with a schema
+!! this project can build standalone (see tests/fixtures/cartosym/NOTICE),
+!! so this is hand-built rather than vendored, but every wire shape it
+!! exercises (SIGN BASKET OBJECTS OF, Sign := {name}, WHERE-guarded and
+!! unconditioned DrawingRule, Style := {...}, multi-DrawingRule GRAPHIC)
+!! matches real corpus usage already found elsewhere (RoadsExgm2ien.ili
+!! etc.) - only the specific classes/colors here are synthetic.
+
+MODEL PycartosymExamples (en)
+AT "mailto:test@example.org"
+VERSION "2024-01-01" =
+  TOPIC T =
+    CLASS SurfaceSign =
+      Dummy: TEXT*1;
+    END SurfaceSign;
+
+    CLASS PolylineSign =
+      Dummy: TEXT*1;
+    END PolylineSign;
+
+    CLASS TextSign =
+      Dummy: TEXT*1;
+    END TextSign;
+
+    SIGN BASKET MyBasket ~ T
+      OBJECTS OF SurfaceSign: ParkingFill, BuildingsFill, LanduseFill
+      OBJECTS OF PolylineSign: ParkingBorder, HighwayLine, LanduseBorder
+      OBJECTS OF TextSign: AmenityLabel, LanduseLabel;
+
+    !! example 1: 1-polygon-fill-stroke.sld
+    CLASS Landuse1 =
+      FunctionCode: (parking, other);
+      Geometry: TEXT*1;
+    END Landuse1;
+
+    GRAPHIC Landuse1_Graphics BASED ON Landuse1 =
+      Landuse OF SurfaceSign:
+        WHERE FunctionCode == #parking (
+          Sign := {ParkingFill};
+          Geometry := Geometry;
+          Priority := 1
+        );
+    END Landuse1_Graphics;
+
+    !! example 2: 2-line-stroke-dash.sld
+    CLASS Roads =
+      RoadClass: (highway, other);
+      Geometry: TEXT*1;
+    END Roads;
+
+    GRAPHIC Roads_Graphics BASED ON Roads =
+      Roads OF PolylineSign:
+        WHERE RoadClass == #highway (
+          Sign := {HighwayLine};
+          Geometry := Geometry;
+          Priority := 1
+        );
+    END Roads_Graphics;
+
+    !! example 4: 4-text-label.sld
+    CLASS Amenities =
+      Name: TEXT*40;
+      Geometry: TEXT*1;
+    END Amenities;
+
+    GRAPHIC Amenities_Graphics BASED ON Amenities =
+      AmenityLabels OF TextSign: (
+          Sign := {AmenityLabel};
+          Txt := Name;
+          Geometry := Geometry;
+          HAli := #Left;
+          VAli := #Half;
+          Priority := 1
+        );
+    END Amenities_Graphics;
+
+    !! example 6: 6-feature-type-name.sld
+    CLASS Buildings =
+      Geometry: TEXT*1;
+    END Buildings;
+
+    GRAPHIC Buildings_Graphics BASED ON Buildings =
+      Buildings OF SurfaceSign: (
+          Sign := {BuildingsFill};
+          Geometry := Geometry;
+          Priority := 1
+        );
+    END Buildings_Graphics;
+
+    !! example 7: 7-multi-symbolizer-rule.sld - 2 DrawingRules, 1 GRAPHIC
+    CLASS Landuse7 =
+      FunctionTitle: TEXT*40;
+      Geometry: TEXT*1;
+    END Landuse7;
+
+    GRAPHIC Landuse7_Graphics BASED ON Landuse7 =
+      LandusePoly OF SurfaceSign: (
+          Sign := {LanduseFill};
+          Geometry := Geometry;
+          Priority := 1
+        );
+      LanduseText OF TextSign: (
+          Sign := {LanduseLabel};
+          Txt := FunctionTitle;
+          Geometry := Geometry;
+          Priority := 1
+        );
+    END Landuse7_Graphics;
+  END T;
+END PycartosymExamples.

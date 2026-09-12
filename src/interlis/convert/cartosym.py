@@ -168,6 +168,18 @@ class SignLibrary:
         color = color_to_rgb(float(lum), float(c), float(h)) if lum and c and h else None
         return color, (float(t) if t else None)
 
+    def dash_pattern(self, obj: XtfObject) -> list[float] | None:
+        """Read a `LineStyle_Dashed.Dashes` (`LIST OF DashRec`) as a flat `DLength` list, in wire order."""
+        nodes = obj.attributes.get("Dashes")
+        if not nodes:
+            return None
+        lengths = []
+        for occurrence in nodes[0].children:
+            length_node = next((c for c in occurrence.children if c.tag == "DLength"), None)
+            if length_node is not None and length_node.text is not None:
+                lengths.append(float(length_node.text))
+        return lengths or None
+
 
 def symbol_sign_object_to_marker(library: SignLibrary, obj: XtfObject) -> Marker:
     """Build a `Marker` from a real `SymbolSign` data object (`Color`/`Symbol` resolved within the same SIGN BASKET).
@@ -192,8 +204,34 @@ def symbol_sign_object_to_marker(library: SignLibrary, obj: XtfObject) -> Marker
     return Marker(elements=[graphic] if graphic else None, opacity=opacity)
 
 
+def text_sign_object_to_font_kwargs(library: SignLibrary, obj: XtfObject) -> dict[str, Any]:
+    """Build `text_sign_to_label` kwargs (`font_face`/`height`/`italic`) from a real `TextSign` data object.
+
+    `Font` (`TextSignFontAssoc`) gives the face; `Height`/`Slanted` are
+    `TextSign`'s own attributes directly (not references). `Underlined`
+    is deliberately NOT read: pycartosym's SLD writer raises
+    `NotImplementedError` for `Font.underline` unconditionally (confirmed
+    reading its source) - wiring it would only ever produce a crash, not
+    a silently-wrong value, but there is no real `TextSign` data to
+    verify against either way.
+    """
+    kwargs: dict[str, Any] = {}
+    font_obj = library.resolve_ref(obj, "Font")
+    if font_obj is not None:
+        face = library.scalar(font_obj, "Name")
+        if face is not None:
+            kwargs["font_face"] = face
+    height = library.scalar(obj, "Height")
+    if height is not None:
+        kwargs["height"] = float(height)
+    slanted = library.scalar(obj, "Slanted")
+    if slanted is not None:
+        kwargs["italic"] = slanted == "true"
+    return kwargs
+
+
 def surface_sign_object_to_fill(library: SignLibrary, obj: XtfObject) -> Fill:
-    """Build a `Fill` from a real `SurfaceSign` data object's `FillColor` - `Border`/`HatchSymb` are not resolved here.
+    """Build a `Fill` from a real `SurfaceSign` data object's `FillColor` - `HatchSymb`/`Clip`/`HatchOrg` not resolved.
 
     Same `Color` wire mechanism as `symbol_sign_object_to_marker`
     (verified there against real data) applied to a different attribute
@@ -204,43 +242,96 @@ def surface_sign_object_to_fill(library: SignLibrary, obj: XtfObject) -> Fill:
     return surface_sign_to_fill(fill_color=color, opacity=opacity)
 
 
-def polyline_sign_object_to_stroke(library: SignLibrary, obj: XtfObject) -> Stroke:
-    """Build a `Stroke` from a real `PolylineSign` data object's `Color` - `Style` (width/join/cap/dash) not resolved.
+def surface_sign_object_border_to_stroke(library: SignLibrary, obj: XtfObject) -> Stroke | None:
+    """Build a `Stroke` from a `SurfaceSign` data object's `Border` (`SurfaceSignBorderAssoc`, a `PolylineSign` REF).
 
-    Same `Color` wire mechanism as `symbol_sign_object_to_marker`
-    (verified there) applied to `PolylineSign.Color` - not itself
-    corpus-verified. `Style` (-> `LineStyle_Solid`/`_Dashed` -> their own
-    `PolylineAttrs`/`Dashes`) needs a real `PolylineSign` data object to
-    verify against, none found in the fixtures fetched so far - left for
-    a follow-up rather than guessed.
+    Reuses `polyline_sign_object_to_stroke` on the referenced object - the
+    border IS a real `PolylineSign` object, same wire shape as one
+    referenced directly by a `PolylineSign` `Sign := {name}`.
+    """
+    border_obj = library.resolve_ref(obj, "Border")
+    return polyline_sign_object_to_stroke(library, border_obj) if border_obj is not None else None
+
+
+def polyline_sign_object_to_stroke(library: SignLibrary, obj: XtfObject) -> Stroke:
+    """Build a `Stroke` from a real `PolylineSign` data object's `Color` and `Style` (width/join/cap/dash pattern).
+
+    `Style` (`PolylineSignLineStyleAssoc`) resolves to a `LineStyle_Solid`/
+    `_Dashed` object; its own `LineAttrs` association
+    (`LineStyle_SolidPolylineAttrsAssoc`/`_DashedLineAttrsAssoc`) gives
+    `Width`/`Join`/`Caps`, and a `LineStyle_Dashed` additionally gives its
+    own `Dashes` (`LIST OF DashRec`) as the dash pattern. Same `Color`
+    wire mechanism as `symbol_sign_object_to_marker` (verified there)
+    applied to `PolylineSign.Color`.
     """
     color, opacity = library.resolve_color(obj, "Color")
-    return polyline_sign_to_stroke(color=color, opacity=opacity)
+    width = join = cap = dashes = None
+    style_obj = library.resolve_ref(obj, "Style")
+    if style_obj is not None:
+        attrs_obj = library.resolve_ref(style_obj, "LineAttrs")
+        if attrs_obj is not None:
+            width_text = library.scalar(attrs_obj, "Width")
+            width = float(width_text) if width_text is not None else None
+            join = library.scalar(attrs_obj, "Join")
+            cap = library.scalar(attrs_obj, "Caps")
+        if style_obj.qualified_class.endswith("LineStyle_Dashed"):
+            dashes = library.dash_pattern(style_obj)
+    return polyline_sign_to_stroke(color=color, opacity=opacity, width=width, join=join, cap=cap, dash_pattern=dashes)
+
+
+def _symbol_sign_kwargs(library: SignLibrary, obj: XtfObject) -> dict[str, Any]:
+    return {"marker": symbol_sign_object_to_marker(library, obj)}
+
+
+def _polyline_sign_kwargs(library: SignLibrary, obj: XtfObject) -> dict[str, Any]:
+    return {"stroke": polyline_sign_object_to_stroke(library, obj)}
+
+
+def _surface_sign_kwargs(library: SignLibrary, obj: XtfObject) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {"fill": surface_sign_object_to_fill(library, obj)}
+    stroke = surface_sign_object_border_to_stroke(library, obj)
+    if stroke is not None:
+        kwargs["stroke"] = stroke
+    return kwargs
 
 
 _SIGN_OBJECT_BUILDERS = {
-    _MARKER_SIGN_CLASS: ("marker", symbol_sign_object_to_marker),
-    _FILL_SIGN_CLASS: ("fill", surface_sign_object_to_fill),
-    _STROKE_SIGN_CLASS: ("stroke", polyline_sign_object_to_stroke),
+    _MARKER_SIGN_CLASS: _symbol_sign_kwargs,
+    _FILL_SIGN_CLASS: _surface_sign_kwargs,
+    _STROKE_SIGN_CLASS: _polyline_sign_kwargs,
 }
 
 
-def styling_rule_from_drawing_rule(drawing_rule: MetaInstance, sign_library: SignLibrary | None = None) -> StylingRule:
+def _with_feature_type(selector: dict[str, Any] | None, feature_type: str | None) -> dict[str, Any] | None:
+    """Prepend a `dataLayer.id` conjunct - pycartosym's own writer pulls this back out as `se:FeatureTypeName`."""
+    if feature_type is None:
+        return selector
+    conjunct = {"op": "=", "args": [{"sysId": "dataLayer.id"}, feature_type]}
+    return conjunct if selector is None else {"op": "and", "args": [conjunct, selector]}
+
+
+def styling_rule_from_drawing_rule(
+    drawing_rule: MetaInstance, sign_library: SignLibrary | None = None, feature_type: str | None = None
+) -> StylingRule:
     """Build one pycartosym `StylingRule` from a built INTERLIS `DrawingRule`.
 
     The `WHERE` selector compiles via `cql2.to_cql2` (the same CQL2-JSON
-    shape `StylingRule.selector` expects natively). `Priority` ->
+    shape `StylingRule.selector` expects natively). `feature_type`
+    (typically the enclosing `Graphic.Base.Name` - `DrawingRule` has no
+    back-reference to it, so the caller must pass it) is prepended as a
+    `dataLayer.id` conjunct, pycartosym's own convention for `se:
+    FeatureTypeName` (confirmed against its writer source). `Priority` ->
     `z_order`. A `Sign := {name}` reference resolves (via `sign_library`,
     a parsed SIGN BASKET data section - `None` skips it entirely, same as
     before this was wired) to its own library-object data, dispatched by
-    `drawing_rule.Class` to `symbol_sign_object_to_marker`/
-    `surface_sign_object_to_fill`/`polyline_sign_object_to_stroke` -
-    those hold color/width/symbol; a `TextSign`'s `Txt`/`Rotation`/
-    `HAli`/`VAli` are genuine `PARAMETER`s (`AbstractSymbology.Signs.
-    TextSign`) set directly on the `DrawingRule`, unlike `Height`/`Font`
-    which are OWN attributes only ever set via the referenced Sign object
-    (not yet resolved for `TextSign` - no real corpus data found to
-    verify `Font`/`TextSignFontAssoc` resolution against).
+    `drawing_rule.Class` to `_symbol_sign_kwargs`/`_surface_sign_kwargs`/
+    `_polyline_sign_kwargs` - those hold color/width/symbol/border; a
+    `TextSign`'s `Txt`/`Rotation`/`HAli`/`VAli` are genuine `PARAMETER`s
+    (`AbstractSymbology.Signs.TextSign`) set directly on the
+    `DrawingRule`, unlike `Height`/`Font` which are OWN attributes only
+    ever set via the referenced Sign object - resolved via
+    `text_sign_object_to_font_kwargs` when `sign_object` is present (not
+    itself corpus-verified, no real `TextSign` data object found).
 
     A `DrawingRule` with more than one `CondSignParamAssignment` (several
     independent `WHERE (...)` blocks under the same rule name, which would
@@ -250,7 +341,7 @@ def styling_rule_from_drawing_rule(drawing_rule: MetaInstance, sign_library: Sig
     conditions = drawing_rule.Rule if isinstance(drawing_rule.Rule, list) else [drawing_rule.Rule]
     cond = conditions[0]
     where = getattr(cond, "Where", None)
-    selector = to_cql2(where) if where is not None else None
+    selector = _with_feature_type(to_cql2(where) if where is not None else None, feature_type)
 
     raw_assignments = cond.Assignments if isinstance(cond.Assignments, list) else [cond.Assignments]
     params: dict[str, Any] = {}
@@ -271,14 +362,19 @@ def styling_rule_from_drawing_rule(drawing_rule: MetaInstance, sign_library: Sig
         symbolizer_kwargs["z_order"] = symbolizer_z_order(params["Priority"])
     sign_class = getattr(getattr(drawing_rule, "Class", None), "Name", None)
     if sign_object is not None and sign_library is not None and sign_class in _SIGN_OBJECT_BUILDERS:
-        field, builder = _SIGN_OBJECT_BUILDERS[sign_class]
-        symbolizer_kwargs[field] = builder(sign_library, sign_object)
+        symbolizer_kwargs.update(_SIGN_OBJECT_BUILDERS[sign_class](sign_library, sign_object))
     if sign_class == _TEXT_SIGN_CLASS and "Txt" in params:
+        font_kwargs = (
+            text_sign_object_to_font_kwargs(sign_library, sign_object)
+            if sign_object is not None and sign_library is not None
+            else {}
+        )
         symbolizer_kwargs["label"] = text_sign_to_label(
             text=params.get("Txt"),
             rotation=params.get("Rotation"),
             h_alignment=params.get("HAli"),
             v_alignment=params.get("VAli"),
+            **font_kwargs,
         )
 
     return StylingRule(
