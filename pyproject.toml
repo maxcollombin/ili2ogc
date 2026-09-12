@@ -25,6 +25,7 @@ keywords = ["interlis", "gis", "geodata", "json-schema", "json-fg", "ogc", "cql2
 dependencies = [
     "antlr4-python3-runtime==4.13.2",
     "jsonschema>=4.23.0",
+    "pycartosym[sld]>=0.2.2",
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
 ]
