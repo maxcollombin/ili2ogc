@@ -6,7 +6,6 @@ and `RoadsExgm2ien.ili`'s `PolylineSign`/`SurfaceSign` PARAMETER
 assignments), not invented numbers.
 """
 
-import pycartosym
 from pycartosym.models.styles import Style, StylingRule, Symbolizer
 
 from interlis.convert.cartosym import (
@@ -14,14 +13,12 @@ from interlis.convert.cartosym import (
     polyline_sign_to_stroke,
     surface_sign_to_fill,
     text_sign_to_label,
+    write_sld,
 )
-
-_SLD = pycartosym.get_codec("sld")
 
 
 def _write(symbolizer: Symbolizer) -> str:
-    out = _SLD.write(Style(styling_rules=[StylingRule(name="r", symbolizer=symbolizer)]))
-    return out if isinstance(out, str) else out.decode()
+    return write_sld(Style(styling_rules=[StylingRule(name="r", symbolizer=symbolizer)]))
 
 
 def test_black_color_from_point_graphics_signatures_xtf():

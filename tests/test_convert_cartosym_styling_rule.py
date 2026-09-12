@@ -11,10 +11,9 @@ docstring) to isolate what's under test.
 """
 
 import pycartosym
-import pytest
 from conftest import build_from_text
 
-from interlis.convert.cartosym import styling_rule_from_drawing_rule
+from interlis.convert.cartosym import styling_rule_from_drawing_rule, text_sign_to_label, write_sld
 
 _MODEL = """INTERLIS 2.3;
 
@@ -61,13 +60,9 @@ VERSION "2024-01-01" =
 END TestGraphicStyling.
 """
 
-_SLD = pycartosym.get_codec("sld")
-
 
 def _write(rule) -> str:
-    style = pycartosym.models.styles.Style(styling_rules=[rule])
-    out = _SLD.write(style)
-    return out if isinstance(out, str) else out.decode()
+    return write_sld(pycartosym.models.styles.Style(styling_rules=[rule]))
 
 
 def _drawing_rule(graphic_name: str, rule_name: str):
@@ -95,14 +90,15 @@ def test_surface_sign_where_clause_compiles_to_a_cql2_selector():
 
 
 def test_text_sign_txt_and_rotation_attribute_paths_become_property_refs():
-    """`Txt`/`Rotation` become `PropertyRef`s on the pycartosym model - only `Txt` is currently writable to SLD.
+    """`Txt`/`Rotation` become `PropertyRef`s on the pycartosym model, both written via `write_sld`'s workaround.
 
     `Transform2D.orientation` accepts a `PropertyRef` at the model level
-    (coerced by pydantic), but pycartosym's SLD writer's angle formatter
-    does not yet support an attribute-driven rotation, only a literal
-    number - confirmed empirically (raises `NotImplementedError:
-    Unsupported angle value shape`). Real corpus data (`RoadsExgm2ien.ili`:
-    `Rotation := NamOri`) needs exactly this - noted in the mapping doc.
+    (coerced by pydantic), but pycartosym's SLD writer's own angle
+    formatter does not yet support an attribute-driven rotation, only a
+    literal number (confirmed empirically: raises `NotImplementedError:
+    Unsupported angle value shape` if written directly) - `write_sld`
+    works around it (see its docstring), real corpus data
+    (`RoadsExgm2ien.ili`: `Rotation := NamOri`) needs exactly this.
     """
     styling_rule = styling_rule_from_drawing_rule(_drawing_rule("Text_Graphics", "StreetName"))
     assert styling_rule.selector is None
@@ -115,5 +111,24 @@ def test_text_sign_txt_and_rotation_attribute_paths_become_property_refs():
     assert graphic.text == {"property": "Street"}
     assert graphic.transform.orientation.property == "NamOri"
 
-    with pytest.raises(NotImplementedError, match="Unsupported angle value shape"):
-        _write(styling_rule)
+    xml = _write(styling_rule)
+    assert "<se:TextSymbolizer>" in xml
+    assert "<ogc:PropertyName>Street</ogc:PropertyName>" in xml
+    assert "<se:Rotation><ogc:PropertyName>NamOri</ogc:PropertyName></se:Rotation>" in xml
+
+
+def test_write_sld_only_patches_rules_that_actually_need_the_rotation_workaround():
+    """A `Style` mixing a plain rule and one needing the rotation workaround - only the 2nd is touched."""
+    plain = pycartosym.models.styles.StylingRule(
+        name="Plain", symbolizer=pycartosym.models.styles.Symbolizer(label=text_sign_to_label(text="Fixed"))
+    )
+    dynamic = pycartosym.models.styles.StylingRule(
+        name="Dynamic",
+        symbolizer=pycartosym.models.styles.Symbolizer(
+            label=text_sign_to_label(text="x", rotation={"property": "NamOri"})
+        ),
+    )
+    xml = write_sld(pycartosym.models.styles.Style(styling_rules=[plain, dynamic]))
+    assert "<se:Label>Fixed</se:Label>" in xml
+    assert "<se:Rotation><ogc:PropertyName>NamOri</ogc:PropertyName></se:Rotation>" in xml
+    assert xml.count("<se:Rule>") == 2
