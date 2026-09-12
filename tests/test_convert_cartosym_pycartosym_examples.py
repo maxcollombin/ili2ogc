@@ -9,13 +9,12 @@ usage found elsewhere this session (`RoadsExgm2ien.ili`,
 target example's own hex values (`tests/test_convert_color.py`'s
 independent inverse pipeline).
 
-Not attempted, with reasons: `3-point-dot-mark`/`15-image-marker`
-(`ShapeGraphic`/circle marks and tiled external graphics - no
-`StandardSymbology` analog beyond the already-known `FontSymbol`
-composite-geometry gap), `5-else-rule` (CartoSym-CSS cascade vs. SLD
-`ElseFilter` - a structural mismatch, not an INTERLIS mapping question),
-`8-comparisons` (`Between`/`Like` - `cql2.to_cql2`/`constraint_eval.py`
-don't cover them, no real corpus evidence either), `9-metadata`/`10-14`
+Not attempted, with reasons: `15-image-marker` (tiled/arbitrary external
+graphics - `StandardSymbology` has no external-image reference mechanism
+at all, only a font glyph or a composite vector geometry), `5-else-rule`
+(CartoSym-CSS cascade vs. SLD `ElseFilter` - a structural mismatch, not
+an INTERLIS mapping question), `8-comparisons` (`Between`/`Like` - the
+INTERLIS grammar itself has neither operator), `9-metadata`/`10-14`
 raster (no `StandardSymbology` equivalent at all).
 """
 
@@ -103,6 +102,30 @@ def test_example_4_text_label():
     assert '"font-size">12<' in xml
     assert "<se:AnchorPointX>0</se:AnchorPointX>" in xml
     assert "<se:AnchorPointY>0.5</se:AnchorPointY>" in xml
+
+
+def test_example_3_point_dot_mark():
+    """Target: `examples/sld/3-point-dot-mark.sld` - one `se:Rule`, 2 stacked `se:PointSymbolizer`/`se:Mark`.
+
+    A single `SymbolSign` referencing one composite `FontSymbol` (2
+    stacked circular `FontSymbol_Surface` items, `Font.Type = symbol`)
+    produces one `Marker` with 2 `CircleGraphic` elements - pycartosym's
+    writer emits one `se:PointSymbolizer` per marker element, all as
+    siblings under the same `se:Rule`, matching the target's "stacked
+    Dots" structure exactly (unlike `example_7`'s 2-`DrawingRule` case,
+    which produces 2 sibling `se:Rule`s instead).
+    """
+    rules, graphic = _drawing_rules("Amenities_Dots_Graphics")
+    styling_rule = styling_rule_from_drawing_rule(
+        rules[0], sign_library=_sign_library(), feature_type=graphic.Base.Name
+    )
+    xml = _write_rules([styling_rule])
+    assert xml.count("<se:PointSymbolizer>") == 2
+    assert xml.count("<se:WellKnownName>circle</se:WellKnownName>") == 2
+    assert '"fill">#ffffff<' in xml
+    assert '"fill">#ffa500<' in xml
+    assert "<se:Size>10</se:Size>" in xml
+    assert "<se:Size>8</se:Size>" in xml
 
 
 def test_example_6_feature_type_name():

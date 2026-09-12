@@ -60,6 +60,20 @@
             <H>136.0160</H>
             <T>1.0</T>
          </Color>
+         <Color ili:tid="7"><!-- #ffffff -->
+            <Name>white</Name>
+            <L>100.0000</L>
+            <C>0.0117</C>
+            <H>296.8129</H>
+            <T>1.0</T>
+         </Color>
+         <Color ili:tid="8"><!-- #ffa500 -->
+            <Name>orange</Name>
+            <L>74.9322</L>
+            <C>82.5047</C>
+            <H>73.1350</H>
+            <T>1.0</T>
+         </Color>
 
          <!-- PolylineAttrs (Width) -->
          <PolylineAttrs ili:tid="10">
@@ -140,6 +154,54 @@
             <Height>10</Height>
             <Font ili:ref="300"></Font>
          </TextSign>
+
+         <!-- FontSymbol composite geometry (Font.Type = symbol, 2 stacked
+              circular FontSymbol_Surface items - "3-point-dot-mark.sld") -->
+         <Font ili:tid="301">
+            <Name>AmenityDotsFont</Name>
+            <Internal>true</Internal>
+            <Type>symbol</Type>
+         </Font>
+         <FontSymbol ili:tid="310">
+            <Name>StackedDots</Name>
+            <Font ili:ref="301"></Font>
+            <Geometry>
+               <FontSymbol_Surface>
+                  <FillColor ili:ref="7"></FillColor>
+                  <Geometry>
+                     <SURFACE>
+                        <BOUNDARY>
+                           <POLYLINE>
+                              <COORD><C1>0</C1><C2>0</C2></COORD>
+                              <ARC><C1>5</C1><C2>0</C2><A1>-5</A1><A2>0</A2><R>5</R></ARC>
+                              <ARC><C1>-5</C1><C2>0</C2><A1>0</A1><A2>0</A2><R>5</R></ARC>
+                           </POLYLINE>
+                        </BOUNDARY>
+                     </SURFACE>
+                  </Geometry>
+               </FontSymbol_Surface>
+            </Geometry>
+            <Geometry>
+               <FontSymbol_Surface>
+                  <FillColor ili:ref="8"></FillColor>
+                  <Geometry>
+                     <SURFACE>
+                        <BOUNDARY>
+                           <POLYLINE>
+                              <COORD><C1>0</C1><C2>0</C2></COORD>
+                              <ARC><C1>4</C1><C2>0</C2><A1>-4</A1><A2>0</A2><R>4</R></ARC>
+                              <ARC><C1>-4</C1><C2>0</C2><A1>0</A1><A2>0</A2><R>4</R></ARC>
+                           </POLYLINE>
+                        </BOUNDARY>
+                     </SURFACE>
+                  </Geometry>
+               </FontSymbol_Surface>
+            </Geometry>
+         </FontSymbol>
+         <SymbolSign ili:tid="500">
+            <ili:Name>AmenityDots</ili:Name>
+            <Symbol ili:ref="310"></Symbol>
+         </SymbolSign>
       </T>
    </ili:datasection>
 </ili:transfer>

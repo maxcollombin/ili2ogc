@@ -27,10 +27,15 @@ VERSION "2024-01-01" =
       Dummy: TEXT*1;
     END TextSign;
 
+    CLASS SymbolSign =
+      Dummy: TEXT*1;
+    END SymbolSign;
+
     SIGN BASKET MyBasket ~ T
       OBJECTS OF SurfaceSign: ParkingFill, BuildingsFill, LanduseFill
       OBJECTS OF PolylineSign: ParkingBorder, HighwayLine, LanduseBorder
-      OBJECTS OF TextSign: AmenityLabel, LanduseLabel;
+      OBJECTS OF TextSign: AmenityLabel, LanduseLabel
+      OBJECTS OF SymbolSign: AmenityDots;
 
     !! example 1: 1-polygon-fill-stroke.sld
     CLASS Landuse1 =
@@ -78,6 +83,16 @@ VERSION "2024-01-01" =
           Priority := 1
         );
     END Amenities_Graphics;
+
+    !! example 3: 3-point-dot-mark.sld - one SymbolSign, composite FontSymbol
+    !! (2 stacked circular FontSymbol_Surface geometries)
+    GRAPHIC Amenities_Dots_Graphics BASED ON Amenities =
+      AmenityDotsRule OF SymbolSign: (
+          Sign := {AmenityDots};
+          Geometry := Geometry;
+          Priority := 1
+        );
+    END Amenities_Dots_Graphics;
 
     !! example 6: 6-feature-type-name.sld
     CLASS Buildings =

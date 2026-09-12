@@ -1,10 +1,13 @@
 """Convert a resolved INTERLIS `StandardSymbology` sign instance into a pycartosym `Symbolizer`/`StylingRule`.
 
-`FontSymbol`'s composite geometry (`Font.Type = symbol`) has no target
-here yet. `Fill.hatch`/`Stroke.casing`/`centerLine`/`pattern` are not
-attempted at all - they raise `NotImplementedError` in pycartosym's
-current SLD writer regardless of dialect (confirmed empirically), so no
-value built here for them could ever be written out.
+`FontSymbol`'s composite geometry (`Font.Type = symbol`) only has a
+target for the case where every geometry item is a circular
+`FontSymbol_Surface` (see `font_symbol_geometry_to_circle_graphics`) - a
+`FontSymbol_Polyline` item, or a non-circular `FontSymbol_Surface`
+boundary, has none yet. `Fill.hatch`/`Stroke.casing`/`centerLine`/
+`pattern` are not attempted at all - they raise `NotImplementedError` in
+pycartosym's current SLD writer regardless of dialect (confirmed
+empirically), so no value built here for them could ever be written out.
 """
 
 from typing import Any
@@ -12,15 +15,25 @@ from typing import Any
 from lxml import etree
 from pycartosym import get_codec
 from pycartosym.models.styles import Style, StylingRule, Symbolizer
-from pycartosym.models.symbolizers import Fill, Font, Label, Marker, Stroke, TextAlignment, TextGraphic, Transform2D
+from pycartosym.models.symbolizers import (
+    CircleGraphic,
+    Fill,
+    Font,
+    Label,
+    Marker,
+    Stroke,
+    TextAlignment,
+    TextGraphic,
+    Transform2D,
+)
 from pycartosym.models.types import Angle, AngleUnit, RGBColor, UnitType, UnitValue
 from pycartosym.models.value_expressions import PropertyRef
 
 from interlis.convert.color import lch_to_srgb
 from interlis.convert.cql2 import to_cql2
 from interlis.metamodel.instance import MetaInstance
-from interlis.xtf.parse import XtfBasket, XtfObject
-from interlis.xtf.validate import _extract_reference
+from interlis.xtf.parse import RawNode, XtfBasket, XtfObject
+from interlis.xtf.validate import _extract_reference, _find_child, _geom_tag
 
 _SE_NS = "http://www.opengis.net/se"
 _OGC_NS = "http://www.opengis.net/ogc"
@@ -161,7 +174,13 @@ class SignLibrary:
 
     def resolve_color(self, obj: XtfObject, attr: str) -> tuple[RGBColor | None, float | None]:
         """Resolve a `Color`-typed reference attribute to `(RGBColor, opacity)` - `opacity` is `Color.T`."""
-        color_obj = self.resolve_ref(obj, attr)
+        nodes = obj.attributes.get(attr)
+        return self._color_from_ref_node(nodes[0]) if nodes else (None, None)
+
+    def _color_from_ref_node(self, ref_node: RawNode) -> tuple[RGBColor | None, float | None]:
+        """Resolve a raw REFERENCE-attribute node (top-level or nested in a structure) to `(RGBColor, opacity)`."""
+        tid = _extract_reference(ref_node)
+        color_obj = self.by_tid.get(tid) if tid else None
         if color_obj is None:
             return None, None
         lum, c, h, t = (self.scalar(color_obj, name) for name in ("L", "C", "H", "T"))
@@ -181,27 +200,98 @@ class SignLibrary:
         return lengths or None
 
 
+def _circle_radius_from_surface(node: RawNode) -> float | None:
+    """Read an `SS_Surface` boundary as a circle's own radius, from real wire ARC segments.
+
+    Only a single-boundary surface whose segments (after the mandatory
+    StartSegment COORD) are all ARC segments carrying an explicit
+    optional `<R>` (eCH-0031 SS4.3.11.14, the same element
+    `xtf/validate.py::_validate_arc_node` already checks) is handled - a
+    circle whose radius must instead be derived from 3 raw boundary
+    points (no `<R>` on the wire) has no real corpus example and returns
+    `None` here.
+    """
+    surface = _find_child(node, "SURFACE")
+    boundary = _find_child(surface, "BOUNDARY") if surface is not None else None
+    polyline = _find_child(boundary, "POLYLINE") if boundary is not None else None
+    if polyline is None or len(polyline.children) < 2 or _geom_tag(polyline.children[0]) != "COORD":
+        return None
+    radii: list[float] = []
+    for arc in polyline.children[1:]:
+        if _geom_tag(arc) != "ARC":
+            return None
+        r_node = _find_child(arc, "R")
+        if r_node is None or r_node.text is None:
+            return None
+        radii.append(float(r_node.text))
+    return radii[0] if radii and all(abs(r - radii[0]) < 1e-9 for r in radii) else None
+
+
+def font_symbol_geometry_to_circle_graphics(
+    library: SignLibrary, symbol_obj: XtfObject, *, scale: float = 1.0
+) -> list[CircleGraphic] | None:
+    """Build one `CircleGraphic` per circular `FontSymbol_Surface` item in a `Font.Type = symbol` `FontSymbol`.
+
+    A `FontSymbol` is "a collection of lines and surfaces" (its own
+    model comment) - several stacked `FontSymbol_Surface` items are a
+    genuine, intended composite symbol, not an edge case. Only the case
+    where EVERY item is a `FontSymbol_Surface` whose boundary is a real
+    circle (`_circle_radius_from_surface`) is handled - a
+    `FontSymbol_Polyline` item, or a non-circular boundary, aborts the
+    whole symbol rather than silently dropping just that item.
+    """
+    occurrences = symbol_obj.attributes.get("Geometry") or []
+    graphics: list[CircleGraphic] = []
+    for occurrence in occurrences:
+        if not occurrence.children:
+            return None
+        structure_node = occurrence.children[0]
+        if not structure_node.tag.endswith("FontSymbol_Surface"):
+            return None
+        geometry_node = next((c for c in structure_node.children if c.tag == "Geometry"), None)
+        radius = _circle_radius_from_surface(geometry_node) if geometry_node is not None else None
+        if radius is None:
+            return None
+        fillcolor_node = next((c for c in structure_node.children if c.tag == "FillColor"), None)
+        fill_color, fill_opacity = (
+            library._color_from_ref_node(fillcolor_node) if fillcolor_node is not None else (None, None)
+        )
+        fill = Fill(color=fill_color, opacity=fill_opacity)
+        graphics.append(CircleGraphic(type="Circle", radius=meters(radius * scale), fill=fill))
+    return graphics or None
+
+
 def symbol_sign_object_to_marker(library: SignLibrary, obj: XtfObject) -> Marker:
     """Build a `Marker` from a real `SymbolSign` data object (`Color`/`Symbol` resolved within the same SIGN BASKET).
 
-    Only the `Font.Type = text` case (`Symbol` -> `FontSymbol` -> `Font`)
-    has a target - a `Font.Type = symbol` `FontSymbol` (composite
-    geometry) has none yet. Verified against real corpus data
-    (`Point_Graphics_Signatures.xtf`'s `SymbolSign`/`FontSymbol`/`Font`).
+    `Font.Type = text` (`Symbol` -> `FontSymbol` -> `Font`) builds a
+    single glyph `TextGraphic`; `Font.Type = symbol` builds one or more
+    `CircleGraphic`s via `font_symbol_geometry_to_circle_graphics` (any
+    other composite geometry falls through to no marker element).
+    Verified against real corpus data (`Point_Graphics_Signatures.xtf`'s
+    `SymbolSign`/`FontSymbol`/`Font`) for the text case.
     """
     # `color` (from `SymbolSignColorAssoc`) has no confirmed pycartosym
     # target for a text-glyph Marker yet (neither `TextGraphic` nor `Font`
     # has a color field) - only `opacity` (`Color.T`) is applied here,
     # left as a follow-up rather than guessed.
     _color, opacity = library.resolve_color(obj, "Color")
-    graphic = None
+    elements: list[Any] | None = None
     symbol_obj = library.resolve_ref(obj, "Symbol")
     if symbol_obj is not None:
         font_obj = library.resolve_ref(symbol_obj, "Font")
-        ucs4 = library.scalar(symbol_obj, "UCS4")
-        if font_obj is not None and ucs4 and library.scalar(font_obj, "Type") == "text":
-            graphic = font_symbol_text_to_graphic(character=chr(int(ucs4)), font_face=library.scalar(font_obj, "Name"))
-    return Marker(elements=[graphic] if graphic else None, opacity=opacity)
+        font_type = library.scalar(font_obj, "Type") if font_obj is not None else None
+        if font_type == "text" and font_obj is not None:
+            ucs4 = library.scalar(symbol_obj, "UCS4")
+            if ucs4:
+                elements = [
+                    font_symbol_text_to_graphic(character=chr(int(ucs4)), font_face=library.scalar(font_obj, "Name"))
+                ]
+        elif font_type == "symbol":
+            scale_text = library.scalar(obj, "Scale")
+            scale = float(scale_text) if scale_text else 1.0
+            elements = font_symbol_geometry_to_circle_graphics(library, symbol_obj, scale=scale)
+    return Marker(elements=elements, opacity=opacity)
 
 
 def text_sign_object_to_font_kwargs(library: SignLibrary, obj: XtfObject) -> dict[str, Any]:
